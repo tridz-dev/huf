@@ -187,7 +187,8 @@ class FakeDB:
 		if as_dict:
 			return FakeRow({field: row.get(field) for field in fields})
 		values = tuple(row.get(field) for field in fields)
-		return values[0] if isinstance(fieldname, str) else values
+		# Like Frappe, a single requested field comes back as the bare value.
+		return values[0] if isinstance(fieldname, str) or len(values) == 1 else values
 
 	def set_value(
 		self,

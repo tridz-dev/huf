@@ -34,8 +34,9 @@ def post_event(
 
 	Bypasses doctype permissions; the caller must already have authorized the session.
 	"""
-	row = frappe.db.get_value(SESSION_DOCTYPE, session, ["last_seq"], for_update=True)
-	if row is None:
+	# Single field: frappe returns the bare value (not a tuple), and None only for a missing row.
+	last_seq = frappe.db.get_value(SESSION_DOCTYPE, session, "last_seq", for_update=True)
+	if last_seq is None and not frappe.db.exists(SESSION_DOCTYPE, session):
 		raise _missing_session(session)
 
 	if idempotency_key:
@@ -47,7 +48,7 @@ def post_event(
 		if existing:
 			return _event_dict(frappe.get_doc(EVENT_DOCTYPE, existing[0][0]))
 
-	seq = next_seq(row[0])
+	seq = next_seq(last_seq)
 	doc = frappe.get_doc(
 		{
 			"doctype": EVENT_DOCTYPE,

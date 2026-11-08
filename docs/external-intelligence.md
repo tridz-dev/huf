@@ -35,13 +35,25 @@ Modes:
 
    Replace `<site>`, `<api_key>` and `<api_secret>` with your values.
 
-**Authentication.** The endpoint accepts only a Frappe API key and secret, sent in the `Authorization: token <api_key>:<api_secret>` header. Cookie sessions are refused, and so are guest requests, so a browser that is logged in to Huf cannot be used to call the endpoint. OAuth is not supported yet.
+**Authentication.** The endpoint accepts a Frappe API key and secret, sent in the `Authorization: token <api_key>:<api_secret>` header. Cookie sessions are refused, and so are guest requests, so a browser that is logged in to Huf cannot be used to call the endpoint. An OAuth bearer token is accepted too (see "Sign in with OAuth").
 
 **Connection selection.** Send the `X-Huf-Connection` header, or a `?connection=` query parameter, with the connection name. It is needed only when the user has several enabled connections. With a single enabled connection it can be omitted.
 
 **Session selection.** Send `Mcp-Session-Id` to continue a specific session. Without it, `initialize` opens a new session. Any other method reuses the newest open (non-terminal) session on the connection, or creates one if none exists.
 
 Calls made through this endpoint act as the user who owns the API key. Revoking or disabling that user, or deleting the connection, stops access.
+
+### Sign in with OAuth
+
+MCP clients such as Claude can log in through the browser instead of a pasted key. Huf reuses Frappe's own OAuth server (authorization code with PKCE S256, refresh tokens, optional dynamic client registration) and adds only the discovery document for the gateway.
+
+What the user does: add the server URL `https://<site>/api/method/huf.ai.external.gateway.mcp` in the client, then sign in to Huf in the browser window that opens and approve access. The client stores the token and sends it as `Authorization: Bearer <token>`. Every call runs as the user who approved, with that user's own permissions; the user needs an enabled External Agent Connection (pass `X-Huf-Connection` if there is more than one).
+
+How discovery works: an unauthenticated call gets HTTP 401 with `WWW-Authenticate: Bearer resource_metadata="https://<site>/api/method/huf.ai.external.oauth.protected_resource"`. That document names the gateway as the resource and the site as its authorization server; the client then reads `/.well-known/oauth-authorization-server` and registers or uses a client.
+
+Admin setup (once): open OAuth Settings and keep "Show Auth Server Metadata" on. "Enable Dynamic Client Registration" (on by default in the version tested) lets clients register themselves; otherwise create an OAuth Client with the client's redirect URI, token endpoint auth method None, scopes `all`. Dynamic clients get the consent screen at first login. The consent screen needs the site's built assets (`bench build`).
+
+Limits: Frappe does not bind a token to a resource and the gateway does not check scopes, so a token is as powerful as the user. Revoke access by deleting the token under OAuth Bearer Token.
 
 ## 3. MCP tools
 
@@ -108,7 +120,6 @@ Events for a session, such as user replies, approval decisions and cancellations
 ## 7. Not yet implemented
 
 - **Managed runtimes**: running the agent inside Huf, for example through a Codex app server or a hosted Claude runtime.
-- **OAuth for the MCP endpoint**: today the endpoint uses the API key header only.
 - **Converting repeated operations into Flows or Procedures**: turning a sequence of tool calls that worked into a reusable Huf Flow.
 
 ## 8. Suggested follow-up refactors

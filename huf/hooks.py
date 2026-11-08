@@ -421,7 +421,7 @@ scheduler_events = {
 # Request Events
 # ----------------
 before_request = ["huf.ai.telegram_web_access_enforce.enforce"]
-# after_request = ["huf.utils.after_request"]
+after_request = ["huf.ai.external.oauth.add_auth_challenge"]
 
 # Job Events
 # ----------

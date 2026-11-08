@@ -6,7 +6,8 @@ from a client acting for one External Agent Connection of the signed-in user.
 Authentication: the caller must send a Frappe API token in the ``Authorization`` header, using the
 ``token`` or ``bearer`` scheme (``Authorization: token <key>:<secret>``). Cookie sessions and Guest
 are refused, so a browser that happens to be logged in cannot be driven to call this endpoint.
-OAuth is a planned follow-up.
+OAuth bearer tokens issued by Frappe's OAuth server are accepted through the ``bearer`` scheme; a 401
+answer carries a ``WWW-Authenticate`` challenge added by ``oauth.add_auth_challenge``.
 
 Session selection: ``Mcp-Session-Id`` header carries the session token. When it is present, the
 session is loaded from it and its connection is derived from the session; ``X-Huf-Connection`` and

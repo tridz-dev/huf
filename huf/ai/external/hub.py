@@ -319,7 +319,7 @@ def dispatch_hub(name: str, arguments: dict | None, session_doc, tier: str | Non
 		if is_write:
 			if not approvals.consume_approval(session_doc.name, name, arguments):
 				approval = approvals.request_approval(session_doc.name, name, "write", arguments)
-				return {"status": "approval_required", "approval": approval, "action_class": "write"}
+				return {"status": "approval_required", "approval": approval["approval"], "action_class": "write"}
 
 		result = _HANDLERS[name](arguments)
 		return {"status": "ok", "result": _clean(result)}

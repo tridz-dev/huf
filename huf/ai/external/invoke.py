@@ -185,9 +185,13 @@ def external_invoke(
 		frappe.log_error(title="External agent tool invocation failed")
 		return {"status": "error", "error": EXECUTION_ERROR}
 
+	# A handler can report its own failure inside a successful call ({"success": False, ...}).
+	result_dict = result.as_dict()
+	inner = result_dict.get("result")
+	inner_failed = isinstance(inner, dict) and inner.get("success") is False
 	payload = {
-		"status": "ok" if result.success else "error",
-		**result.as_dict(),
+		"status": "ok" if result.success and not inner_failed else "error",
+		**result_dict,
 		"action_class": action_class,
 	}
 	post_event(session_doc.name, "from_agent", "tool_result", payload, idempotency_key=key)

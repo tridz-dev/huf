@@ -51,7 +51,7 @@ def test_get_all_applies_operators_order_limit_and_pluck(fake):
 def test_for_update_is_recorded_and_commit_rollback_are_counted(fake):
 	fake.get_doc({"doctype": SESSION, "name": "S1", "last_seq": 4}).insert()
 
-	assert fake.db.get_value(SESSION, "S1", ["last_seq"], for_update=True) == (4,)
+	assert fake.db.get_value(SESSION, "S1", ["last_seq"], for_update=True) == 4
 	assert fake.db.locks == [(SESSION, "S1")]
 	fake.db.commit()
 	fake.db.commit()
