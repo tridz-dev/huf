@@ -142,12 +142,45 @@ Events for a session, such as user replies, approval decisions and cancellations
 
 `huf_wait` returns queued events within at most 10 seconds (default 5), even if nothing has arrived. The caller should poll again. Waiting is a convenience, not a guarantee of timely delivery.
 
-## 7. Not yet implemented
+## 7. Running tasks from Huf (managed runner)
+
+`scripts/external_runner/runner.py` lets you press **Send a task** in Huf and have a command on your own machine do the work. It is a small standard-library script that you run yourself. It uses the AI app already installed and logged in on that machine, with that app's own credentials. Huf never receives those credentials. This is user-operated, not a hosted service: Huf does not start, host or supervise the runner.
+
+1. Create an External Agent Connection and an API key for its user (see "Connecting").
+2. On the machine where your AI app is logged in, start the runner. Start it before sending a task, because it opens its own session and tasks are delivered to the newest open session:
+
+   ```
+   export HUF_TOKEN=<api_key>:<api_secret>
+   python3 scripts/external_runner/runner.py \
+       --url https://<site>/api/method/huf.ai.external.gateway.mcp \
+       --connection <connection name> \
+       --command 'my-ai-cli --prompt {prompt}'
+   ```
+
+3. In Huf, open the connection and press **Send a task**.
+
+The runner polls with `huf_wait`. For each `task_assigned` event it reports "Started", runs the command, reports the output (at most 4000 characters) and finishes the task with `huf_complete`: `success` with the command's output as the result, or `failed` with the error text. A non-zero exit or a timeout counts as failed.
+
+Options:
+
+| Option | Meaning |
+|--------|---------|
+| `--url` | Gateway URL. |
+| `--token` | `key:secret`; defaults to the `HUF_TOKEN` environment variable. |
+| `--connection` | Connection name, sent as `X-Huf-Connection`. Needed only with several enabled connections. |
+| `--command` | Command template, split like a shell would but run without one. `{prompt}` becomes one argument holding the whole task text; if it is absent the prompt is appended as the last argument. |
+| `--stdin` | Send the prompt on standard input instead. |
+| `--timeout` | Seconds allowed per task (default 900). The command is killed when it expires. |
+| `--once` | Exit after one task. |
+
+The runner stops on Ctrl+C or SIGTERM, retries network errors with a growing delay, starts a new session if the gateway refuses the old one, and exits with an error if the credentials are rejected (HTTP 401 or 403).
+
+## 8. Not yet implemented
 
 - **Managed runtimes**: running the agent inside Huf, for example through a Codex app server or a hosted Claude runtime.
 - **Converting repeated operations into Flows or Procedures**: turning a sequence of tool calls that worked into a reusable Huf Flow.
 
-## 8. Suggested follow-up refactors
+## 9. Suggested follow-up refactors
 
 These are separate from the External Intelligence feature and should land in their own changes.
 
