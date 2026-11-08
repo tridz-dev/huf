@@ -102,3 +102,8 @@ export interface CreateExternalConnectionInput {
   communicate_policy?: ExternalPolicy;
   hub_tier?: ExternalHubTier;
 }
+
+export interface AssignedTask {
+  session: string;
+  seq: number;
+}

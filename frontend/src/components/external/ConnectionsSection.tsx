@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { AlertTriangle, Check, Loader2, Plug, Plus } from 'lucide-react';
+import { AlertTriangle, Check, Loader2, Plug, Plus, Send } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -36,6 +36,7 @@ import {
   testExternalConnection,
   updateExternalConnection,
 } from '@/services/external/agentsApi';
+import { AssignTaskDialog } from './AssignTaskDialog';
 import { ConnectionSetupDialog } from './ConnectionSetupDialog';
 
 type Connection = ExternalConnection;
@@ -95,6 +96,7 @@ export function ConnectionsSection() {
   const [testingName, setTestingName] = useState<string | null>(null);
   const [testResults, setTestResults] = useState<Record<string, ConnectionTestResult>>({});
   const [setupConnection, setSetupConnection] = useState<Connection | null>(null);
+  const [taskConnection, setTaskConnection] = useState<Connection | null>(null);
 
   const loadConnections = useCallback(async () => {
     try {
@@ -240,6 +242,12 @@ export function ConnectionsSection() {
                     Last seen: {formatLastSeen(connection.last_seen)}
                   </p>
                   <div className="flex items-center gap-2">
+                    {connection.enabled === 1 && (
+                      <Button variant="outline" size="sm" onClick={() => setTaskConnection(connection)}>
+                        <Send className="mr-2 h-3.5 w-3.5" />
+                        Send a task
+                      </Button>
+                    )}
                     <Button
                       variant="outline"
                       size="sm"
@@ -262,6 +270,17 @@ export function ConnectionsSection() {
             </Card>
           ))}
         </div>
+      )}
+
+      {taskConnection && (
+        <AssignTaskDialog
+          open
+          onOpenChange={(next) => {
+            if (!next) setTaskConnection(null);
+          }}
+          connection={taskConnection.name}
+          agentName={taskConnection.agent}
+        />
       )}
 
       {setupConnection && (

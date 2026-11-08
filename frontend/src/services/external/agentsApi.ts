@@ -9,6 +9,7 @@ import { call } from '@/lib/frappe-sdk';
 import { handleFrappeError } from '@/lib/frappe-error';
 import type {
   AgentExecutionMode,
+  AssignedTask,
   ConnectableAgent,
   ConnectionSnippets,
   ConnectionTestResult,
@@ -193,6 +194,19 @@ export async function listConnectableAgents(): Promise<ConnectableAgent[]> {
 export async function setAgentExecutionMode(agent: string, executionMode: AgentExecutionMode): Promise<void> {
   try {
     await call.post(`${BASE}set_agent_execution_mode`, { agent, execution_mode: executionMode });
+  } catch (error) {
+    handleFrappeError(error);
+    throw error;
+  }
+}
+
+/**
+ * Queue a task for a connected agent. The app picks it up the next time it checks in.
+ */
+export async function assignExternalTask(connection: string, prompt: string): Promise<AssignedTask> {
+  try {
+    const response = await call.post(`${BASE}assign_task`, { connection, prompt });
+    return response.message as AssignedTask;
   } catch (error) {
     handleFrappeError(error);
     throw error;
