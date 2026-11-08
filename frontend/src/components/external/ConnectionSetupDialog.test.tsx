@@ -2,7 +2,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-const URL = 'https://huf.example.com/api/method/huf.ai.external.gateway';
+const URL = 'https://huf.example.com/mcp-endpoint';
 
 vi.mock('@/services/external/agentsApi', () => ({
   getConnectionSnippets: vi.fn(() =>
