@@ -110,6 +110,9 @@ class AgentManager:
 
     def __init__(self, agent_name, file_handler=None, provider_override=None, model_override=None, conversation_id=None, desktop_ctx=None):
         self.agent_doc = frappe.get_cached_doc("Agent", agent_name)
+        from huf.ai.external.guard import assert_native_execution
+
+        assert_native_execution(self.agent_doc)
         self.conversation_id = conversation_id
         # Pinned Huf Desktop executor context (None for every non-desktop run).
         self.desktop_ctx = desktop_ctx

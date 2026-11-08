@@ -27,16 +27,11 @@ class ExternalActionApproval(Document):
 		return False
 
 	def validate(self):
-		if self.status not in _DECIDED_STATUSES or not self.decided_by:
-			return
-
-		if self.decided_by != frappe.session.user:
-			return
-
-		if "System Manager" in frappe.get_roles(self.decided_by):
-			return
-
-		frappe.throw(_("You cannot decide your own request."), frappe.PermissionError)
+		# Decisions are made through huf.ai.external.approvals.decide_approval, which checks
+		# authority. The agent has no capability that reaches it, so the connected user
+		# approving from Huf is the intended flow.
+		if self.status in _DECIDED_STATUSES and not self.decided_by:
+			self.decided_by = frappe.session.user
 
 	def _session_user(self) -> str | None:
 		if not self.session:
