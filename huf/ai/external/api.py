@@ -16,8 +16,15 @@ from frappe import _
 from frappe.utils import cint, now_datetime
 
 from huf.ai.external import approvals, mailbox, sessions
-from huf.ai.external.states import is_terminal
+from huf.ai.external.states import (
+	ACTIVE,
+	RUNTIME_OFFLINE,
+	WAITING_APPROVAL,
+	WAITING_INPUT,
+	is_terminal,
+)
 
+AGENT_DOCTYPE = "Agent"
 CONNECTION_DOCTYPE = "External Agent Connection"
 SESSION_DOCTYPE = "External Agent Session"
 EVENT_DOCTYPE = "External Agent Event"
@@ -26,6 +33,9 @@ APPROVAL_DOCTYPE = approvals.APPROVAL_DOCTYPE
 RUNTIME_KINDS = ("claude_code", "codex", "other")
 MODES = ("Connected", "Managed")
 POLICY_VALUES = ("Allow", "Requires Approval", "Deny")
+NATIVE_EXECUTION_MODE = "Native"
+EXECUTION_MODES = (NATIVE_EXECUTION_MODE, "Connected External", "Managed External")
+OPEN_SESSION_STATES = (ACTIVE, WAITING_INPUT, WAITING_APPROVAL, RUNTIME_OFFLINE)
 
 MAX_TEXT_LENGTH = 8000
 MAX_LIST_LIMIT = 100
@@ -300,3 +310,56 @@ def cancel(session: str) -> str:
 	_owned_session(session)
 	sessions.cancel_session(session)
 	return frappe.db.get_value(SESSION_DOCTYPE, session, "state")
+
+
+@frappe.whitelist()
+def list_connectable_agents() -> list[dict]:
+	"""Enabled agents the signed-in user may run, with the mode that decides how they run."""
+	from huf.ai.agent.access import check_agent_access
+
+	_require_user()
+	agents = frappe.get_all(
+		AGENT_DOCTYPE,
+		fields=["name", "agent_name", "execution_mode", "disabled"],
+		filters={"disabled": 0},
+		limit=500,
+	)
+	return [
+		{
+			"name": row.name,
+			"agent_name": row.agent_name,
+			"execution_mode": row.execution_mode or NATIVE_EXECUTION_MODE,
+		}
+		for row in agents
+		if check_agent_access(frappe.get_doc(AGENT_DOCTYPE, row.name), frappe.session.user)
+	]
+
+
+@frappe.whitelist(methods=["POST"])
+def set_agent_execution_mode(agent: str, execution_mode: str) -> dict:
+	_require_user()
+	_validate_choice("execution mode", execution_mode, EXECUTION_MODES)
+	if not frappe.has_permission(AGENT_DOCTYPE, "write", agent):
+		frappe.throw(_("You do not have permission to change this agent."), frappe.PermissionError)
+
+	current = frappe.db.get_value(AGENT_DOCTYPE, agent, "execution_mode") or NATIVE_EXECUTION_MODE
+	if execution_mode == NATIVE_EXECUTION_MODE and current != NATIVE_EXECUTION_MODE:
+		open_sessions = frappe.get_all(
+			SESSION_DOCTYPE,
+			filters={"agent": agent, "state": ["in", list(OPEN_SESSION_STATES)]},
+			pluck="name",
+			limit=1,
+		)
+		if open_sessions:
+			frappe.throw(
+				_("This agent has an open external session. End it before switching to Native."),
+				frappe.ValidationError,
+			)
+		# Native agents run only through the built-in runner, so external connections must stop.
+		for connection in frappe.get_all(
+			CONNECTION_DOCTYPE, filters={"agent": agent, "enabled": 1}, pluck="name"
+		):
+			frappe.db.set_value(CONNECTION_DOCTYPE, connection, "enabled", 0)
+
+	frappe.db.set_value(AGENT_DOCTYPE, agent, "execution_mode", execution_mode)
+	return {"agent": agent, "execution_mode": execution_mode}
