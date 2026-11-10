@@ -133,6 +133,8 @@ Organize AI capabilities into modular, reusable packages:
 - **Skills Catalog** — Combine system prompts, tools, knowledge sources, and MCP configurations into shareable skills
 - **Huf Apps** — Package complete agentic applications (agents, flows, data tables, skills) into installable Huf Apps
 - **App Discovery** — Automatically discover and register installed apps and skill dependencies
+- **Official Skills Catalog** — [`tridz-dev/huf-skills`](https://github.com/tridz-dev/huf-skills) is the curated, official collection of skills for Huf agents, and the default source in skill settings
+- **Coding Agent Skill** — [`tridz-dev/huf_app_skill`](https://github.com/tridz-dev/huf_app_skill) helps AI coding agents (Claude Code, Codex, Cursor, OpenCode, Kimi) build Huf Apps. Clone it and run `./install.sh` from the repo directory, as described in its README
 
 ### Multi-Channel Gateways
 
