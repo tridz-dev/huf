@@ -136,15 +136,6 @@ Organize AI capabilities into modular, reusable packages:
 - **Official Skills Catalog** — [`tridz-dev/huf-skills`](https://github.com/tridz-dev/huf-skills) is the curated, official collection of skills for Huf agents, and the default source in skill settings
 - **Coding Agent Skill** — [`tridz-dev/huf_app_skill`](https://github.com/tridz-dev/huf_app_skill) helps AI coding agents (Claude Code, Codex, Cursor, OpenCode, Kimi) build Huf Apps. Clone it and run `./install.sh` from the repo directory, as described in its README
 
-### Client Apps
-
-Huf client apps for the platform. The repositories below are private (early access) and are not publicly available yet:
-
-- **Huf Desktop** — [`tridz-dev/huf_desktop`](https://github.com/tridz-dev/huf_desktop) (private, early access). Electron desktop app and the current client
-- **Huf iOS** — [`tridz-dev/huf_mobile_ios`](https://github.com/tridz-dev/huf_mobile_ios) (private, early access)
-- **Huf Android** — [`tridz-dev/huf_mobile_android`](https://github.com/tridz-dev/huf_mobile_android) (private, early access)
-- **Huf Web (Legacy PWA)** — [`tridz-dev/huf_web_legacy`](https://github.com/tridz-dev/huf_web_legacy) (private, deprecated). Superseded by Huf Desktop
-
 ### Multi-Channel Gateways
 
 Connect your agents to inbound and outbound communication channels:
@@ -289,8 +280,8 @@ bench restart
 ├──────────────────────────────────────────────────────────────────────────────────────────┤
 │  SURFACES & GATEWAYS                                                                     │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌─────────────┐  │
-│  │   Chat UI    │  │     API      │  │ Flow Builder │  │  Gateways    │  │  Huf Apps   │  │
-│  │  (Studio)    │  │  Endpoints   │  │ (React Flow) │  │(Email/TG/Slack│  │ & Extensions│  │
+│  │   Chat UI    │  │  API / PWA   │  │ Flow Builder │  │  Gateways    │  │  Huf Apps   │  │
+│  │ (Studio/PWA) │  │  Endpoints   │  │ (React Flow) │  │(Email/TG/Slack│  │ & Extensions│  │
 │  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘  └──────┬──────┘  │
 ├─────────┼─────────────────┼─────────────────┼─────────────────┼─────────────────┼────────┤
 │  CORE ENGINE                                                                             │
