@@ -9,6 +9,7 @@
 		"configuration_section",
 		"source_name",
 		"description",
+		"source_kind",
 		"column_break_1",
 		"knowledge_type",
 		"scope",
@@ -76,6 +77,13 @@
 			"fieldname": "description",
 			"fieldtype": "Small Text",
 			"label": "Description"
+		},
+		{
+			"default": "Manual",
+			"fieldtype": "Select",
+			"label": "Source Kind",
+			"options": "Manual\nUpload\nDirectory\nS3\nSFTP\nGoogle Drive",
+			"fieldname": "source_kind"
 		},
 		{
 			"fieldname": "column_break_1",
