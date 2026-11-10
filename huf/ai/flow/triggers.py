@@ -195,34 +195,77 @@ def start_flow_run(
 	"""
 	from huf.ai.flow import engine
 
-	if user:
-		frappe.set_user(user)
-	flow_run = engine.create_flow_run(
-		flow_id=flow_id, payload=payload, trigger_type=trigger_type, ignore_permissions=True
-	)
-	if trigger_node_id and flow_run.current_node_id != trigger_node_id:
-		flow_run.db_set("current_node_id", trigger_node_id)
-	if enqueue:
-		if commit_first:
-			# GET requests are not committed by Frappe, so the new run (and the worker's view of it)
-			# would be rolled back; commit before the job can look for it.
-			frappe.db.commit()  # nosemgrep
-		frappe.enqueue("huf.ai.flow.engine.run_flow", queue="default", flow_run_name=flow_run.name)
-	else:
-		engine.run_flow(flow_run.name)
-	return flow_run
+	previous_user = frappe.session.user
+	try:
+		if user:
+			frappe.set_user(user)
+
+		flow_run = engine.create_flow_run(
+			flow_id=flow_id,
+			payload=payload,
+			trigger_type=trigger_type,
+			ignore_permissions=True,
+		)
+
+		if trigger_node_id and flow_run.current_node_id != trigger_node_id:
+			flow_run.db_set("current_node_id", trigger_node_id)
+
+		if enqueue:
+			if commit_first:
+				# GET requests are not committed by Frappe, so the new run (and the worker's view of it)
+				# would be rolled back; commit before the job can look for it.
+				frappe.db.commit()  # nosemgrep
+			frappe.enqueue(
+				"huf.ai.flow.engine.run_flow",
+				queue="default",
+				flow_run_name=flow_run.name,
+			)
+		else:
+			engine.run_flow(flow_run.name)
+
+		return flow_run
+	finally:
+		frappe.set_user(previous_user)
 
 
-def run_trigger_job(flow_id: str, payload: dict, trigger_type: str, trigger_node_id: str, run_as: str):
+def run_trigger_job(
+	flow_id: str,
+	payload: dict,
+	trigger_type: str,
+	trigger_node_id: str,
+	run_as: str,
+):
 	"""Background job: start (and run) one triggered flow as ``run_as``.
 
 	The flow may have been paused or deleted between the trigger and this job running: then nothing starts.
 	"""
-	if frappe.db.get_value("Flow Definition", flow_id, "status") != "Active":
-		return
-	frappe.set_user(run_as)
-	frappe.flags.huf_flow_run_origin = True  # docs written by this run must not re-trigger flows
-	start_flow_run(flow_id, payload, trigger_type, trigger_node_id, user=run_as, enqueue=False)
+	previous_user = frappe.session.user
+	flags = frappe.flags
+	had_origin_flag = hasattr(flags, "huf_flow_run_origin")
+	previous_origin_flag = getattr(flags, "huf_flow_run_origin", None)
+
+	try:
+		if frappe.db.get_value("Flow Definition", flow_id, "status") != "Active":
+			return
+
+		frappe.set_user(run_as)
+		flags.huf_flow_run_origin = True
+		return start_flow_run(
+			flow_id,
+			payload,
+			trigger_type,
+			trigger_node_id,
+			user=run_as,
+			enqueue=False,
+		)
+	finally:
+		try:
+			frappe.set_user(previous_user)
+		finally:
+			if had_origin_flag:
+				flags.huf_flow_run_origin = previous_origin_flag
+			elif hasattr(flags, "huf_flow_run_origin"):
+				delattr(flags, "huf_flow_run_origin")
 
 
 # ---------------------------------------------------------------------------
