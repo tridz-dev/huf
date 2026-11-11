@@ -153,3 +153,61 @@ Full design, API and limits: [WhatsApp Broadcast](../whatsapp/BROADCAST.md). Man
 - Messaging limit: the preview reads `whatsapp_business_manager_messaging_limit`. If it is unknown the preview warns (`tier_unknown`) and the recipient cap is the only ceiling.
 - Costs: the preview shows cost as unavailable (`cost.total` null) until rates are filled in `huf/ai/whatsapp/broadcast/rates.json` from Meta's official rate card. Check Meta billing for real charges.
 - Live verification is described in [broadcast-live-verification.md](../whatsapp/broadcast-live-verification.md). Run it only against allow-listed test recipients.
+
+## 11. External app hooks
+
+Huf fires three hooks for external apps (for example Loyal Arrow). Register them in the external app's `hooks.py`. Each value is a dotted path or a list of dotted paths; handlers run in registration order.
+
+```python
+# external_app/hooks.py
+huf_gateway_pre_send = ["external_app.whatsapp_guard.check_send"]
+huf_gateway_opt_out = ["external_app.whatsapp_guard.on_opt_change"]
+huf_gateway_delivery_status = ["external_app.whatsapp_guard.on_delivery_status"]
+```
+
+Helpers are in `huf/ai/gateway_hooks.py`:
+
+- `fire_hook(name, **payload)` notifies. A handler that raises, or a bad dotted path, is written to the Error Log and skipped. The other handlers still run.
+- `gate_hook(name, **payload)` gates. It fails closed (see `huf_gateway_pre_send`).
+
+All handlers are called with keyword arguments only. Handlers for every hook must be side-effect-free: no database writes, no messages, no network calls. Hooks can fire inside a webhook or send transaction.
+
+### huf_gateway_pre_send (gate)
+
+Called by `outbound_policy.check_pre_send(gateway, to, kind, context)` right before a Graph POST or a `WhatsApp Message` insert.
+
+- Kwargs: `gateway` (Gateway name), `to` (recipient; normalized on bridge paths, raw on adapter, tool and management paths), `kind` (`text`, `template`, `media` or `other`), `context` (dict).
+- `context` keys: `source` (for example `bridge.send_text`, `bridge.send_template`, `bridge.send_media`, `bridge._send_payload`, `bridge.send_sticker`, `adapter`, `agent_tool`, `management`), `subtype` (for example the media kind, `interactive`, `location`, `call_permission_request`), and `consent_confirmation` (bool, only on bridge and adapter paths). Use `context.get(...)`: tool and management calls omit the key.
+- Verdict: a truthy return or an exception blocks. A falsy return allows. No handlers means allow.
+- Refusal: `OutboundRefused(message, code="blocked_by_hook")`. The message is always `Blocked by gateway hook`; a handler's returned string is not passed through. The code is non-retryable. Bridge calls raise `BridgeError` with `error == "blocked_by_hook"`, and `reply_api` and `broadcast` map it to a refusal or skip.
+- Idempotency key: none. The payload has no message id, and the hook runs once per send call, so a retried send calls it again. Keep the decision a pure function of the payload.
+- Consent: `consent_confirmation` is True only for the STOP/START confirmation reply, so a guard can let it through to an opted-out contact.
+- Kinds: `text`, `template`, `media` (image, audio, video, document, sticker), `other` (interactive, location, contacts, reaction, call permission request).
+- Known residual gaps:
+  - A call with no gateway (`gateway` is None) skips the hook with a debug log. This includes any caller that does not pass `gateway_name`.
+  - Each part of a multi-part text fires the hook separately.
+  - A closed-window fallback fires as `template`, not `text`.
+  - `consent_confirmation` is not set on tool or management calls.
+- Tests: `huf/ai/whatsapp/tests/test_pre_send_hook.py`, `huf/ai/whatsapp/tests/test_pre_send_bridge.py`.
+
+### huf_gateway_opt_out (notify)
+
+Fired by `_record_opt_out` and `_record_opt_in` in `huf/ai/gateway_service.py`, after the database write, and only on a real transition.
+
+- Kwargs: `gateway` (Gateway name), `sender_id` (str), `kind` (`opt_out` or `opt_in`), `keyword` (str, may be empty).
+- `opt_out` fires only when the sender was not already opted out. `opt_in` fires only when the sender was opted out.
+- For linked identities, one event fires: `opt_out` for the primary sender id, and `opt_in` for the first linked id that changed.
+- Idempotency key: `(gateway, sender_id, kind)`.
+- Residual gap: the hook covers only changes made through the consent handling paths (STOP/START keywords). Other changes to a sender's opt-out state do not fire it.
+
+### huf_gateway_delivery_status (notify)
+
+Fired by `_update_reply_status` in `huf/ai/gateway_webhook.py`, after the Gateway Event status is written. It applies only to replies recorded on a Gateway Event (matched by `reply_message_id`).
+
+- Kwargs: `gateway`, `provider_message_id` (the wamid), `status` (`sent`, `delivered`, `read`, `played` or `failed`), `error_code` (the first Meta error's code, or None), `error_title` (the first error's title or message, or None), `event_name` (Gateway Event name).
+- Fires only when the status advances, or when a `failed` is newly recorded. Replays, out-of-order statuses and an identical repeated `failed` fire nothing.
+- Idempotency key: `(provider_message_id, status)`.
+- Residual gaps:
+  - Only the first Meta error is passed as `error_code` and `error_title`. All errors are kept in the Gateway Event's `delivery_error` text, which is redacted and capped.
+  - The status is written with `db.set_value`, which triggers no doc events, so this hook is the only signal.
+  - The hook runs inside the webhook request. A later rollback does not unsend the message.

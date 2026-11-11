@@ -45,3 +45,7 @@ Notes:
 ## Broadcasts
 
 See [WhatsApp Broadcast](BROADCAST.md) for one-template bounded sends to opted-in recipients: state machine, limits and pacing, error handling, costs, and the runbook for the kill switch.
+
+## External app hooks
+
+See [External app hooks](../gateways/whatsapp-runbook.md#11-external-app-hooks) for the `huf_gateway_pre_send`, `huf_gateway_opt_out` and `huf_gateway_delivery_status` hooks that external apps register.
