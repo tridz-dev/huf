@@ -862,6 +862,12 @@ def _send_media_impl(gateway_name, to, kind, link, file_url, caption, filename, 
 				return loaded
 			content, fname, mime = loaded
 			k = (kind or "").strip().lower()
+			from huf.ai.whatsapp import outbound_policy as policy
+
+			try:  # before anything reaches Meta; the in-bridge send check still runs (the hook fires twice per file send)
+				policy.check_pre_send(gateway_name, phone, "media", {"source": "management", "subtype": k or "media"})
+			except policy.OutboundRefused as exc:
+				return {"success": False, "error": exc.code, "message": str(exc)}
 			use_id = bridge.upload_media(account_name, content, mime, fname, kind=k or None, voice=bool(voice))["media_id"]
 			use_name = filename or (fname if k == "document" else None)
 		return bridge.send_media(

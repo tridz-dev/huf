@@ -741,8 +741,17 @@ class WhatsAppGatewayAdapter(GatewayAdapter):
 			)
 		return self._send_built(wm.build_interactive_payload(bridge.normalize_phone(to), kind, spec or {}, reply_to))
 
-	def upload_media(self, content: bytes, mime_type: str, filename: str = "", kind: str | None = None, voice: bool = False) -> str:
-		"""Upload bytes to Meta (``POST /{phone_id}/media``) and return the media id."""
+	def upload_media(
+		self, content: bytes, mime_type: str, filename: str = "", kind: str | None = None, voice: bool = False,
+		to: str | None = None,
+	) -> str:
+		"""Upload bytes to Meta (``POST /{phone_id}/media``) and return the media id.
+
+		``to`` (the recipient the media is for) runs ``huf_gateway_pre_send`` first so a refused send uploads nothing;
+		the later send fires the hook again.
+		"""
+		if to:
+			self._pre_send({"type": "document" if kind not in ("image", "audio", "video", "sticker") else kind, "to": to})
 		if self._bridge_mode():
 			return bridge.upload_media(self._account, content, mime_type, filename, kind, voice, trusted=True)["media_id"]
 		mime = wm.normalize_mime(mime_type)

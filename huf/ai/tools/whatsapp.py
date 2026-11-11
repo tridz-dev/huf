@@ -755,6 +755,9 @@ def _send_media_file(kwargs: dict, recipient: str) -> str:
 		_, errors = wm.validate_media_message(prepared["kind"], "", "pending", first, filename, prepared["voice"])
 		if errors:
 			return json.dumps(wt.validation_error(errors), default=str)
+		blocked = _pre_send_refusal(kwargs, recipient, "media", prepared["kind"])  # before anything reaches Meta
+		if blocked:
+			return blocked
 		media_id = _upload_for_send(kwargs, prepared)
 	except send_file.FileSendError as e:
 		return _file_error(e)
