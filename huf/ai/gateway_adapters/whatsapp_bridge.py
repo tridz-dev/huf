@@ -32,7 +32,8 @@ from urllib.parse import quote, urljoin, urlparse
 import frappe
 import frappe.utils
 
-from huf.ai.whatsapp import outbound_policy as policy, template_plain
+from huf.ai.whatsapp import outbound_policy as policy, pre_send, template_plain
+from huf.ai.gateway_adapters.whatsapp_parts.bridge_utils import _button_sig, _clean_reason, _parse_ts
 from huf.ai.gateway_adapters import whatsapp_messages as wm
 from huf.ai.gateway_adapters import whatsapp_templates as wt
 
@@ -123,6 +124,14 @@ class BridgeError(Exception):
 
 def _err(code: str, **extra: Any) -> dict[str, Any]:
 	return {"success": False, "error": code, **extra}
+
+
+def _pre_send(gateway_name: str | None, to: Any, kind: str, source: str, subtype: str = "") -> None:
+	"""``huf_gateway_pre_send`` (fail closed) before any Graph POST / ``WhatsApp Message`` insert; a refusal is a ``BridgeError``."""
+	try:
+		pre_send.check(gateway_name, normalize_phone(to), kind, source, subtype or kind, to)
+	except policy.OutboundRefused as exc:
+		raise BridgeError(_err(exc.code, message=str(exc))) from exc
 
 
 def _gateway_required() -> dict[str, Any]:
@@ -451,7 +460,7 @@ def send_text(
 	reply_to: str | None = None,
 	trusted: bool = False,
 	preview_url: bool | None = None,
-	http_post: Callable[..., Any] | None = None,
+	http_post: Callable[..., Any] | None = None, gateway_name: str | None = None,
 ) -> dict[str, Any]:
 	"""Send a free-form text via ``WhatsApp Message`` (it performs the one send, A1).
 
@@ -465,6 +474,7 @@ def send_text(
 	"""
 	acct = _account_or_error(account_name)
 	_refuse_if_disconnected(acct)
+	_pre_send(gateway_name, to, "text", "bridge.send_text")
 	if preview_url is not None and trusted:
 		return _send_text_direct(acct, to, text, reply_to, bool(preview_url), http_post)
 	values = {
@@ -824,6 +834,7 @@ def _mirror_template_send(acct: dict[str, Any], docname: str, to: str, wamid: st
 		return {"success": True, "name": doc.name, "message_id": wamid, "status": doc.get("status")}
 	except Exception:
 		# The template is already delivered; a failed audit row must not fail the send.
+		frappe.log_error(title="WhatsApp mirror failed", message=frappe.get_traceback())
 		return {"success": True, "name": None, "message_id": wamid, "status": "Success", "mirrored": False}
 
 
@@ -986,6 +997,7 @@ def send_template(
 		policy.enforce_template(account_name, to, tpl, gateway_name)
 	except policy.OutboundRefused as exc:
 		raise BridgeError(_err(exc.code, message=str(exc))) from exc
+	_pre_send(gateway_name, to, "template", "bridge.send_template")
 
 	other_buttons, copy_comps, errors = split_copy_code_params(button_params)
 	view = _send_view(tpl) if tpl else _params_template_view(body_params, header_params)
@@ -1188,7 +1200,7 @@ def send_media(
 	trusted: bool = False,
 	voice: bool | None = None,
 	http_post: Callable[..., Any] | None = None,
-	http_get: Callable[..., Any] | None = None,
+	http_get: Callable[..., Any] | None = None, gateway_name: str | None = None,
 ) -> dict[str, Any]:
 	"""Send an image/document/audio/video/sticker; exactly one Graph call.
 
@@ -1205,11 +1217,12 @@ def send_media(
 	media, errors = wt.validate_media_request(kind, link, media_id, caption, filename, voice)
 	if errors:
 		raise BridgeError(wt.validation_error(errors))
+	_pre_send(gateway_name, to, "media", "bridge.send_media", media["kind"])
 	if not media["media_id"]:
 		_preflight_link(media["kind"], media["link"], http_get)
 	if media["media_id"] or media["kind"] == "sticker" or media["voice"] or media["filename"]:
 		payload = wt.build_media_payload(normalize_phone(to), media, reply_to)
-		return _send_payload(account_name, payload, trusted, http_post)
+		return _send_payload(account_name, payload, trusted, http_post, gateway_name, _gated=True)
 	values = {
 		"doctype": "WhatsApp Message",
 		"type": "Outgoing",
@@ -1300,15 +1313,19 @@ def _mirror_direct_send(acct: dict[str, Any], payload: dict[str, Any], wamid: st
 		return {"success": True, "name": doc.name, "message_id": wamid, "status": doc.get("status")}
 	except Exception:
 		# already delivered: a failed audit row must not fail the send
+		frappe.log_error(title="WhatsApp mirror failed", message=frappe.get_traceback())
 		return {"success": True, "name": None, "message_id": wamid, "status": "Success", "mirrored": False}
 
 
 def _send_payload(
-	account_name: str, payload: dict[str, Any], trusted: bool = False, http_post: Callable[..., Any] | None = None
+	account_name: str, payload: dict[str, Any], trusted: bool = False, http_post: Callable[..., Any] | None = None,
+	gateway_name: str | None = None, _gated: bool = False,
 ) -> dict[str, Any]:
 	acct = _account_or_error(account_name)
 	if not _may_bypass(trusted) and not frappe.has_permission("WhatsApp Message", "create"):
 		raise frappe.PermissionError("Not permitted to send WhatsApp messages")
+	if not _gated:  # send_media / send_sticker already fired the hook for their payload branch
+		_pre_send(gateway_name, payload.get("to"), pre_send.kind_of(str(payload.get("type") or "")), "bridge._send_payload", str(payload.get("type") or ""))
 	wamid = _post_typed_message(acct, payload, http_post)
 	return _mirror_direct_send(acct, payload, wamid, trusted)
 
@@ -1322,51 +1339,52 @@ def _built(result: tuple[dict[str, Any] | None, list[dict[str, str]]]) -> dict[s
 
 def send_interactive(
 	account_name: str, to: str, kind: str, spec: dict[str, Any], reply_to: str | None = None,
-	trusted: bool = False, http_post: Callable[..., Any] | None = None,
+	trusted: bool = False, http_post: Callable[..., Any] | None = None, gateway_name: str | None = None,
 ) -> dict[str, Any]:
 	"""Send reply buttons / list / CTA URL / flow / location request (``kind``: buttons|list|cta_url|flow|location_request)."""
 	_account_or_error(account_name)
 	payload = _built(wm.build_interactive_payload(normalize_phone(to), kind, spec or {}, reply_to))
-	return _send_payload(account_name, payload, trusted, http_post)
+	return _send_payload(account_name, payload, trusted, http_post, gateway_name)
 
 
 def send_location(
 	account_name: str, to: str, latitude: Any, longitude: Any, name: str | None = None, address: str | None = None,
-	reply_to: str | None = None, trusted: bool = False, http_post: Callable[..., Any] | None = None,
+	reply_to: str | None = None, trusted: bool = False, http_post: Callable[..., Any] | None = None, gateway_name: str | None = None,
 ) -> dict[str, Any]:
 	_account_or_error(account_name)
 	payload = _built(wm.build_location_payload(normalize_phone(to), latitude, longitude, name, address, reply_to))
-	return _send_payload(account_name, payload, trusted, http_post)
+	return _send_payload(account_name, payload, trusted, http_post, gateway_name)
 
 
 def send_contacts(
 	account_name: str, to: str, contacts: Any, reply_to: str | None = None, trusted: bool = False,
-	http_post: Callable[..., Any] | None = None,
+	http_post: Callable[..., Any] | None = None, gateway_name: str | None = None,
 ) -> dict[str, Any]:
 	_account_or_error(account_name)
 	payload = _built(wm.build_contacts_payload(normalize_phone(to), contacts, reply_to))
-	return _send_payload(account_name, payload, trusted, http_post)
+	return _send_payload(account_name, payload, trusted, http_post, gateway_name)
 
 
 def send_reaction(
 	account_name: str, to: str, message_id: str, emoji: str = "", remove: bool = False, trusted: bool = False,
-	http_post: Callable[..., Any] | None = None,
+	http_post: Callable[..., Any] | None = None, gateway_name: str | None = None,
 ) -> dict[str, Any]:
 	"""React to (``emoji``) or un-react (empty emoji / ``remove``) an inbound message (target <= 30 days old)."""
 	_account_or_error(account_name)
 	payload = _built(wm.build_reaction_payload(normalize_phone(to), message_id, emoji, remove))
-	return _send_payload(account_name, payload, trusted, http_post)
+	return _send_payload(account_name, payload, trusted, http_post, gateway_name)
 
 
 def send_sticker(
 	account_name: str, to: str, link: str | None = None, media_id: str | None = None, reply_to: str | None = None,
-	trusted: bool = False, http_post: Callable[..., Any] | None = None, http_get: Callable[..., Any] | None = None,
+	trusted: bool = False, http_post: Callable[..., Any] | None = None, http_get: Callable[..., Any] | None = None, gateway_name: str | None = None,
 ) -> dict[str, Any]:
 	_account_or_error(account_name)
 	payload = _built(wm.build_sticker_payload(normalize_phone(to), link, media_id, reply_to))
+	_pre_send(gateway_name, to, "media", "bridge.send_sticker", "sticker")
 	if not media_id:
 		_preflight_link("sticker", link, http_get)
-	return _send_payload(account_name, payload, trusted, http_post)
+	return _send_payload(account_name, payload, trusted, http_post, gateway_name, _gated=True)
 
 
 def post_media_upload(
@@ -1405,7 +1423,7 @@ def send_voice_note(
 	media_id: str | None = None,
 	reply_to: str | None = None,
 	trusted: bool = False,
-	http_post: Callable[..., Any] | None = None,
+	http_post: Callable[..., Any] | None = None, gateway_name: str | None = None,
 ) -> dict[str, Any]:
 	"""Send audio as a voice note (``audio.voice: true``); rejects anything that is not Ogg/Opus before any call."""
 	if link and not media_id:
@@ -1414,7 +1432,7 @@ def send_voice_note(
 			raise BridgeError(wt.validation_error(errors))
 	return send_media(
 		account_name, to, "audio", link=link, media_id=media_id, reply_to=reply_to, trusted=trusted,
-		voice=True, http_post=http_post,
+		voice=True, http_post=http_post, gateway_name=gateway_name,
 	)
 
 
@@ -2195,13 +2213,6 @@ def _write_buttons(parent: str, rows: list[dict[str, Any]]) -> None:
 		child.db_insert()
 
 
-def _button_sig(rows: list[dict[str, Any]]) -> list[tuple]:
-	return [
-		(r.get("button_type") or "", r.get("button_label") or "", r.get("website_url") or "", r.get("phone_number") or "")
-		for r in rows
-	]
-
-
 def _refresh_local_components(name: str, tpl: dict[str, Any]) -> bool:
 	"""Bring a local row's header/body/footer/buttons in line with Meta's components; True when changed."""
 	comps = tpl.get("components")
@@ -2426,14 +2437,6 @@ def _utcnow() -> datetime:
 	return datetime.now(timezone.utc)
 
 
-def _parse_ts(value: Any) -> datetime | None:
-	try:
-		dt = datetime.fromisoformat(str(value))
-	except (TypeError, ValueError):
-		return None
-	return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
-
-
 def _loads(value: Any, default: Any = None) -> Any:
 	if isinstance(value, (dict, list)):
 		return value
@@ -2476,11 +2479,6 @@ def _publish_status(template: str, status: str, reason: str = "") -> None:
 		frappe.publish_realtime("whatsapp_template_status", {"template": template, "status": status, "reason": reason})
 	except Exception:
 		pass
-
-
-def _clean_reason(reason: Any) -> str:
-	text = str(reason or "").strip()
-	return "" if text.upper() == "NONE" else text
 
 
 def _resolve_state_name(template_id: Any, name: Any, language: Any, account: str | None = None) -> str | None:

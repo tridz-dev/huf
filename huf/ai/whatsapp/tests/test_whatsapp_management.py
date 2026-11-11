@@ -75,7 +75,7 @@ class TestWhatsAppManagement(unittest.TestCase):
 			result = mgmt.send_text_message(gateway_name="GW-1", to="+44 7700 900123", text="hello")
 
 		self.assertTrue(result["success"])
-		send_text.assert_called_once_with("ACC-1", "447700900123", "hello")
+		send_text.assert_called_once_with("ACC-1", "447700900123", "hello", gateway_name="GW-1")
 
 	def test_send_text_rejects_empty_recipient_before_bridge(self):
 		with patch.object(bridge, "window_state") as window:

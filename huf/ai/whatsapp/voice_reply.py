@@ -184,7 +184,7 @@ def send_voice_reply(event, gateway, response: str, *, quote: bool = True, once:
 		prepared = prepare_audio(audio)
 		adapter = _adapter(gateway, event)
 		media_id = adapter.upload_media(
-			prepared["content"], prepared["mime"], prepared["filename"], "audio", prepared["voice"]
+			prepared["content"], prepared["mime"], prepared["filename"], "audio", prepared["voice"], to=event.conversation_id
 		)
 		delivery = adapter.send_media(
 			event.conversation_id, "audio", media_id=media_id,

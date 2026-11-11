@@ -64,7 +64,8 @@ import frappe
 import requests
 
 from huf.ai import run_delivery
-from huf.ai.whatsapp import send_file as send_file
+from huf.ai.whatsapp import pre_send, send_file as send_file
+from huf.ai.whatsapp.parts.tool_args import _body_values, _json_list
 from huf.ai.gateway_adapters import whatsapp_bridge as bridge
 from huf.ai.gateway_adapters import whatsapp_messages as wm
 from huf.ai.gateway_adapters import whatsapp_templates as wt
@@ -504,7 +505,7 @@ def _send_message(kwargs: dict) -> str:
 	acct = _resolve_bridge_account(kwargs)
 	if acct:
 		try:
-			res = bridge.send_text(acct["name"], recipient, message)
+			res = bridge.send_text(acct["name"], recipient, message, gateway_name=kwargs.get("gateway_name") or None)
 		except bridge.BridgeError as e:
 			return json.dumps(e.payload, default=str)
 		except frappe.PermissionError:
@@ -530,6 +531,8 @@ def _send_message(kwargs: dict) -> str:
 		"text": {"preview_url": False, "body": message},
 	}
 
+	if blocked := _pre_send_refusal(kwargs, recipient, "text", "text"):
+		return blocked
 	try:
 		res = requests.post(url, json=payload, headers=headers, timeout=15)
 		data = res.json()
@@ -561,20 +564,6 @@ def _send_message(kwargs: dict) -> str:
 		return _error(f"Failed to send WhatsApp message: {str(e)}")
 
 
-def _json_list(value: Any) -> Optional[list]:
-	"""A list argument that may arrive as a JSON string; None when it is not a list."""
-	if value in (None, ""):
-		return []
-	if isinstance(value, str):
-		try:
-			value = json.loads(value)
-		except ValueError:
-			return None
-	if isinstance(value, dict):
-		return [value]
-	return value if isinstance(value, list) else None
-
-
 def _recipient(kwargs: dict) -> str:
 	return bridge.normalize_phone(kwargs.get("to") or kwargs.get("recipient") or kwargs.get("phone_number") or "")
 
@@ -601,6 +590,12 @@ def _allowlist_refusal(recipient: str) -> Optional[str]:
 	except policy.OutboundRefused as e:
 		return _refused(e.code, str(e))
 	return None
+
+
+def _pre_send_refusal(kwargs: dict, recipient: str, kind: str, subtype: str) -> Optional[str]:
+	"""``huf_gateway_pre_send`` for a direct Graph POST: a refusal JSON (non-retryable) or None."""
+	gated = pre_send.agent_tool_gate(kwargs.get("gateway_name"), recipient, kind, subtype)
+	return _refused(*gated) if gated else None
 
 
 def _free_form_refusal(kwargs: dict, recipient: str, what: str) -> Optional[str]:
@@ -643,6 +638,9 @@ def _deliver_typed(kwargs: dict, recipient: str, built: tuple, bridge_call: Any,
 	phone_number_id, access_token = _get_whatsapp_credentials(kwargs)
 	if not phone_number_id or not access_token:
 		return _error("WhatsApp credentials not found", definite=True)
+	msg_type = str(payload.get("type") or "")
+	if blocked := _pre_send_refusal(kwargs, recipient, pre_send.kind_of(msg_type), msg_type):
+		return blocked
 	try:
 		res = requests.post(
 			f"{_graph_root(kwargs['gateway_name'])}/{phone_number_id}/messages",
@@ -684,7 +682,7 @@ def _send_media(kwargs: dict) -> str:
 		lambda account: bridge.send_media(
 			account, recipient, media["kind"], link=media["link"], media_id=media["media_id"],
 			caption=media["caption"], filename=media["filename"], voice=media["voice"],
-			reply_to=(kwargs.get("reply_to") or "").strip() or None,
+			reply_to=(kwargs.get("reply_to") or "").strip() or None, gateway_name=kwargs.get("gateway_name") or None,
 		),
 		"media",
 	)
@@ -732,6 +730,8 @@ def _send_media_file(kwargs: dict, recipient: str) -> str:
 		_, errors = wm.validate_media_message(prepared["kind"], "", "pending", first, filename, prepared["voice"])
 		if errors:
 			return json.dumps(wt.validation_error(errors), default=str)
+		if blocked := _pre_send_refusal(kwargs, recipient, "media", prepared["kind"]):  # before anything reaches Meta
+			return blocked
 		media_id = _upload_for_send(kwargs, prepared)
 	except send_file.FileSendError as e:
 		return _file_error(e)
@@ -774,7 +774,7 @@ def _send_location(kwargs: dict) -> str:
 	reply_to = (kwargs.get("reply_to") or "").strip() or None
 	return _deliver_typed(
 		kwargs, recipient, wm.build_location_payload(recipient, *args, reply_to),
-		lambda account: bridge.send_location(account, recipient, *args[:2], name=args[2], address=args[3], reply_to=reply_to),
+		lambda account: bridge.send_location(account, recipient, *args[:2], name=args[2], address=args[3], reply_to=reply_to, gateway_name=kwargs.get("gateway_name") or None),
 		"a location",
 	)
 
@@ -798,7 +798,7 @@ def _send_contact(kwargs: dict) -> str:
 	reply_to = (kwargs.get("reply_to") or "").strip() or None
 	return _deliver_typed(
 		kwargs, recipient, wm.build_contacts_payload(recipient, contacts, reply_to),
-		lambda account: bridge.send_contacts(account, recipient, contacts, reply_to=reply_to),
+		lambda account: bridge.send_contacts(account, recipient, contacts, reply_to=reply_to, gateway_name=kwargs.get("gateway_name") or None),
 		"a contact",
 	)
 
@@ -812,7 +812,7 @@ def _send_reaction(kwargs: dict) -> str:
 	message_id = kwargs.get("message_id")
 	return _deliver_typed(
 		kwargs, recipient, wm.build_reaction_payload(recipient, message_id, emoji, remove),
-		lambda account: bridge.send_reaction(account, recipient, str(message_id or ""), emoji, remove=remove),
+		lambda account: bridge.send_reaction(account, recipient, str(message_id or ""), emoji, remove=remove, gateway_name=kwargs.get("gateway_name") or None),
 		"a reaction",
 	)
 
@@ -845,16 +845,9 @@ def _send_interactive(kwargs: dict, kind: str) -> str:
 	reply_to = (kwargs.get("reply_to") or "").strip() or None
 	return _deliver_typed(
 		kwargs, recipient, wm.build_interactive_payload(recipient, kind, spec, reply_to),
-		lambda account: bridge.send_interactive(account, recipient, kind, spec, reply_to=reply_to),
+		lambda account: bridge.send_interactive(account, recipient, kind, spec, reply_to=reply_to, gateway_name=kwargs.get("gateway_name") or None),
 		"an interactive message",
 	)
-
-
-def _body_values(parameters: Any) -> Any:
-	"""Body parameters as the bridge takes them: strings in a list, or a ``{name: value}`` map."""
-	if isinstance(parameters, dict):
-		return {str(k): str(v) for k, v in parameters.items()}
-	return [p if isinstance(p, dict) else str(p) for p in parameters]
 
 
 def _send_template(kwargs: dict) -> str:
@@ -936,6 +929,8 @@ def _send_template(kwargs: dict) -> str:
 		"template": template,
 	}
 
+	if blocked := _pre_send_refusal(kwargs, recipient, "template", "template"):
+		return blocked
 	try:
 		res = requests.post(url, json=payload, headers=headers, timeout=15)
 		data = res.json()

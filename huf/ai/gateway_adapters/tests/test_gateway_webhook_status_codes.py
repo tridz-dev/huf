@@ -161,5 +161,44 @@ class TestGatewayWebhookStatusCodes(unittest.TestCase):
         assert mock_frappe.local.response.http_status_code == 200
 
 
+class TestGatewayWebhookMissingCredentials(unittest.TestCase):
+    """An enabled gateway with credentials removed must never 5xx the callback.
+
+    ``get_gateway_adapter`` raises a ValidationError when the Gateway has no
+    integration settings. Meta retries every 5xx, so the webhook answers POST
+    with 200 + ``success: False`` and GET verification with 403, logging once.
+    """
+
+    def _run(self, method, mock_frappe):
+        import frappe as real_frappe
+
+        mock_frappe.request = SimpleNamespace(args={"gateway_name": "Support Slack"}, method=method, body=b"{}")
+        mock_frappe.local = SimpleNamespace(response=FakeResponse())
+        mock_frappe.form_dict = {}
+        mock_frappe.ValidationError = real_frappe.ValidationError
+        mock_frappe.get_traceback.return_value = "traceback"
+        mock_frappe.get_doc.return_value = SimpleNamespace(
+            name="Support Slack", provider="Slack", is_enabled=1, integration_settings=None
+        )
+        return gateway_webhook.handle_gateway_webhook()
+
+    @patch("huf.ai.gateway_webhook.frappe")
+    def test_post_without_credentials_returns_200_success_false_and_logs_once(self, mock_frappe):
+        result = self._run("POST", mock_frappe)
+
+        assert result["success"] is False
+        assert result["error"]
+        assert mock_frappe.local.response.http_status_code == 200
+        assert mock_frappe.log_error.call_count == 1
+
+    @patch("huf.ai.gateway_webhook.frappe")
+    def test_get_verification_without_credentials_returns_403_and_logs_once(self, mock_frappe):
+        result = self._run("GET", mock_frappe)
+
+        assert result == {"success": False, "error": "Webhook verification failed"}
+        assert mock_frappe.local.response.http_status_code == 403
+        assert mock_frappe.log_error.call_count == 1
+
+
 if __name__ == "__main__":
     unittest.main()

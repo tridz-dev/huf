@@ -203,7 +203,7 @@ class TestWhatsAppGatewayAdapter(unittest.TestCase):
 			b.send_text.return_value = {"success": True, "name": "WM-1", "message_id": "wamid.b", "status": "Sent"}
 			delivery = adapter.send_reply(self.reply())
 			b.send_text.assert_called_once_with(
-				"acct", "1234567890", "hi", reply_to="wamid.in", trusted=True, preview_url=False
+				"acct", "1234567890", "hi", reply_to="wamid.in", trusted=True, preview_url=False, gateway_name="gw"
 			)
 		self.assertEqual(delivery.provider_message_id, "wamid.b")
 		self.assertEqual(self.calls, [])

@@ -260,6 +260,6 @@ class TestLinkedOptOut(unittest.TestCase):
 		store = Store()
 		recorded = []
 		event = SimpleNamespace(raw_payload={"bsuid": BSUID})
-		with store.patch(), patch.object(gs, "_record_opt_out", side_effect=lambda g, s, d=None: recorded.append(s)):
+		with store.patch(), patch.object(gs, "_record_opt_out", side_effect=lambda g, s, d=None, *_, **__: recorded.append(s)):
 			gs._record_opt_out_linked(self._gw(), event, PHONE, None)
 		self.assertEqual(recorded, [PHONE, BSUID])
