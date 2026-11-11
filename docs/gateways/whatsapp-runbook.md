@@ -165,7 +165,7 @@ huf_gateway_opt_out = ["external_app.whatsapp_guard.on_opt_change"]
 huf_gateway_delivery_status = ["external_app.whatsapp_guard.on_delivery_status"]
 ```
 
-Helpers are in `huf/ai/gateway_hooks.py`:
+Helpers are in `huf/ai/whatsapp/gateway_hooks.py`:
 
 - `fire_hook(name, **payload)` notifies. A handler that raises, or a bad dotted path, is written to the Error Log and skipped. The other handlers still run.
 - `gate_hook(name, **payload)` gates. It fails closed (see `huf_gateway_pre_send`).

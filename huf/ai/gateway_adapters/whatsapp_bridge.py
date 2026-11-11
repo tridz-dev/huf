@@ -32,7 +32,8 @@ from urllib.parse import quote, urljoin, urlparse
 import frappe
 import frappe.utils
 
-from huf.ai.whatsapp import outbound_policy as policy, template_plain
+from huf.ai.whatsapp import outbound_policy as policy, pre_send, template_plain
+from huf.ai.gateway_adapters.whatsapp_parts.bridge_utils import _button_sig, _clean_reason, _parse_ts
 from huf.ai.gateway_adapters import whatsapp_messages as wm
 from huf.ai.gateway_adapters import whatsapp_templates as wt
 
@@ -125,26 +126,10 @@ def _err(code: str, **extra: Any) -> dict[str, Any]:
 	return {"success": False, "error": code, **extra}
 
 
-_PRE_SEND_MEDIA = frozenset({"image", "audio", "video", "document", "sticker"})
-
-
 def _pre_send(gateway_name: str | None, to: Any, kind: str, source: str, subtype: str = "") -> None:
-	"""``huf_gateway_pre_send`` (fail closed) before any Graph POST / ``WhatsApp Message`` insert.
-
-	``gateway_name`` None skips the hook (see :func:`outbound_policy.check_pre_send`). A refusal is raised as
-	``BridgeError`` (``error`` is the stable code ``blocked_by_hook``): a policy decision, never retryable.
-	"""
-	token = getattr(frappe.local, "huf_consent_send_scope", None)
-
-	def digits(v: Any) -> str:
-		return "".join(c for c in str(v or "") if c.isdigit())
-
-	consent = bool(token and gateway_name and token[0] == gateway_name and digits(token[1]) == digits(to))
+	"""``huf_gateway_pre_send`` (fail closed) before any Graph POST / ``WhatsApp Message`` insert; a refusal is a ``BridgeError``."""
 	try:
-		policy.check_pre_send(
-			gateway_name or None, normalize_phone(to), kind,
-			{"source": source, "consent_confirmation": consent, "subtype": subtype or kind},
-		)
+		pre_send.check(gateway_name, normalize_phone(to), kind, source, subtype or kind, to)
 	except policy.OutboundRefused as exc:
 		raise BridgeError(_err(exc.code, message=str(exc))) from exc
 
@@ -475,8 +460,7 @@ def send_text(
 	reply_to: str | None = None,
 	trusted: bool = False,
 	preview_url: bool | None = None,
-	http_post: Callable[..., Any] | None = None,
-	gateway_name: str | None = None,
+	http_post: Callable[..., Any] | None = None, gateway_name: str | None = None,
 ) -> dict[str, Any]:
 	"""Send a free-form text via ``WhatsApp Message`` (it performs the one send, A1).
 
@@ -1216,8 +1200,7 @@ def send_media(
 	trusted: bool = False,
 	voice: bool | None = None,
 	http_post: Callable[..., Any] | None = None,
-	http_get: Callable[..., Any] | None = None,
-	gateway_name: str | None = None,
+	http_get: Callable[..., Any] | None = None, gateway_name: str | None = None,
 ) -> dict[str, Any]:
 	"""Send an image/document/audio/video/sticker; exactly one Graph call.
 
@@ -1342,11 +1325,7 @@ def _send_payload(
 	if not _may_bypass(trusted) and not frappe.has_permission("WhatsApp Message", "create"):
 		raise frappe.PermissionError("Not permitted to send WhatsApp messages")
 	if not _gated:  # send_media / send_sticker already fired the hook for their payload branch
-		msg_type = str(payload.get("type") or "")
-		_pre_send(
-			gateway_name, payload.get("to"), "media" if msg_type in _PRE_SEND_MEDIA else "other",
-			"bridge._send_payload", msg_type,
-		)
+		_pre_send(gateway_name, payload.get("to"), pre_send.kind_of(str(payload.get("type") or "")), "bridge._send_payload", str(payload.get("type") or ""))
 	wamid = _post_typed_message(acct, payload, http_post)
 	return _mirror_direct_send(acct, payload, wamid, trusted)
 
@@ -1370,8 +1349,7 @@ def send_interactive(
 
 def send_location(
 	account_name: str, to: str, latitude: Any, longitude: Any, name: str | None = None, address: str | None = None,
-	reply_to: str | None = None, trusted: bool = False, http_post: Callable[..., Any] | None = None,
-	gateway_name: str | None = None,
+	reply_to: str | None = None, trusted: bool = False, http_post: Callable[..., Any] | None = None, gateway_name: str | None = None,
 ) -> dict[str, Any]:
 	_account_or_error(account_name)
 	payload = _built(wm.build_location_payload(normalize_phone(to), latitude, longitude, name, address, reply_to))
@@ -1399,8 +1377,7 @@ def send_reaction(
 
 def send_sticker(
 	account_name: str, to: str, link: str | None = None, media_id: str | None = None, reply_to: str | None = None,
-	trusted: bool = False, http_post: Callable[..., Any] | None = None, http_get: Callable[..., Any] | None = None,
-	gateway_name: str | None = None,
+	trusted: bool = False, http_post: Callable[..., Any] | None = None, http_get: Callable[..., Any] | None = None, gateway_name: str | None = None,
 ) -> dict[str, Any]:
 	_account_or_error(account_name)
 	payload = _built(wm.build_sticker_payload(normalize_phone(to), link, media_id, reply_to))
@@ -1446,8 +1423,7 @@ def send_voice_note(
 	media_id: str | None = None,
 	reply_to: str | None = None,
 	trusted: bool = False,
-	http_post: Callable[..., Any] | None = None,
-	gateway_name: str | None = None,
+	http_post: Callable[..., Any] | None = None, gateway_name: str | None = None,
 ) -> dict[str, Any]:
 	"""Send audio as a voice note (``audio.voice: true``); rejects anything that is not Ogg/Opus before any call."""
 	if link and not media_id:
@@ -2237,13 +2213,6 @@ def _write_buttons(parent: str, rows: list[dict[str, Any]]) -> None:
 		child.db_insert()
 
 
-def _button_sig(rows: list[dict[str, Any]]) -> list[tuple]:
-	return [
-		(r.get("button_type") or "", r.get("button_label") or "", r.get("website_url") or "", r.get("phone_number") or "")
-		for r in rows
-	]
-
-
 def _refresh_local_components(name: str, tpl: dict[str, Any]) -> bool:
 	"""Bring a local row's header/body/footer/buttons in line with Meta's components; True when changed."""
 	comps = tpl.get("components")
@@ -2468,14 +2437,6 @@ def _utcnow() -> datetime:
 	return datetime.now(timezone.utc)
 
 
-def _parse_ts(value: Any) -> datetime | None:
-	try:
-		dt = datetime.fromisoformat(str(value))
-	except (TypeError, ValueError):
-		return None
-	return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
-
-
 def _loads(value: Any, default: Any = None) -> Any:
 	if isinstance(value, (dict, list)):
 		return value
@@ -2518,11 +2479,6 @@ def _publish_status(template: str, status: str, reason: str = "") -> None:
 		frappe.publish_realtime("whatsapp_template_status", {"template": template, "status": status, "reason": reason})
 	except Exception:
 		pass
-
-
-def _clean_reason(reason: Any) -> str:
-	text = str(reason or "").strip()
-	return "" if text.upper() == "NONE" else text
 
 
 def _resolve_state_name(template_id: Any, name: Any, language: Any, account: str | None = None) -> str | None:

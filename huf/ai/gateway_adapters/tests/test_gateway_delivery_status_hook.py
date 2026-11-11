@@ -88,9 +88,9 @@ class TestDeliveryStatusHook(IntegrationTestCase):
 		store = _Store()
 		with (
 			patch.object(gateway_webhook.frappe, "db", store),
-			patch("huf.ai.gateway_hooks.frappe.get_hooks", return_value=["x.y.z"]),
-			patch("huf.ai.gateway_hooks.frappe.get_attr", side_effect=RuntimeError("boom")),
-			patch("huf.ai.gateway_hooks.frappe.log_error") as log,
+			patch("huf.ai.whatsapp.gateway_hooks.frappe.get_hooks", return_value=["x.y.z"]),
+			patch("huf.ai.whatsapp.gateway_hooks.frappe.get_attr", side_effect=RuntimeError("boom")),
+			patch("huf.ai.whatsapp.gateway_hooks.frappe.log_error") as log,
 		):
 			gateway_webhook._update_reply_status(GW, {"id": WAMID, "status": "delivered"})
 		self.assertEqual(store.row["reply_status"], "delivered")

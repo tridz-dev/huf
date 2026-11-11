@@ -18,6 +18,8 @@ from typing import Any
 import frappe
 from huf.ai.whatsapp import account_events as account_events_mod
 from huf.ai.whatsapp import outbound_policy as policy
+from huf.ai.whatsapp import pre_send
+from huf.ai.whatsapp.pre_send import via_bridge as _via_bridge
 from huf.ai.gateway_adapters import whatsapp_bridge as bridge
 from huf.ai.gateway_adapters import whatsapp_calls as wc
 from huf.ai.gateway_adapters import whatsapp_errors as we
@@ -538,13 +540,7 @@ class WhatsAppGatewayAdapter(GatewayAdapter):
 
 	def _send_text_part(self, to: str, text: str, reply_to: str | None) -> OutboundDelivery:
 		if self._bridge_mode():
-			return _delivery_from_bridge(
-				_via_bridge(
-					bridge.send_text,
-					self._account, to, text, reply_to=reply_to, trusted=True, preview_url=self._preview_url,
-					gateway_name=self._gateway_name or None,
-				)
-			)
+			return self._bridge_delivery(bridge.send_text, self._account, to, text, reply_to=reply_to, trusted=True, preview_url=self._preview_url)
 		data: dict[str, Any] = {
 			"messaging_product": "whatsapp",
 			"recipient_type": "individual",
@@ -658,14 +654,7 @@ class WhatsAppGatewayAdapter(GatewayAdapter):
 		self, to, kind, link=None, media_id=None, caption=None, filename=None, reply_to=None, trusted=False, voice=None
 	) -> OutboundDelivery:
 		if self._bridge_mode():
-			return _delivery_from_bridge(
-				_via_bridge(
-					bridge.send_media,
-					self._account, to, kind, link=link, media_id=media_id, caption=caption,
-					filename=filename, reply_to=reply_to, trusted=trusted, voice=voice,
-					gateway_name=self._gateway_name or None,
-				)
-			)
+			return self._bridge_delivery(bridge.send_media, self._account, to, kind, link=link, media_id=media_id, caption=caption, filename=filename, reply_to=reply_to, trusted=trusted, voice=voice)
 		media, errors = wt.validate_media_request(kind, link, media_id, caption, filename, voice)
 		if errors:
 			raise bridge.BridgeError(wt.validation_error(errors))
@@ -679,12 +668,7 @@ class WhatsAppGatewayAdapter(GatewayAdapter):
 		"""Send a webp sticker by public link or uploaded media id (free-form: needs an open 24h window)."""
 		self._ensure_window(to)
 		if self._bridge_mode():
-			return _delivery_from_bridge(
-				_via_bridge(
-					bridge.send_sticker, self._account, to, link=link, media_id=media_id, reply_to=reply_to, trusted=trusted,
-					gateway_name=self._gateway_name or None,
-				)
-			)
+			return self._bridge_delivery(bridge.send_sticker, self._account, to, link=link, media_id=media_id, reply_to=reply_to, trusted=trusted)
 		return self._send_built(wm.build_sticker_payload(bridge.normalize_phone(to), link, media_id, reply_to))
 
 	def send_location(
@@ -693,24 +677,13 @@ class WhatsAppGatewayAdapter(GatewayAdapter):
 	) -> OutboundDelivery:
 		self._ensure_window(to)
 		if self._bridge_mode():
-			return _delivery_from_bridge(
-				_via_bridge(
-					bridge.send_location,
-					self._account, to, latitude, longitude, name=name, address=address, reply_to=reply_to, trusted=trusted,
-					gateway_name=self._gateway_name or None,
-				)
-			)
+			return self._bridge_delivery(bridge.send_location, self._account, to, latitude, longitude, name=name, address=address, reply_to=reply_to, trusted=trusted)
 		return self._send_built(wm.build_location_payload(bridge.normalize_phone(to), latitude, longitude, name, address, reply_to))
 
 	def send_contacts(self, to: str, contacts: Any, reply_to: str | None = None, trusted: bool = False) -> OutboundDelivery:
 		self._ensure_window(to)
 		if self._bridge_mode():
-			return _delivery_from_bridge(
-				_via_bridge(
-					bridge.send_contacts, self._account, to, contacts, reply_to=reply_to, trusted=trusted,
-					gateway_name=self._gateway_name or None,
-				)
-			)
+			return self._bridge_delivery(bridge.send_contacts, self._account, to, contacts, reply_to=reply_to, trusted=trusted)
 		return self._send_built(wm.build_contacts_payload(bridge.normalize_phone(to), contacts, reply_to))
 
 	def send_reaction(
@@ -719,12 +692,7 @@ class WhatsAppGatewayAdapter(GatewayAdapter):
 		"""React to an inbound message (<= 30 days old); an empty emoji / ``remove=True`` removes the reaction."""
 		self._ensure_window(to)
 		if self._bridge_mode():
-			return _delivery_from_bridge(
-				_via_bridge(
-					bridge.send_reaction, self._account, to, message_id, emoji, remove=remove, trusted=trusted,
-					gateway_name=self._gateway_name or None,
-				)
-			)
+			return self._bridge_delivery(bridge.send_reaction, self._account, to, message_id, emoji, remove=remove, trusted=trusted)
 		return self._send_built(wm.build_reaction_payload(bridge.normalize_phone(to), message_id, emoji, remove))
 
 	def send_interactive(
@@ -733,25 +701,13 @@ class WhatsAppGatewayAdapter(GatewayAdapter):
 		"""Reply buttons / list / CTA URL / flow / location request; ``spec`` carries that kind's fields."""
 		self._ensure_window(to)
 		if self._bridge_mode():
-			return _delivery_from_bridge(
-				_via_bridge(
-					bridge.send_interactive, self._account, to, kind, spec, reply_to=reply_to, trusted=trusted,
-					gateway_name=self._gateway_name or None,
-				)
-			)
+			return self._bridge_delivery(bridge.send_interactive, self._account, to, kind, spec, reply_to=reply_to, trusted=trusted)
 		return self._send_built(wm.build_interactive_payload(bridge.normalize_phone(to), kind, spec or {}, reply_to))
 
-	def upload_media(
-		self, content: bytes, mime_type: str, filename: str = "", kind: str | None = None, voice: bool = False,
-		to: str | None = None,
-	) -> str:
-		"""Upload bytes to Meta (``POST /{phone_id}/media``) and return the media id.
-
-		``to`` (the recipient the media is for) runs ``huf_gateway_pre_send`` first so a refused send uploads nothing;
-		the later send fires the hook again.
-		"""
+	def upload_media(self, content: bytes, mime_type: str, filename: str = "", kind: str | None = None, voice: bool = False, to: str | None = None) -> str:
+		"""Upload bytes to Meta (``POST /{phone_id}/media``) and return the media id. ``to`` gates first (pre_send)."""
 		if to:
-			self._pre_send({"type": "document" if kind not in ("image", "audio", "video", "sticker") else kind, "to": to})
+			pre_send.check_graph(self._gateway_name, {"type": "document" if kind not in ("image", "audio", "video", "sticker") else kind, "to": to})
 		if self._bridge_mode():
 			return bridge.upload_media(self._account, content, mime_type, filename, kind, voice, trusted=True)["media_id"]
 		mime = wm.normalize_mime(mime_type)
@@ -826,26 +782,11 @@ class WhatsAppGatewayAdapter(GatewayAdapter):
 			policy.record_template_outreach(self._gateway_name, to)
 		return delivery
 
-	def _pre_send(self, data: dict[str, Any]) -> None:
-		"""``huf_gateway_pre_send`` for a direct Graph POST (bridge mode fires it inside the bridge instead)."""
-		msg_type = str(data.get("type") or "")
-		kind = (
-			"text" if msg_type == "text" else "template" if msg_type == "template"
-			else "media" if msg_type in ("image", "audio", "video", "document", "sticker") else "other"
-		)
-		to = data.get("to")
-		token = getattr(frappe.local, "huf_consent_send_scope", None)
-		consent = bool(
-			token and self._gateway_name and token[0] == self._gateway_name
-			and "".join(c for c in str(token[1]) if c.isdigit()) == "".join(c for c in str(to or "") if c.isdigit())
-		)
-		policy.check_pre_send(
-			self._gateway_name or None, to, kind,
-			{"source": "adapter", "consent_confirmation": consent, "subtype": msg_type},
-		)
+	def _bridge_delivery(self, fn: Callable[..., Any], *args: Any, **kwargs: Any) -> OutboundDelivery:
+		return _delivery_from_bridge(_via_bridge(fn, *args, gateway_name=self._gateway_name or None, **kwargs))
 
 	def _graph_send(self, data: dict[str, Any]) -> OutboundDelivery:
-		self._pre_send(data)
+		pre_send.check_graph(self._gateway_name, data)
 		refusal = account_events_mod.send_refusal(self._phone_number_id)
 		if refusal:
 			raise WhatsAppSendError(refusal["message"], {"kind": "gateway_disconnected", "retryable": False, "message": refusal["message"]})
@@ -900,16 +841,6 @@ def _contact_names(value: Mapping[str, Any]) -> dict[str, str]:
 			if wa_id and name:
 				names[wa_id] = str(name)
 	return names
-
-
-def _via_bridge(fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
-	"""Call a bridge send; a ``blocked_by_hook`` refusal becomes ``OutboundRefused`` again (as in direct mode)."""
-	try:
-		return fn(*args, **kwargs)
-	except bridge.BridgeError as exc:
-		if (exc.payload or {}).get("error") == "blocked_by_hook":
-			raise policy.OutboundRefused(str(exc.payload.get("message") or "Blocked by policy."), "blocked_by_hook") from exc
-		raise
 
 
 def _delivery_from_bridge(result: Mapping[str, Any]) -> OutboundDelivery:

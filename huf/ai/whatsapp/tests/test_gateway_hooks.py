@@ -3,7 +3,7 @@
 import unittest
 from unittest.mock import patch
 
-from huf.ai import gateway_hooks
+from huf.ai.whatsapp import gateway_hooks
 from huf.ai.whatsapp.outbound_policy import OutboundRefused
 
 HOOK = "huf_test_gateway_hook"
@@ -40,18 +40,18 @@ def _refuse_str(**payload):
 	return "no"
 
 
-MODULE = "huf.ai.gateway_adapters.tests.test_gateway_hooks"
+MODULE = "huf.ai.whatsapp.tests.test_gateway_hooks"
 
 
 class _Base(unittest.TestCase):
 	def setUp(self):
 		CALLS.clear()
-		self.log_patch = patch("huf.ai.gateway_hooks.frappe.log_error")
+		self.log_patch = patch("huf.ai.whatsapp.gateway_hooks.frappe.log_error")
 		self.log_error = self.log_patch.start()
 		self.addCleanup(self.log_patch.stop)
 
 	def hooks(self, value):
-		patcher = patch("huf.ai.gateway_hooks.frappe.get_hooks", return_value=value)
+		patcher = patch("huf.ai.whatsapp.gateway_hooks.frappe.get_hooks", return_value=value)
 		patcher.start()
 		self.addCleanup(patcher.stop)
 
@@ -141,7 +141,7 @@ class TestGateHook(_Base):
 				self.assertEqual(ctx.exception.code, "blocked_by_hook")
 
 	def test_get_hooks_failure_fails_closed(self):
-		patcher = patch("huf.ai.gateway_hooks.frappe.get_hooks", side_effect=RuntimeError("x"))
+		patcher = patch("huf.ai.whatsapp.gateway_hooks.frappe.get_hooks", side_effect=RuntimeError("x"))
 		patcher.start()
 		self.addCleanup(patcher.stop)
 		with self.assertRaises(OutboundRefused) as ctx:

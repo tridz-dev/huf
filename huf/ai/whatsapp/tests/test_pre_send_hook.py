@@ -47,7 +47,7 @@ def _boom(**payload):
 def _hooks(*handlers):
 	paths = [f"{MOD}.{h.__name__}" for h in handlers]
 	return patch(
-		"huf.ai.gateway_hooks.frappe.get_hooks",
+		"huf.ai.whatsapp.gateway_hooks.frappe.get_hooks",
 		side_effect=lambda n, *a, **k: paths if n == "huf_gateway_pre_send" else [],
 	)
 
@@ -55,7 +55,7 @@ def _hooks(*handlers):
 class _Base(unittest.TestCase):
 	def setUp(self):
 		SEEN.clear()
-		p = patch("huf.ai.gateway_hooks.frappe.log_error")
+		p = patch("huf.ai.whatsapp.gateway_hooks.frappe.log_error")
 		p.start()
 		self.addCleanup(p.stop)
 

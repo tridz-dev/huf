@@ -55,7 +55,7 @@ def _boom(**payload):
 def _hooks(*handlers):
 	paths = [f"{MOD}.{h.__name__}" for h in handlers]
 	return patch(
-		"huf.ai.gateway_hooks.frappe.get_hooks",
+		"huf.ai.whatsapp.gateway_hooks.frappe.get_hooks",
 		side_effect=lambda n, *a, **k: paths if n == "huf_gateway_pre_send" else [],
 	)
 
@@ -71,7 +71,7 @@ class _Base(unittest.TestCase):
 	def setUp(self):
 		SEEN.clear()
 		for target, kw in (
-			("huf.ai.gateway_hooks.frappe.log_error", {}),
+			("huf.ai.whatsapp.gateway_hooks.frappe.log_error", {}),
 			(f"{bridge.__name__}.is_available", {"return_value": True}),
 			(f"{bridge.__name__}._account_or_error", {"return_value": ACCT}),
 			(f"{bridge.__name__}._refuse_if_disconnected", {"return_value": None}),

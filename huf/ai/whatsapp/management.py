@@ -34,7 +34,7 @@ from huf.ai.gateway_adapters import whatsapp_calls as wcalls
 from huf.ai.gateway_adapters import whatsapp_messages as wm
 from huf.ai.gateway_adapters import whatsapp_templates as wt
 from huf.ai.gateway_adapters.whatsapp_bridge import BridgeError
-from huf.ai.whatsapp import setup_stage
+from huf.ai.whatsapp import pre_send, setup_stage
 
 ADMIN_ROLES = ("System Manager", "Huf Admin")
 WHATSAPP_PROVIDER = "WhatsApp"
@@ -681,10 +681,7 @@ def send_template_message(
 	account_name = _resolve_account_name(_gateway_whatsapp_account(gateway_name))
 	if isinstance(account_name, dict):
 		return account_name
-	return bridge.send_template(
-		account_name, phone, template_name, body, header, button_params=buttons, language_code=language_code or None,
-		gateway_name=gateway_name,
-	)
+	return bridge.send_template(account_name, phone, template_name, body, header, button_params=buttons, language_code=language_code or None, gateway_name=gateway_name)
 
 
 @frappe.whitelist(methods=["POST"])
@@ -862,12 +859,8 @@ def _send_media_impl(gateway_name, to, kind, link, file_url, caption, filename, 
 				return loaded
 			content, fname, mime = loaded
 			k = (kind or "").strip().lower()
-			from huf.ai.whatsapp import outbound_policy as policy
-
-			try:  # before anything reaches Meta; the in-bridge send check still runs (the hook fires twice per file send)
-				policy.check_pre_send(gateway_name, phone, "media", {"source": "management", "subtype": k or "media"})
-			except policy.OutboundRefused as exc:
-				return {"success": False, "error": exc.code, "message": str(exc)}
+			if refused := pre_send.management_refusal(gateway_name, phone, "media", k or "media"):  # before Meta; the bridge fires it again
+				return refused
 			use_id = bridge.upload_media(account_name, content, mime, fname, kind=k or None, voice=bool(voice))["media_id"]
 			use_name = filename or (fname if k == "document" else None)
 		return bridge.send_media(
@@ -956,9 +949,7 @@ def send_location_message(
 		gateway_name,
 		to,
 		lambda p: wm.build_location_payload(p, latitude, longitude, name, address, reply_to)[1],
-		lambda acct, p: bridge.send_location(acct, p, latitude, longitude, name=name, address=address, reply_to=reply_to,
-			gateway_name=gateway_name,
-		),
+		lambda acct, p: bridge.send_location(acct, p, latitude, longitude, name=name, address=address, reply_to=reply_to, gateway_name=gateway_name),
 	)
 
 
@@ -1777,13 +1768,7 @@ def send_call_permission_request(
 		wcalls.permission_request_payload(phone, text or "")
 	except ValueError as exc:
 		return _value_error(exc)
-	gated = _free_form_gate(gateway_name, phone)
+	gated = _free_form_gate(gateway_name, phone) or pre_send.management_refusal(gateway_name, phone, "other", "call_permission_request")
 	if gated:
 		return gated
-	from huf.ai.whatsapp import outbound_policy as policy
-
-	try:
-		policy.check_pre_send(gateway_name, phone, "other", {"source": "management", "subtype": "call_permission_request"})
-	except policy.OutboundRefused as exc:
-		return {"success": False, "error": exc.code, "message": str(exc)}
 	return {"success": True, "result": graph.send_permission_request(phone, text or "")}

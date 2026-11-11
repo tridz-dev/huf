@@ -18,8 +18,9 @@ from frappe.rate_limiter import rate_limit
 from huf.ai.gateway_adapters import provider_hooks
 from huf.ai.gateway_adapters.provider_ids import provider_to_service_id
 from huf.ai.gateway_adapters.registered import get_adapter_class
-from huf.ai.gateway_hooks import fire_hook
+from huf.ai.gateway_core.webhook_helpers import adapter_unavailable_response, reply_status_values
 from huf.ai.whatsapp.broadcast import status as broadcast_status
+from huf.ai.whatsapp.gateway_hooks import fire_hook
 
 EXEMPT_AUTH_ROUTES: frozenset[str] = frozenset(
 	{
@@ -409,63 +410,25 @@ def _reply_status_wins(current: str, state: str) -> bool:
 
 
 def _update_reply_status(gateway_name: str, status: dict) -> None:
-	"""Mirror a Meta delivery status onto the Gateway Event that sent the reply. Never raises.
-
-	When the stored status actually advances (or a ``failed`` is newly recorded) the external hook
-	``huf_gateway_delivery_status`` is fired via :func:`huf.ai.gateway_hooks.fire_hook` with the
-	keyword payload ``gateway``, ``provider_message_id`` (the wamid), ``status``
-	(sent|delivered|read|played|failed), ``error_code`` (first error's code or None),
-	``error_title`` (first error's title/message or None) and ``event_name`` (Gateway Event name).
-	The idempotency key is ``(provider_message_id, status)``: a replay, a late/out-of-order status
-	or a repeated identical ``failed`` fires nothing. ``db.set_value`` triggers no doc_events, hence
-	the explicit hook. Handler failures are isolated by ``fire_hook`` and never affect the webhook.
-	"""
+	"""Mirror a Meta delivery status onto the Gateway Event that sent the reply; fires ``huf_gateway_delivery_status`` on a change. Never raises."""
 	payload = None
 	try:
 		state = str(status.get("status") or "").lower()
 		message_id = str(status.get("id") or "")
 		if state not in _REPLY_STATUSES or not message_id:
 			return
-		row = frappe.db.get_value(
-			"Gateway Event",
-			{"gateway": gateway_name, "reply_message_id": message_id},
-			["name", "reply_status", "delivery_error"],
-			as_dict=True,
-		)
+		row = frappe.db.get_value("Gateway Event", {"gateway": gateway_name, "reply_message_id": message_id}, ["name", "reply_status", "delivery_error"], as_dict=True)
 		if not isinstance(row, dict):
 			return
 		current = row.get("reply_status") or ""
 		if not _reply_status_wins(current, state):
 			return  # out-of-order webhook: never regress delivered/read, never resurrect failed with sent
-		if state == current and state != "failed":
-			return  # replay
-		values: dict[str, Any] = {"reply_status": state}
-		error_code = error_title = None
-		if state == "failed":
-			from huf.ai.gateway_service import _redact_error_text
-
-			errors = [e for e in (status.get("errors") if isinstance(status.get("errors"), list) else []) if isinstance(e, dict)]
-			first = errors[0] if errors else {}
-			error_code = first.get("code")
-			error_title = first.get("title") or first.get("message")
-			parts = [f"error {e.get('code') or 'unknown'}: {e.get('title') or e.get('message') or 'no detail'}" for e in errors]
-			summary = "; ".join(parts) or "error unknown: no detail"
-			values["delivery_error"] = _redact_error_text(summary)[:_GATEWAY_ERROR_MAX]
-			values["delivery_error_code"] = str(error_code if error_code is not None else "unknown")
-			if current == "failed" and row.get("delivery_error") == values["delivery_error"]:
-				return  # identical failed replay
-		elif current == "failed":
-			values["delivery_error"] = ""
-			values["delivery_error_code"] = ""
+		values, error_code, error_title = reply_status_values(status, state, current, row.get("delivery_error"), _GATEWAY_ERROR_MAX)
+		if values is None:
+			return  # replay, or an identical failed replay
 		frappe.db.set_value("Gateway Event", row["name"], values, update_modified=False)
-		payload = {
-			"gateway": gateway_name,
-			"provider_message_id": message_id,
-			"status": state,
-			"error_code": error_code,
-			"error_title": error_title,
-			"event_name": row["name"],
-		}
+		payload = {"gateway": gateway_name, "provider_message_id": message_id, "status": state,
+			"error_code": error_code, "error_title": error_title, "event_name": row["name"]}
 	except Exception:
 		pass
 	if payload is not None:
@@ -891,14 +854,7 @@ def handle_gateway_webhook() -> dict | None:
 	try:
 		adapter = get_gateway_adapter(gateway)
 	except (frappe.ValidationError, ValueError):
-		# Enabled gateway with missing/incomplete credentials. Raising here would 5xx and
-		# make the provider retry forever, so answer without leaking details and log once.
-		frappe.log_error(frappe.get_traceback(), "WhatsApp gateway adapter unavailable")
-		if (getattr(frappe.request, "method", "") or "").upper() == "GET":
-			frappe.local.response.http_status_code = 403
-			return {"success": False, "error": "Webhook verification failed"}
-		frappe.local.response.http_status_code = 200
-		return {"success": False, "error": "Gateway is not configured"}
+		return adapter_unavailable_response(frappe)  # missing credentials: answer 403/200, never 5xx (provider would retry forever)
 	request = _inbound_request()
 	if len(getattr(request, "body", b"") or b"") > MAX_BODY_BYTES:
 		frappe.local.response.http_status_code = 413

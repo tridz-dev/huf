@@ -112,7 +112,7 @@ def check_pre_send(gateway: str | None, to: Any, kind: str, context: dict[str, A
 	if not gateway:
 		frappe.logger("huf").debug(f"huf_gateway_pre_send skipped (no gateway) kind={kind}")
 		return
-	from huf.ai.gateway_hooks import gate_hook
+	from huf.ai.whatsapp.gateway_hooks import gate_hook
 
 	gate_hook("huf_gateway_pre_send", gateway=gateway, to=to, kind=kind, context=dict(context or {}))
 

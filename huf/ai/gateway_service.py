@@ -25,7 +25,7 @@ from frappe.utils import add_to_date, get_datetime, now_datetime
 
 from huf.ai.whatsapp import outbound_policy as policy
 from huf.ai.gateway_adapters import provider_hooks
-from huf.ai.gateway_hooks import fire_hook
+from huf.ai.whatsapp.gateway_hooks import fire_hook
 from huf.ai.gateways.identity_policy import IDENTITY_REQUIRED_PROVIDERS, is_identity_required  # noqa: F401
 
 
@@ -83,11 +83,8 @@ def _gateway_fallback_reply_text(gateway) -> str:
     return ""
 
 
+from huf.ai.gateway_core.event_helpers import _conversation_race_errors, _flow_trigger_payload, _lang_code
 from huf.ai.gateway_core.fallback_texts import _FALLBACK_TEXTS, ATTACHMENT_UNAVAILABLE_NOTE  # noqa: F401
-
-
-def _lang_code(value: Any) -> str:
-    return str(value or "").strip().replace("-", "_").split("_")[0].lower()
 
 
 def _contact_language(event) -> str:
@@ -710,15 +707,8 @@ def _live_sender_entry(gateway, sender_id: str) -> dict | None:
     return None
 
 
-def _record_opt_out(
-    gateway, sender_id: str, display_name: str | None = None, keyword: str = "", notify: bool = True
-) -> None:
-    """Mark the sender opted out and notify external apps.
-
-    Fires hook ``huf_gateway_opt_out`` with ``gateway``, ``sender_id``, ``kind="opt_out"`` and ``keyword``
-    after the DB write, only on a real transition (not when already Opted out). Idempotency key:
-    ``(gateway, sender_id, kind)``.
-    """
+def _record_opt_out(gateway, sender_id: str, display_name: str | None = None, keyword: str = "", notify: bool = True) -> None:
+    """Mark the sender opted out; fires hook ``huf_gateway_opt_out`` after the write on a real transition only."""
     external_id = _normalize_sender_for_provider(gateway.provider, "Sender", sender_id)
     row = _live_sender_entry(gateway, sender_id)
     already = bool(row) and row["state"] == ENTRY_STATE_OPTED_OUT
@@ -782,14 +772,8 @@ def _record_room_opt_in(gateway, chat_id: str) -> None:
     _save_entry(row["name"], {"state": restored, "previous_state": ""})
 
 
-def _record_opt_out_linked(
-    gateway, event, sender_id: str, display_name: str | None = None, keyword: str = ""
-) -> None:
-    """Record the opt-out under the sender id and, when the event carries both, the BSUID too.
-
-    Hook ``huf_gateway_opt_out`` fires once, for the primary ``sender_id`` (the canonical id the event
-    arrived with); the BSUID alias record is written silently. Idempotency key: ``(gateway, sender_id, kind)``.
-    """
+def _record_opt_out_linked(gateway, event, sender_id: str, display_name: str | None = None, keyword: str = "") -> None:
+    """Record the opt-out under the sender id and, when the event carries both, the BSUID too (hook fires once, primary id)."""
     _record_opt_out(gateway, sender_id, display_name, keyword)
     other = _raw_bsuid(getattr(event, "raw_payload", None))
     if other and other != sender_id:
@@ -797,23 +781,10 @@ def _record_opt_out_linked(
 
 
 def _record_opt_in_linked(gateway, sender_id: str, keyword: str = "") -> None:
-    """START clears the opt-out under every id linked to the sender (phone and BSUID), like STOP set it.
-
-    Hook ``huf_gateway_opt_out`` (``kind="opt_in"``) fires once, for the canonical (first linked) id, if
-    any linked record actually transitioned. Idempotency key: ``(gateway, sender_id, kind)``.
-    """
+    """START clears the opt-out under every linked id (phone and BSUID); the hook fires once, for the first id, on a transition."""
     ids = _linked_sender_ids(gateway.name, gateway.provider, sender_id)
-    changed = False
-    for linked in ids:
-        changed = _record_opt_in(gateway, linked, keyword, notify=False) or changed
-    if changed:
-        fire_hook(
-            "huf_gateway_opt_out",
-            gateway=gateway.name,
-            sender_id=ids[0] if ids else sender_id,
-            kind="opt_in",
-            keyword=keyword,
-        )
+    if any([_record_opt_in(gateway, linked, keyword, notify=False) for linked in ids]):
+        fire_hook("huf_gateway_opt_out", gateway=gateway.name, sender_id=ids[0] if ids else sender_id, kind="opt_in", keyword=keyword)
 
 
 def _record_inbound_consent(gateway, sender_id: str) -> None:
@@ -827,11 +798,7 @@ def _record_inbound_consent(gateway, sender_id: str) -> None:
 
 
 def _record_opt_in(gateway, sender_id: str, keyword: str = "", notify: bool = True) -> bool:
-    """Clear an opt-out; return True on a real transition.
-
-    Fires hook ``huf_gateway_opt_out`` (``kind="opt_in"``) after the write unless ``notify`` is False;
-    nothing fires when the sender was not opted out. Idempotency key: ``(gateway, sender_id, kind)``.
-    """
+    """Clear an opt-out; True on a real transition (then fires ``huf_gateway_opt_out`` kind=opt_in unless ``notify`` is False)."""
     row = _live_sender_entry(gateway, sender_id)
     if not row or row["state"] != ENTRY_STATE_OPTED_OUT:
         return False
@@ -886,9 +853,7 @@ def _handle_consent_event(event, gateway, context: dict[str, Any]) -> dict | Non
             gateway, text, "opt_out_keywords", DEFAULT_OPT_OUT_KEYWORDS
         ) and policy.has_received_template(gateway.name, sender_id):
             # We messaged this contact first (proactive template): their STOP must be honoured.
-            _record_opt_out_linked(
-                gateway, event, sender_id, str(context.get("display_name") or "") or None, _normalize_consent_text(text)
-            )
+            _record_opt_out_linked(gateway, event, sender_id, str(context.get("display_name") or "") or None, _normalize_consent_text(text))
             reply = getattr(gateway, "opt_out_reply_text", None) or DEFAULT_OPT_OUT_REPLY
             _send_plain_reply(gateway, sender_id, str(context.get("conversation_id") or "") or sender_id, reply)
             return _reject_event(event, "Sender opted out (STOP) after a proactive template; no agent run")
@@ -914,9 +879,7 @@ def _handle_consent_event(event, gateway, context: dict[str, Any]) -> dict | Non
         return None  # admission rejects these silently
 
     if _text_matches_keywords(gateway, text, "opt_out_keywords", DEFAULT_OPT_OUT_KEYWORDS):
-        _record_opt_out_linked(
-                gateway, event, sender_id, str(context.get("display_name") or "") or None, _normalize_consent_text(text)
-            )
+        _record_opt_out_linked(gateway, event, sender_id, str(context.get("display_name") or "") or None, _normalize_consent_text(text))
         reply = getattr(gateway, "opt_out_reply_text", None) or DEFAULT_OPT_OUT_REPLY
         _send_plain_reply(gateway, sender_id, conversation_id, reply)
         return _reject_event(event, "Sender opted out (STOP); no agent run")
@@ -1754,10 +1717,6 @@ def _cap_message_text(value: Any) -> str:
     return text[:MESSAGE_TEXT_MAX_CHARS] + "\n[truncated]"
 
 
-def _conversation_race_errors() -> tuple[type, ...]:
-    return (frappe.QueryDeadlockError, frappe.TimestampMismatchError)
-
-
 BUSY_CONVERSATION_MARKER = "currently executing another run"
 _BUSY_ATTEMPTS = 6
 _BUSY_BASE_DELAY = 2.0
@@ -2533,13 +2492,6 @@ def _persist_terminal_state(event_name: str, result: Any) -> None:
     )
     frappe.db.set_value("Gateway Event", event_name, expected)
     _commit_unless_testing()
-
-
-def _flow_trigger_payload(event, gateway, attachments: list[str]) -> dict:
-    """What a Flow gets for a gateway message (see ``huf.ai.flow.gateways.gateway_payload``)."""
-    from huf.ai.flow.gateways.gateway_payload import build_payload
-
-    return build_payload(event, gateway, attachments, provider_hooks.get(gateway.provider, "extra_event_fields"))
 
 
 def _start_flow_for_event(event, gateway) -> dict:
