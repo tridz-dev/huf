@@ -18,6 +18,7 @@ from frappe.rate_limiter import rate_limit
 from huf.ai.gateway_adapters import provider_hooks
 from huf.ai.gateway_adapters.provider_ids import provider_to_service_id
 from huf.ai.gateway_adapters.registered import get_adapter_class
+from huf.ai.gateway_hooks import fire_hook
 from huf.ai.whatsapp.broadcast import status as broadcast_status
 
 EXEMPT_AUTH_ROUTES: frozenset[str] = frozenset(
@@ -408,7 +409,18 @@ def _reply_status_wins(current: str, state: str) -> bool:
 
 
 def _update_reply_status(gateway_name: str, status: dict) -> None:
-	"""Mirror a Meta delivery status onto the Gateway Event that sent the reply. Never raises."""
+	"""Mirror a Meta delivery status onto the Gateway Event that sent the reply. Never raises.
+
+	When the stored status actually advances (or a ``failed`` is newly recorded) the external hook
+	``huf_gateway_delivery_status`` is fired via :func:`huf.ai.gateway_hooks.fire_hook` with the
+	keyword payload ``gateway``, ``provider_message_id`` (the wamid), ``status``
+	(sent|delivered|read|played|failed), ``error_code`` (first error's code or None),
+	``error_title`` (first error's title/message or None) and ``event_name`` (Gateway Event name).
+	The idempotency key is ``(provider_message_id, status)``: a replay, a late/out-of-order status
+	or a repeated identical ``failed`` fires nothing. ``db.set_value`` triggers no doc_events, hence
+	the explicit hook. Handler failures are isolated by ``fire_hook`` and never affect the webhook.
+	"""
+	payload = None
 	try:
 		state = str(status.get("status") or "").lower()
 		message_id = str(status.get("id") or "")
@@ -417,7 +429,7 @@ def _update_reply_status(gateway_name: str, status: dict) -> None:
 		row = frappe.db.get_value(
 			"Gateway Event",
 			{"gateway": gateway_name, "reply_message_id": message_id},
-			["name", "reply_status"],
+			["name", "reply_status", "delivery_error"],
 			as_dict=True,
 		)
 		if not isinstance(row, dict):
@@ -425,20 +437,39 @@ def _update_reply_status(gateway_name: str, status: dict) -> None:
 		current = row.get("reply_status") or ""
 		if not _reply_status_wins(current, state):
 			return  # out-of-order webhook: never regress delivered/read, never resurrect failed with sent
+		if state == current and state != "failed":
+			return  # replay
 		values: dict[str, Any] = {"reply_status": state}
+		error_code = error_title = None
 		if state == "failed":
 			from huf.ai.gateway_service import _redact_error_text
 
-			errors = status.get("errors") if isinstance(status.get("errors"), list) else []
-			first = errors[0] if errors and isinstance(errors[0], dict) else {}
-			code = first.get("code") or "unknown"
-			title = first.get("title") or first.get("message") or "no detail"
-			values["delivery_error"] = _redact_error_text(f"error {code}: {title}")[:_GATEWAY_ERROR_MAX]
+			errors = [e for e in (status.get("errors") if isinstance(status.get("errors"), list) else []) if isinstance(e, dict)]
+			first = errors[0] if errors else {}
+			error_code = first.get("code")
+			error_title = first.get("title") or first.get("message")
+			parts = [f"error {e.get('code') or 'unknown'}: {e.get('title') or e.get('message') or 'no detail'}" for e in errors]
+			summary = "; ".join(parts) or "error unknown: no detail"
+			values["delivery_error"] = _redact_error_text(summary)[:_GATEWAY_ERROR_MAX]
+			values["delivery_error_code"] = str(error_code if error_code is not None else "unknown")
+			if current == "failed" and row.get("delivery_error") == values["delivery_error"]:
+				return  # identical failed replay
 		elif current == "failed":
 			values["delivery_error"] = ""
+			values["delivery_error_code"] = ""
 		frappe.db.set_value("Gateway Event", row["name"], values, update_modified=False)
+		payload = {
+			"gateway": gateway_name,
+			"provider_message_id": message_id,
+			"status": state,
+			"error_code": error_code,
+			"error_title": error_title,
+			"event_name": row["name"],
+		}
 	except Exception:
 		pass
+	if payload is not None:
+		fire_hook("huf_gateway_delivery_status", **payload)
 
 
 _LAST_EVENT_THROTTLE_SECONDS = 60
