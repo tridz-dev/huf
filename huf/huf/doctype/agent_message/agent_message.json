@@ -14,6 +14,7 @@
   "agent",
   "conversation",
   "conversation_index",
+  "client_message_id",
   "column_break_jcev",
   "model",
   "user",
@@ -70,6 +71,15 @@
    "fieldtype": "Int",
    "label": "Index in Conversation",
    "read_only": 1
+  },
+  {
+   "description": "Stable id of this message in the Huf Desktop app that imported it. Used only to make imports idempotent.",
+   "fieldname": "client_message_id",
+   "fieldtype": "Data",
+   "label": "Client Message ID",
+   "length": 64,
+   "read_only": 1,
+   "search_index": 1
   },
   {
    "fieldname": "content",
