@@ -682,7 +682,8 @@ def send_template_message(
 	if isinstance(account_name, dict):
 		return account_name
 	return bridge.send_template(
-		account_name, phone, template_name, body, header, button_params=buttons, language_code=language_code or None
+		account_name, phone, template_name, body, header, button_params=buttons, language_code=language_code or None,
+		gateway_name=gateway_name,
 	)
 
 
@@ -715,7 +716,7 @@ def send_text_message(gateway_name: str | None = None, to: str | None = None, te
 	account_name = _resolve_account_name(_gateway_whatsapp_account(gateway_name))
 	if isinstance(account_name, dict):
 		return account_name
-	return bridge.send_text(account_name, phone, str(text))
+	return bridge.send_text(account_name, phone, str(text), gateway_name=gateway_name)
 
 
 def _send_authority(gateway_name: str | None) -> dict[str, Any] | None:
@@ -865,7 +866,7 @@ def _send_media_impl(gateway_name, to, kind, link, file_url, caption, filename, 
 			use_name = filename or (fname if k == "document" else None)
 		return bridge.send_media(
 			account_name, phone, kind or "", link=link, media_id=use_id, caption=caption, filename=use_name,
-			reply_to=reply_to, voice=voice,
+			reply_to=reply_to, voice=voice, gateway_name=gateway_name,
 		)
 
 	return _typed_send(gateway_name, to, validate, send)
@@ -949,7 +950,9 @@ def send_location_message(
 		gateway_name,
 		to,
 		lambda p: wm.build_location_payload(p, latitude, longitude, name, address, reply_to)[1],
-		lambda acct, p: bridge.send_location(acct, p, latitude, longitude, name=name, address=address, reply_to=reply_to),
+		lambda acct, p: bridge.send_location(acct, p, latitude, longitude, name=name, address=address, reply_to=reply_to,
+			gateway_name=gateway_name,
+		),
 	)
 
 
@@ -968,7 +971,7 @@ def send_contacts_message(
 		gateway_name,
 		to,
 		lambda p: wm.build_contacts_payload(p, parsed, reply_to)[1],
-		lambda acct, p: bridge.send_contacts(acct, p, parsed, reply_to=reply_to),
+		lambda acct, p: bridge.send_contacts(acct, p, parsed, reply_to=reply_to, gateway_name=gateway_name),
 	)
 
 
@@ -988,7 +991,7 @@ def send_reaction_message(
 		gateway_name,
 		to,
 		lambda p: wm.build_reaction_payload(p, message_id, emoji or "", rm)[1],
-		lambda acct, p: bridge.send_reaction(acct, p, message_id or "", emoji or "", remove=rm),
+		lambda acct, p: bridge.send_reaction(acct, p, message_id or "", emoji or "", remove=rm, gateway_name=gateway_name),
 	)
 
 
@@ -1043,7 +1046,7 @@ def send_interactive_message(
 		gateway_name,
 		to,
 		lambda p: wm.build_interactive_payload(p, kind, spec, reply_to)[1],
-		lambda acct, p: bridge.send_interactive(acct, p, kind or "", spec, reply_to=reply_to),
+		lambda acct, p: bridge.send_interactive(acct, p, kind or "", spec, reply_to=reply_to, gateway_name=gateway_name),
 	)
 
 

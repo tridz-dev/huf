@@ -504,7 +504,7 @@ def _send_message(kwargs: dict) -> str:
 	acct = _resolve_bridge_account(kwargs)
 	if acct:
 		try:
-			res = bridge.send_text(acct["name"], recipient, message)
+			res = bridge.send_text(acct["name"], recipient, message, gateway_name=kwargs.get("gateway_name") or None)
 		except bridge.BridgeError as e:
 			return json.dumps(e.payload, default=str)
 		except frappe.PermissionError:
@@ -707,6 +707,7 @@ def _send_media(kwargs: dict) -> str:
 			account, recipient, media["kind"], link=media["link"], media_id=media["media_id"],
 			caption=media["caption"], filename=media["filename"], voice=media["voice"],
 			reply_to=(kwargs.get("reply_to") or "").strip() or None,
+			gateway_name=kwargs.get("gateway_name") or None,
 		),
 		"media",
 	)
@@ -796,7 +797,9 @@ def _send_location(kwargs: dict) -> str:
 	reply_to = (kwargs.get("reply_to") or "").strip() or None
 	return _deliver_typed(
 		kwargs, recipient, wm.build_location_payload(recipient, *args, reply_to),
-		lambda account: bridge.send_location(account, recipient, *args[:2], name=args[2], address=args[3], reply_to=reply_to),
+		lambda account: bridge.send_location(account, recipient, *args[:2], name=args[2], address=args[3], reply_to=reply_to,
+			gateway_name=kwargs.get("gateway_name") or None,
+		),
 		"a location",
 	)
 
@@ -820,7 +823,7 @@ def _send_contact(kwargs: dict) -> str:
 	reply_to = (kwargs.get("reply_to") or "").strip() or None
 	return _deliver_typed(
 		kwargs, recipient, wm.build_contacts_payload(recipient, contacts, reply_to),
-		lambda account: bridge.send_contacts(account, recipient, contacts, reply_to=reply_to),
+		lambda account: bridge.send_contacts(account, recipient, contacts, reply_to=reply_to, gateway_name=kwargs.get("gateway_name") or None),
 		"a contact",
 	)
 
@@ -834,7 +837,7 @@ def _send_reaction(kwargs: dict) -> str:
 	message_id = kwargs.get("message_id")
 	return _deliver_typed(
 		kwargs, recipient, wm.build_reaction_payload(recipient, message_id, emoji, remove),
-		lambda account: bridge.send_reaction(account, recipient, str(message_id or ""), emoji, remove=remove),
+		lambda account: bridge.send_reaction(account, recipient, str(message_id or ""), emoji, remove=remove, gateway_name=kwargs.get("gateway_name") or None),
 		"a reaction",
 	)
 
@@ -867,7 +870,7 @@ def _send_interactive(kwargs: dict, kind: str) -> str:
 	reply_to = (kwargs.get("reply_to") or "").strip() or None
 	return _deliver_typed(
 		kwargs, recipient, wm.build_interactive_payload(recipient, kind, spec, reply_to),
-		lambda account: bridge.send_interactive(account, recipient, kind, spec, reply_to=reply_to),
+		lambda account: bridge.send_interactive(account, recipient, kind, spec, reply_to=reply_to, gateway_name=kwargs.get("gateway_name") or None),
 		"an interactive message",
 	)
 

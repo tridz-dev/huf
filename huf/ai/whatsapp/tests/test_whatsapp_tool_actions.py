@@ -273,7 +273,7 @@ class TestWhatsAppToolBridgeRouting(unittest.TestCase):
 			result = json.loads(whatsapp.handle_action("send_message", to="+1 555-123-4567", message="hello"))
 		self.assertTrue(result["success"])
 		self.assertEqual(result["data"]["message_id"], "wamid.1")
-		mock_send.assert_called_once_with("WA-1", "15551234567", "hello")
+		mock_send.assert_called_once_with("WA-1", "15551234567", "hello", gateway_name="GW-1")
 		mock_post.assert_not_called()
 
 	def test_send_message_bridge_error_payload_is_returned(self):

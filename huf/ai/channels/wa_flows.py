@@ -124,7 +124,10 @@ def send_flow(gateway: str, to: str, flow_name: str, cta: str, body: str = "", s
 	if isinstance(account, dict):
 		return account
 	try:
-		res = (send or bridge.send_interactive)(account, to, "flow", spec)
+		res = (
+			send(account, to, "flow", spec) if send
+			else bridge.send_interactive(account, to, "flow", spec, gateway_name=gateway)
+		)
 	except bridge.BridgeError as exc:
 		return dict(exc.payload, success=False)
 	return {"success": True, "flow_token": spec["flow_token"], "message_id": (res or {}).get("message_id")}

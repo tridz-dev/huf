@@ -539,8 +539,10 @@ class WhatsAppGatewayAdapter(GatewayAdapter):
 	def _send_text_part(self, to: str, text: str, reply_to: str | None) -> OutboundDelivery:
 		if self._bridge_mode():
 			return _delivery_from_bridge(
-				bridge.send_text(
-					self._account, to, text, reply_to=reply_to, trusted=True, preview_url=self._preview_url
+				_via_bridge(
+					bridge.send_text,
+					self._account, to, text, reply_to=reply_to, trusted=True, preview_url=self._preview_url,
+					gateway_name=self._gateway_name or None,
 				)
 			)
 		data: dict[str, Any] = {
@@ -657,9 +659,11 @@ class WhatsAppGatewayAdapter(GatewayAdapter):
 	) -> OutboundDelivery:
 		if self._bridge_mode():
 			return _delivery_from_bridge(
-				bridge.send_media(
+				_via_bridge(
+					bridge.send_media,
 					self._account, to, kind, link=link, media_id=media_id, caption=caption,
 					filename=filename, reply_to=reply_to, trusted=trusted, voice=voice,
+					gateway_name=self._gateway_name or None,
 				)
 			)
 		media, errors = wt.validate_media_request(kind, link, media_id, caption, filename, voice)
@@ -676,7 +680,10 @@ class WhatsAppGatewayAdapter(GatewayAdapter):
 		self._ensure_window(to)
 		if self._bridge_mode():
 			return _delivery_from_bridge(
-				bridge.send_sticker(self._account, to, link=link, media_id=media_id, reply_to=reply_to, trusted=trusted)
+				_via_bridge(
+					bridge.send_sticker, self._account, to, link=link, media_id=media_id, reply_to=reply_to, trusted=trusted,
+					gateway_name=self._gateway_name or None,
+				)
 			)
 		return self._send_built(wm.build_sticker_payload(bridge.normalize_phone(to), link, media_id, reply_to))
 
@@ -687,8 +694,10 @@ class WhatsAppGatewayAdapter(GatewayAdapter):
 		self._ensure_window(to)
 		if self._bridge_mode():
 			return _delivery_from_bridge(
-				bridge.send_location(
-					self._account, to, latitude, longitude, name=name, address=address, reply_to=reply_to, trusted=trusted
+				_via_bridge(
+					bridge.send_location,
+					self._account, to, latitude, longitude, name=name, address=address, reply_to=reply_to, trusted=trusted,
+					gateway_name=self._gateway_name or None,
 				)
 			)
 		return self._send_built(wm.build_location_payload(bridge.normalize_phone(to), latitude, longitude, name, address, reply_to))
@@ -696,7 +705,12 @@ class WhatsAppGatewayAdapter(GatewayAdapter):
 	def send_contacts(self, to: str, contacts: Any, reply_to: str | None = None, trusted: bool = False) -> OutboundDelivery:
 		self._ensure_window(to)
 		if self._bridge_mode():
-			return _delivery_from_bridge(bridge.send_contacts(self._account, to, contacts, reply_to=reply_to, trusted=trusted))
+			return _delivery_from_bridge(
+				_via_bridge(
+					bridge.send_contacts, self._account, to, contacts, reply_to=reply_to, trusted=trusted,
+					gateway_name=self._gateway_name or None,
+				)
+			)
 		return self._send_built(wm.build_contacts_payload(bridge.normalize_phone(to), contacts, reply_to))
 
 	def send_reaction(
@@ -706,7 +720,10 @@ class WhatsAppGatewayAdapter(GatewayAdapter):
 		self._ensure_window(to)
 		if self._bridge_mode():
 			return _delivery_from_bridge(
-				bridge.send_reaction(self._account, to, message_id, emoji, remove=remove, trusted=trusted)
+				_via_bridge(
+					bridge.send_reaction, self._account, to, message_id, emoji, remove=remove, trusted=trusted,
+					gateway_name=self._gateway_name or None,
+				)
 			)
 		return self._send_built(wm.build_reaction_payload(bridge.normalize_phone(to), message_id, emoji, remove))
 
@@ -717,7 +734,10 @@ class WhatsAppGatewayAdapter(GatewayAdapter):
 		self._ensure_window(to)
 		if self._bridge_mode():
 			return _delivery_from_bridge(
-				bridge.send_interactive(self._account, to, kind, spec, reply_to=reply_to, trusted=trusted)
+				_via_bridge(
+					bridge.send_interactive, self._account, to, kind, spec, reply_to=reply_to, trusted=trusted,
+					gateway_name=self._gateway_name or None,
+				)
 			)
 		return self._send_built(wm.build_interactive_payload(bridge.normalize_phone(to), kind, spec or {}, reply_to))
 
@@ -771,7 +791,8 @@ class WhatsAppGatewayAdapter(GatewayAdapter):
 				usage["run_id"] = run_id or self._run_id
 			if solution or self._solution:
 				usage["solution"] = solution or self._solution
-			result = bridge.send_template(
+			result = _via_bridge(
+				bridge.send_template,
 				self._account, to, template_name, params, header_params=header_arg,
 				trusted=trusted, language_code=language_code, button_params=list(button_params or []),
 				gateway_name=self._gateway_name or None, **usage,
@@ -870,6 +891,16 @@ def _contact_names(value: Mapping[str, Any]) -> dict[str, str]:
 			if wa_id and name:
 				names[wa_id] = str(name)
 	return names
+
+
+def _via_bridge(fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
+	"""Call a bridge send; a ``blocked_by_hook`` refusal becomes ``OutboundRefused`` again (as in direct mode)."""
+	try:
+		return fn(*args, **kwargs)
+	except bridge.BridgeError as exc:
+		if (exc.payload or {}).get("error") == "blocked_by_hook":
+			raise policy.OutboundRefused(str(exc.payload.get("message") or "Blocked by policy."), "blocked_by_hook") from exc
+		raise
 
 
 def _delivery_from_bridge(result: Mapping[str, Any]) -> OutboundDelivery:

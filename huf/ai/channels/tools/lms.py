@@ -186,7 +186,10 @@ def lms_send_certificate(course: str = "", **_ignored) -> str:
 		return _err("no_account", "This gateway has no WhatsApp account to send from.")
 	try:
 		media = bridge.upload_media(account, prepared["content"], prepared["mime"], prepared["filename"], kind="document")
-		result = bridge.send_media(account, recipient, "document", media_id=str(media["media_id"]), filename=prepared["filename"])
+		result = bridge.send_media(
+			account, recipient, "document", media_id=str(media["media_id"]), filename=prepared["filename"],
+			gateway_name=gateway or None,
+		)
 	except bridge.BridgeError as e:
 		payload = e.payload or {}
 		return _err(str(payload.get("error") or "send_failed"), str(payload.get("message") or "Could not send the certificate."))
