@@ -857,7 +857,17 @@ def handle_gateway_webhook() -> dict | None:
 		frappe.local.response.http_status_code = 413
 		return {"success": False, "error": "Payload too large"}
 
-	adapter = get_gateway_adapter(gateway)
+	try:
+		adapter = get_gateway_adapter(gateway)
+	except (frappe.ValidationError, ValueError):
+		# Enabled gateway with missing/incomplete credentials. Raising here would 5xx and
+		# make the provider retry forever, so answer without leaking details and log once.
+		frappe.log_error(frappe.get_traceback(), "WhatsApp gateway adapter unavailable")
+		if (getattr(frappe.request, "method", "") or "").upper() == "GET":
+			frappe.local.response.http_status_code = 403
+			return {"success": False, "error": "Webhook verification failed"}
+		frappe.local.response.http_status_code = 200
+		return {"success": False, "error": "Gateway is not configured"}
 	request = _inbound_request()
 	if len(getattr(request, "body", b"") or b"") > MAX_BODY_BYTES:
 		frappe.local.response.http_status_code = 413
