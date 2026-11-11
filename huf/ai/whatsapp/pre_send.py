@@ -4,7 +4,7 @@
 """Call-site helpers for the external ``huf_gateway_pre_send`` gate (see ``gateway_hooks.gate_hook``).
 
 Every outbound send path (adapter, bridge, agent tool, management API) runs the gate through here, before
-anything reaches Meta or the ``WhatsApp Message`` table. ``gateway_name`` None skips the hook (see
+anything reaches Meta or the ``WhatsApp Message`` table. ``gateway_name`` None is refused when a hook is registered (see
 :func:`outbound_policy.check_pre_send`). A refusal is a policy decision, never retryable.
 """
 
@@ -29,10 +29,10 @@ def _digits(value: Any) -> str:
 	return "".join(c for c in str(value or "") if c.isdigit())
 
 
-def consent_confirmed(gateway_name: str | None, to: Any) -> bool:
-	"""True when ``to`` is the recipient of an in-flight consent-confirmation send for this gateway."""
+def consent_confirmed(gateway_name: str | None, to: Any, kind: str = "text") -> bool:
+	"""True for a ``text`` send to the recipient of the in-flight consent confirmation on this gateway."""
 	token = getattr(frappe.local, "huf_consent_send_scope", None)
-	return bool(token and gateway_name and token[0] == gateway_name and _digits(token[1]) == _digits(to))
+	return bool(kind == "text" and token and gateway_name and token[0] == gateway_name and _digits(token[1]) == _digits(to))
 
 
 def check(
@@ -45,7 +45,7 @@ def check(
 		kind,
 		{
 			"source": source,
-			"consent_confirmation": consent_confirmed(gateway_name, to if consent_to is None else consent_to),
+			"consent_confirmation": consent_confirmed(gateway_name, to if consent_to is None else consent_to, kind),
 			"subtype": subtype,
 		},
 	)

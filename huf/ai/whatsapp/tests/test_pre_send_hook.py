@@ -86,9 +86,10 @@ class TestCheckPreSend(_Base):
 			policy.check_pre_send(GW, TO, "text")
 		self.assertEqual(cm.exception.code, "blocked_by_hook")
 
-	def test_gateway_none_skipped(self):
-		with _hooks(_block):
+	def test_gateway_none_fails_closed(self):
+		with _hooks(_allow), self.assertRaises(policy.OutboundRefused) as cm:
 			policy.check_pre_send(None, TO, "text")
+		self.assertEqual(cm.exception.code, "blocked_by_hook")
 		self.assertEqual(SEEN, [])
 
 	def test_not_retryable(self):
@@ -143,16 +144,16 @@ class TestAdapterGraphSend(_Base):
 			self._adapter(post).send_reply(self._reply())
 		post.assert_not_called()
 
-	def test_gateway_none_skips(self):
+	def test_gateway_none_fails_closed(self):
 		post = MagicMock(return_value=_ok_response())
 		adapter = WhatsAppGatewayAdapter(CREDS, http_post=post)
 		with (
 			patch("huf.ai.gateway_adapters.whatsapp.account_events_mod.send_refusal", return_value=None),
-			_hooks(_block),
+			_hooks(_allow),
+			self.assertRaises(policy.OutboundRefused),
 		):
 			adapter._graph_send({"to": TO, "type": "text", "text": {"body": "x"}})
-		post.assert_called_once()
-		self.assertEqual(SEEN, [])
+		post.assert_not_called()
 
 	def test_consent_confirmation_flag_passes_through(self):
 		post = MagicMock(return_value=_ok_response())

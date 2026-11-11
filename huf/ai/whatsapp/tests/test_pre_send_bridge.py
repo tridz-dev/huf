@@ -132,11 +132,10 @@ class TestSendText(_Base):
 			)
 		self.post.assert_called_once()
 
-	def test_gateway_none_skips_hook(self):
-		with _hooks(_block):
-			bridge.send_text(ACC, TO, "hi")
+	def test_gateway_none_fails_closed(self):
+		with _hooks(_allow):
+			self.assertBlocked(bridge.send_text, ACC, TO, "hi")
 		self.assertEqual(SEEN, [])
-		self.get_doc_mock.assert_called_once()
 
 	def test_consent_confirmation_flagged(self):
 		frappe.local.huf_consent_send_scope = (GW, "+91 98765-43210")
@@ -194,11 +193,11 @@ class TestSendTemplate(_Base):
 			self._call()
 		self.post.assert_called_once()
 
-	def test_gateway_none_skips(self):
-		with _hooks(_block):
+	def test_gateway_none_fails_closed(self):
+		with _hooks(_allow), self.assertRaises(bridge.BridgeError) as cm:
 			self._call(gateway_name=None)
-		self.assertEqual(SEEN, [])
-		self.post.assert_called_once()
+		self.assertEqual(cm.exception.payload["error"], "blocked_by_hook")
+		self.post.assert_not_called()
 
 
 class TestSendMedia(_Base):
@@ -252,10 +251,9 @@ class TestSendMedia(_Base):
 			)
 		self.assertEqual(SEEN[0]["gateway"], GW)
 
-	def test_gateway_none_skips(self):
-		with _hooks(_block), patch.object(bridge, "_mirror_direct_send", return_value={"success": True}):
-			bridge.send_media(ACC, TO, "image", media_id="m1", http_post=self.post)
-		self.assertEqual(SEEN, [])
+	def test_gateway_none_fails_closed(self):
+		with _hooks(_allow), patch.object(bridge, "_mirror_direct_send", return_value={"success": True}):
+			self.assertBlocked(bridge.send_media, ACC, TO, "image", media_id="m1", http_post=self.post)
 
 
 class TestSendPayloadAndWrappers(_Base):
@@ -276,11 +274,10 @@ class TestSendPayloadAndWrappers(_Base):
 			bridge._send_payload(ACC, payload, True, self.post, GW)
 		self.post.assert_called_once()
 
-	def test_send_payload_gateway_none_skips(self):
+	def test_send_payload_gateway_none_fails_closed(self):
 		payload = {"messaging_product": "whatsapp", "to": TO, "type": "location", "location": {}}
-		with _hooks(_block), patch.object(bridge, "_mirror_direct_send", return_value={"success": True}):
-			bridge._send_payload(ACC, payload, True, self.post)
-		self.assertEqual(SEEN, [])
+		with _hooks(_allow), patch.object(bridge, "_mirror_direct_send", return_value={"success": True}):
+			self.assertBlocked(bridge._send_payload, ACC, payload, True, self.post)
 
 	def test_wrappers_block_end_to_end(self):
 		calls = (

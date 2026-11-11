@@ -106,12 +106,13 @@ def check_pre_send(gateway: str | None, to: Any, kind: str, context: dict[str, A
 	``False``) or an exception refuses with
 	:class:`OutboundRefused` code ``blocked_by_hook`` (non-retryable). No hooks registered means allow.
 
-	``gateway`` None skips the hook (debug log): without a gateway there is nothing for a guard to key on.
-	This is deliberately not part of :func:`check_recipient`, which is also used as a non-send filter.
+	``gateway`` None: a no-op without a registered hook, else refused (fail closed, ``blocked_by_hook``).
 	"""
 	if not gateway:
-		frappe.logger("huf").debug(f"huf_gateway_pre_send skipped (no gateway) kind={kind}")
-		return
+		if not frappe.get_hooks("huf_gateway_pre_send"):
+			return
+		frappe.logger("huf").warning(f"huf_gateway_pre_send refused: no gateway, kind={kind}")
+		raise OutboundRefused("Blocked by gateway hook", "blocked_by_hook")
 	from huf.ai.whatsapp.gateway_hooks import gate_hook
 
 	gate_hook("huf_gateway_pre_send", gateway=gateway, to=to, kind=kind, context=dict(context or {}))
