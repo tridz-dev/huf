@@ -58,13 +58,14 @@ def _error_log_count():
 class TestMirrorFailureLogging(unittest.TestCase):
 	def test_template_mirror_failure_logs_and_send_still_succeeds(self):
 		before = _error_log_count()
-		with patch.object(wb, "resolve_account", return_value=ACCT), patch.object(
-			wb, "_template_docname", return_value="hello_tpl-en_US"
-		), patch.object(wb, "_graph_post_message", return_value="wamid.G1") as post, patch.object(
-			frappe, "get_doc", side_effect=_failing_message_doc
-		), patch.object(frappe, "has_permission", return_value=True), patch.object(
-			frappe.db, "commit"
-		) as commit:
+		with (
+			patch.object(wb, "resolve_account", return_value=ACCT),
+			patch.object(wb, "_template_docname", return_value="hello_tpl-en_US"),
+			patch.object(wb, "_graph_post_message", return_value="wamid.G1") as post,
+			patch.object(frappe, "get_doc", side_effect=_failing_message_doc),
+			patch.object(frappe, "has_permission", return_value=True),
+			patch.object(frappe.db, "commit") as commit,
+		):
 			res = wb.send_template("ACC", "+1 415", "hello_tpl", ["a", "b"], ["h"])
 		self.assertEqual(res["success"], True)
 		self.assertEqual(res["message_id"], "wamid.G1")
@@ -74,14 +75,21 @@ class TestMirrorFailureLogging(unittest.TestCase):
 		self.assertEqual(_error_log_count(), before + 1)
 
 	def test_direct_send_mirror_failure_logs_and_send_still_succeeds(self):
-		payload = {"messaging_product": "whatsapp", "to": "14155552671", "type": "text", "text": {"body": "x"}}
+		payload = {
+			"messaging_product": "whatsapp",
+			"to": "14155552671",
+			"type": "text",
+			"text": {"body": "x"},
+		}
 		http_post = MagicMock(return_value=FakeResp({"messages": [{"id": "wamid.D1"}]}))
 		before = _error_log_count()
-		with patch.object(wb, "resolve_account", return_value=ACCT), patch.object(
-			wb, "_account_or_error", return_value=ACCT
-		), patch.object(account_events, "send_refusal", return_value=None), patch.object(
-			frappe, "get_doc", side_effect=_failing_message_doc
-		), patch.object(frappe, "has_permission", return_value=True):
+		with (
+			patch.object(wb, "resolve_account", return_value=ACCT),
+			patch.object(wb, "_account_or_error", return_value=ACCT),
+			patch.object(account_events, "send_refusal", return_value=None),
+			patch.object(frappe, "get_doc", side_effect=_failing_message_doc),
+			patch.object(frappe, "has_permission", return_value=True),
+		):
 			res = wb._send_payload("ACC", payload, False, http_post)
 		self.assertEqual(res["message_id"], "wamid.D1")
 		self.assertIs(res["mirrored"], False)
@@ -89,13 +97,14 @@ class TestMirrorFailureLogging(unittest.TestCase):
 		self.assertEqual(_error_log_count(), before + 1)
 
 	def test_mirror_failure_log_has_traceback_and_no_message_body(self):
-		with patch.object(wb, "resolve_account", return_value=ACCT), patch.object(
-			wb, "_template_docname", return_value="hello_tpl-en_US"
-		), patch.object(wb, "_graph_post_message", return_value="wamid.G2"), patch.object(
-			frappe, "get_doc", side_effect=_failing_message_doc
-		), patch.object(frappe, "has_permission", return_value=True), patch.object(
-			frappe, "log_error"
-		) as log_error:
+		with (
+			patch.object(wb, "resolve_account", return_value=ACCT),
+			patch.object(wb, "_template_docname", return_value="hello_tpl-en_US"),
+			patch.object(wb, "_graph_post_message", return_value="wamid.G2"),
+			patch.object(frappe, "get_doc", side_effect=_failing_message_doc),
+			patch.object(frappe, "has_permission", return_value=True),
+			patch.object(frappe, "log_error") as log_error,
+		):
 			wb.send_template("ACC", "+1 415", "hello_tpl", ["secret-body-text"], ["h"])
 		log_error.assert_called_once()
 		self.assertEqual(log_error.call_args.kwargs["title"], TITLE)

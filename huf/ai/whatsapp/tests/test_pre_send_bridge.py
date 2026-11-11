@@ -26,7 +26,15 @@ SEEN: list[dict] = []
 GW = "GW-BRIDGE"
 ACC = "ACC-1"
 TO = "919876543210"
-ACCT = {"name": ACC, "phone_id": "111", "access_token": "tok", "token": "tok", "business_id": "b", "url": "https://graph.invalid", "version": "v1"}
+ACCT = {
+	"name": ACC,
+	"phone_id": "111",
+	"access_token": "tok",
+	"token": "tok",
+	"business_id": "b",
+	"url": "https://graph.invalid",
+	"version": "v1",
+}
 
 
 def _block(**payload):
@@ -46,7 +54,10 @@ def _boom(**payload):
 
 def _hooks(*handlers):
 	paths = [f"{MOD}.{h.__name__}" for h in handlers]
-	return patch("huf.ai.gateway_hooks.frappe.get_hooks", side_effect=lambda n, *a, **k: paths if n == "huf_gateway_pre_send" else [])
+	return patch(
+		"huf.ai.gateway_hooks.frappe.get_hooks",
+		side_effect=lambda n, *a, **k: paths if n == "huf_gateway_pre_send" else [],
+	)
 
 
 def _ok():
@@ -70,7 +81,9 @@ class _Base(unittest.TestCase):
 			p = patch(target, **kw)
 			p.start()
 			self.addCleanup(p.stop)
-		self.get_doc = patch("frappe.get_doc", return_value=MagicMock(name="doc", **{"get.return_value": None}))
+		self.get_doc = patch(
+			"frappe.get_doc", return_value=MagicMock(name="doc", **{"get.return_value": None})
+		)
 		self.get_doc_mock = self.get_doc.start()
 		self.addCleanup(self.get_doc.stop)
 		self.post = MagicMock(return_value=_ok())
@@ -93,7 +106,14 @@ class TestSendText(_Base):
 	def test_blocked_direct_path_no_post(self):
 		with _hooks(_block):
 			self.assertBlocked(
-				bridge.send_text, ACC, TO, "hi", trusted=True, preview_url=True, gateway_name=GW, http_post=self.post
+				bridge.send_text,
+				ACC,
+				TO,
+				"hi",
+				trusted=True,
+				preview_url=True,
+				gateway_name=GW,
+				http_post=self.post,
 			)
 
 	def test_hook_raising_blocks(self):
@@ -107,7 +127,9 @@ class TestSendText(_Base):
 
 	def test_no_hook_unchanged_direct_path(self):
 		with _hooks(), patch.object(bridge, "_mirror_direct_send", return_value={"success": True}):
-			bridge.send_text(ACC, TO, "hi", trusted=True, preview_url=True, gateway_name=GW, http_post=self.post)
+			bridge.send_text(
+				ACC, TO, "hi", trusted=True, preview_url=True, gateway_name=GW, http_post=self.post
+			)
 		self.post.assert_called_once()
 
 	def test_gateway_none_skips_hook(self):
@@ -128,13 +150,24 @@ class TestSendText(_Base):
 
 class TestSendTemplate(_Base):
 	def _call(self, **kw):
-		with patch.object(bridge, "_template_row", return_value=None), patch.object(
-			policy, "enforce_template", return_value=None
-		), patch.object(bridge, "_template_docname", return_value="tpl-en"), patch.object(
-			bridge.policy, "note_template_sent"
-		), patch.object(bridge, "_mirror_template_send", return_value={"success": True, "message_id": "wamid.9"}):
+		with (
+			patch.object(bridge, "_template_row", return_value=None),
+			patch.object(policy, "enforce_template", return_value=None),
+			patch.object(bridge, "_template_docname", return_value="tpl-en"),
+			patch.object(bridge.policy, "note_template_sent"),
+			patch.object(
+				bridge, "_mirror_template_send", return_value={"success": True, "message_id": "wamid.9"}
+			),
+		):
 			return bridge.send_template(
-				ACC, TO, "hello", ["x"], force_graph=True, http_post=self.post, gateway_name=kw.pop("gateway_name", GW), **kw
+				ACC,
+				TO,
+				"hello",
+				["x"],
+				force_graph=True,
+				http_post=self.post,
+				gateway_name=kw.pop("gateway_name", GW),
+				**kw,
 			)
 
 	def test_blocked_after_enforce_template(self):
@@ -147,7 +180,10 @@ class TestSendTemplate(_Base):
 			self.assertBlocked(lambda: self._call())
 
 	def test_enforce_template_refusal_still_first(self):
-		with _hooks(_block), patch.object(policy, "enforce_template", side_effect=policy.OutboundRefused("x", "opted_out")):
+		with (
+			_hooks(_block),
+			patch.object(policy, "enforce_template", side_effect=policy.OutboundRefused("x", "opted_out")),
+		):
 			with self.assertRaises(bridge.BridgeError) as cm:
 				bridge.send_template(ACC, TO, "hello", ["x"], gateway_name=GW, http_post=self.post)
 		self.assertEqual(cm.exception.payload["error"], "opted_out")
@@ -168,17 +204,35 @@ class TestSendTemplate(_Base):
 class TestSendMedia(_Base):
 	def test_blocked_plain_link_branch(self):
 		with _hooks(_block):
-			self.assertBlocked(bridge.send_media, ACC, TO, "image", link="https://x.invalid/a.jpg", gateway_name=GW, http_post=self.post)
+			self.assertBlocked(
+				bridge.send_media,
+				ACC,
+				TO,
+				"image",
+				link="https://x.invalid/a.jpg",
+				gateway_name=GW,
+				http_post=self.post,
+			)
 		self.assertEqual(SEEN[0]["kind"], "media")
 
 	def test_blocked_media_id_branch_fires_once(self):
 		with _hooks(_block):
-			self.assertBlocked(bridge.send_media, ACC, TO, "image", media_id="m1", gateway_name=GW, http_post=self.post)
+			self.assertBlocked(
+				bridge.send_media, ACC, TO, "image", media_id="m1", gateway_name=GW, http_post=self.post
+			)
 		self.assertEqual(len(SEEN), 1)
 
 	def test_hook_raising_blocks(self):
 		with _hooks(_boom):
-			self.assertBlocked(bridge.send_media, ACC, TO, "image", link="https://x.invalid/a.jpg", gateway_name=GW, http_post=self.post)
+			self.assertBlocked(
+				bridge.send_media,
+				ACC,
+				TO,
+				"image",
+				link="https://x.invalid/a.jpg",
+				gateway_name=GW,
+				http_post=self.post,
+			)
 
 	def test_no_hook_unchanged_and_single_fire(self):
 		with _hooks(_allow), patch.object(bridge, "_mirror_direct_send", return_value={"success": True}):
@@ -193,7 +247,9 @@ class TestSendMedia(_Base):
 
 	def test_voice_note_carries_gateway(self):
 		with _hooks(_block):
-			self.assertBlocked(bridge.send_voice_note, ACC, TO, media_id="m1", gateway_name=GW, http_post=self.post)
+			self.assertBlocked(
+				bridge.send_voice_note, ACC, TO, media_id="m1", gateway_name=GW, http_post=self.post
+			)
 		self.assertEqual(SEEN[0]["gateway"], GW)
 
 	def test_gateway_none_skips(self):
@@ -230,15 +286,28 @@ class TestSendPayloadAndWrappers(_Base):
 		calls = (
 			lambda: bridge.send_location(ACC, TO, 1, 2, trusted=True, http_post=self.post, gateway_name=GW),
 			lambda: bridge.send_contacts(
-				ACC, TO, [{"name": {"formatted_name": "A", "first_name": "A"}, "phones": [{"phone": "+15550001111"}]}],
-				trusted=True, http_post=self.post, gateway_name=GW,
+				ACC,
+				TO,
+				[{"name": {"formatted_name": "A", "first_name": "A"}, "phones": [{"phone": "+15550001111"}]}],
+				trusted=True,
+				http_post=self.post,
+				gateway_name=GW,
 			),
-			lambda: bridge.send_reaction(ACC, TO, "wamid.1", "👍", trusted=True, http_post=self.post, gateway_name=GW),
+			lambda: bridge.send_reaction(
+				ACC, TO, "wamid.1", "👍", trusted=True, http_post=self.post, gateway_name=GW
+			),
 			lambda: bridge.send_interactive(
-				ACC, TO, "buttons", {"body": "b", "buttons": [{"id": "1", "title": "t"}]},
-				trusted=True, http_post=self.post, gateway_name=GW,
+				ACC,
+				TO,
+				"buttons",
+				{"body": "b", "buttons": [{"id": "1", "title": "t"}]},
+				trusted=True,
+				http_post=self.post,
+				gateway_name=GW,
 			),
-			lambda: bridge.send_sticker(ACC, TO, media_id="m1", trusted=True, http_post=self.post, gateway_name=GW),
+			lambda: bridge.send_sticker(
+				ACC, TO, media_id="m1", trusted=True, http_post=self.post, gateway_name=GW
+			),
 		)
 		for call in calls:
 			SEEN.clear()
@@ -249,7 +318,9 @@ class TestSendPayloadAndWrappers(_Base):
 
 	def test_sticker_kind_is_media(self):
 		with _hooks(_block):
-			self.assertBlocked(bridge.send_sticker, ACC, TO, media_id="m1", gateway_name=GW, http_post=self.post)
+			self.assertBlocked(
+				bridge.send_sticker, ACC, TO, media_id="m1", gateway_name=GW, http_post=self.post
+			)
 		self.assertEqual(SEEN[0]["kind"], "media")
 
 
@@ -259,12 +330,16 @@ class TestCallerPlumbing(_Base):
 	def test_adapter_bridge_mode_text_reply_blocked(self):
 		adapter = WhatsAppGatewayAdapter(
 			{"phone_number_id": "111", "access_token": "t", "webhook_verify_token": "v", "app_secret": "s"},
-			http_post=self.post, gateway_context={"gateway_name": GW, "whatsapp_account": ACC},
+			http_post=self.post,
+			gateway_context={"gateway_name": GW, "whatsapp_account": ACC},
 		)
 		self.assertTrue(adapter._bridge_mode())
-		with patch.object(bridge, "window_state", return_value={"open": True}), patch.object(policy, "check_recipient"), _hooks(
-			_block
-		), self.assertRaises(policy.OutboundRefused) as cm:
+		with (
+			patch.object(bridge, "window_state", return_value={"open": True}),
+			patch.object(policy, "check_recipient"),
+			_hooks(_block),
+			self.assertRaises(policy.OutboundRefused) as cm,
+		):
 			adapter.send_reply(GatewayReply(conversation_id=TO, text="hello"))
 		self.assertEqual(cm.exception.code, "blocked_by_hook")
 		self.assertEqual(SEEN[0]["gateway"], GW)
@@ -275,24 +350,33 @@ class TestCallerPlumbing(_Base):
 	def test_adapter_bridge_mode_no_hook_sends(self):
 		adapter = WhatsAppGatewayAdapter(
 			{"phone_number_id": "111", "access_token": "t", "webhook_verify_token": "v", "app_secret": "s"},
-			http_post=self.post, gateway_context={"gateway_name": GW, "whatsapp_account": ACC},
+			http_post=self.post,
+			gateway_context={"gateway_name": GW, "whatsapp_account": ACC},
 		)
-		with patch.object(bridge, "window_state", return_value={"open": True}), patch.object(policy, "check_recipient"), patch.object(
-			bridge, "_graph_post_message", return_value="wamid.9"
-		) as gpm, patch.object(bridge, "_mirror_direct_send", return_value={"success": True, "message_id": "wamid.9"}), _hooks():
+		with (
+			patch.object(bridge, "window_state", return_value={"open": True}),
+			patch.object(policy, "check_recipient"),
+			patch.object(bridge, "_graph_post_message", return_value="wamid.9") as gpm,
+			patch.object(
+				bridge, "_mirror_direct_send", return_value={"success": True, "message_id": "wamid.9"}
+			),
+			_hooks(),
+		):
 			adapter.send_reply(GatewayReply(conversation_id=TO, text="hello"))
 		gpm.assert_called_once()
 
 	def _mgmt(self, hooks, fn, **kwargs):
-		with patch.object(mgmt, "_send_authority", return_value=None), patch.object(
-			mgmt, "_gateway_whatsapp_account", return_value=ACC
-		), patch.object(mgmt, "_resolve_account_name", return_value=ACC), patch.object(
-			bridge, "window_state", return_value={"open": True}
-		), patch.object(mgmt, "_opted_out", return_value=False), patch.object(
-			bridge, "_template_row", return_value=None
-		), patch.object(policy, "enforce_template", return_value=None), patch.object(
-			bridge, "_template_docname", return_value="t-en"
-		), hooks:
+		with (
+			patch.object(mgmt, "_send_authority", return_value=None),
+			patch.object(mgmt, "_gateway_whatsapp_account", return_value=ACC),
+			patch.object(mgmt, "_resolve_account_name", return_value=ACC),
+			patch.object(bridge, "window_state", return_value={"open": True}),
+			patch.object(mgmt, "_opted_out", return_value=False),
+			patch.object(bridge, "_template_row", return_value=None),
+			patch.object(policy, "enforce_template", return_value=None),
+			patch.object(bridge, "_template_docname", return_value="t-en"),
+			hooks,
+		):
 			return fn(gateway_name=GW, to=TO, **kwargs)
 
 	def test_management_send_text_message_blocked(self):
@@ -325,9 +409,11 @@ class TestCallerPlumbing(_Base):
 		from huf.ai.tools import whatsapp as wtools
 
 		kwargs = {"gateway_name": GW, "to": TO, "message": "hi"}
-		with patch.object(wtools, "_free_form_refusal", return_value=None), patch.object(
-			wtools, "_resolve_bridge_account", return_value={"name": ACC}
-		), _hooks(_block):
+		with (
+			patch.object(wtools, "_free_form_refusal", return_value=None),
+			patch.object(wtools, "_resolve_bridge_account", return_value={"name": ACC}),
+			_hooks(_block),
+		):
 			out = json.loads(wtools._send_message(kwargs))
 		self.assertEqual((out["success"], out["error"]), (False, "blocked_by_hook"))
 		self.assertNotIn("definite", out)  # a policy refusal, not retryable
@@ -338,9 +424,11 @@ class TestCallerPlumbing(_Base):
 		from huf.ai.tools import whatsapp as wtools
 
 		kwargs = {"gateway_name": GW, "to": TO, "latitude": 1, "longitude": 2}
-		with patch.object(wtools, "_free_form_refusal", return_value=None), patch.object(
-			wtools, "_resolve_bridge_account", return_value={"name": ACC}
-		), _hooks(_block):
+		with (
+			patch.object(wtools, "_free_form_refusal", return_value=None),
+			patch.object(wtools, "_resolve_bridge_account", return_value={"name": ACC}),
+			_hooks(_block),
+		):
 			out = json.loads(wtools._send_location(kwargs))
 		self.assertEqual(out["error"], "blocked_by_hook")
 		self.assertEqual(SEEN[0]["gateway"], GW)
@@ -350,13 +438,15 @@ class TestCallerPlumbing(_Base):
 
 		doc = MagicMock(status="open", gateway=GW, contact_handle=TO)
 		doc.get.return_value = "whatsapp"
-		with patch.object(reply_api, "_load", return_value=doc), patch.object(
-			reply_api.conv, "window_applies", return_value=True
-		), patch.object(reply_api.frappe.db, "get_value", return_value=ACC), patch.object(
-			bridge, "_template_row", return_value=None
-		), patch.object(bridge, "_template_docname", return_value="t-en"), patch.object(
-			policy, "enforce_template", return_value=None
-		), _hooks(_block):
+		with (
+			patch.object(reply_api, "_load", return_value=doc),
+			patch.object(reply_api.conv, "window_applies", return_value=True),
+			patch.object(reply_api.frappe.db, "get_value", return_value=ACC),
+			patch.object(bridge, "_template_row", return_value=None),
+			patch.object(bridge, "_template_docname", return_value="t-en"),
+			patch.object(policy, "enforce_template", return_value=None),
+			_hooks(_block),
+		):
 			out = reply_api.deliver_reply(doc, template="hello", params=["x"])
 		self.assertEqual((out["status"], out["error"]), ("refused", "blocked_by_hook"))
 		self.assertEqual((SEEN[0]["gateway"], SEEN[0]["kind"]), (GW, "template"))
@@ -367,10 +457,13 @@ class TestCallerPlumbing(_Base):
 
 		doc = MagicMock(status="open", gateway=GW, contact_handle=TO)
 		doc.get.return_value = "whatsapp"
-		with patch.object(reply_api, "_load", return_value=doc), patch.object(
-			reply_api.conv, "window_applies", return_value=True
-		), patch.object(reply_api.conv, "is_within_24h", return_value=True), patch.object(
-			reply_api, "send_free_text", side_effect=policy.OutboundRefused("no", "blocked_by_hook")
+		with (
+			patch.object(reply_api, "_load", return_value=doc),
+			patch.object(reply_api.conv, "window_applies", return_value=True),
+			patch.object(reply_api.conv, "is_within_24h", return_value=True),
+			patch.object(
+				reply_api, "send_free_text", side_effect=policy.OutboundRefused("no", "blocked_by_hook")
+			),
 		):
 			out = reply_api.deliver_reply(doc, text="hello")
 		self.assertEqual((out["status"], out["error"]), ("refused", "blocked_by_hook"))
@@ -379,7 +472,9 @@ class TestCallerPlumbing(_Base):
 		from huf.ai.whatsapp.broadcast import send as bsend
 
 		with patch.object(bsend, "_write") as write:
-			outcome = bsend._after_bridge_error("RCPT-1", 1, {"success": False, "error": "blocked_by_hook", "message": "no"}, GW, TO)
+			outcome = bsend._after_bridge_error(
+				"RCPT-1", 1, {"success": False, "error": "blocked_by_hook", "message": "no"}, GW, TO
+			)
 		self.assertEqual(outcome, "skipped")
 		self.assertEqual(write.call_args.kwargs["skip_reason"], "blocked_by_hook")
 		self.assertEqual(write.call_args.kwargs["status"], "skipped")
@@ -388,11 +483,14 @@ class TestCallerPlumbing(_Base):
 		from huf.ai.channels import wa_flows
 
 		flow = frappe._dict(name="F", flow_id="1", status="PUBLISHED")
-		with patch.object(wa_flows.frappe.db, "get_value", return_value=flow), patch.object(
-			policy, "check_recipient"
-		), patch.object(mgmt, "_free_form_gate", return_value=None), patch.object(
-			mgmt, "_resolve_account_name", return_value=ACC
-		), patch.object(mgmt, "_gateway_whatsapp_account", return_value=ACC), _hooks(_block):
+		with (
+			patch.object(wa_flows.frappe.db, "get_value", return_value=flow),
+			patch.object(policy, "check_recipient"),
+			patch.object(mgmt, "_free_form_gate", return_value=None),
+			patch.object(mgmt, "_resolve_account_name", return_value=ACC),
+			patch.object(mgmt, "_gateway_whatsapp_account", return_value=ACC),
+			_hooks(_block),
+		):
 			out = wa_flows.send_flow(GW, TO, "flow", "go")
 		self.assertEqual((out["success"], out["error"]), (False, "blocked_by_hook"))
 		self.assertEqual(SEEN[0]["gateway"], GW)

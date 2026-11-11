@@ -46,7 +46,10 @@ def _boom(**payload):
 
 def _hooks(*handlers):
 	paths = [f"{MOD}.{h.__name__}" for h in handlers]
-	return patch("huf.ai.gateway_hooks.frappe.get_hooks", side_effect=lambda n, *a, **k: paths if n == "huf_gateway_pre_send" else [])
+	return patch(
+		"huf.ai.gateway_hooks.frappe.get_hooks",
+		side_effect=lambda n, *a, **k: paths if n == "huf_gateway_pre_send" else [],
+	)
 
 
 class _Base(unittest.TestCase):
@@ -143,7 +146,10 @@ class TestAdapterGraphSend(_Base):
 	def test_gateway_none_skips(self):
 		post = MagicMock(return_value=_ok_response())
 		adapter = WhatsAppGatewayAdapter(CREDS, http_post=post)
-		with patch("huf.ai.gateway_adapters.whatsapp.account_events_mod.send_refusal", return_value=None), _hooks(_block):
+		with (
+			patch("huf.ai.gateway_adapters.whatsapp.account_events_mod.send_refusal", return_value=None),
+			_hooks(_block),
+		):
 			adapter._graph_send({"to": TO, "type": "text", "text": {"body": "x"}})
 		post.assert_called_once()
 		self.assertEqual(SEEN, [])
@@ -158,13 +164,19 @@ class TestAdapterGraphSend(_Base):
 		self.assertTrue(SEEN[0]["context"]["consent_confirmation"])
 		# a different recipient under the same scope is not flagged
 		SEEN.clear()
-		with _hooks(_allow), patch("huf.ai.gateway_adapters.whatsapp.account_events_mod.send_refusal", return_value=None):
+		with (
+			_hooks(_allow),
+			patch("huf.ai.gateway_adapters.whatsapp.account_events_mod.send_refusal", return_value=None),
+		):
 			self._adapter(post)._graph_send({"to": "15550001111", "type": "text", "text": {"body": "x"}})
 		self.assertFalse(SEEN[0]["context"]["consent_confirmation"])
 
 	def test_template_kind(self):
 		post = MagicMock(return_value=_ok_response())
-		with _hooks(_block), patch("huf.ai.gateway_adapters.whatsapp.account_events_mod.send_refusal", return_value=None):
+		with (
+			_hooks(_block),
+			patch("huf.ai.gateway_adapters.whatsapp.account_events_mod.send_refusal", return_value=None),
+		):
 			with self.assertRaises(policy.OutboundRefused):
 				self._adapter(post)._graph_send({"to": TO, "type": "template", "template": {"name": "t"}})
 		post.assert_not_called()
@@ -186,7 +198,16 @@ class TestToolDirectPosts(_Base):
 
 	def _run(self, fn, kwargs, hooks, *args):
 		ps = self._common()
-		with ps[0], ps[1], ps[2], ps[3], ps[4], ps[5], hooks, patch.object(wtools.requests, "post", return_value=_ok_response()) as post:
+		with (
+			ps[0],
+			ps[1],
+			ps[2],
+			ps[3],
+			ps[4],
+			ps[5],
+			hooks,
+			patch.object(wtools.requests, "post", return_value=_ok_response()) as post,
+		):
 			out = json.loads(fn(kwargs, *args))
 		return out, post
 
@@ -207,7 +228,10 @@ class TestToolDirectPosts(_Base):
 		self.assertEqual(out["error"], "blocked_by_hook")
 
 	def test_typed_post_blocked(self):
-		built = ({"messaging_product": "whatsapp", "to": TO, "type": "image", "image": {"link": "https://x"}}, [])
+		built = (
+			{"messaging_product": "whatsapp", "to": TO, "type": "image", "image": {"link": "https://x"}},
+			[],
+		)
 		out, post = self._run(
 			lambda kw: wtools._deliver_typed(kw, TO, built, None, "image"), dict(self.KW), _hooks(_block)
 		)
@@ -217,7 +241,9 @@ class TestToolDirectPosts(_Base):
 
 	def test_typed_post_no_hook(self):
 		built = ({"messaging_product": "whatsapp", "to": TO, "type": "location", "location": {}}, [])
-		out, post = self._run(lambda kw: wtools._deliver_typed(kw, TO, built, None, "location"), dict(self.KW), _hooks())
+		out, post = self._run(
+			lambda kw: wtools._deliver_typed(kw, TO, built, None, "location"), dict(self.KW), _hooks()
+		)
 		post.assert_called_once()
 		self.assertTrue(out["success"])
 
@@ -238,11 +264,13 @@ class TestManagementCallPermission(_Base):
 	def _call(self, hooks):
 		graph = MagicMock()
 		graph.send_permission_request.return_value = {"ok": 1}
-		with patch.object(mgmt, "_calls_graph", return_value=graph), patch.object(
-			mgmt, "_validate_recipient", return_value=TO
-		), patch.object(mgmt.wcalls, "permission_request_payload"), patch.object(
-			mgmt, "_free_form_gate", return_value=None
-		), hooks:
+		with (
+			patch.object(mgmt, "_calls_graph", return_value=graph),
+			patch.object(mgmt, "_validate_recipient", return_value=TO),
+			patch.object(mgmt.wcalls, "permission_request_payload"),
+			patch.object(mgmt, "_free_form_gate", return_value=None),
+			hooks,
+		):
 			out = mgmt.send_call_permission_request(gateway_name=GW, to=TO, text="t")
 		return out, graph
 

@@ -31,7 +31,10 @@ class _Store:
 class TestDeliveryStatusHook(IntegrationTestCase):
 	def _run(self, statuses, store=None):
 		store = store or _Store()
-		with patch.object(gateway_webhook.frappe, "db", store), patch.object(gateway_webhook, "fire_hook") as hook:
+		with (
+			patch.object(gateway_webhook.frappe, "db", store),
+			patch.object(gateway_webhook, "fire_hook") as hook,
+		):
 			for s in statuses:
 				gateway_webhook._update_reply_status(GW, {"id": WAMID, **s})
 		return store, hook
@@ -83,11 +86,12 @@ class TestDeliveryStatusHook(IntegrationTestCase):
 
 	def test_raising_handler_does_not_break_update(self):
 		store = _Store()
-		with patch.object(gateway_webhook.frappe, "db", store), patch(
-			"huf.ai.gateway_hooks.frappe.get_hooks", return_value=["x.y.z"]
-		), patch("huf.ai.gateway_hooks.frappe.get_attr", side_effect=RuntimeError("boom")), patch(
-			"huf.ai.gateway_hooks.frappe.log_error"
-		) as log:
+		with (
+			patch.object(gateway_webhook.frappe, "db", store),
+			patch("huf.ai.gateway_hooks.frappe.get_hooks", return_value=["x.y.z"]),
+			patch("huf.ai.gateway_hooks.frappe.get_attr", side_effect=RuntimeError("boom")),
+			patch("huf.ai.gateway_hooks.frappe.log_error") as log,
+		):
 			gateway_webhook._update_reply_status(GW, {"id": WAMID, "status": "delivered"})
 		self.assertEqual(store.row["reply_status"], "delivered")
 		self.assertTrue(log.called)

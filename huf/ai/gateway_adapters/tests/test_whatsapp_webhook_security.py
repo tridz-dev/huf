@@ -101,7 +101,7 @@ class TestWhatsAppWebhookSecurity(IntegrationTestCase):
 		frappe.db.delete("AI Model", {"name": self.model})
 		frappe.db.delete("AI Provider", {"name": self.provider})
 		frappe.delete_doc("User", self.exec_user, ignore_permissions=True, force=True)
-		frappe.db.commit()
+		frappe.db.commit()  # nosemgrep -- test teardown
 
 	# ------------------------------------------------------------------ helpers
 	def _make_gateway_user(self):
@@ -126,7 +126,12 @@ class TestWhatsAppWebhookSecurity(IntegrationTestCase):
 		if with_app_secret:
 			credentials.append({"key": "app_secret", "value": APP_SECRET})
 		return frappe.get_doc(
-			{"doctype": "Integration Settings", "service": "whatsapp", "is_active": 1, "credentials": credentials}
+			{
+				"doctype": "Integration Settings",
+				"service": "whatsapp",
+				"is_active": 1,
+				"credentials": credentials,
+			}
 		).insert(ignore_permissions=True)
 
 	def _make_gateway(self, settings_name: str, gateway_name: str):

@@ -26,7 +26,9 @@ class TestOptOutHook(unittest.TestCase):
 
 	def test_stop_fires_opt_out_once(self):
 		fh = self._out(_opted_out("Approved"))
-		fh.assert_called_once_with("huf_gateway_opt_out", gateway="GW", sender_id="123", kind="opt_out", keyword="stop")
+		fh.assert_called_once_with(
+			"huf_gateway_opt_out", gateway="GW", sender_id="123", kind="opt_out", keyword="stop"
+		)
 
 	def test_stop_without_entry_fires(self):
 		self.assertEqual(self._out(None).call_count, 1)
@@ -41,7 +43,9 @@ class TestOptOutHook(unittest.TestCase):
 			patch.object(gs, "fire_hook") as fh,
 		):
 			gs._record_opt_in(GW, "123", keyword="start")
-		fh.assert_called_once_with("huf_gateway_opt_out", gateway="GW", sender_id="123", kind="opt_in", keyword="start")
+		fh.assert_called_once_with(
+			"huf_gateway_opt_out", gateway="GW", sender_id="123", kind="opt_in", keyword="start"
+		)
 
 	def test_start_without_prior_opt_out_fires_nothing(self):
 		with (
@@ -61,7 +65,9 @@ class TestOptOutHook(unittest.TestCase):
 			patch.object(gs, "fire_hook") as fh,
 		):
 			gs._record_opt_out_linked(GW, event, "123", keyword="stop")
-		fh.assert_called_once_with("huf_gateway_opt_out", gateway="GW", sender_id="123", kind="opt_out", keyword="stop")
+		fh.assert_called_once_with(
+			"huf_gateway_opt_out", gateway="GW", sender_id="123", kind="opt_out", keyword="stop"
+		)
 
 	def test_linked_start_fires_once_for_primary(self):
 		with (
@@ -71,4 +77,6 @@ class TestOptOutHook(unittest.TestCase):
 			patch.object(gs, "fire_hook") as fh,
 		):
 			gs._record_opt_in_linked(GW, "123", keyword="start")
-		fh.assert_called_once_with("huf_gateway_opt_out", gateway="GW", sender_id="123", kind="opt_in", keyword="start")
+		fh.assert_called_once_with(
+			"huf_gateway_opt_out", gateway="GW", sender_id="123", kind="opt_in", keyword="start"
+		)

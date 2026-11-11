@@ -40,7 +40,10 @@ def _allow(**payload):
 
 def _hooks(*handlers):
 	paths = [f"{MOD}.{h.__name__}" for h in handlers]
-	return patch("huf.ai.gateway_hooks.frappe.get_hooks", side_effect=lambda n, *a, **k: paths if n == "huf_gateway_pre_send" else [])
+	return patch(
+		"huf.ai.gateway_hooks.frappe.get_hooks",
+		side_effect=lambda n, *a, **k: paths if n == "huf_gateway_pre_send" else [],
+	)
 
 
 class _Base(unittest.TestCase):
@@ -55,15 +58,18 @@ class TestManagement(_Base):
 	def _call(self, hooks, fn=None, **kw):
 		fn = fn or mgmt.send_media_message
 		file_url = "/private/files/v.ogg" if fn is mgmt.send_voice_note else "/private/files/d.pdf"
-		with patch.object(mgmt, "_send_authority", return_value=None), patch.object(
-			mgmt, "_gateway_whatsapp_account", return_value=ACC
-		), patch.object(mgmt, "_resolve_account_name", return_value=ACC), patch.object(
-			bridge, "is_available", return_value=True
-		), patch.object(bridge, "window_state", return_value={"open": True}), patch.object(
-			mgmt, "_opted_out", return_value=False
-		), patch.object(mgmt, "_read_uploaded_file", return_value=(b"%PDF", "d.pdf", "application/pdf")), patch.object(
-			bridge, "upload_media", return_value={"success": True, "media_id": "M1"}
-		) as up, patch.object(bridge, "send_media", return_value={"success": True}) as sent, hooks:
+		with (
+			patch.object(mgmt, "_send_authority", return_value=None),
+			patch.object(mgmt, "_gateway_whatsapp_account", return_value=ACC),
+			patch.object(mgmt, "_resolve_account_name", return_value=ACC),
+			patch.object(bridge, "is_available", return_value=True),
+			patch.object(bridge, "window_state", return_value={"open": True}),
+			patch.object(mgmt, "_opted_out", return_value=False),
+			patch.object(mgmt, "_read_uploaded_file", return_value=(b"%PDF", "d.pdf", "application/pdf")),
+			patch.object(bridge, "upload_media", return_value={"success": True, "media_id": "M1"}) as up,
+			patch.object(bridge, "send_media", return_value={"success": True}) as sent,
+			hooks,
+		):
 			out = fn(gateway_name=GW, to=TO, file_url=file_url, **kw)
 		return out, up, sent
 
@@ -72,7 +78,9 @@ class TestManagement(_Base):
 		self.assertEqual((out["success"], out["error"]), (False, "blocked_by_hook"))
 		up.assert_not_called()
 		sent.assert_not_called()
-		self.assertEqual((SEEN[0]["gateway"], SEEN[0]["kind"], SEEN[0]["context"]["source"]), (GW, "media", "management"))
+		self.assertEqual(
+			(SEEN[0]["gateway"], SEEN[0]["kind"], SEEN[0]["context"]["source"]), (GW, "media", "management")
+		)
 
 	def test_blocked_voice_note_does_not_upload(self):
 		out, up, sent = self._call(_hooks(_block), fn=mgmt.send_voice_note)
@@ -94,19 +102,27 @@ class TestManagement(_Base):
 
 
 class TestAgentTool(_Base):
-	PREP = {"kind": "document", "mime": "application/pdf", "content": b"%PDF", "filename": "d.pdf", "voice": False}
+	PREP = {
+		"kind": "document",
+		"mime": "application/pdf",
+		"content": b"%PDF",
+		"filename": "d.pdf",
+		"voice": False,
+	}
 
 	def _call(self, hooks):
 		kwargs = {"gateway_name": GW, "to": TO, "file_id": "F1"}
-		with patch.object(wtools, "_free_form_refusal", return_value=None), patch.object(
-			wtools.send_file, "resolve_file", return_value=MagicMock()
-		), patch.object(wtools.send_file, "prepare_upload", return_value=dict(self.PREP)), patch.object(
-			wtools.send_file, "split_caption", return_value=("", "")
-		), patch.object(wtools, "_resolve_bridge_account", return_value={"name": ACC}), patch.object(
-			bridge, "upload_media", return_value={"success": True, "media_id": "M1"}
-		) as up, patch.object(wtools, "_send_media", return_value=json.dumps({"success": True})) as sent, patch.object(
-			wtools.requests, "post"
-		) as rpost, hooks:
+		with (
+			patch.object(wtools, "_free_form_refusal", return_value=None),
+			patch.object(wtools.send_file, "resolve_file", return_value=MagicMock()),
+			patch.object(wtools.send_file, "prepare_upload", return_value=dict(self.PREP)),
+			patch.object(wtools.send_file, "split_caption", return_value=("", "")),
+			patch.object(wtools, "_resolve_bridge_account", return_value={"name": ACC}),
+			patch.object(bridge, "upload_media", return_value={"success": True, "media_id": "M1"}) as up,
+			patch.object(wtools, "_send_media", return_value=json.dumps({"success": True})) as sent,
+			patch.object(wtools.requests, "post") as rpost,
+			hooks,
+		):
 			out = json.loads(wtools._send_media_file(kwargs, TO))
 		return out, up, sent, rpost
 
@@ -116,7 +132,9 @@ class TestAgentTool(_Base):
 		up.assert_not_called()
 		sent.assert_not_called()
 		rpost.assert_not_called()
-		self.assertEqual((SEEN[0]["gateway"], SEEN[0]["kind"], SEEN[0]["context"]["source"]), (GW, "media", "agent_tool"))
+		self.assertEqual(
+			(SEEN[0]["gateway"], SEEN[0]["kind"], SEEN[0]["context"]["source"]), (GW, "media", "agent_tool")
+		)
 
 	def test_no_hook_unchanged(self):
 		out, up, sent, _ = self._call(_hooks())
@@ -138,14 +156,22 @@ class TestLms(_Base):
 
 class TestAdapterUpload(_Base):
 	def _adapter(self):
-		creds = {"phone_number_id": "111", "access_token": "tok", "webhook_verify_token": "v", "app_secret": "s"}
+		creds = {
+			"phone_number_id": "111",
+			"access_token": "tok",
+			"webhook_verify_token": "v",
+			"app_secret": "s",
+		}
 		return WhatsAppGatewayAdapter(creds, gateway_context={"gateway_name": GW})
 
 	def test_blocked_upload_for_recipient_posts_nothing(self):
 		adapter = self._adapter()
-		with patch.object(adapter, "_bridge_mode", return_value=False), patch.object(
-			bridge, "post_media_upload"
-		) as post, _hooks(_block), self.assertRaises(policy.OutboundRefused) as cm:
+		with (
+			patch.object(adapter, "_bridge_mode", return_value=False),
+			patch.object(bridge, "post_media_upload") as post,
+			_hooks(_block),
+			self.assertRaises(policy.OutboundRefused) as cm,
+		):
 			adapter.upload_media(b"OggS", "audio/ogg; codecs=opus", "v.ogg", "audio", True, to=TO)
 		self.assertEqual(cm.exception.code, "blocked_by_hook")
 		post.assert_not_called()
@@ -153,23 +179,31 @@ class TestAdapterUpload(_Base):
 
 	def test_bridge_mode_blocked_before_bridge_upload(self):
 		adapter = self._adapter()
-		with patch.object(adapter, "_bridge_mode", return_value=True), patch.object(bridge, "upload_media") as up, _hooks(
-			_block
-		), self.assertRaises(policy.OutboundRefused):
+		with (
+			patch.object(adapter, "_bridge_mode", return_value=True),
+			patch.object(bridge, "upload_media") as up,
+			_hooks(_block),
+			self.assertRaises(policy.OutboundRefused),
+		):
 			adapter.upload_media(b"x", "image/png", "p.png", "image", False, to=TO)
 		up.assert_not_called()
 
 	def test_no_recipient_or_no_hook_unchanged(self):
 		adapter = self._adapter()
-		with patch.object(adapter, "_bridge_mode", return_value=False), patch.object(
-			bridge, "post_media_upload", return_value="MID"
-		) as post, patch.object(bridge.wm, "normalize_mime", return_value="audio/ogg"), patch.object(
-			bridge.wm, "validate_upload", return_value=("audio", [])
+		with (
+			patch.object(adapter, "_bridge_mode", return_value=False),
+			patch.object(bridge, "post_media_upload", return_value="MID") as post,
+			patch.object(bridge.wm, "normalize_mime", return_value="audio/ogg"),
+			patch.object(bridge.wm, "validate_upload", return_value=("audio", [])),
 		):
 			with _hooks(_block):
-				self.assertEqual(adapter.upload_media(b"x", "audio/ogg", "v.ogg", "audio", True), "MID")  # no `to`: no hook
+				self.assertEqual(
+					adapter.upload_media(b"x", "audio/ogg", "v.ogg", "audio", True), "MID"
+				)  # no `to`: no hook
 			with _hooks():
-				self.assertEqual(adapter.upload_media(b"x", "audio/ogg", "v.ogg", "audio", True, to=TO), "MID")
+				self.assertEqual(
+					adapter.upload_media(b"x", "audio/ogg", "v.ogg", "audio", True, to=TO), "MID"
+				)
 		self.assertEqual(post.call_count, 2)
 
 
