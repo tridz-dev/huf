@@ -796,7 +796,26 @@ class WhatsAppGatewayAdapter(GatewayAdapter):
 			policy.record_template_outreach(self._gateway_name, to)
 		return delivery
 
+	def _pre_send(self, data: dict[str, Any]) -> None:
+		"""``huf_gateway_pre_send`` for a direct Graph POST (bridge mode fires it inside the bridge instead)."""
+		msg_type = str(data.get("type") or "")
+		kind = (
+			"text" if msg_type == "text" else "template" if msg_type == "template"
+			else "media" if msg_type in ("image", "audio", "video", "document", "sticker") else "other"
+		)
+		to = data.get("to")
+		token = getattr(frappe.local, "huf_consent_send_scope", None)
+		consent = bool(
+			token and self._gateway_name and token[0] == self._gateway_name
+			and "".join(c for c in str(token[1]) if c.isdigit()) == "".join(c for c in str(to or "") if c.isdigit())
+		)
+		policy.check_pre_send(
+			self._gateway_name or None, to, kind,
+			{"source": "adapter", "consent_confirmation": consent, "subtype": msg_type},
+		)
+
 	def _graph_send(self, data: dict[str, Any]) -> OutboundDelivery:
+		self._pre_send(data)
 		refusal = account_events_mod.send_refusal(self._phone_number_id)
 		if refusal:
 			raise WhatsAppSendError(refusal["message"], {"kind": "gateway_disconnected", "retryable": False, "message": refusal["message"]})

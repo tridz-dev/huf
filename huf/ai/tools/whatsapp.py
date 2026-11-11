@@ -530,6 +530,9 @@ def _send_message(kwargs: dict) -> str:
 		"text": {"preview_url": False, "body": message},
 	}
 
+	blocked = _pre_send_refusal(kwargs, recipient, "text", "text")
+	if blocked:
+		return blocked
 	try:
 		res = requests.post(url, json=payload, headers=headers, timeout=15)
 		data = res.json()
@@ -603,6 +606,19 @@ def _allowlist_refusal(recipient: str) -> Optional[str]:
 	return None
 
 
+def _pre_send_refusal(kwargs: dict, recipient: str, kind: str, subtype: str) -> Optional[str]:
+	"""``huf_gateway_pre_send`` for a direct Graph POST: a refusal JSON (non-retryable) or None."""
+	from huf.ai.whatsapp import outbound_policy as policy
+
+	try:
+		policy.check_pre_send(
+			kwargs.get("gateway_name") or None, recipient, kind, {"source": "agent_tool", "subtype": subtype}
+		)
+	except policy.OutboundRefused as e:
+		return _refused(e.code, str(e))
+	return None
+
+
 def _free_form_refusal(kwargs: dict, recipient: str, what: str) -> Optional[str]:
 	"""Server-side gate of every free-form non-text send: allow-list, opt-out, then window / allow_proactive."""
 	refusal = _allowlist_refusal(recipient)
@@ -643,6 +659,12 @@ def _deliver_typed(kwargs: dict, recipient: str, built: tuple, bridge_call: Any,
 	phone_number_id, access_token = _get_whatsapp_credentials(kwargs)
 	if not phone_number_id or not access_token:
 		return _error("WhatsApp credentials not found", definite=True)
+	msg_type = str(payload.get("type") or "")
+	blocked = _pre_send_refusal(
+		kwargs, recipient, "media" if msg_type in ("image", "audio", "video", "document", "sticker") else "other", msg_type
+	)
+	if blocked:
+		return blocked
 	try:
 		res = requests.post(
 			f"{_graph_root(kwargs['gateway_name'])}/{phone_number_id}/messages",
@@ -936,6 +958,9 @@ def _send_template(kwargs: dict) -> str:
 		"template": template,
 	}
 
+	blocked = _pre_send_refusal(kwargs, recipient, "template", "template")
+	if blocked:
+		return blocked
 	try:
 		res = requests.post(url, json=payload, headers=headers, timeout=15)
 		data = res.json()

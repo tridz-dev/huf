@@ -60,7 +60,7 @@ def _send_template(gateway_name: str, handle: str, template: str, params: Any) -
 	return str(res.get("wamid") or res.get("message_id") or res.get("id") or res.get("name") or "")
 
 
-_POLICY_CODES = frozenset({"recipient_not_allowlisted", "bsuid_recipient", "opted_out", "template_not_approved", "marketing_opted_out"})
+_POLICY_CODES = frozenset({"recipient_not_allowlisted", "bsuid_recipient", "opted_out", "template_not_approved", "marketing_opted_out", "blocked_by_hook"})
 CATEGORIES = ("service", "utility", "marketing")
 
 

@@ -1771,4 +1771,10 @@ def send_call_permission_request(
 	gated = _free_form_gate(gateway_name, phone)
 	if gated:
 		return gated
+	from huf.ai.whatsapp import outbound_policy as policy
+
+	try:
+		policy.check_pre_send(gateway_name, phone, "other", {"source": "management", "subtype": "call_permission_request"})
+	except policy.OutboundRefused as exc:
+		return {"success": False, "error": exc.code, "message": str(exc)}
 	return {"success": True, "result": graph.send_permission_request(phone, text or "")}

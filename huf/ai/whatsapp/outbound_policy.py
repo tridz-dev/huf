@@ -90,6 +90,32 @@ def check_recipient(gateway: str | None, recipient: Any) -> None:
 			)
 
 
+PRE_SEND_KINDS = ("text", "template", "media", "other")
+
+
+def check_pre_send(gateway: str | None, to: Any, kind: str, context: dict[str, Any] | None = None) -> None:
+	"""Run the external ``huf_gateway_pre_send`` hook right before a Graph POST (fail closed).
+
+	``kind`` is one of ``text`` / ``template`` / ``media`` / ``other``. ``context`` is a small dict, e.g.
+	``{"source": "<caller>", "consent_confirmation": bool, "subtype": "..."}``; ``consent_confirmation`` is True
+	only for the STOP/START confirmation reply so a guard can let it through to an opted-out contact.
+
+	Hook handlers (registered under ``huf_gateway_pre_send`` in an external app's ``hooks.py``) are called as
+	``handler(gateway=, to=, kind=, context=)`` and MUST be side-effect-free: observe and decide only, no database
+	writes, no messages, no network. A truthy return or an exception refuses with
+	:class:`OutboundRefused` code ``blocked_by_hook`` (non-retryable). No hooks registered means allow.
+
+	``gateway`` None skips the hook (debug log): without a gateway there is nothing for a guard to key on.
+	This is deliberately not part of :func:`check_recipient`, which is also used as a non-send filter.
+	"""
+	if not gateway:
+		frappe.logger("huf").debug(f"huf_gateway_pre_send skipped (no gateway) kind={kind}")
+		return
+	from huf.ai.gateway_hooks import gate_hook
+
+	gate_hook("huf_gateway_pre_send", gateway=gateway, to=to, kind=kind, context=dict(context or {}))
+
+
 def check_template(gateway: str | None, recipient: Any, row: dict[str, Any] | None) -> None:
 	"""Refuse a known template that is not APPROVED, and MARKETING to a contact who stopped marketing."""
 	if not row:
