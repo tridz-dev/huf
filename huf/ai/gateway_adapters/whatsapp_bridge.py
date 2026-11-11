@@ -824,6 +824,7 @@ def _mirror_template_send(acct: dict[str, Any], docname: str, to: str, wamid: st
 		return {"success": True, "name": doc.name, "message_id": wamid, "status": doc.get("status")}
 	except Exception:
 		# The template is already delivered; a failed audit row must not fail the send.
+		frappe.log_error(title="WhatsApp mirror failed", message=frappe.get_traceback())
 		return {"success": True, "name": None, "message_id": wamid, "status": "Success", "mirrored": False}
 
 
@@ -1300,6 +1301,7 @@ def _mirror_direct_send(acct: dict[str, Any], payload: dict[str, Any], wamid: st
 		return {"success": True, "name": doc.name, "message_id": wamid, "status": doc.get("status")}
 	except Exception:
 		# already delivered: a failed audit row must not fail the send
+		frappe.log_error(title="WhatsApp mirror failed", message=frappe.get_traceback())
 		return {"success": True, "name": None, "message_id": wamid, "status": "Success", "mirrored": False}
 
 
