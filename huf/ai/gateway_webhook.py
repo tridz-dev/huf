@@ -18,7 +18,7 @@ from frappe.rate_limiter import rate_limit
 from huf.ai.gateway_adapters import provider_hooks
 from huf.ai.gateway_adapters.provider_ids import provider_to_service_id
 from huf.ai.gateway_adapters.registered import get_adapter_class
-from huf.ai.gateway_core.webhook_helpers import adapter_unavailable_response, reply_status_values
+from huf.ai.gateway_core.webhook_helpers import adapter_unavailable_response, reply_status_values, untracked_status_hook
 from huf.ai.whatsapp.broadcast import status as broadcast_status
 from huf.ai.whatsapp.gateway_hooks import fire_hook
 
@@ -409,8 +409,8 @@ def _reply_status_wins(current: str, state: str) -> bool:
 	return _REPLY_STATUS_RANK.get(state, 0) >= _REPLY_STATUS_RANK.get(current, 0)
 
 
-def _update_reply_status(gateway_name: str, status: dict) -> None:
-	"""Mirror a Meta delivery status onto the Gateway Event that sent the reply; fires ``huf_gateway_delivery_status`` on a change. Never raises."""
+def _update_reply_status(gateway_name: str, status: dict) -> bool:
+	"""Mirror a Meta delivery status onto the Gateway Event that sent the reply; fires ``huf_gateway_delivery_status`` on a change. Never raises. True if a Gateway Event matched."""
 	payload = None
 	try:
 		state = str(status.get("status") or "").lower()
@@ -422,10 +422,10 @@ def _update_reply_status(gateway_name: str, status: dict) -> None:
 			return
 		current = row.get("reply_status") or ""
 		if not _reply_status_wins(current, state):
-			return  # out-of-order webhook: never regress delivered/read, never resurrect failed with sent
+			return True  # out-of-order webhook: never regress delivered/read, never resurrect failed with sent
 		values, error_code, error_title = reply_status_values(status, state, current, row.get("delivery_error"), _GATEWAY_ERROR_MAX)
 		if values is None:
-			return  # replay, or an identical failed replay
+			return True  # replay, or an identical failed replay
 		frappe.db.set_value("Gateway Event", row["name"], values, update_modified=False)
 		payload = {"gateway": gateway_name, "provider_message_id": message_id, "status": state,
 			"error_code": error_code, "error_title": error_title, "event_name": row["name"]}
@@ -433,6 +433,7 @@ def _update_reply_status(gateway_name: str, status: dict) -> None:
 		pass
 	if payload is not None:
 		fire_hook("huf_gateway_delivery_status", **payload)
+	return payload is not None
 
 
 _LAST_EVENT_THROTTLE_SECONDS = 60
@@ -765,8 +766,9 @@ def _handle_batched_payload(gateway, adapter, request) -> dict:
 	account_applied = forwarded = 0
 	if not deferred:
 		for status in parsed.statuses:
-			_update_reply_status(gateway.name, status)
-			broadcast_status.apply_from_webhook(status, gateway.name)
+			handled = _update_reply_status(gateway.name, status)
+			if not (broadcast_status.apply_from_webhook(status, gateway.name) or handled):
+				untracked_status_hook(gateway.name, status, _reply_status_wins, fire_hook)
 			if str(status.get("status") or "").lower() == "failed":
 				_record_failed_status(gateway.name, status, getattr(gateway, "provider", None))
 		routed_updates = [update for update in parsed.template_updates if _record_template_update(update, gateway.name)]

@@ -165,6 +165,8 @@ huf_gateway_opt_out = ["external_app.whatsapp_guard.on_opt_change"]
 huf_gateway_delivery_status = ["external_app.whatsapp_guard.on_delivery_status"]
 ```
 
+With a `huf_gateway_pre_send` hook registered, any send that lacks a gateway name is refused (`blocked_by_hook`, fail closed); without one, such sends are unchanged.
+
 Helpers are in `huf/ai/whatsapp/gateway_hooks.py`:
 
 - `fire_hook(name, **payload)` notifies. A handler that raises, or a bad dotted path, is written to the Error Log and skipped. The other handlers still run.
@@ -207,7 +209,8 @@ Fired by `_record_opt_out` and `_record_opt_in` in `huf/ai/gateway_service.py`, 
 
 ### huf_gateway_delivery_status (notify)
 
-Fired by `_update_reply_status` in `huf/ai/gateway_webhook.py`, after the Gateway Event status is written. It applies only to replies recorded on a Gateway Event (matched by `reply_message_id`).
+Fired from the statuses loop in `huf/ai/gateway_webhook.py`. Two sources: (1) `_update_reply_status`, after the Gateway Event status is written, for replies recorded on a Gateway Event (matched by `reply_message_id`; `event_name` set); (2) `untracked_status_hook` (`gateway_core/webhook_helpers.py`) for a wamid that matches neither a Gateway Event nor a broadcast recipient, i.e. agent-tool `send_template` / bridge sends (`event_name` is None; no Gateway Event is created). Broadcast recipients are handled by `broadcast/status.py` and never fire this hook. Untracked statuses are deduped per `(gateway, wamid)` in `frappe.cache()` (highest status, 7-day TTL) with the same ordering rules as replies.
+- Delivery is AT-LEAST-ONCE for untracked sends: a cache flush or eviction can refire a status. Consumers must be idempotent (key below).
 
 - Kwargs: `gateway`, `provider_message_id` (the wamid), `status` (`sent`, `delivered`, `read`, `played` or `failed`), `error_code` (the first Meta error's code, or None), `error_title` (the first error's title or message, or None), `event_name` (Gateway Event name).
 - Fires only when the status advances, or when a `failed` is newly recorded. Replays, out-of-order statuses and an identical repeated `failed` fire nothing.

@@ -61,3 +61,28 @@ def adapter_unavailable_response(fw: Any = frappe) -> dict:
 		return {"success": False, "error": "Webhook verification failed"}
 	fw.local.response.http_status_code = 200
 	return {"success": False, "error": "Gateway is not configured"}
+
+
+_UNTRACKED_TTL = 7 * 24 * 3600
+
+
+def untracked_status_hook(gateway: str, status: dict, wins: Any, fire: Any) -> None:
+	"""Fire ``huf_gateway_delivery_status`` for a status whose wamid matched neither a Gateway Event reply nor a
+	broadcast recipient (agent-tool / template sends). ``event_name`` is None; no row is created.
+
+	Deduped per ``(gateway, wamid)`` in the cache (7 days) with ``wins`` (``_reply_status_wins``): replays, late
+	``sent`` and ``failed`` after delivered/read stay silent. Cache loss can refire (at-least-once). Never raises."""
+	try:
+		state, wamid = str(status.get("status") or "").lower(), str(status.get("id") or "")
+		if state not in ("sent", "delivered", "read", "played", "failed") or not wamid:
+			return
+		key = f"huf_dlv:{gateway}:{wamid}"
+		current = frappe.cache().get_value(key) or ""
+		if state == current or not wins(current, state):
+			return
+		frappe.cache().set_value(key, state, expires_in_sec=_UNTRACKED_TTL)
+		code, title, _ = _error_parts(status) if state == "failed" else (None, None, "")
+		fire("huf_gateway_delivery_status", gateway=gateway, provider_message_id=wamid, status=state,
+			error_code=code, error_title=title, event_name=None)
+	except Exception:
+		pass

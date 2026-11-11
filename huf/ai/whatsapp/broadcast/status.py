@@ -221,8 +221,11 @@ def apply_user_stop(gateway: str, recipient: str) -> int:
 # Each never raises: a broadcast problem must not break webhook ingest or the STOP reply.
 
 
-def apply_from_webhook(status: dict, gateway: str | None = None) -> None:
-	"""Mirror one Meta ``statuses[]`` entry onto its recipient row; park it when the row has no wamid yet."""
+def apply_from_webhook(status: dict, gateway: str | None = None) -> bool:
+	"""Mirror one Meta ``statuses[]`` entry onto its recipient row; park it when the row has no wamid yet.
+
+	True when the broadcast side owns the wamid (applied, replayed, parked, or errored), so the caller must not
+	treat it as an untracked tool/template send."""
 	try:
 		applied = apply_status(
 			status.get("id"),
@@ -232,10 +235,12 @@ def apply_from_webhook(status: dict, gateway: str | None = None) -> None:
 			status.get("biz_opaque_callback_data"),
 			gateway=gateway or "",
 		)
-		if not applied:
-			_park_if_unmatched(status, gateway)
+		if applied or _park_if_unmatched(status, gateway):
+			return True
+		return _find_row(str(status.get("id") or ""), status.get("biz_opaque_callback_data"), gateway or "") is not None
 	except Exception:
 		frappe.log_error(title="WhatsApp broadcast status failed", message=frappe.get_traceback())
+		return True
 
 
 # --------------------------------------------------------------------------- parked statuses (status-before-commit race)
