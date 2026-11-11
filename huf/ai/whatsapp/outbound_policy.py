@@ -101,8 +101,9 @@ def check_pre_send(gateway: str | None, to: Any, kind: str, context: dict[str, A
 	only for the STOP/START confirmation reply so a guard can let it through to an opted-out contact.
 
 	Hook handlers (registered under ``huf_gateway_pre_send`` in an external app's ``hooks.py``) are called as
-	``handler(gateway=, to=, kind=, context=)`` and MUST be side-effect-free: observe and decide only, no database
-	writes, no messages, no network. A truthy return or an exception refuses with
+	``handler(gateway=, to=, kind=, context=)`` and MUST be side-effect-free (this gate only): observe and decide only, no
+	database writes, no messages, no network. Return ``None`` to allow; ANY other return value (including
+	``False``) or an exception refuses with
 	:class:`OutboundRefused` code ``blocked_by_hook`` (non-retryable). No hooks registered means allow.
 
 	``gateway`` None skips the hook (debug log): without a gateway there is nothing for a guard to key on.

@@ -109,7 +109,45 @@ class TestFireHook(_Base):
 		self.assertEqual(gateway_hooks.fire_hook(HOOK), [])
 
 
+def _ret(value):
+	def handler(**payload):
+		return value
+
+	return handler
+
+
+_VERDICTS = {
+	"false": False,
+	"true": True,
+	"empty_str": "",
+	"zero": 0,
+	"empty_dict": {},
+	"reason": "reason",
+	"allowed_false": {"allowed": False},
+}
+for _n, _v in _VERDICTS.items():
+	globals()[f"_v_{_n}"] = _ret(_v)
+
+
 class TestGateHook(_Base):
+	def test_only_none_allows_every_other_verdict_blocks(self):
+		self.hooks([f"{MODULE}._allow"])
+		self.assertIsNone(gateway_hooks.gate_hook(HOOK))
+		for name in _VERDICTS:
+			with self.subTest(verdict=name):
+				self.hooks([f"{MODULE}._v_{name}"])
+				with self.assertRaises(OutboundRefused) as ctx:
+					gateway_hooks.gate_hook(HOOK)
+				self.assertEqual(ctx.exception.code, "blocked_by_hook")
+
+	def test_get_hooks_failure_fails_closed(self):
+		patcher = patch("huf.ai.gateway_hooks.frappe.get_hooks", side_effect=RuntimeError("x"))
+		patcher.start()
+		self.addCleanup(patcher.stop)
+		with self.assertRaises(OutboundRefused) as ctx:
+			gateway_hooks.gate_hook(HOOK)
+		self.assertEqual(ctx.exception.code, "blocked_by_hook")
+
 	def test_no_hooks_allows(self):
 		self.hooks([])
 		self.assertIsNone(gateway_hooks.gate_hook(HOOK, to="1"))

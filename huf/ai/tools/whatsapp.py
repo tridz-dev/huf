@@ -610,9 +610,14 @@ def _pre_send_refusal(kwargs: dict, recipient: str, kind: str, subtype: str) -> 
 	"""``huf_gateway_pre_send`` for a direct Graph POST: a refusal JSON (non-retryable) or None."""
 	from huf.ai.whatsapp import outbound_policy as policy
 
+	gateway = (kwargs.get("gateway_name") or "").strip()
+	if not gateway:
+		# handle_action always binds gateway_name from the run context; reaching a send without one is a
+		# bug, so fail closed instead of silently skipping the external guard.
+		return _refused("blocked_by_hook", "Blocked by gateway hook")
 	try:
 		policy.check_pre_send(
-			kwargs.get("gateway_name") or None, recipient, kind, {"source": "agent_tool", "subtype": subtype}
+			gateway, recipient, kind, {"source": "agent_tool", "subtype": subtype}
 		)
 	except policy.OutboundRefused as e:
 		return _refused(e.code, str(e))

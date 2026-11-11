@@ -170,7 +170,7 @@ Helpers are in `huf/ai/gateway_hooks.py`:
 - `fire_hook(name, **payload)` notifies. A handler that raises, or a bad dotted path, is written to the Error Log and skipped. The other handlers still run.
 - `gate_hook(name, **payload)` gates. It fails closed (see `huf_gateway_pre_send`).
 
-All handlers are called with keyword arguments only. Handlers for every hook must be side-effect-free: no database writes, no messages, no network calls. Hooks can fire inside a webhook or send transaction.
+All handlers are called with keyword arguments only. Only the pre-send GATE (`huf_gateway_pre_send`) must be side-effect-free: no database writes, no messages, no network calls. Notification hooks (`huf_gateway_delivery_status`, `huf_gateway_opt_out`) are expected to write. Hooks can fire inside a webhook or send transaction.
 
 ### huf_gateway_pre_send (gate)
 
@@ -178,7 +178,7 @@ Called by `outbound_policy.check_pre_send(gateway, to, kind, context)` right bef
 
 - Kwargs: `gateway` (Gateway name), `to` (recipient; normalized on bridge paths, raw on adapter, tool and management paths), `kind` (`text`, `template`, `media` or `other`), `context` (dict).
 - `context` keys: `source` (for example `bridge.send_text`, `bridge.send_template`, `bridge.send_media`, `bridge._send_payload`, `bridge.send_sticker`, `adapter`, `agent_tool`, `management`), `subtype` (for example the media kind, `interactive`, `location`, `call_permission_request`), and `consent_confirmation` (bool, only on bridge and adapter paths). Use `context.get(...)`: tool and management calls omit the key.
-- Verdict: a truthy return or an exception blocks. A falsy return allows. No handlers means allow.
+- Verdict (fail closed): return `None` to allow. ANY other return value blocks, including `False`, `True`, `''`, `0`, `{}`, a reason string and `{"allowed": False}`. An exception, a bad dotted path or a failing hook lookup also blocks. No handlers means allow.
 - Refusal: `OutboundRefused(message, code="blocked_by_hook")`. The message is always `Blocked by gateway hook`; a handler's returned string is not passed through. The code is non-retryable. Bridge calls raise `BridgeError` with `error == "blocked_by_hook"`, and `reply_api` and `broadcast` map it to a refusal or skip.
 - Idempotency key: none. The payload has no message id, and the hook runs once per send call, so a retried send calls it again. Keep the decision a pure function of the payload.
 - Consent: `consent_confirmation` is True only for the STOP/START confirmation reply, so a guard can let it through to an opted-out contact.
@@ -187,7 +187,11 @@ Called by `outbound_policy.check_pre_send(gateway, to, kind, context)` right bef
   - A call with no gateway (`gateway` is None) skips the hook with a debug log. This includes any caller that does not pass `gateway_name`.
   - Each part of a multi-part text fires the hook separately.
   - A closed-window fallback fires as `template`, not `text`.
-  - `consent_confirmation` is not set on tool or management calls.
+  - `consent_confirmation` is not set on tool or management calls. Honour it only for `kind == 'text'`.
+  - File sends fire the hook twice (pre-upload and in the bridge), so handlers must be idempotent and must not count calls.
+  - A refused voice note falls back to a gated text send, so a guard that blocks only `kind='media'` still lets the text through.
+  - Multi-part replies are gated per part: part 2 can be blocked after part 1 went out.
+  - Callers that pass no gateway name skip the hook. None are known in production paths; the agent tool binds the gateway from the run context and fails closed (`blocked_by_hook`) if it is missing.
 - Tests: `huf/ai/whatsapp/tests/test_pre_send_hook.py`, `huf/ai/whatsapp/tests/test_pre_send_bridge.py`.
 
 ### huf_gateway_opt_out (notify)
@@ -196,8 +200,9 @@ Fired by `_record_opt_out` and `_record_opt_in` in `huf/ai/gateway_service.py`, 
 
 - Kwargs: `gateway` (Gateway name), `sender_id` (str), `kind` (`opt_out` or `opt_in`), `keyword` (str, may be empty).
 - `opt_out` fires only when the sender was not already opted out. `opt_in` fires only when the sender was opted out.
-- For linked identities, one event fires: `opt_out` for the primary sender id, and `opt_in` for the first linked id that changed.
+- For linked identities, one event fires: `opt_out` for the primary sender id, and `opt_in` always for the FIRST linked id (`ids[0]`, passed by `gateway_service`), whether or not other linked ids changed.
 - Idempotency key: `(gateway, sender_id, kind)`.
+- Handler failures are logged and NOT retried; consumers should reconcile from Gateway Access Entry state.
 - Residual gap: the hook covers only changes made through the consent handling paths (STOP/START keywords). Other changes to a sender's opt-out state do not fire it.
 
 ### huf_gateway_delivery_status (notify)
@@ -207,6 +212,7 @@ Fired by `_update_reply_status` in `huf/ai/gateway_webhook.py`, after the Gatewa
 - Kwargs: `gateway`, `provider_message_id` (the wamid), `status` (`sent`, `delivered`, `read`, `played` or `failed`), `error_code` (the first Meta error's code, or None), `error_title` (the first error's title or message, or None), `event_name` (Gateway Event name).
 - Fires only when the status advances, or when a `failed` is newly recorded. Replays, out-of-order statuses and an identical repeated `failed` fire nothing.
 - Idempotency key: `(provider_message_id, status)`.
+- Handler failures are logged and NOT retried; consumers should reconcile from Gateway Event state.
 - Residual gaps:
   - Only the first Meta error is passed as `error_code` and `error_title`. All errors are kept in the Gateway Event's `delivery_error` text, which is redacted and capped.
   - The status is written with `db.set_value`, which triggers no doc events, so this hook is the only signal.
