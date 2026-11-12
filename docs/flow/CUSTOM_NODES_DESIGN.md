@@ -140,15 +140,15 @@ def find_lead(ctx):                         # ctx: NodeContext
 
 ### 5.3 New backend pieces (`huf/ai/flow/ext_nodes/`)
 
-* `registry.py`: `get_ext_nodes()` reads `frappe.get_hooks("huf_flow_nodes")` for **installed apps only**, normalizes like `_normalize_hook_tools`, validates each spec (key format `^[a-z0-9_]+\.[a-z0-9_]+$`, key prefix equals the declaring app name, no duplicate, handler path importable, icon in allow-list, outcome keys unique), and caches per site (cleared on migrate / app install, alongside the existing tool cache). A bad spec is skipped and logged; it never breaks Huf.
+* `registry.py`: `get_ext_nodes()` reads `frappe.get_hooks("huf_flow_nodes")` for **installed apps only**, normalizes like `_normalize_hook_tools`, validates each spec (key format `^[a-z0-9_]+\.[a-z0-9_]+$`, key prefix equals the declaring app name, no duplicate, handler path importable, icon (unknown icon falls back to a default), outcome keys unique), and caches per site in the Frappe cache, cleared on migrate and app install (tool discovery has no such cache; it only stores scan timestamps in `Agent Settings.last_app_scans`). A bad spec is skipped and logged; it never breaks Huf.
 * `context.py`: `NodeContext`, `NodeResult`.
-* Engine: register `"ext.node": _exec_ext_node` in `_NODE_EXECUTORS`. `_build_program` sets routing per instance: SELF_ROUTED when the registered node declares `outcomes`, DEFAULT otherwise (today `NODE_ROUTING` is keyed by type only, so this is the one engine change that is not purely additive).
+* Engine: register `"ext.node": _exec_ext_node` in `_NODE_EXECUTORS`. `_build_program` (not `_build_router`, which builds an empty program) sets routing per instance: SELF_ROUTED when the registered node declares `outcomes`, DEFAULT otherwise (today `NODE_ROUTING` is keyed by type only, so this is the one engine change that is not purely additive).
 * `_exec_ext_node` order: resolve `config.node` in registry (fail with a plain "this step needs the CRM app" sentence if absent) -> permission gate (5.5) -> test-run simulate for `changes`/`sends` effects -> call handler -> normalize with the existing `normalize_tool_result` style checks -> `enforce_output_budget` -> write an `Agent Run` log row (`run_kind="ext"`) like `tool.call` does -> map outcome to the router.
 * Handler exceptions become a failed node with `plain_error`; `on_error` / `on_failure` edges work unchanged.
 
 ### 5.4 Config form without frontend releases
 
-`get_node_schemas()` already returns `{label, icon, category, config_schema[], json_schema}` per type. Extend it with a second block `ext_nodes` generated from the registry; `input_schema` is converted with the existing `_field_type` (string, number, boolean, select from `enum`, `json`, and `value`/`expression` for reference-capable fields). Supported schema subset is deliberately small: `type`, `title`, `description`, `enum`, `default`, `required`, `minLength/maxLength`, `minimum/maximum`, plus one Huf extension `x-huf-link: "<DocType>"` for a document picker (the catalog APIs in `flow/catalog` already serve these).
+`get_node_schemas()` already returns `{label, icon, category, config_schema[], json_schema}` per type. Extend it with a second block `ext_nodes` generated from the registry; `input_schema` is converted with the existing `_field_type` (string, number, boolean, select from `enum`, `json`, and `value`/`expression` for reference-capable fields). Supported schema subset is deliberately small: `type`, `title`, `description`, `enum`, `default`, `required`. Length/range limits and a document-picker extension (`x-huf-link`) are later additions.
 
 Frontend work: one generic **ExtNodeForm** that renders `config_schema` with existing field components, a palette section per `category`, a card/summary using the node label, outcome handles from `outcomes`, serializer passthrough for `ext.node` (`config.node`, `config.input`), run-story wording from the label. The hard-coded per-type code stays for built-ins.
 
@@ -157,19 +157,21 @@ Frontend work: one generic **ExtNodeForm** that renders `config_schema` with exi
 * **Schema**: add `ExtNode` (`type` const `ext.node`, `config.node` string with the key pattern, `config.input` object of `Value`, `additionalProperties:false`) and add `ext.node` to `FLOW_ONLY_NODE_TYPES` (the embedded copy must be kept in sync, as `validator.py` already warns).
 * **Registry-aware checks** in `validator.py`, following the injected-classifier pattern in `graph/permissions.py` so the pure validator stays frappe-free: node key exists; `input` satisfies `input_schema` (publish mode; draft mode only warns, matching "saving never blocks on an unfinished flow"); each outgoing edge label is a declared outcome; every declared outcome is wired or defaults to the node's `next`.
 * **Missing provider app**: draft saves keep the node; publish and run fail with a plain message naming the app; the flow list shows the same warning as other broken-step cases.
-* **Permissions**: the handler runs as the flow's run-as user (same as tool calls). `permissions` declared in the spec are enforced before the handler via `frappe.has_permission`; they also feed the permission envelope next to `tool.call` classification so a published flow's declared envelope covers ext nodes (I2 applies: no authorization path may read the envelope alone, use the same live check as `authorize_tool_call`). A spec cannot lower a check; a handler that needs elevated access must say so with `"elevated": true`, which a System Manager must approve per app in Agent Settings (default off). Open question 3.
+* **Permissions**: the handler runs as the flow's run-as user (same as tool calls). The spec's `permissions` are **self-reported by the app and are not a security boundary**: a handler is arbitrary Python and can bypass checks (`ignore_permissions`, `get_all`). Unlike `tool.call`, Huf cannot re-derive what the handler does (`classify_tool`, `graph/permissions.py`). So the declared list is used for (a) a pre-handler `frappe.has_permission` check as a convenience and early failure, and (b) showing the author what the step touches. It is not counted as a verified permission envelope. The real control is that installing a provider app is itself a trust decision. There is no `elevated` flag.
 * **No dynamic code loading from flows**: the only dotted paths executed are those declared in the hook of an installed app, the same trust model as `get_hook_declared_function_paths` for `App Provided` tools (finding F-07). Flow JSON carries only the registry key.
-* Secrets: nodes read credentials through `ctx.get_credential`; the existing redaction in `flow/support/redact.py` applies to logged input and output.
-* Limits: per-node wall time and output size reuse the contract limits; `effect: sends|changes` nodes are skipped in test runs unless the handler passes `supports_test_run=True` and honours `ctx.is_test_run`.
+* Secrets: nodes read credentials through `ctx.get_credential`. `flow/support/redact.py` only hides webhook secrets in a graph definition, so it does **not** cover node input or output. Phase 1 adds a redaction pass for ext-node input and output before they reach the `Agent Run` log (mask values of keys such as `token`, `secret`, `password`, `authorization`).
+* Limits: per-node wall time and output size reuse the contract limits. In test runs, `effect: changes|sends` nodes are simulated and not executed unless the spec sets `supports_test_run: true` (the handler then checks `ctx.is_test_run`). `effect: reads` nodes do run their real queries.
+* **Registry snapshot**: `PinnedVersion` pins the graph, not the registry. At publish and again at run start the node's spec (outcome keys and input schema) is snapshotted into the run, so a provider upgrade cannot change routing for an in-flight run.
 
 ### 5.6 Seeding flows from apps
 
 Add a `flows/` folder to the seed framework:
 
+* Seeding uses `ignore_permissions=True` and `_validate_link_refs` does not look inside `definition_json`, so `upsert_flow` itself checks that every `ext.node` key is registered and every `agent.run` agent exists, and reports misses through the existing `missing_refs` result.
 * `LOAD_ORDER` gets `("flows", upsert_flow)` **after** agents and triggers, so referenced agents exist. `scanner.get_seed_files` already handles arbitrary folder names.
-* Seed file: a `Flow Definition` payload (`flow_id`, `flow_name`, `description`, `category`, `definition_json`) plus `requires_nodes: ["crm.find_lead", ...]` (derived automatically if omitted, by scanning `ext.node` entries).
+* Seed file: a `Flow Definition` payload (`flow_id`, `flow_name`, `description`, `category`, `definition_json`) (required nodes are found by scanning the definition each time; no separate field).
 * `upsert_flow` validates the definition in **draft** mode, checks that every required node key is registered (missing -> the existing `missing_refs` skip result, shown in the seed summary), writes provenance (`source_app`, `source_file`) and `is_system=1`, and **always lands as Draft**. Publishing remains an explicit user action, because publishing starts triggers.
-* Re-seeding: `_upsert_doc` today overwrites by key with `doc.update(data)`. For flows that would destroy user edits. Proposal: when `source_app` matches and the stored `definition_json` hash equals the hash recorded at last seed, update; otherwise leave it and report "edited locally, not updated". Open question 1.
+* Re-seeding: `_upsert_doc` today overwrites by key with `doc.update(data)`, which would destroy user edits. Policy for flows: update only while the flow is still Draft and unmodified since it was seeded; otherwise skip and report "edited locally, not updated". `is_system=1` must not block user edits or deletes of seeded flows; check what `is_system` enforces on `Flow Definition` before reusing it, and add a separate `source_app`-based marker if it does.
 * The seeder skips the `huf` app itself, so Huf's own demo flows would continue to ship separately.
 
 ### 5.7 Example: end to end
@@ -187,7 +189,7 @@ CRM contributes `crm.find_lead`, `crm.create_lead`; Raven contributes `raven.pos
 
 ## 6. Tests
 
-* Registry: valid spec, bad key, wrong app prefix, duplicate, un-importable handler, bad icon (skipped, logged, others unaffected).
+* Registry: valid spec, bad key, wrong app prefix, duplicate, un-importable handler, bad key etc. (skipped, logged, others unaffected).
 * Validator: unknown key, bad input vs `input_schema`, unknown outcome label, profile allow-list, draft vs publish severity.
 * Engine: success, outcome routing, handler exception -> `on_error`, missing app, permission denied, output budget, test-run simulation, `Agent Run` row written.
 * `get_node_schemas`: ext block shape, snapshot test (pattern from `gateways/tests/test_registry_snapshot.py`).
@@ -210,13 +212,12 @@ Rough size: phase 1 and 3 are small backend changes; phase 2 (frontend) is the l
 * Closed enums in several layers (schema, embedded validator copy, Procedure profile, frontend tables). Mitigation: only `ext.node` is added; add a test asserting the schema file and embedded copy stay equal.
 * Procedure profile: Procedures share the graph IR. v1 allows `ext.node` in Flows only; Procedure support needs the same permission-envelope review.
 * Per-instance routing touches the engine's central table; cover with the existing `test_flow_engine` suite.
-* Backward compatibility: Huf Desktop (pre-release) forbids compatibility shims; this design adds no legacy path.
 * Supply chain: a malicious installed app already runs arbitrary Python; the hook adds no new trust level beyond `huf_tools`, but it must not widen what a flow author can invoke (hence the literal key).
 
 ## 9. Open questions
 
-1. Re-seed policy for flows the user edited (hash compare vs always overwrite vs versioned copy).
+1. (Decided for v1) Re-seed only unmodified Drafts; revisit if app authors need to push fixes to edited flows.
 2. Should outcome-less nodes also be able to emit `meta.outcome` ad hoc, or must outcomes always be declared? (Recommend declared.)
-3. Is an `elevated` flag worth having in v1, or should nodes always run strictly as the run-as user?
-4. Should unpublished-provider-app flows be auto-set to Draft on app uninstall?
+3. (Decided) No `elevated` flag; see 5.5.
+4. (Decided for v1) Uninstalling a provider leaves published flows in place; the flow list flags them and runs fail with a plain message naming the app. No auto-draft.
 5. Can `Procedure` reuse `ext.node` later, and with which effect classes?
