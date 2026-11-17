@@ -206,6 +206,10 @@ VALID_TYPES = [
 
 def upsert_tool(data: dict, source_app: str, source_file: str) -> tuple:
     data = data.copy()
+    from huf.huf.doctype.agent_tool_function.agent_tool_function import is_otp_tool_path
+
+    if is_otp_tool_path(data.get("function_path")):
+        return False, "OTP functions cannot be seeded as agent tools"
     if data.get("types") not in VALID_TYPES:
         data["types"] = "App Provided"
         
