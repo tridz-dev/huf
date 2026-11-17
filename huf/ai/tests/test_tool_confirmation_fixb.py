@@ -37,7 +37,7 @@ class TestFixB(IntegrationTestCase):
 
 	def test_sweeper_fails_stale_approved(self):
 		req = self._park()
-		frappe.db.set_value(tc.DOCTYPE, req["id"], {"state": "approved", "modified": add_to_date(now_datetime(), minutes=-31)}, update_modified=False)
+		frappe.db.set_value(tc.DOCTYPE, req["id"], {"state": "approved", "modified": add_to_date(now_datetime(), minutes=-46)}, update_modified=False)
 		tc.sweep_expired()
 		row = frappe.get_doc(tc.DOCTYPE, req["id"])
 		self.assertEqual((row.state, row.error), ("failed", "execution_timeout_unknown"))
@@ -89,3 +89,62 @@ class TestFixB(IntegrationTestCase):
 		), patch.object(tool_policy, "is_tool_allowed", return_value=True):
 			tool_policy.check_tool_call("send_campaign", dict(ARGS), "run1", True, conversation_id=None)
 		self.assertIsNone(p.call_args.args[4])
+
+
+class TestFixSweeperAndRun(TestFixB):
+	def _approve(self):
+		req = self._park()
+		with patch.object(tc, "assert_user_may_run"), patch.object(frappe, "enqueue"):
+			tc.decide(req["id"], True)
+		return req["id"]
+
+	def test_followup_failure_keeps_executed(self):
+		rid = self._approve()
+		with (
+			patch.object(tc, "_execute", return_value={"ok": 1}),
+			patch.object(tc, "_append_followup", side_effect=RuntimeError("x")),
+		):
+			tc.run_approved(rid, "Administrator")
+		row = frappe.get_doc(tc.DOCTYPE, rid)
+		self.assertEqual(row.state, "executed")
+		self.assertFalse(row.raw_args)
+
+	def test_stale_threshold_and_null_result(self):
+		self.assertGreater(tc.APPROVED_STALE_MINUTES, 30)
+		rid = self._approve()
+		frappe.db.sql(f"update `tab{tc.DOCTYPE}` set result=NULL where name=%s", rid)
+		frappe.db.set_value(tc.DOCTYPE, rid, "modified", add_to_date(now_datetime(), minutes=-30), update_modified=False)
+		tc.sweep_expired()
+		self.assertEqual(frappe.db.get_value(tc.DOCTYPE, rid, "state"), "approved")
+		frappe.db.set_value(tc.DOCTYPE, rid, "modified", add_to_date(now_datetime(), minutes=-46), update_modified=False)
+		tc.sweep_expired()
+		self.assertEqual(frappe.db.get_value(tc.DOCTYPE, rid, "state"), "failed")
+
+	def test_sweeper_failed_row_but_tool_ran_ends_executed(self):
+		rid = self._approve()
+
+		def _exec(doc, args):
+			frappe.db.set_value(tc.DOCTYPE, rid, {"state": "failed", "error": "execution_timeout_unknown"}, update_modified=False)
+			return {"ok": 1}
+
+		with patch.object(tc, "_execute", side_effect=_exec):
+			tc.run_approved(rid, "Administrator")
+		row = frappe.get_doc(tc.DOCTYPE, rid)
+		self.assertEqual(row.state, "executed")
+		self.assertTrue(row.error)
+
+	def test_sweep_isolated_and_followup_called(self):
+		r1, r2 = self._park()["id"], self._park()["id"]
+		for r in (r1, r2):
+			frappe.db.set_value(tc.DOCTYPE, r, "expires_at", add_to_date(now_datetime(), minutes=-1))
+		calls = []
+
+		def _fu(doc, state, result):
+			calls.append((doc.name, state))
+			if doc.name == r1:
+				raise RuntimeError("bad row")
+
+		with patch.object(tc, "_append_followup", side_effect=_fu):
+			tc.sweep_expired()
+		self.assertIn((r2, "expired"), calls)
+		self.assertEqual(frappe.db.get_value(tc.DOCTYPE, r2, "state"), "expired")

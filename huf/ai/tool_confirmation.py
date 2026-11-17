@@ -22,7 +22,7 @@ from frappe.utils import add_to_date, cint, get_datetime, get_system_timezone, n
 
 DOCTYPE = "Agent Tool Confirmation"
 EXPIRY_MINUTES = 15
-APPROVED_STALE_MINUTES = 30
+APPROVED_STALE_MINUTES = 45  # must exceed the run_approved job timeout (1800s = 30 min)
 _EXECUTING = "__executing__"
 _SAMPLE_LEN = 200
 _TRANSIENT_ARGS = ("ignore_permissions",)
@@ -407,11 +407,13 @@ def run_approved(id, user):
 		doc.save(ignore_permissions=True)
 		frappe.db.commit()
 		result = None
+		ran = False
 		try:
 			args = json.loads(doc.raw_args or "{}")
 			if not verify_args_hash(args, doc.args_hash):
 				raise ArgsChanged(id)
 			res = _execute(doc, args)
+			ran = True
 			result = res.as_dict() if hasattr(res, "as_dict") else res
 			ok = bool(getattr(res, "success", True))
 			doc.state = "executed" if ok else "failed"
@@ -422,10 +424,24 @@ def run_approved(id, user):
 			doc.state, doc.error = "failed", str(e)[:500]
 			doc.result = ""
 			frappe.log_error(title="tool_confirmation: execution failed")
+		# Commit the outcome BEFORE any follow-up/publish so a later failure can never lose the executed fact.
+		# Executed wins over a sweeper that marked the row failed while the job was still running.
+		if ran and frappe.db.get_value(DOCTYPE, id, "state") != "approved":
+			frappe.log_error(title="tool_confirmation: row changed during execution")
+			if doc.state == "executed":
+				doc.error = "sweeper_marked_failed_but_executed"
 		_close(doc, clear_args=True)
-		_append_followup(doc, doc.state, _redact(result) if result is not None else {"error": doc.error})
-		_publish("approval-resolved", doc)
 		frappe.db.commit()
+		try:
+			_append_followup(doc, doc.state, _redact(result) if result is not None else {"error": doc.error})
+			frappe.db.commit()
+		except Exception:
+			frappe.db.rollback()
+			frappe.log_error(title="tool_confirmation: follow-up failed")
+		try:
+			_publish("approval-resolved", doc)
+		except Exception:
+			frappe.log_error(title="tool_confirmation: publish failed")
 	finally:
 		frappe.set_user(previous)
 
@@ -438,6 +454,21 @@ def _close(doc, state=None, clear_args=False):
 	doc.save(ignore_permissions=True)
 
 
+def _sweep_row(name, values, state):
+	"""Update one row, tell the model (so it does not re-call the tool) and the user; isolated per row."""
+	try:
+		frappe.db.set_value(DOCTYPE, name, values, update_modified=False)
+		doc = frappe.get_doc(DOCTYPE, name)
+		_append_followup(doc, state, {"error": doc.error} if doc.error else {})
+		frappe.db.commit()
+		_publish("approval-resolved", doc)
+		return True
+	except Exception:
+		frappe.db.rollback()
+		frappe.log_error(title="tool_confirmation: sweep row failed")
+		return False
+
+
 def sweep_expired() -> dict:
 	"""Scheduler job: expire stale pending rows and clear raw_args from every non-pending row."""
 	now = now_datetime()
@@ -445,22 +476,18 @@ def sweep_expired() -> dict:
 		DOCTYPE, filters={"state": "pending", "expires_at": ("<=", now)}, pluck="name"
 	)
 	for name in expired:
-		frappe.db.set_value(DOCTYPE, name, {"state": "expired", "raw_args": ""}, update_modified=False)
+		_sweep_row(name, {"state": "expired", "raw_args": ""}, "expired")
 	stale = frappe.db.get_all(
 		DOCTYPE,
-		filters={
-			"state": "approved",
-			"modified": ("<=", add_to_date(now, minutes=-APPROVED_STALE_MINUTES)),
-			"result": ("in", ("", _EXECUTING, None)),
-		},
+		filters={"state": "approved", "modified": ("<=", add_to_date(now, minutes=-APPROVED_STALE_MINUTES))},
+		or_filters=[["result", "is", "not set"], ["result", "=", ""], ["result", "=", _EXECUTING]],
 		pluck="name",
 	)
 	for name in stale:
-		frappe.db.set_value(
-			DOCTYPE,
+		_sweep_row(
 			name,
 			{"state": "failed", "error": "execution_timeout_unknown", "raw_args": "", "result": ""},
-			update_modified=False,
+			"failed",
 		)
 	cleared = frappe.db.get_all(
 		DOCTYPE, filters={"state": ("!=", "pending"), "raw_args": ("is", "set")}, pluck="name"
