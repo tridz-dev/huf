@@ -17,7 +17,7 @@ from frappe import _
 from huf.permissions import has_capability
 
 API_SOURCES = ("api", "manual", "widget")
-_PHONE_HEADERS = {"phone", "phone_number", "wa_id", "mobile", "whatsapp"}
+_PHONE_HEADERS = {"phone", "phone_number", "wa_id", "mobile", "whatsapp", "email", "email_address"}
 _MIN_DIGITS, _MAX_DIGITS = 7, 15  # E.164 length bounds
 
 
@@ -53,7 +53,7 @@ def _raw_items(rows: Any) -> list[Any]:
 		items = []
 		for item in rows:
 			if isinstance(item, dict):
-				items.append(item.get("phone") or item.get("wa_id") or item.get("mobile") or "")
+				items.append(item.get("phone") or item.get("wa_id") or item.get("mobile") or item.get("email") or "")
 			else:
 				items.append(item)
 	else:
