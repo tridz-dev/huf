@@ -90,3 +90,38 @@ def single_target(args: dict, user: str | None = None) -> dict:
 		"channel": None,
 		"sample": _sample(args),
 	}
+
+
+def whatsapp_broadcast_start(args: dict, user: str | None = None) -> dict:
+	"""``whatsapp_broadcast_start``: the real queued recipient count, template, channel and audience(s) of the
+	named broadcast. ``recipient_count`` stays None (so the gate refuses to park) when the broadcast cannot be
+	resolved or the user cannot read it."""
+	from huf.ai.whatsapp.broadcast import api as broadcast_api
+
+	args = args or {}
+	name = args.get("broadcast")
+	scheduled = args.get("scheduled_at")
+	out = {
+		"action": f"Schedule WhatsApp broadcast for {scheduled}" if scheduled else "Start WhatsApp broadcast",
+		"recipient_count": None, "template": None, "channel": "whatsapp", "sample": None,
+	}
+	try:
+		row = broadcast_api._require_broadcast_read(name)
+	except frappe.PermissionError:
+		return out
+	if row.get("error") or row.get("status") not in ("Draft", "Paused"):
+		return out
+	audiences = frappe.get_all(
+		"WhatsApp Broadcast Audience", filters={"parent": name, "exclude": 0}, pluck="audience", limit_page_length=20,
+		parent_doctype="WhatsApp Broadcast",
+	)
+	attested = bool(row.get("consent_attested") and row.get("consent_attested_by"))
+	out.update(
+		recipient_count=int(broadcast_api._queued_count(name) or 0),
+		template=row.get("template_name") or row.get("template"),
+		sample=(
+			f"{row.get('title')} | audience: {', '.join(audiences) or 'manual list'} | consent "
+			+ (f"attested by {row.get('consent_attested_by')}" if attested else "NOT ATTESTED (will be refused)")
+		)[:_SAMPLE_LEN],
+	)
+	return out
