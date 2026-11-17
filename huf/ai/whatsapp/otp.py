@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+import uuid
 from typing import Any
 
 import frappe
@@ -34,6 +35,8 @@ CALLER_LIMIT, CALLER_WINDOW = 60, 60  # sends per caller per minute
 IDEMPOTENCY_TTL = 24 * 3600
 OWNER_TTL = 7 * 24 * 3600
 _PENDING = "pending"
+FALLBACK_TEXT_MAX = 160 * 3
+SMS_ALLOWED_MODES = {"twilio", "send_only"}  # frappe_sms writes the message (the code) to SMS Log
 
 
 def _err(code: str, message: str, **extra: Any) -> dict[str, Any]:
@@ -67,11 +70,15 @@ def _require_sender() -> str:
 
 
 def _hit(kind: str, digest: str, limit: int, window: int) -> bool:
-	"""Count one hit in a fixed window; True when still within ``limit``."""
+	"""Count one hit in a fixed window; True when still within ``limit``.
+
+	The key is created with its TTL in one SET NX EX, then INCRed, so no counter is ever TTL-less.
+	"""
 	cache = frappe.cache()
 	key = _key(kind, digest)
+	cache.set(key, 0, ex=window, nx=True)
 	count = cache.incr(key)
-	if count == 1:
+	if count == 1:  # key expired between SET and INCR: re-arm the TTL
 		cache.expire(key, window)
 	return int(count) <= limit
 
@@ -81,6 +88,13 @@ def _unhit(kind: str, digest: str) -> None:
 		frappe.cache().decr(_key(kind, digest))
 	except Exception:  # noqa: BLE001, S110 - best-effort counter rollback
 		pass
+
+
+# Errors raised before Meta accepted or saw the request: the attempt does not count against the limits.
+_REFUND_ERRORS = {
+	"not_opted_in", "template_not_approved", "validation_failed", "recipient_not_allowlisted",
+	"bsuid_recipient", "gateway_disconnected", "no_account",
+}
 
 
 def _resolve_template(account: str, template: str | None) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
@@ -162,8 +176,38 @@ def _check_fallback(code, fallback, sms_gateway, fallback_text) -> dict[str, Any
 		return _err("invalid_fallback", "Only 'sms' is allowed as an OTP fallback (email is never allowed).")
 	if not sms_gateway or not frappe.db.exists("Gateway", sms_gateway):
 		return _err("invalid_fallback", "sms_gateway is required for the SMS fallback.")
-	if not fallback_text or "{code}" not in str(fallback_text):
-		return _err("invalid_fallback", "fallback_text containing {code} is required for the SMS fallback.")
+	text = "" if fallback_text is None else str(fallback_text)
+	lowered = text.lower()
+	if (
+		not text
+		or len(text) > FALLBACK_TEXT_MAX
+		or text.count("{code}") != 1
+		or any(bad in lowered for bad in ("http", "www", "://"))
+	):
+		return _err(
+			"invalid_fallback_text",
+			"fallback_text must be at most 480 characters, contain {code} exactly once and no links.",
+		)
+	return None
+
+
+def _sms_mode_blocked(sms_gateway) -> dict[str, Any] | None:
+	"""Refuse gateways whose SMS goes through Frappe core send_sms (it persists the body in SMS Log)."""
+	from huf.ai.whatsapp.broadcast import failover
+
+	try:
+		mode = str((failover._credentials(sms_gateway) or {}).get("mode") or "").strip().lower()
+	except Exception:  # noqa: BLE001
+		mode = ""
+	if mode not in SMS_ALLOWED_MODES:
+		return _err("sms_mode_not_allowed_for_otp", "This SMS gateway mode cannot be used for OTP fallback.")
+	return None
+
+
+def _gateway_forbidden(user, *names) -> dict[str, Any] | None:
+	for name in names:
+		if name and not frappe.has_permission("Gateway", "read", name, user=user):
+			return _err("gateway_forbidden", "You do not have access to this gateway.")
 	return None
 
 
@@ -178,7 +222,10 @@ def _sms_fallback(code, to, sms_gateway, fallback_text) -> dict[str, Any] | None
 	if delivered != "sms":
 		return None
 	mid = next((str(a.get("message_id") or "") for a in attempts if a.get("channel") == "sms"), "")
-	return {"success": True, "message_id": mid, "status": "sent", "channel": "sms", "fallback_attempts": _scrub(attempts, code)}
+	status = "sent"
+	if not mid:
+		mid, status = f"sms-{uuid.uuid4().hex}", "unknown"
+	return {"success": True, "message_id": mid, "status": status, "channel": "sms", "fallback_attempts": _scrub(attempts, code)}
 
 
 def _send(user, gateway, phone, code, template, idempotency_key, fallback=None, sms_gateway=None, fallback_text=None) -> dict[str, Any]:
@@ -186,9 +233,16 @@ def _send(user, gateway, phone, code, template, idempotency_key, fallback=None, 
 		return _err("invalid_gateway", "Gateway not found.")
 	if not _CODE_RE.match(code):
 		return _err("invalid_code", "Code must be 4-15 letters or digits.")
+	forbidden = _gateway_forbidden(user, gateway, sms_gateway if fallback else None)
+	if forbidden:
+		return forbidden
 	bad_fb = _check_fallback(code, fallback, sms_gateway, fallback_text)
 	if bad_fb:
 		return bad_fb
+	if fallback:
+		bad_mode = _sms_mode_blocked(sms_gateway)
+		if bad_mode:
+			return bad_mode
 	to = management._validate_recipient(phone)
 	if isinstance(to, dict):
 		return to | {"error": "invalid_phone"}
@@ -202,55 +256,79 @@ def _send(user, gateway, phone, code, template, idempotency_key, fallback=None, 
 		return bad
 
 	caller = _digest(user)
+	fingerprint = _digest(user, gateway, to, idempotency_key, hashlib.sha256(code.encode()).hexdigest(), row["name"])
 	idem_slot = None
 	if idempotency_key:
 		idem_slot = _key("idem", _digest(user, gateway, to, idempotency_key))
 		cache = frappe.cache()
-		if cache.set(idem_slot, _PENDING, ex=IDEMPOTENCY_TTL, nx=True) is None:
+		if cache.set(idem_slot, f"{_PENDING}:{fingerprint}", ex=IDEMPOTENCY_TTL, nx=True) is None:
 			prior = cache.get(idem_slot)
 			prior = prior.decode() if isinstance(prior, bytes) else prior
-			if prior and prior != _PENDING:
-				chan = "sms" if prior.startswith("sms:") else "whatsapp"
-				return {"success": True, "message_id": prior.removeprefix("sms:"), "status": "sent", "channel": chan, "replayed": True}
-			return _err("in_progress", "A send with this idempotency key is already in progress.")
+			state, _sep, rest = str(prior or "").partition(":")
+			if state == _PENDING:
+				if rest != fingerprint:
+					return _err("idempotency_conflict", "This idempotency key was used with a different code or template.")
+				return _err("in_progress", "A send with this idempotency key is already in progress.")
+			if state != fingerprint:
+				return _err("idempotency_conflict", "This idempotency key was used with a different code or template.")
+			chan, _s, mid = rest.partition(":")
+			return {"success": True, "message_id": mid, "status": "sent", "channel": chan, "replayed": True}
 
-	def release() -> None:
-		if idem_slot:
-			frappe.cache().delete(idem_slot)
-
-	phone_digest = _digest(gateway, to)
-	if not _hit("caller", caller, CALLER_LIMIT, CALLER_WINDOW):
-		release()
-		return _err("rate_limited", "Too many OTP requests from this caller.", scope="caller")
-	if not _hit("phone", phone_digest, PHONE_LIMIT, PHONE_WINDOW):
-		release()
-		return _err("rate_limited", "Too many OTP requests for this number.", scope="phone")
-
+	hits: list[tuple[str, str]] = []
+	done = False
 	try:
-		result = bridge.send_template(
-			account, to, row.get("actual_name") or row.get("template_name") or row["name"],
-			[code], None, trusted=True, language_code=row.get("language_code"),
-			gateway_name=gateway, force_graph=True, redact_params=True,
-		)
-	except bridge.BridgeError as exc:
-		error, message = _map_refusal(_scrub(exc.payload, code))
-		if fallback and error in ("not_opted_in", "window"):
-			sms = _sms_fallback(code, to, sms_gateway, fallback_text)
-			if sms:
-				if idem_slot:
-					frappe.cache().set(idem_slot, "sms:" + sms["message_id"], ex=IDEMPOTENCY_TTL)
-				return sms
-		release()
-		return _err(error, message)
-	except Exception:  # noqa: BLE001 - never surface a traceback that could hold the code
-		release()
-		return _err("send_failed", "The OTP could not be sent.")
+		phone_digest = _digest(gateway, to)
+		hits.append(("caller", caller))
+		if not _hit("caller", caller, CALLER_LIMIT, CALLER_WINDOW):
+			return _err("rate_limited", "Too many OTP requests from this caller.", scope="caller")
+		hits.append(("phone", phone_digest))
+		if not _hit("phone", phone_digest, PHONE_LIMIT, PHONE_WINDOW):
+			return _err("rate_limited", "Too many OTP requests for this number.", scope="phone")
 
-	message_id = str(result.get("message_id") or result.get("wamid") or "")
-	if idem_slot:
-		frappe.cache().set(idem_slot, message_id, ex=IDEMPOTENCY_TTL)
-	frappe.cache().set(_key("owner", _digest(message_id)), caller, ex=OWNER_TTL)
-	return {"success": True, "message_id": message_id, "status": result.get("message_status") or "sent", "channel": "whatsapp"}
+		try:
+			result = bridge.send_template(
+				account, to, row.get("actual_name") or row.get("template_name") or row["name"],
+				[code], None, trusted=True, language_code=row.get("language_code"),
+				gateway_name=gateway, force_graph=True, redact_params=True,
+			)
+		except bridge.BridgeError as exc:
+			error, message = _map_refusal(_scrub(exc.payload, code))
+			if fallback and error in ("not_opted_in", "window"):
+				sms = _sms_fallback(code, to, sms_gateway, fallback_text)
+				if sms:
+					mid = sms["message_id"]
+					cache = frappe.cache()
+					cache.set(_key("owner", _digest(mid)), caller, ex=OWNER_TTL)
+					cache.set(_key("status", _digest(mid)), sms["status"], ex=OWNER_TTL)
+					if idem_slot:
+						cache.set(idem_slot, f"{fingerprint}:sms:{mid}", ex=IDEMPOTENCY_TTL)
+					done = True
+					return sms
+			if error not in _REFUND_ERRORS:
+				hits = []  # Meta saw the request: keep the counters
+			return _err(error, message)
+		except Exception:  # noqa: BLE001 - never surface a traceback that could hold the code
+			return _err("send_failed", "The OTP could not be sent.")
+
+		hits = []  # Meta accepted: counters stay
+		done = True
+		message_id = str(result.get("message_id") or result.get("wamid") or "")
+		try:
+			if idem_slot:
+				frappe.cache().set(idem_slot, f"{fingerprint}:whatsapp:{message_id}", ex=IDEMPOTENCY_TTL)
+			frappe.cache().set(_key("owner", _digest(message_id)), caller, ex=OWNER_TTL)
+		except Exception:  # noqa: BLE001, S110 - the OTP is already out; do not report a failure
+			pass
+		return {"success": True, "message_id": message_id, "status": result.get("message_status") or "sent", "channel": "whatsapp"}
+	finally:
+		if not done:
+			for kind, digest in hits:
+				_unhit(kind, digest)
+			if idem_slot:
+				try:
+					frappe.cache().delete(idem_slot)
+				except Exception:  # noqa: BLE001, S110
+					pass
 
 
 @frappe.whitelist()
@@ -263,6 +341,10 @@ def get_otp_status(message_id: str | None = None) -> dict[str, Any]:
 	owner = owner.decode() if isinstance(owner, bytes) else owner
 	if not owner or owner != _digest(user):
 		return _err("not_found", "Message not found.")
+	sms_status = frappe.cache().get(_key("status", _digest(message_id)))
+	if sms_status:
+		sms_status = sms_status.decode() if isinstance(sms_status, bytes) else sms_status
+		return {"success": True, "message_id": message_id, "status": sms_status}
 	row = frappe.db.get_value("WhatsApp Message", {"message_id": message_id}, ["status", "type"], as_dict=True)
 	if not row:
 		return _err("not_found", "Message not found.")

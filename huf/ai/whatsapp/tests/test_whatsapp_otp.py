@@ -38,6 +38,7 @@ class TestOtp(unittest.TestCase):
 		fake.incr.side_effect = lambda k: self.cache.__setitem__(k, self.cache.get(k, 0) + 1) or self.cache[k]
 		fake.decr.side_effect = lambda k: self.cache.__setitem__(k, self.cache.get(k, 0) - 1)
 		fake.expire.return_value = True
+		self.fake = fake
 
 		def _set(k, v, ex=None, nx=False):
 			if nx and k in self.cache:
@@ -57,6 +58,8 @@ class TestOtp(unittest.TestCase):
 			patch("huf.ai.whatsapp.otp.frappe.cache", return_value=fake),
 			patch("huf.ai.whatsapp.otp.frappe.get_roles", side_effect=lambda *_: self.roles),
 			patch("huf.ai.whatsapp.otp.frappe.db.exists", return_value=True),
+			patch("huf.ai.whatsapp.otp.frappe.has_permission", return_value=True),
+			patch("huf.ai.whatsapp.broadcast.failover._credentials", return_value={"mode": "twilio"}),
 			patch("huf.ai.whatsapp.otp.frappe.get_all", return_value=[dict(TPL)]),
 			patch("huf.ai.whatsapp.otp.management._gateway_whatsapp_account", return_value="ACC"),
 			patch("huf.ai.whatsapp.otp.management._resolve_account_name", return_value="ACC"),
@@ -171,7 +174,7 @@ class TestOtp(unittest.TestCase):
 		with self.assertLogs(logger, level="DEBUG") as cm, patch("frappe.log_error") as log_error, self._optout(), \
 				patch("huf.ai.channels.channel_consent.has_consent", return_value=(True, "ok")) as consent, \
 				patch("huf.ai.gateway_adapters.sms.send_sms_message", sms), \
-				patch("huf.ai.whatsapp.broadcast.failover._credentials", return_value={}):
+				patch("huf.ai.whatsapp.broadcast.failover._credentials", return_value={"mode": "twilio"}):
 			logger.debug("probe")
 			res = otp.send_otp("GW", PHONE, SENTINEL, idempotency_key="k9", **self.FB)
 		self.assertTrue(res["success"])
@@ -199,9 +202,12 @@ class TestOtp(unittest.TestCase):
 		self.assertEqual(res["error"], "not_opted_in")
 
 	def test_sms_fallback_requires_gateway_and_text(self):
-		for kw in ({"sms_gateway": None}, {"fallback_text": None}, {"fallback_text": "no placeholder"}):
+		for kw in ({"sms_gateway": None},):
 			res = otp.send_otp("GW", PHONE, SENTINEL, **{**self.FB, **kw})
 			self.assertEqual(res["error"], "invalid_fallback")
+		for text in (None, "no placeholder", "{code} {code}", "go http://x.io {code}", "see www.x.io {code}", "a" * 500 + "{code}"):
+			res = otp.send_otp("GW", PHONE, SENTINEL, **{**self.FB, "fallback_text": text})
+			self.assertEqual(res["error"], "invalid_fallback_text", text)
 		self.assertEqual(self.sent, [])
 
 	def test_sms_fallback_only_on_terminal_failure(self):
@@ -212,3 +218,52 @@ class TestOtp(unittest.TestCase):
 			with patch.object(bridge.policy, "enforce_template", side_effect=bridge.policy.OutboundRefused("x", "template_not_approved")):
 				self.assertEqual(otp.send_otp("GW", "919876543211", SENTINEL, **self.FB)["error"], "template_not_approved")
 		sms.assert_not_called()
+
+	def test_sms_mode_frappe_sms_refused(self):
+		sms = MagicMock()
+		with self._optout(), patch("huf.ai.whatsapp.broadcast.failover._credentials", return_value={"mode": "frappe_sms"}), \
+				patch("huf.ai.gateway_adapters.sms.send_sms_message", sms):
+			res = otp.send_otp("GW", PHONE, SENTINEL, **self.FB)
+		self.assertEqual(res["error"], "sms_mode_not_allowed_for_otp")
+		sms.assert_not_called()
+		self.assertEqual(self.sent, [])
+
+	def test_gateway_forbidden(self):
+		with patch("huf.ai.whatsapp.otp.frappe.has_permission", side_effect=lambda dt, pt, name, user=None: name != "SMSGW"):
+			self.assertEqual(otp.send_otp("GW", PHONE, SENTINEL, **self.FB)["error"], "gateway_forbidden")
+		with patch("huf.ai.whatsapp.otp.frappe.has_permission", return_value=False):
+			self.assertEqual(otp.send_otp("GW", PHONE, SENTINEL)["error"], "gateway_forbidden")
+		self.assertEqual(self.sent, [])
+
+	def test_idempotency_conflict_on_different_code(self):
+		otp.send_otp("GW", PHONE, SENTINEL, idempotency_key="k")
+		res = otp.send_otp("GW", PHONE, "111222", idempotency_key="k")
+		self.assertEqual(res["error"], "idempotency_conflict")
+		self.assertEqual(len(self.sent), 1)
+
+	def test_slot_released_when_sms_fallback_raises(self):
+		with self._optout(), patch.object(otp, "_sms_fallback", side_effect=RuntimeError("boom")):
+			res = otp.send_otp("GW", PHONE, SENTINEL, idempotency_key="k", **self.FB)
+		self.assertEqual(res["error"], "send_failed")
+		self.assertFalse([k for k in self.cache if ":idem:" in k])
+
+	def test_counters_refunded_before_meta_but_not_after(self):
+		with patch.object(bridge.policy, "enforce_template", side_effect=bridge.policy.OutboundRefused("x", "opted_out")):
+			otp.send_otp("GW", PHONE, SENTINEL)
+		self.assertTrue(all(v == 0 for k, v in self.cache.items() if ":phone:" in k or ":caller:" in k))
+		self.post.side_effect = _graph_error
+		otp.send_otp("GW", "919876543211", SENTINEL)
+		self.assertTrue(any(v == 1 for k, v in self.cache.items() if ":phone:" in k))
+
+	def test_hit_sets_ttl_atomically(self):
+		otp._hit("phone", "d", 3, 600)
+		self.fake.set.assert_any_call(otp._key("phone", "d"), 0, ex=600, nx=True)
+
+	def test_sms_leg_status_and_owner(self):
+		sms = MagicMock(return_value={"ok": True, "id": "SM1", "status": "queued"})
+		with self._optout(), patch("huf.ai.channels.channel_consent.has_consent", return_value=(True, "ok")), \
+				patch("huf.ai.gateway_adapters.sms.send_sms_message", sms):
+			res = otp.send_otp("GW", PHONE, SENTINEL, **self.FB)
+		self.assertEqual(otp.get_otp_status(res["message_id"])["status"], "sent")
+		with patch.object(frappe.session, "user", "someone.else@example.com"):
+			self.assertEqual(otp.get_otp_status(res["message_id"])["error"], "not_found")

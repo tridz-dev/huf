@@ -13,6 +13,27 @@ from frappe.model.document import Document
 from huf.ai.tools.registry import get_hook_declared_function_paths
 
 
+# OTP delivery must never be reachable by an agent (an LLM could exfiltrate or abuse codes).
+OTP_TOOL_DENYLIST = [
+	"huf.ai.whatsapp.otp.send_otp",
+	"huf.ai.whatsapp.otp.get_otp_status",
+]
+
+
+def is_otp_tool_path(function_path):
+	"""True when ``function_path`` is, or resolves (alias / re-export) to, an OTP function."""
+	path = (function_path or "").strip()
+	if not path:
+		return False
+	if path in OTP_TOOL_DENYLIST:
+		return True
+	try:
+		func = frappe.get_attr(path)
+	except Exception:
+		return False
+	return f"{getattr(func, '__module__', '')}.{getattr(func, '__name__', '')}" in OTP_TOOL_DENYLIST
+
+
 # Identifier parameters the built-in document operations use (see huf/ai/tools/functions.py and
 # prepare_function_params). They are arguments to the operation, not fields of the
 # reference DocType, so they must not be checked against the DocType meta.
@@ -819,6 +840,8 @@ class AgentToolFunction(Document):
 			self.params = json.dumps(json.loads(self.params), indent=4)
 
 	def validate(self):
+		if is_otp_tool_path(self.function_path):
+			frappe.throw(_("OTP functions cannot be exposed as agent tools."))
 
 		INVALID_FUNCTION_NAMES = [
 			"get_document",
