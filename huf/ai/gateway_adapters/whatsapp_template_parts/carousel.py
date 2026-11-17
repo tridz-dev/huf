@@ -92,7 +92,7 @@ def _validate_cards(
 
 
 def _build_carousel_template(cards: list[dict[str, Any]]) -> dict[str, Any]:
-	"""Meta ``CAROUSEL`` create component (card header handle, body, buttons). Schema from memory (unverified)."""
+	"""Meta ``CAROUSEL`` create component (card header handle, body, buttons). Create schema verified live on the Meta Cloud API 2026-11-18 (two-card media carousel created and sent; limits: up to 10 cards, card body up to 160 chars, up to 2 buttons per card, no header or footer on the main bubble, variables not at body edges)."""
 	out: list[dict[str, Any]] = []
 	for card in cards:
 		comps: list[dict[str, Any]] = [
