@@ -203,6 +203,28 @@ def _tool_is_outbound(tool_name) -> bool:
 		return False
 
 
+def _explicit_requires_confirmation(tool_name) -> bool:
+	try:
+		return frappe.db.get_value("Agent Tool Function", {"tool_name": tool_name}, "requires_confirmation") in (1, True, "1")
+	except Exception:
+		return True  # cannot read the flag: fail closed
+
+
+def _needs_confirmation(tool_name, args, requires_confirmation, is_outbound) -> bool:
+	"""Outbound flag is per-action for multi-action tools (see tools.outbound_actions): only sending actions
+	pause; read actions run. An explicit ``requires_confirmation`` on the tool row still gates every action."""
+	from huf.ai.tools.outbound_actions import is_outbound_call
+
+	outbound = is_outbound_call(tool_name, args)
+	if outbound is None:
+		return bool(requires_confirmation or is_outbound or _tool_is_outbound(tool_name))
+	if outbound:
+		return True
+	# read-only action on a mapped tool: the passed flag merges requires_confirmation and is_outbound, so
+	# re-read the explicit requires_confirmation from the tool row
+	return _explicit_requires_confirmation(tool_name)
+
+
 def check_tool_call(
 	tool_name,
 	args,
@@ -216,7 +238,7 @@ def check_tool_call(
 	"""Return a JSON tool result string if the call must NOT run, else None (proceed).
 
 	Effective confirmation = ``requires_confirmation`` OR ``is_outbound`` (PLAN 06: any outbound tool pauses)."""
-	requires_confirmation = bool(requires_confirmation or is_outbound or _tool_is_outbound(tool_name))
+	requires_confirmation = _needs_confirmation(tool_name, args, requires_confirmation, is_outbound)
 	try:
 		ctx = resolve_gateway_context(agent_run_id)
 	except Exception:
