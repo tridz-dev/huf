@@ -167,6 +167,7 @@ def update_audience(
 	row = _require_audience_write(audience)
 	if row.get("error"):
 		return row
+	aud.assert_not_external(audience, "edited")
 	doc = frappe.get_doc(aud.AUDIENCE, audience)
 	if title is not None:
 		doc.title = title
@@ -194,6 +195,7 @@ def delete_audience(audience: str | None = None) -> dict[str, Any]:
 	row = _require_audience_write(audience)
 	if row.get("error"):
 		return row
+	aud.assert_not_external(audience, "deleted")
 	used = aud.referencing_broadcasts(audience)
 	if used:
 		return _error(
@@ -289,6 +291,7 @@ def import_members(
 	row = _require_audience_write(audience)
 	if row.get("error"):
 		return row
+	aud.assert_not_external(audience, "imported into")
 	if on_conflict not in _ON_CONFLICT:
 		return _error("invalid", f"on_conflict must be one of {', '.join(_ON_CONFLICT)}.")
 	mapped = audience_csv.mapped_rows(csv_text, rows, _parse_json_arg(mapping, "mapping"))
@@ -356,6 +359,7 @@ def remove_members(audience: str | None = None, recipients: Any = None) -> dict[
 	row = _require_audience_write(audience)
 	if row.get("error"):
 		return row
+	aud.assert_not_external(audience, "edited")
 	wanted = _parse_list(recipients, "recipients")
 	max_remove = policy.get("audience_max_remove_per_request")
 	if len(wanted) > max_remove:

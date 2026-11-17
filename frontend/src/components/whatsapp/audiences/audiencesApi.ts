@@ -39,6 +39,8 @@ export interface Audience {
   title: string;
   description?: string | null;
   is_adhoc?: boolean;
+  externally_managed?: boolean;
+  managed_by?: string | null;
   consent_source: string;
   consent_basis: ConsentBasis;
   consent_purposes: ConsentPurpose[];

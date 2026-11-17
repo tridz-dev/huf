@@ -50,6 +50,29 @@ beforeEach(() => {
   }));
 });
 
+describe('externally managed audiences', () => {
+  it('shows the source and hides edit actions', async () => {
+    m.listAudiences.mockResolvedValue(ok({ audiences: [aud({ externally_managed: true, managed_by: 'loyalty' }), aud({ name: 'AUD-2', title: 'Newsletter' })] }));
+    const user = userEvent.setup();
+    render(<AudiencesPage gateway="GW" />);
+    expect(await screen.findByText('Managed by loyalty')).toBeTruthy();
+    expect(screen.getAllByRole('button', { name: 'Import' })).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: 'Delete' })).toHaveLength(1);
+    await user.click(screen.getAllByRole('button', { name: 'View contacts' })[0]);
+    await screen.findByText('Asha');
+    expect(screen.queryByRole('button', { name: /^Remove / })).toBeNull();
+  });
+
+  it('refuses a save from the form', async () => {
+    const user = userEvent.setup();
+    const { AudienceFormDialog } = await import('./AudienceFormDialog');
+    render(<AudienceFormDialog gateway="GW" audience={aud({ externally_managed: true, managed_by: 'loyalty' }) as never} onClose={() => {}} onSaved={() => {}} />);
+    await user.click(screen.getByRole('button', { name: /save/i }));
+    expect(await screen.findByText(/Managed by loyalty/)).toBeTruthy();
+    expect(m.updateAudience).not.toHaveBeenCalled();
+  });
+});
+
 describe('csv helpers', () => {
   it('parses quotes', () => {
     const { headers, rows } = csvToObjects('phone,name\r\n9198,"Doe, J"\n');

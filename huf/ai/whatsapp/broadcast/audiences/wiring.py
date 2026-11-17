@@ -249,3 +249,22 @@ def get_broadcast_audiences(broadcast: str | None = None) -> dict[str, Any]:
 	for p in picks:
 		p["title"] = frappe.db.get_value(aud.AUDIENCE, p["audience"], "title")
 	return {"success": True, "broadcast": broadcast, "selection": picks, "consent": consent_cover(broadcast)}
+
+
+def resnapshot(broadcast: str) -> dict | None:
+	"""Rebuild the audience-sourced recipient rows of a Draft/Scheduled broadcast from its stored picks.
+
+	Used after an external audience refresh. Unlike ``set_broadcast_audiences`` it leaves the consent attestation
+	alone: the picks and the audiences' own consent are unchanged, only their members were refreshed.
+	"""
+	row = frappe.db.get_value(aud.BROADCAST, broadcast, ["gateway", "category"], as_dict=True)
+	items = _clean_items(_picks(broadcast))
+	result, _audiences, _blocked = audience_selection.expand(row["gateway"], items, _template_category(broadcast, row.get("category")))
+	prev = frappe.flags.get("in_broadcast_api")
+	frappe.flags.in_broadcast_api = True
+	try:
+		frappe.db.delete(RECIPIENT, {"broadcast": broadcast, "audience": ["is", "set"]})
+		rows = [{k: r.get(k) for k in ("recipient", "params", "consent_source", "consent_at", "audience")} for r in result["rows"]]
+		return _prepare_with_retry(broadcast, rows)
+	finally:
+		frappe.flags.in_broadcast_api = prev

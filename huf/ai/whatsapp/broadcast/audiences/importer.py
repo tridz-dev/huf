@@ -77,11 +77,14 @@ def import_rows(
 	source: str = "import",
 	progress: Callable[[dict], None] | None = None,
 	commit_chunks: bool = False,
+	external: bool = False,
 ) -> dict[str, Any]:
 	"""Validate and store mapped rows. ``on_conflict``: ``skip`` | ``update`` (tags are merged).
 
 	Duplicates inside ``rows`` count as ``duplicate_in_file``. Returns exact totals plus capped example lists.
 	"""
+	if not external:
+		aud.assert_not_external(audience, "imported into")
 	frappe.flags.in_audience_api = True
 	existing = {
 		r["recipient"]: r
