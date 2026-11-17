@@ -53,6 +53,7 @@ class TestFailover(FrappeTestCase):
 		"""Apply the webhook status (enqueue patched), then run each queued job directly like a worker would."""
 		with patch("frappe.enqueue") as enq:
 			applied = bs.apply_status("wamid.fo1", status, TS, errors, gateway=GW)
+		frappe.db.commit()  # enqueue_after_commit: the worker only ever sees committed rows (it rolls back on early exit)
 		with patch("huf.ai.channels.channel_consent.has_consent", _consent(allowed)), patch.dict(failover.__dict__, {"_send_sms": self.sms, "_send_email": self.email}):
 			for call in enq.call_args_list:
 				failover.run_failover_job(call.kwargs["recipient_name"])

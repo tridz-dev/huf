@@ -65,8 +65,15 @@ class TestMediaUpload(unittest.TestCase):
 		doc.save.assert_not_called()
 
 	def test_forbidden(self):
-		with self.assertRaises(mu.MediaUploadError) as c:
-			self._run(_file(), MagicMock(), perm=False)
+		# the read-permission check lives in _find_file (fixf): exercise the real resolver with permission denied
+		doc = _file()
+		doc.file_url = "/private/files/a.pdf"
+		fr = MagicMock()
+		fr.db.exists.return_value = True
+		fr.get_doc.return_value = doc
+		fr.has_permission.return_value = False
+		with patch.object(mu, "frappe", fr), self.assertRaises(mu.MediaUploadError) as c:
+			mu.upload_private_pdf(ACCT, "FILE-1", "u@x.test", http_post=MagicMock())
 		self.assertEqual(c.exception.code, "file_forbidden")
 
 	def test_not_pdf(self):

@@ -77,7 +77,9 @@ class TestRefreshJob(AudienceTestCase):
 	def _run_job_inline(self, hook):
 		"""Stand-in for the worker: run refresh_hook_job directly when enqueue is called."""
 		def fake_enqueue(method, **kw):
-			with patch.object(frappe, "get_attr", return_value=hook):
+			real = frappe.get_attr  # only the hook path is faked: log_error and doc hooks resolve real attrs
+
+			with patch.object(frappe, "get_attr", side_effect=lambda p, *a, **k: hook if p == kw["path"] else real(p, *a, **k)):
 				external.refresh_hook_job(kw["path"], kw["token"], kw["audience"], kw["managed_by"])
 
 		return patch.object(frappe, "enqueue", side_effect=fake_enqueue)
