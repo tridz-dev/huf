@@ -78,10 +78,11 @@ def import_rows(
 	progress: Callable[[dict], None] | None = None,
 	commit_chunks: bool = False,
 	external: bool = False,
+	stale: set[str] | None = None,
 ) -> dict[str, Any]:
 	"""Validate and store mapped rows. ``on_conflict``: ``skip`` | ``update`` (tags are merged).
 
-	Duplicates inside ``rows`` count as ``duplicate_in_file``. Returns exact totals plus capped example lists.
+	Duplicates inside ``rows`` count as ``duplicate_in_file``. ``stale``: members about to be deleted by the caller (not counted against the audience cap). Returns exact totals plus capped example lists.
 	"""
 	if not external:
 		aud.assert_not_external(audience, "imported into")
@@ -130,7 +131,7 @@ def import_rows(
 				seen.add(phone)
 				_update_member(existing[phone], clean)
 				result["updated"] += 1
-			elif len(existing) + result["added"] >= max_members:
+			elif len(existing) - len(stale or ()) + result["added"] >= max_members:
 				note("skipped", {"row": index, "recipient": phone, "reason": "audience_full"})
 			else:
 				seen.add(phone)

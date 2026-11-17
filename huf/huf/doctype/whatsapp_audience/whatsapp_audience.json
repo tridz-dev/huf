@@ -80,9 +80,8 @@
   },
   {
    "fieldname": "external_key",
-   "fieldtype": "Data",
-   "label": "Last refresh key",
-   "length": 140,
+   "fieldtype": "Small Text",
+   "label": "Recent refresh keys",
    "read_only": 1,
    "hidden": 1
   },
