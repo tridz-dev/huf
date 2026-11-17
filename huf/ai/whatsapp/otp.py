@@ -123,17 +123,30 @@ def send_otp(
 	code: str | None = None,
 	template: str | None = None,
 	idempotency_key: str | None = None,
+	fallback: str | None = None,
+	sms_gateway: str | None = None,
+	fallback_text: str | None = None,
 ) -> dict[str, Any]:
 	"""Send ``code`` to ``phone`` over WhatsApp using the gateway's approved authentication template.
 
 	Returns ``{success, message_id, status}`` or ``{success: False, error, message}`` with error one of
 	``invalid_*``, ``rate_limited``, ``not_opted_in``, ``template_not_found``, ``template_not_approved``,
-	``throughput``, ``window``, ``in_progress``, ``send_failed``. The code is never in the return value.
+	``throughput``, ``window``, ``in_progress``, ``send_failed``, ``invalid_fallback``. The code is never in the
+	return value. Success carries ``channel`` (``whatsapp`` | ``sms``).
+
+	SMS fallback (``fallback="sms"``; email is never allowed for OTP -> ``invalid_fallback``): requires
+	``sms_gateway`` (a Gateway name) and ``fallback_text`` containing ``{code}``. It fires synchronously, only
+	when the WhatsApp send is refused terminally at send time with ``not_opted_in`` or ``window`` (not opted in /
+	undeliverable recipient); never for throughput, template, auth or other errors, and never from the status
+	webhook (so a sent-but-undelivered OTP is not duplicated). The SMS goes through failover.run_chain, which
+	checks SMS utility consent via channel_consent.has_consent. Result then has ``channel: "sms"`` and a
+	``fallback_attempts`` audit (channel/status/reason only; no body, code scrubbed). No consent -> the original
+	WhatsApp error is returned.
 	"""
 	user = _require_sender()
 	code_str = "" if code is None else str(code)
 	try:
-		return _send(user, gateway, phone, code_str, template, idempotency_key)
+		return _send(user, gateway, phone, code_str, template, idempotency_key, fallback, sms_gateway, fallback_text)
 	except frappe.PermissionError:
 		raise
 	except Exception as exc:  # noqa: BLE001 - never let a traceback (which can hold the code in locals/args) reach logs
@@ -142,11 +155,40 @@ def send_otp(
 		return _err("send_failed", "The OTP could not be sent.")
 
 
-def _send(user, gateway, phone, code, template, idempotency_key) -> dict[str, Any]:
+def _check_fallback(code, fallback, sms_gateway, fallback_text) -> dict[str, Any] | None:
+	if fallback in (None, ""):
+		return None
+	if str(fallback).lower() != "sms":
+		return _err("invalid_fallback", "Only 'sms' is allowed as an OTP fallback (email is never allowed).")
+	if not sms_gateway or not frappe.db.exists("Gateway", sms_gateway):
+		return _err("invalid_fallback", "sms_gateway is required for the SMS fallback.")
+	if not fallback_text or "{code}" not in str(fallback_text):
+		return _err("invalid_fallback", "fallback_text containing {code} is required for the SMS fallback.")
+	return None
+
+
+def _sms_fallback(code, to, sms_gateway, fallback_text) -> dict[str, Any] | None:
+	"""Run the shared failover chain for SMS only. Returns the success payload, or None if SMS did not go out."""
+	from huf.ai.whatsapp.broadcast.failover import run_chain
+
+	body = str(fallback_text).replace("{code}", code)
+	attempts, delivered = run_chain(
+		["sms"], phone=to, email=None, body=body, body_kind="otp", sms_gateway=sms_gateway,
+	)
+	if delivered != "sms":
+		return None
+	mid = next((str(a.get("message_id") or "") for a in attempts if a.get("channel") == "sms"), "")
+	return {"success": True, "message_id": mid, "status": "sent", "channel": "sms", "fallback_attempts": _scrub(attempts, code)}
+
+
+def _send(user, gateway, phone, code, template, idempotency_key, fallback=None, sms_gateway=None, fallback_text=None) -> dict[str, Any]:
 	if not gateway or not frappe.db.exists("Gateway", gateway):
 		return _err("invalid_gateway", "Gateway not found.")
 	if not _CODE_RE.match(code):
 		return _err("invalid_code", "Code must be 4-15 letters or digits.")
+	bad_fb = _check_fallback(code, fallback, sms_gateway, fallback_text)
+	if bad_fb:
+		return bad_fb
 	to = management._validate_recipient(phone)
 	if isinstance(to, dict):
 		return to | {"error": "invalid_phone"}
@@ -168,7 +210,8 @@ def _send(user, gateway, phone, code, template, idempotency_key) -> dict[str, An
 			prior = cache.get(idem_slot)
 			prior = prior.decode() if isinstance(prior, bytes) else prior
 			if prior and prior != _PENDING:
-				return {"success": True, "message_id": prior, "status": "sent", "replayed": True}
+				chan = "sms" if prior.startswith("sms:") else "whatsapp"
+				return {"success": True, "message_id": prior.removeprefix("sms:"), "status": "sent", "channel": chan, "replayed": True}
 			return _err("in_progress", "A send with this idempotency key is already in progress.")
 
 	def release() -> None:
@@ -191,8 +234,14 @@ def _send(user, gateway, phone, code, template, idempotency_key) -> dict[str, An
 			gateway_name=gateway, force_graph=True, redact_params=True,
 		)
 	except bridge.BridgeError as exc:
-		release()
 		error, message = _map_refusal(_scrub(exc.payload, code))
+		if fallback and error in ("not_opted_in", "window"):
+			sms = _sms_fallback(code, to, sms_gateway, fallback_text)
+			if sms:
+				if idem_slot:
+					frappe.cache().set(idem_slot, "sms:" + sms["message_id"], ex=IDEMPOTENCY_TTL)
+				return sms
+		release()
 		return _err(error, message)
 	except Exception:  # noqa: BLE001 - never surface a traceback that could hold the code
 		release()
@@ -202,7 +251,7 @@ def _send(user, gateway, phone, code, template, idempotency_key) -> dict[str, An
 	if idem_slot:
 		frappe.cache().set(idem_slot, message_id, ex=IDEMPOTENCY_TTL)
 	frappe.cache().set(_key("owner", _digest(message_id)), caller, ex=OWNER_TTL)
-	return {"success": True, "message_id": message_id, "status": result.get("message_status") or "sent"}
+	return {"success": True, "message_id": message_id, "status": result.get("message_status") or "sent", "channel": "whatsapp"}
 
 
 @frappe.whitelist()

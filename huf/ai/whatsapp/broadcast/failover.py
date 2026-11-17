@@ -122,6 +122,9 @@ def run_chain(
 			res = send(gateway, to, body)
 		except Exception as exc:  # noqa: BLE001
 			res = {"ok": False, "status": "failed", "error": str(exc)}
+		if str(body_kind or "").lower() == "otp" and body:
+			# OTP bodies hold the code: never let it reach an audit entry via a provider error echo.
+			res = {**res, "error": str(res.get("error") or "").replace(body, "***")}
 		if res.get("ok"):
 			attempts.append(_entry(channel, str(res.get("status") or "sent"), message_id=res.get("id"), cost=res.get("cost")))
 			return attempts, channel
