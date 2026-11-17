@@ -33,7 +33,76 @@ def _current(doc, key, seeded):
     return cur
 
 
-def _apply_seed_preserving_edits(doc, data: dict):
+# Only-tighten security fields: a re-seed (or first adoption of an existing doc) may never
+# loosen them. value = the tight value for Check fields.
+_TIGHT_CHECKS = {"requires_confirmation": 1, "is_outbound": 1, "allowed_for_guest": 0}
+_ROLE_TEXT_FIELDS = ("required_roles",)
+_ROLE_TABLE_FIELDS = ("allowed_roles",)
+
+
+def _split_roles(raw) -> list:
+    return [r.strip() for r in str(raw or "").replace("\n", ",").split(",") if r.strip()]
+
+
+def _table_roles(rows) -> list:
+    out = []
+    for r in rows or []:
+        name = r.get("role") if hasattr(r, "get") else r
+        if name and name not in out:
+            out.append(name)
+    return out
+
+
+def _snapshot_security(doc) -> dict:
+    snap = {}
+    for k in _TIGHT_CHECKS:
+        if doc.meta.has_field(k):
+            snap[k] = int(doc.get(k) or 0)
+    for k in _ROLE_TEXT_FIELDS:
+        if doc.meta.has_field(k):
+            snap[k] = _split_roles(doc.get(k))
+    for k in _ROLE_TABLE_FIELDS:
+        if doc.meta.has_field(k):
+            snap[k] = _table_roles(doc.get(k))
+    return snap
+
+
+def _enforce_only_tighten(doc, before: dict, data: dict) -> list:
+    """Restore the stricter of existing/seed for security fields. Returns warning strings."""
+    warnings = []
+    label = f"{doc.doctype} {doc.name}"
+    for k, tight in _TIGHT_CHECKS.items():
+        if k not in before or k not in data:
+            continue
+        old, new = before[k], int(doc.get(k) or 0)
+        if old == tight and new != tight:
+            doc.set(k, old)
+            warnings.append(f"{label}: ignored seed loosening of {k} ({old} -> {new})")
+    for k in _ROLE_TEXT_FIELDS:
+        if k not in before or k not in data:
+            continue
+        cur = _split_roles(doc.get(k))
+        missing = [r for r in before[k] if r not in cur]
+        if missing:
+            doc.set(k, ", ".join(cur + missing))
+            warnings.append(f"{label}: ignored seed removal of {k} {missing}")
+    for k in _ROLE_TABLE_FIELDS:
+        if k not in before or k not in data:
+            continue
+        cur = _table_roles(doc.get(k))
+        missing = [r for r in before[k] if r not in cur]
+        if missing:
+            for r in missing:
+                doc.append(k, {"role": r})
+            warnings.append(f"{label}: ignored seed removal of {k} {missing}")
+    for w in warnings:
+        frappe.logger("huf").warning("[app_seeding] %s", w)
+    return warnings
+
+
+def _apply_seed_preserving_edits(doc, data: dict) -> list:
+    """Apply seed values; returns warnings about ignored security-loosening changes."""
+    before = _snapshot_security(doc)
     new = _seed_values(data)
     try:
         old = json.loads(doc.get("seed_snapshot") or "null")
@@ -47,7 +116,9 @@ def _apply_seed_preserving_edits(doc, data: dict):
         doc.set(key, data[key])
     doc.source_app = data.get("source_app")
     doc.source_file = data.get("source_file")
+    warnings = _enforce_only_tighten(doc, before, data)
     doc.seed_snapshot = json.dumps(new)
+    return warnings
 
 
 def _validate_row_link_refs(child_doctype: str, row: dict, row_index: int) -> list:
@@ -163,12 +234,13 @@ def _upsert_doc(doctype: str, key_field: str, data: dict, source_app: str, sourc
     data["source_app"] = source_app
     data["source_file"] = source_file
 
+    warnings = []
     try:
         tracks = bool(frappe.get_meta(doctype).get_field("seed_snapshot"))
         if docname:
             doc = frappe.get_doc(doctype, docname)
             if tracks:
-                _apply_seed_preserving_edits(doc, data)
+                warnings = _apply_seed_preserving_edits(doc, data)
             else:
                 doc.update(data)
             doc.save(ignore_permissions=True)
@@ -178,7 +250,7 @@ def _upsert_doc(doctype: str, key_field: str, data: dict, source_app: str, sourc
             if tracks:
                 doc.seed_snapshot = json.dumps(_seed_values(data))
             doc.insert(ignore_permissions=True)
-        return True, None
+        return True, ({"warnings": warnings} if warnings else None)
     except Exception as e:
         return False, str(e)
 

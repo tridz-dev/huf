@@ -21,6 +21,7 @@ class SeedResult:
     skipped: int
     errors: List[str]
     skipped_records: List[dict] = field(default_factory=list)
+    warnings: List[str] = field(default_factory=list)
 
 # Load order matters for dependency resolution.
 # Apps load last so a manifest may later reference agents/capabilities
@@ -54,6 +55,8 @@ def seed_app(app_name: str, huf_dir: Path) -> SeedResult:
 
                         if ok:
                             result.seeded += 1
+                            if isinstance(error, dict) and error.get("warnings"):
+                                result.warnings.extend(error["warnings"])
                         else:
                             result.skipped += 1
                             # Use a fallback name if the key isn't standard across all types
