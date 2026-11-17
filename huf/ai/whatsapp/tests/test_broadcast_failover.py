@@ -27,7 +27,9 @@ def _consent(allowed=("sms", "email")):
 	return lambda ch, to, purpose="marketing": (True, "ok") if ch in allowed else (False, "no_opt_in")
 
 
-class TestFailover(FrappeTestCase):
+class FailoverCase(FrappeTestCase):
+	"""Shared fixture/helpers; has no test_ methods so subclasses do not rerun each other."""
+
 	def setUp(self):
 		self.addCleanup(self._cleanup)
 		self._cleanup()
@@ -37,10 +39,12 @@ class TestFailover(FrappeTestCase):
 		self.senders = {"sms": self.sms, "email": self.email}
 
 	def _cleanup(self):
-		frappe.db.rollback()
-		frappe.db.delete(RC, {"broadcast": B})
-		frappe.db.delete(BC, {"name": B})
-		frappe.db.commit()
+		try:
+			frappe.db.rollback()
+			frappe.db.delete(RC, {"broadcast": B})
+			frappe.db.delete(BC, {"name": B})
+		finally:
+			frappe.db.commit()
 
 	def _row(self, channels='["sms","email"]', body="Fallback text", kind="", status="sent", email="a@example.com"):
 		frappe.db.sql(
@@ -64,6 +68,7 @@ class TestFailover(FrappeTestCase):
 		d = frappe.db.get_value(RC, R, ["status", "channel_delivered", "fallback_attempts"], as_dict=True)
 		return d, json.loads(d.fallback_attempts or "[]")
 
+class TestFailover(FailoverCase):
 	def test_chain_sms_fails_then_email(self):
 		self._row()
 		self.sms.return_value = {"ok": False, "id": None, "status": "failed", "error": "boom"}
@@ -157,7 +162,7 @@ class TestFailover(FrappeTestCase):
 		self.assertEqual(failover.parse_channels("not json"), [])
 
 
-class TestFailoverClaimOrder(TestFailover):
+class TestFailoverClaimOrder(FailoverCase):
 	"""The claim is committed before any provider call and replaced by the result afterwards."""
 
 	def test_claim_visible_before_send_and_replaced_after(self):

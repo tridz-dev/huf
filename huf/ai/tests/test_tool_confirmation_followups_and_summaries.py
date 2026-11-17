@@ -1,4 +1,4 @@
-"""FIX-E1 tests. Run: bench run-tests --module huf.ai.tests.test_tool_confirmation_fixe1"""
+"""FIX-E1 tests. Run: bench run-tests --module huf.ai.tests.test_tool_confirmation_followups_and_summaries"""
 
 import json
 from types import SimpleNamespace
@@ -28,7 +28,7 @@ def _capture_followup(call_id):
 	return rows[0]
 
 
-class TestFixE1(IntegrationTestCase):
+class TestFollowupsAndSummaries(IntegrationTestCase):
 	def test_followup_with_call_id_is_a_tool_result_for_that_call(self):
 		row = _capture_followup("call_abc")
 		self.assertEqual((row["role"], row["kind"], row["tool_call_id"]), ("tool", "Tool Result", "call_abc"))

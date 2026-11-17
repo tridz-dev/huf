@@ -52,10 +52,10 @@ beforeEach(() => {
 
 describe('externally managed audiences', () => {
   it('shows the source and hides edit actions', async () => {
-    m.listAudiences.mockResolvedValue(ok({ audiences: [aud({ externally_managed: true, managed_by: 'loyalty' }), aud({ name: 'AUD-2', title: 'Newsletter' })] }));
+    m.listAudiences.mockResolvedValue(ok({ audiences: [aud({ externally_managed: true, managed_by: 'crm' }), aud({ name: 'AUD-2', title: 'Newsletter' })] }));
     const user = userEvent.setup();
     render(<AudiencesPage gateway="GW" />);
-    expect(await screen.findByText('Managed by loyalty')).toBeTruthy();
+    expect(await screen.findByText('Managed by crm')).toBeTruthy();
     expect(screen.getAllByRole('button', { name: 'Import' })).toHaveLength(1);
     expect(screen.getAllByRole('button', { name: 'Delete' })).toHaveLength(1);
     await user.click(screen.getAllByRole('button', { name: 'View contacts' })[0]);
@@ -66,9 +66,9 @@ describe('externally managed audiences', () => {
   it('refuses a save from the form', async () => {
     const user = userEvent.setup();
     const { AudienceFormDialog } = await import('./AudienceFormDialog');
-    render(<AudienceFormDialog gateway="GW" audience={aud({ externally_managed: true, managed_by: 'loyalty' }) as never} onClose={() => {}} onSaved={() => {}} />);
+    render(<AudienceFormDialog gateway="GW" audience={aud({ externally_managed: true, managed_by: 'crm' }) as never} onClose={() => {}} onSaved={() => {}} />);
     await user.click(screen.getByRole('button', { name: /save/i }));
-    expect(await screen.findByText(/Managed by loyalty/)).toBeTruthy();
+    expect(await screen.findByText(/Managed by crm/)).toBeTruthy();
     expect(m.updateAudience).not.toHaveBeenCalled();
   });
 });

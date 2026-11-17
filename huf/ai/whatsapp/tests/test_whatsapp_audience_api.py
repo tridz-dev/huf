@@ -32,6 +32,10 @@ class AudienceTestCase(unittest.TestCase):
 		frappe.set_user("Administrator")
 		frappe.flags.in_audience_api = False
 		self.addCleanup(frappe.db.rollback)
+		# production code under test commits (refresh hooks, runner); neutralise it so the rollback above really undoes the rows
+		commit_patch = patch.object(frappe.db, "commit")
+		commit_patch.start()
+		self.addCleanup(commit_patch.stop)
 		self.addCleanup(lambda: setattr(frappe.flags, "in_audience_api", False))
 		if not frappe.db.exists("Gateway", GW):
 			frappe.get_doc({"doctype": "Gateway", "name": GW, "gateway_name": GW, "provider": "WhatsApp"}).db_insert()
