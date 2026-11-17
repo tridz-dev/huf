@@ -215,6 +215,15 @@ export interface WizardPayloadButton {
   example?: string;
   phone_number?: string;
 }
+export interface WizardPayloadCard {
+  header_type: 'IMAGE' | 'VIDEO';
+  /** Header example media: link or uploaded path. */
+  sample: string;
+  body: string;
+  /** Numbered body variable examples, comma-joined. */
+  sample_values?: string;
+  buttons: WizardPayloadButton[];
+}
 export interface WizardTemplatePayload {
   template_name: string;
   category: TemplateCategory;
@@ -231,6 +240,8 @@ export interface WizardTemplatePayload {
   sample?: string;
   footer?: string;
   buttons?: WizardPayloadButton[];
+  /** Marketing media carousel: 2-10 cards (the template then has no header, footer or top-level buttons). */
+  cards?: WizardPayloadCard[];
   /** Utility only: message validity in seconds. */
   ttl_seconds?: number;
   /** Authentication only: fixed WhatsApp format options. */
@@ -249,7 +260,11 @@ export type HeaderParam =
 export interface CarouselCardDef {
   header_type: string;
   body_vars: string[];
-  buttons: { type: string; dynamic: boolean }[];
+  buttons: { type: string; dynamic: boolean; text?: string; url?: string; example?: string }[];
+  /** Stored card text, examples and header handle (present on detail views). */
+  body?: string;
+  sample_values?: string[];
+  header_example?: string;
 }
 /** Per-card values for a carousel send: header media by link or uploaded media id. */
 export interface CarouselCardParam {

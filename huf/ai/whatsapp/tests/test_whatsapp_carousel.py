@@ -108,3 +108,46 @@ class CarouselBroadcastParamsTest(unittest.TestCase):
 
 if __name__ == "__main__":
 	unittest.main()
+
+
+def _card_in(**kw):
+	card = {"header_type": "IMAGE", "sample": IMG, "body": "Deal {{1}} now", "sample_values": ["A"], "buttons": [
+		{"type": "QUICK_REPLY", "text": "Hi"}, {"type": "URL", "text": "Go", "url": "https://x.example/"},
+	]}
+	card.update(kw)
+	return card
+
+
+def _create_codes(cards, **extra):
+	payload = {"category": "MARKETING", "body": "Hello all", "cards": cards, **extra}
+	_, errors = wt.validate_template_spec(payload)
+	return {e["code"] for e in errors}
+
+
+class CarouselCreateTest(unittest.TestCase):
+	def test_valid_builds_carousel(self):
+		cards = [_card_in(), _card_in()]
+		spec, errors = wt.validate_template_spec({"category": "MARKETING", "body": "Hello all", "cards": cards})
+		self.assertEqual(errors, [])
+		for c in spec["cards"]:
+			c["header_handle"] = "4::h"
+		comps = wt.build_meta_components(spec)
+		self.assertEqual([c["type"] for c in comps], ["BODY", "CAROUSEL"])
+		card = comps[1]["cards"][0]["components"]
+		self.assertEqual(card[0], {"type": "HEADER", "format": "IMAGE", "example": {"header_handle": ["4::h"]}})
+		self.assertEqual(card[1]["example"], {"body_text": [["A"]]})
+		self.assertEqual([b["type"] for b in card[2]["buttons"]], ["QUICK_REPLY", "URL"])
+		view = wt.components_to_view(comps)
+		self.assertEqual(view["carousel"][0]["body"], "Deal {{1}} now")
+
+	def test_error_codes(self):
+		self.assertIn("carousel_card_count", _create_codes([_card_in()]))
+		self.assertIn("carousel_card_count", _create_codes([_card_in()] * 11))
+		self.assertIn("card_header_type", _create_codes([_card_in(), _card_in(header_type="DOCUMENT")]))
+		self.assertIn("card_body_missing", _create_codes([_card_in(), _card_in(body="")]))
+		self.assertIn("card_buttons_mismatch", _create_codes([_card_in(), _card_in(buttons=[{"type": "QUICK_REPLY", "text": "x"}])]))
+		many = [{"type": "QUICK_REPLY", "text": str(i)} for i in range(3)]
+		self.assertIn("card_too_many_buttons", _create_codes([_card_in(buttons=many), _card_in(buttons=many)]))
+		self.assertIn("carousel_top_level_not_allowed", _create_codes([_card_in(), _card_in()], footer="f"))
+		_, errors = wt.validate_template_spec({"category": "UTILITY", "body": "Hello all", "cards": [_card_in(), _card_in()]})
+		self.assertIn("carousel_category_marketing_only", {e["code"] for e in errors})

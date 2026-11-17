@@ -27,6 +27,19 @@ export interface WizardButton {
   codeExample: string;
 }
 
+/** One media card of a carousel template. */
+export interface WizardCard {
+  id: string;
+  headerType: 'image' | 'video';
+  /** Sample file link or uploaded path for the card header. */
+  mediaSample: string;
+  body: string;
+  /** Example values for the card body's numbered variables, index 0 is {{1}}. */
+  samples: string[];
+  /** Quick-reply and website buttons only; every card needs the same kinds in the same order. */
+  buttons: WizardButton[];
+}
+
 /**
  * Wizard state for the three-step create/edit flow. Named TemplateWizardDraft
  * because `TemplateDraft` in whatsappApi is the saved draft record.
@@ -52,6 +65,9 @@ export interface TemplateWizardDraft {
   codeExpiryMinutes: number | null;
   /** Authentication only: label of the copy-code button. */
   otpButtonText: string;
+  /** Marketing media carousel: body above a row of cards; no header, footer or top-level buttons. */
+  carousel: boolean;
+  cards: WizardCard[];
 }
 
 export const headerSampleKey = (token: string) => `header.${token}`;
@@ -75,7 +91,19 @@ export function emptyDraft(category: TemplateCategoryId = 'MARKETING'): Template
     securityRecommendation: true,
     codeExpiryMinutes: 10,
     otpButtonText: OTP_BUTTON_DEFAULT,
+    carousel: false,
+    cards: [],
   };
+}
+
+export function emptyCard(id: string, buttons: WizardButton[] = []): WizardCard {
+  return { id, headerType: 'image', mediaSample: '', body: '', samples: [], buttons };
+}
+
+/** A new carousel card shaped like the first card (same button kinds), with empty text. */
+export function newCardLike(first: WizardCard | undefined, id: string): WizardCard {
+  const buttons = (first?.buttons ?? []).map((b, i) => ({ ...emptyButton(b.type, `${id}-b${i}`), text: '' }));
+  return emptyCard(id, buttons);
 }
 
 export const OTP_BUTTON_DEFAULT = 'Copy code';

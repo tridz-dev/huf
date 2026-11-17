@@ -13,6 +13,7 @@ import { Field, Section, type FieldApi } from './fields';
 import { HeaderSection } from './HeaderSection';
 import { SamplesPanel } from './SamplesPanel';
 import { SetupSection } from './SetupSection';
+import { CardsSection, type CardActions } from './CardsSection';
 
 const TTL_CHOICES = [30, 60, 300, 900, 1800, 3600, 7200, 21600, 43200];
 const DEFAULT_TTL = 3600;
@@ -30,6 +31,7 @@ interface Props {
   onMoveButton: (index: number, by: -1 | 1) => void;
   onRemoveButton: (index: number) => void;
   onButton: (index: number, patch: Partial<WizardButton>) => void;
+  cardActions: CardActions;
 }
 
 export function WriteStep(p: Props) {
@@ -83,6 +85,17 @@ export function WriteStep(p: Props) {
             />
           </Field>
         </Section>
+      </>
+    );
+  }
+
+  if (draft.carousel) {
+    return (
+      <>
+        <SetupSection draft={draft} field={field} locked={p.lockIdentity} onChange={p.onChange} onVariableType={p.onVariableType} />
+        <BodySection draft={draft} field={field} onBody={(body) => p.onChange({ body })} />
+        <SamplesPanel draft={draft} field={field} onSample={p.onSample} />
+        <CardsSection draft={draft} field={field} {...p.cardActions} />
       </>
     );
   }

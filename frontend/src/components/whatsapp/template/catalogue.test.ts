@@ -11,7 +11,7 @@ describe('catalogue', () => {
     expect(byId('utility_default')).toMatchObject({ category: 'UTILITY', availability: 'available' });
     expect(byId('authentication_default')).toMatchObject({ category: 'AUTHENTICATION', availability: 'available' });
     for (const id of ['catalogue', 'flows', 'calling']) expect(byId(id).availability).toBe('comingSoon');
-    expect(TEMPLATE_KINDS.filter(isSelectableKind).map((k) => k.id)).toEqual(['marketing_default', 'utility_default', 'authentication_default']);
+    expect(TEMPLATE_KINDS.filter(isSelectableKind).map((k) => k.id)).toEqual(['marketing_default', 'marketing_carousel', 'utility_default', 'authentication_default']);
   });
 
   it('describes every kind', () => {
