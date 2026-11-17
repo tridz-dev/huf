@@ -169,6 +169,14 @@ def _merge_params(broadcast: dict[str, Any], row: dict[str, Any]) -> tuple[Any, 
 	return tuple(out)
 
 
+def _merge_carousel(broadcast: dict[str, Any], params: Any) -> Any:
+	"""Card values: the broadcast's ``carousel_params`` default under the recipient's ``params.carousel``."""
+	own = _json(params)
+	return broadcast_params.merge_carousel(
+		_json(broadcast.get("carousel_params")), own.get("carousel") if isinstance(own, dict) else None
+	)
+
+
 def _classify(payload: dict[str, Any]) -> dict[str, Any]:
 	"""Classification of a BridgeError payload that carries a Graph code."""
 	return errors.classify(
@@ -234,7 +242,7 @@ def send_one(recipient_name: str) -> str:
 
 	body, header, button = _merge_params(bc, row)
 	own_params = _json(row.get("params"))
-	carousel = (own_params.get("carousel") if isinstance(own_params, dict) else None) or _json(bc.get("carousel_params"))
+	carousel = _merge_carousel(bc, row.get("params"))
 	opaque = row.get("opaque_ref") or recipient_name
 	use_mm = (bc.get("send_via") or "messages") == "marketing_messages"
 	# fail closed: the template row must still exist with a readable status and category (bridge policy is a

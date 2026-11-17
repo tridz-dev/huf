@@ -14,13 +14,15 @@ Register a refresh in the managing app's ``hooks.py``::
     huf_audience_refresh = ["my_app.huf_hooks.refresh_audience"]
 
 The function receives ``audience=<name>, managed_by=<source>`` and returns nothing; it calls
-``upsert_audience_members`` itself. A hook that does not manage that audience simply returns.
+``upsert_audience_members`` itself. A hook that does not manage that audience simply returns. Hooks run in a
+worker thread with a deadline (``audience_refresh_timeout_seconds``); on a timeout the start is refused but the
+thread cannot be killed, so a hook must be idempotent and safe to cancel or repeat.
 """
 
 from __future__ import annotations
 
-import contextlib
-import signal
+import contextvars
+import json
 import threading
 from typing import Any
 
@@ -38,6 +40,8 @@ HOOK = "huf_audience_refresh"
 _MODES = ("replace", "merge")
 _SOURCE_MAX = 60
 _KEY_MAX = 140
+_KEYS_KEPT = 20
+_SAVEPOINT = "huf_external_upsert"
 
 
 def _create(spec: Any, source: str) -> dict[str, Any]:
@@ -89,25 +93,7 @@ def upsert_audience_members(
 	if len(rows) > cap:
 		return _error("too_many", f"Send at most {cap} contacts per refresh.")
 
-	created = False
-	if audience:
-		row = audience_api._require_audience_write(audience)
-		if row.get("error"):
-			return row
-		managed = frappe.db.get_value(aud.AUDIENCE, audience, ["externally_managed", "managed_by"], as_dict=True)
-		if not managed.externally_managed:
-			return _error("not_externally_managed", "This audience is managed in Huf; it cannot be changed by another app.")
-		if managed.managed_by != source:
-			return _error("source_mismatch", f"This audience is managed by {managed.managed_by}; only that app can change it.")
-		if key and frappe.db.get_value(aud.AUDIENCE, audience, "external_key") == key:
-			return {"success": True, "noop": True, "audience": audience}
-	else:
-		made = _create(create, source)
-		if made.get("error"):
-			return made
-		audience, created = made["name"], True
-		row = audience_api._audience_row(audience)
-
+	# Validate and stage everything first; nothing is written until the whole refresh is known to be usable.
 	clean_rows: list[dict] = []
 	seen: set[str] = set()
 	invalid: list[dict] = []
@@ -119,22 +105,50 @@ def upsert_audience_members(
 			if clean["recipient"] not in seen:
 				seen.add(clean["recipient"])
 			clean_rows.append(raw)
-	if mode == "replace" and rows and not seen:
+	if mode == "replace" and not rows:
+		return _error("empty_replace", "replace needs at least one contact; the audience was left as it was.")
+	if mode == "replace" and not seen:
 		return {**_error("no_valid_members", "None of the contacts could be used; the audience was left as it was."), "invalid": invalid[:50]}
 
-	removed = 0
-	if mode == "replace":
-		stale = [
-			r for r in frappe.get_all(aud.MEMBER, {"audience": audience}, pluck="recipient", limit_page_length=0) if r not in seen
-		]
+	if audience:
+		row = audience_api._require_audience_write(audience)
+		if row.get("error"):
+			return row
+		managed = frappe.db.get_value(aud.AUDIENCE, audience, ["externally_managed", "managed_by"], as_dict=True)
+		if not managed.externally_managed:
+			return _error("not_externally_managed", "This audience is managed in Huf; it cannot be changed by another app.")
+		if managed.managed_by != source:
+			return _error("source_mismatch", f"This audience is managed by {managed.managed_by}; only that app can change it.")
+
+	# One transaction: any failure rolls back to here, so the audience is never left half-applied or emptied.
+	frappe.db.savepoint(_SAVEPOINT)
+	try:
+		created = False
+		if audience:
+			if key and not _claim_key(audience, key):
+				return {"success": True, "noop": True, "audience": audience}
+		else:
+			made = _create(create, source)
+			if made.get("error"):
+				frappe.db.rollback(save_point=_SAVEPOINT)
+				return made
+			audience, created = made["name"], True
+			row = audience_api._audience_row(audience)
+			if key:
+				_claim_key(audience, key)
+		stale: list[str] = []
+		if mode == "replace":
+			stale = [r for r in frappe.get_all(aud.MEMBER, {"audience": audience}, pluck="recipient", limit_page_length=0) if r not in seen]
+		# insert/update the new set first, delete the stale members only once that succeeded
+		result = audience_import.import_rows(audience, clean_rows, "update", source=source, external=True, stale=set(stale))
 		chunk = policy.get("audience_delete_chunk")
 		for i in range(0, len(stale), chunk):
 			frappe.db.delete(aud.MEMBER, {"audience": audience, "recipient": ["in", stale[i : i + chunk]]})
 		removed = len(stale)
-	result = audience_import.import_rows(audience, clean_rows, "update", source=source, external=True)
-	counts = aud.refresh_counts(audience, row["gateway"])
-	if key:
-		frappe.db.set_value(aud.AUDIENCE, audience, "external_key", key, update_modified=False)
+		counts = aud.refresh_counts(audience, row["gateway"])
+	except Exception:
+		frappe.db.rollback(save_point=_SAVEPOINT)
+		raise
 	_audit(audience, "external refresh", source=source, mode=mode, added=result["added"], updated=result["updated"], removed=removed, invalid=len(invalid))
 	return {
 		"success": True, "noop": False, "audience": audience, "created": created, "added": result["added"],
@@ -143,28 +157,52 @@ def upsert_audience_members(
 	}  # fmt: skip
 
 
+def _claim_key(audience: str, key: str) -> bool:
+	"""Claim ``key`` for this refresh before any work. False when it is among the audience's recent keys.
+
+	Takes the audience row lock first, so concurrent calls for the audience run one at a time and the second sees
+	the first's claim; the claim is written in the refresh's own transaction (a failed refresh releases it).
+	Keeping the last ``_KEYS_KEPT`` keys also catches an A, B, A replay."""
+	raw = frappe.db.get_value(aud.AUDIENCE, audience, "external_key", for_update=True)
+	try:
+		keys = json.loads(raw) if raw else []
+	except ValueError:
+		keys = [raw] if raw else []
+	keys = [k for k in keys if isinstance(k, str)] if isinstance(keys, list) else []
+	if key in keys:
+		return False
+	keys = (keys + [key])[-_KEYS_KEPT:]
+	frappe.db.set_value(aud.AUDIENCE, audience, "external_key", json.dumps(keys), update_modified=False)
+	return True
+
+
 # --- refresh before a broadcast starts -------------------------------------------------------------
 class RefreshFailed(frappe.ValidationError):
 	pass
 
 
-@contextlib.contextmanager
-def _deadline(seconds: int):
-	"""Raise TimeoutError after ``seconds`` (main thread only; elsewhere the hook runs without a deadline)."""
-	if threading.current_thread() is not threading.main_thread() or not hasattr(signal, "setitimer"):
-		yield
-		return
+def _call_with_deadline(fn, seconds: int, **kwargs: Any) -> None:
+	"""Run ``fn(**kwargs)`` in a worker thread (with this request's frappe context) and wait at most ``seconds``.
 
-	def _fire(_signum, _frame):
+	Works on any worker (RQ, gunicorn, threads) unlike SIGALRM. On timeout raises ``TimeoutError`` and abandons
+	the thread: Python cannot kill it, so a hook may still be running afterwards. Hooks MUST therefore be idempotent
+	and safe to cancel (the refresh is simply retried on the next start); the caller fails closed."""
+	box: dict[str, BaseException] = {}
+	ctx = contextvars.copy_context()
+
+	def run() -> None:
+		try:
+			ctx.run(fn, **kwargs)
+		except BaseException as exc:  # noqa: BLE001 - relayed to the waiting caller
+			box["error"] = exc
+
+	worker = threading.Thread(target=run, name="huf-audience-refresh", daemon=True)
+	worker.start()
+	worker.join(seconds)
+	if worker.is_alive():
 		raise TimeoutError(f"no answer within {seconds}s")
-
-	previous = signal.signal(signal.SIGALRM, _fire)
-	signal.setitimer(signal.ITIMER_REAL, seconds)
-	try:
-		yield
-	finally:
-		signal.setitimer(signal.ITIMER_REAL, 0)
-		signal.signal(signal.SIGALRM, previous)
+	if "error" in box:
+		raise box["error"]
 
 
 def external_audiences(broadcast: str) -> list[dict]:
@@ -194,8 +232,7 @@ def run_refresh_hooks(broadcast: str) -> bool:
 			raise RefreshFailed(f"Audience {target['name']} is managed by {target['managed_by']}, which has no refresh registered. The broadcast was not started.")
 		for path in hooks:
 			try:
-				with _deadline(timeout):
-					frappe.get_attr(path)(audience=target["name"], managed_by=target["managed_by"])
+				_call_with_deadline(frappe.get_attr(path), timeout, audience=target["name"], managed_by=target["managed_by"])
 			except Exception as exc:
 				frappe.log_error(title="Audience refresh failed", message=f"{path} for {target['name']}: {exc}")
 				raise RefreshFailed(f"Audience {target['name']} could not be refreshed by {target['managed_by']} ({exc}). The broadcast was not started.") from exc

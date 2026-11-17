@@ -24,6 +24,82 @@ def _m(n, **kw):
 	return {"recipient": f"9198000000{n:02d}", "display_name": f"N{n}", "consent_source": "app", "consent_at": "2024-01-01", **kw}
 
 
+class TestUpsertAtomicity(AudienceTestCase):
+	def up(self, audience=None, members=None, **kw):
+		kw.setdefault("source", "loyalty")
+		return external.upsert_audience_members(audience=audience, members=members, **kw)
+
+	def made(self):
+		out = self.up(members=[_m(1), _m(2)], create=CREATE)
+		self.assertTrue(out.get("success"), out)
+		return out["audience"]
+
+	def members(self, name):
+		return set(frappe.get_all(aud.MEMBER, {"audience": name}, pluck="recipient"))
+
+	def test_replace_with_no_members_is_refused(self):
+		name = self.made()
+		self.assertEqual(self.up(name, [], mode="replace")["error"], "empty_replace")
+		self.assertEqual(len(self.members(name)), 2)
+
+	def test_failure_mid_apply_rolls_back_and_keeps_members_and_key(self):
+		name = self.made()
+		before = self.members(name)
+		with patch.object(imp, "import_rows", side_effect=RuntimeError("db gone")):
+			with self.assertRaises(RuntimeError):
+				self.up(name, [_m(7)], mode="replace", idempotency_key="k9")
+		self.assertEqual(self.members(name), before)
+		self.assertFalse(self.up(name, [_m(7)], mode="replace", idempotency_key="k9")["noop"])  # key was released
+
+	def test_replace_inserts_new_and_removes_stale(self):
+		name = self.made()
+		out = self.up(name, [_m(2), _m(3)], mode="replace")
+		self.assertEqual((out["added"], out["removed"]), (1, 1))
+		self.assertEqual(self.members(name), {"919800000002", "919800000003"})
+
+	def test_recent_keys_detect_a_b_a_replay(self):
+		name = self.made()
+		self.assertFalse(self.up(name, [_m(3)], mode="merge", idempotency_key="A")["noop"])
+		self.assertFalse(self.up(name, [_m(4)], mode="merge", idempotency_key="B")["noop"])
+		self.assertTrue(self.up(name, [_m(5)], mode="merge", idempotency_key="A")["noop"])
+		self.assertNotIn("919800000005", self.members(name))
+
+	def test_key_claim_takes_the_audience_lock_first(self):
+		name = self.made()
+		with patch.object(frappe.db, "get_value", wraps=frappe.db.get_value) as spy:
+			self.up(name, [_m(3)], mode="merge", idempotency_key="L")
+		self.assertTrue(any(c.kwargs.get("for_update") for c in spy.call_args_list))
+
+
+class TestRefreshDeadline(AudienceTestCase):
+	def test_timeout_fails_closed_and_does_not_hang(self):
+		import threading
+		import time
+
+		release = threading.Event()
+		started = time.monotonic()
+		with self.assertRaises(TimeoutError):
+			external._call_with_deadline(lambda **kw: release.wait(5), 1)
+		release.set()
+		self.assertLess(time.monotonic() - started, 3)
+
+	def test_hook_result_and_error_cross_the_thread(self):
+		calls = []
+		external._call_with_deadline(lambda **kw: calls.append(kw), 5, audience="a")
+		self.assertEqual(calls, [{"audience": "a"}])
+		with self.assertRaises(ValueError):
+			external._call_with_deadline(lambda **kw: (_ for _ in ()).throw(ValueError("x")), 5)
+
+	def test_timeout_blocks_start(self):
+		bc = self.draft_broadcast(self.make("Slow"))
+		with patch.object(frappe, "get_hooks", side_effect=lambda key=None, *a, **k: ["app.slow"] if key == external.HOOK else []), \
+			patch.object(external, "_call_with_deadline", side_effect=TimeoutError("no answer within 1s")), \
+			patch.object(external, "external_audiences", return_value=[{"name": "x", "managed_by": "loyalty"}]):
+			with self.assertRaises(StartRefused) as ctx:
+				runner._refresh_external_audiences(bc)
+		self.assertEqual(ctx.exception.code, "audience_refresh_failed")
+
+
 class TestUpsert(AudienceTestCase):
 	def up(self, audience=None, members=None, **kw):
 		kw.setdefault("source", "loyalty")

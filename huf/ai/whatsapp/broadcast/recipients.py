@@ -20,7 +20,7 @@ from typing import Any
 
 import frappe
 
-from huf.ai.whatsapp.broadcast import params as broadcast_params, policy
+from huf.ai.whatsapp.broadcast import fallback_config, params as broadcast_params, policy
 
 RECIPIENT_DOCTYPE = "WhatsApp Broadcast Recipient"
 PHONE_HEADERS = {"phone", "recipient", "phone_number", "phone number", "mobile", "wa_id", "whatsapp", "number"}
@@ -76,6 +76,7 @@ def _insert_row(
 	consent_source: str | None,
 	consent_at: str | None,
 	audience: str | None = None,
+	fallback: dict | None = None,
 ) -> None:
 	frappe.get_doc(
 		{
@@ -88,8 +89,27 @@ def _insert_row(
 			"consent_source": consent_source,
 			"consent_at": consent_at,
 			"audience": audience,
+			**(fallback or {}),
 		}
 	).insert(ignore_permissions=True)
+
+
+def _row_fallback(row: dict, broadcast_cfg: dict) -> tuple[dict, str | None]:
+	"""Failover values for a recipient row: the row's own (validated) else the broadcast's, plus ``fallback_email``.
+
+	The email comes from ``fallback_email`` or the audience member's ``params.fallback_email``."""
+	own = {k: row[k] for k in fallback_config.CONFIG_FIELDS if row.get(k) not in (None, "")}
+	try:
+		cfg = {**broadcast_cfg, **fallback_config.clean(own)}
+	except (ValueError, frappe.PermissionError) as exc:
+		return {}, str(exc)
+	params = row.get("params") if isinstance(row.get("params"), dict) else {}
+	raw_email = row.get("fallback_email") or params.get("fallback_email")
+	email = fallback_config.clean_email(raw_email)
+	if raw_email and not email:
+		return {}, "fallback_email is not a valid address."
+	problem = fallback_config.check_complete(cfg.get("fallback_channels"), cfg.get("fallback_body"))
+	return {**cfg, "fallback_email": email}, problem
 
 
 def _audience_of(row: dict) -> str | None:
@@ -140,6 +160,7 @@ def prepare(broadcast: str, rows: list[dict]) -> dict:
 	cap = effective_cap(doc)
 	max_rows = policy.get("max_rows_per_broadcast")
 	list_limit = policy.get("returned_list_limit")
+	broadcast_fallback = fallback_config.snapshot(doc)
 	seen = _existing_names(broadcast)
 	active = _active_count(broadcast)
 	total = _total_count(broadcast)
@@ -157,6 +178,11 @@ def prepare(broadcast: str, rows: list[dict]) -> dict:
 		problem = broadcast_params.params_error(row.get("params"))
 		if problem:
 			invalid.append({"recipient": raw, "reason": f"invalid_params: {problem}"})
+			continue
+
+		fallback, problem = _row_fallback(row, broadcast_fallback)
+		if problem:
+			invalid.append({"recipient": raw, "reason": f"invalid_fallback: {problem}"})
 			continue
 
 		name = _row_name(broadcast, recipient)
@@ -190,6 +216,7 @@ def prepare(broadcast: str, rows: list[dict]) -> dict:
 			params,
 			row.get("consent_source") or None,
 			row.get("consent_at") or None,
+			fallback=fallback,
 			**_audience_kw(row),
 		)
 		active += 1

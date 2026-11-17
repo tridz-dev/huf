@@ -124,6 +124,35 @@ def record_opt_out(channel: str, recipient: Any, scope: str = "all", source: str
 	return True
 
 
+OPT_OUT_KEYWORDS = frozenset({"stop", "stopall", "unsubscribe", "cancel", "end", "quit"})
+OPT_IN_KEYWORDS = frozenset({"start", "unstop"})
+
+
+def handle_keyword(channel: str, sender: Any, text: Any, source: str = "inbound") -> str | None:
+	"""Inbound STOP/START handling for a VERIFIED sms/email message. Returns ``opt_out``, ``opt_in`` or None.
+
+	The whole message must be one keyword (case/punctuation-insensitive), so ordinary replies never opt anyone
+	out. START/UNSTOP only lifts a prior opt-out. Never raises: a consent write error must not break ingest."""
+	word = re.sub(r"[^a-z]", "", str(text or "").strip().lower())
+	if word not in OPT_OUT_KEYWORDS and word not in OPT_IN_KEYWORDS:
+		return None
+	if channel == "email":
+		from email.utils import parseaddr
+
+		sender = parseaddr(str(sender or ""))[1] or sender
+	try:
+		if word in OPT_OUT_KEYWORDS:
+			return "opt_out" if record_opt_out(channel, sender, "all", source, word.upper()) else None
+		key = normalize_recipient(channel, sender)
+		latest = _latest(channel, key) if key else None
+		if key and latest and latest["value"] == "opt_out":
+			_insert(channel, key, "opt_in", "marketing", source, f"opt-in via {word.upper()}")
+			return "opt_in"
+	except Exception:  # noqa: BLE001
+		frappe.log_error(title="Channel consent keyword failed", message=frappe.get_traceback())
+	return None
+
+
 def _record_opt_in_row(channel: str, key: str, source: str, attester: str, note: str | None) -> str:
 	"""created | updated | skipped_opted_out. A standing STOP (any scope) is never overridden by import/API."""
 	latest = _latest(channel, key)
