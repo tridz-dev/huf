@@ -34,9 +34,7 @@ RECIPIENT = "WhatsApp Broadcast Recipient"
 QUEUE = "long"
 HELD_STATUS = "held_for_quality_assessment"
 
-
 # --------------------------------------------------------------------------- helpers
-
 
 def _lock_key(broadcast: str) -> str:
 	return f"huf:{frappe.local.site}:wa_broadcast_tick:{broadcast}"

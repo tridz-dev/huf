@@ -13,7 +13,7 @@ from unittest.mock import patch
 import frappe
 
 from huf.ai.gateway_adapters import whatsapp_bridge as bridge
-from huf.ai.whatsapp import credential_sync as cs
+from huf.ai.whatsapp.setup import credential_sync as cs
 
 PHONE_ID = "1100200300"
 WABA_ID = "9900800700"

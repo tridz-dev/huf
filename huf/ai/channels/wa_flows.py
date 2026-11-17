@@ -13,7 +13,7 @@ from huf.ai.channels import run_as
 from huf.ai.channels.pipeline import Decision
 from huf.ai.gateway_adapters import whatsapp_bridge as bridge
 from huf.ai.gateway_adapters import whatsapp_inbound as inbound
-from huf.ai.whatsapp import token_check
+from huf.ai.whatsapp.setup import token_check
 
 ADMIN_ROLES = ("System Manager", "Huf Admin")
 TOKEN_PREFIX = "huf:"

@@ -1,6 +1,6 @@
 # WhatsApp broadcast failover (SMS / email)
 
-When a WhatsApp broadcast send terminally fails, `huf/ai/whatsapp/broadcast/failover.py` can resend the message
+When a WhatsApp broadcast send terminally fails, `huf/ai/whatsapp/broadcast/support/failover.py` can resend the message
 as plain text over SMS then email.
 
 ## Configure

@@ -37,7 +37,7 @@ def make_send_key(gateway, solution, hours_ago=1):
 
 
 def set_token_cache(gateway, quality=None, tier=None):
-	from huf.ai.whatsapp.token_check import _result_key
+	from huf.ai.whatsapp.setup.token_check import _result_key
 
 	frappe.cache().set_value(
 		_result_key(gateway), {"phone": {"display": "+1 555 0100", "quality": quality, "tier": tier}}, expires_in_sec=60
@@ -45,7 +45,7 @@ def set_token_cache(gateway, quality=None, tier=None):
 
 
 def clear_token_cache(gateway):
-	from huf.ai.whatsapp.token_check import _result_key
+	from huf.ai.whatsapp.setup.token_check import _result_key
 
 	frappe.cache().delete_value(_result_key(gateway))
 

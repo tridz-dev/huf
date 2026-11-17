@@ -193,7 +193,7 @@ def _check_fallback(code, fallback, sms_gateway, fallback_text) -> dict[str, Any
 
 def _sms_mode_blocked(sms_gateway) -> dict[str, Any] | None:
 	"""Refuse gateways whose SMS goes through Frappe core send_sms (it persists the body in SMS Log)."""
-	from huf.ai.whatsapp.broadcast import failover
+	from huf.ai.whatsapp.broadcast.support import failover
 
 	try:
 		mode = str((failover._credentials(sms_gateway) or {}).get("mode") or "").strip().lower()
@@ -213,7 +213,7 @@ def _gateway_forbidden(user, *names) -> dict[str, Any] | None:
 
 def _sms_fallback(code, to, sms_gateway, fallback_text) -> dict[str, Any] | None:
 	"""Run the shared failover chain for SMS only. Returns the success payload, or None if SMS did not go out."""
-	from huf.ai.whatsapp.broadcast.failover import run_chain
+	from huf.ai.whatsapp.broadcast.support.failover import run_chain
 
 	body = str(fallback_text).replace("{code}", code)
 	attempts, delivered = run_chain(

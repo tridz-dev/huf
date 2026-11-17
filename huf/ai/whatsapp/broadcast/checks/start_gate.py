@@ -177,7 +177,7 @@ def resume_acknowledged(broadcast: str, preview: dict[str, Any]) -> set[str]:
 
 def check_fallback(broadcast: str) -> None:
 	"""Refuse a start whose failover is half configured: channels without a plain-text body (or a bad kind)."""
-	from huf.ai.whatsapp.broadcast import failover, fallback_config
+	from huf.ai.whatsapp.broadcast.support import failover, fallback_config
 
 	cfg = frappe.db.get_value("WhatsApp Broadcast", broadcast, list(fallback_config.CONFIG_FIELDS), as_dict=True) or {}
 	problem = fallback_config.check_complete(cfg.get("fallback_channels"), cfg.get("fallback_body"))

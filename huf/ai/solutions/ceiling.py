@@ -1,7 +1,7 @@
 """The daily send ceiling of a WhatsApp number (A4).
 
 Order of truth: Meta's ``messaging_limit_tier`` when the last token check (cached by
-``huf.ai.whatsapp.token_check``, 10 minute TTL) reported one; else the gateway's own
+``huf.ai.whatsapp.setup.token_check``, 10 minute TTL) reported one; else the gateway's own
 ``agent_send_cap_per_day`` when > 0 (0 means no limit); else no ceiling.
 """
 
@@ -33,7 +33,7 @@ def parse_tier(tier) -> "int | str | None":
 def _cached_tier(gateway: str) -> Optional[str]:
 	"""Meta's tier from the cached token check; cache only, never a network call."""
 	try:
-		from huf.ai.whatsapp.token_check import _result_key
+		from huf.ai.whatsapp.setup.token_check import _result_key
 
 		cached = frappe.cache().get_value(_result_key(gateway), expires=True)
 		phone = cached.get("phone") if isinstance(cached, dict) else None

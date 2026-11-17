@@ -227,8 +227,8 @@ class TestPreviewApi(_Base):
 		lim = MagicMock()
 		lim.preview.return_value = limits
 		self.frappe.db.count.return_value = int(token)
-		with patch.dict(sys.modules, {"huf.ai.whatsapp.broadcast.cost": cost, "huf.ai.whatsapp.broadcast.limits": lim}), \
-			patch("huf.ai.whatsapp.broadcast.cost", cost, create=True), patch("huf.ai.whatsapp.broadcast.limits", lim, create=True):
+		with patch.dict(sys.modules, {"huf.ai.whatsapp.broadcast.support.cost": cost, "huf.ai.whatsapp.broadcast.limits": lim}), \
+			patch("huf.ai.whatsapp.broadcast.support.cost", cost, create=True), patch("huf.ai.whatsapp.broadcast.limits", lim, create=True):
 			return mgmt.preview_broadcast(BC)
 
 	def test_limits_in_effect_at_top_level_and_inside_limits(self):
