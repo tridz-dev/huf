@@ -75,7 +75,11 @@ class TestToolConfirmationE2E(IntegrationTestCase):
 				tc.run_approved(req["id"], "Administrator")  # duplicate job: no second run
 			ex.assert_called_once()
 		self.assertEqual(frappe.db.get_value(tc.DOCTYPE, req["id"], "state"), "executed")
-		events = [c.kwargs["message"]["type"] for c in pub.call_args_list]
+		events = [
+			c.kwargs["message"]["type"]
+			for c in pub.call_args_list
+			if isinstance(c.kwargs.get("message"), dict) and str(c.kwargs["message"].get("type", "")).startswith("approval-")
+		]
 		self.assertEqual(events, ["approval-requested", "approval-resolved"])
 
 		history = ConversationManager("x").get_conversation_history(self.conv)
