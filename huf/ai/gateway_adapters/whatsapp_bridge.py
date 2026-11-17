@@ -1632,6 +1632,12 @@ def validate_create_payload(payload: dict[str, Any]) -> dict[str, Any]:
 		problem = _check_sample_reference(spec["header_sample"])
 		if problem:
 			errors.append(problem)
+	if not errors:
+		for i, card in enumerate(spec.get("cards") or []):
+			if card["header_sample"] and not card["header_handle"]:
+				problem = _check_sample_reference(card["header_sample"])
+				if problem:
+					errors.append({**problem, "field": f"cards[{i}].sample"})
 	language = _language_link(language_code, payload.get("language"))
 	if not language:
 		errors.append(wt._e("language_code", "unknown_language", f"Language {language_code} is not installed on this site."))
@@ -1915,6 +1921,25 @@ def upload_header_handle(
 		raise BridgeError(_graph_err("upload_failed", exc)) from exc
 
 
+def upload_card_handles(
+	acct: dict[str, Any], spec: dict[str, Any], http_post: Callable[..., Any] | None = None,
+	http_get: Callable[..., Any] | None = None,
+) -> None:
+	"""Upload every carousel card header sample (same resumable upload as header media) and set its ``header_handle``."""
+	for i, card in enumerate(spec.get("cards") or []):
+		if card["header_handle"]:
+			continue
+		try:
+			card["header_handle"] = upload_header_handle(acct, card["header_type"], card["header_sample"], http_post, http_get)
+		except BridgeError as exc:
+			errs = exc.payload.get("errors")
+			if isinstance(errs, list):
+				for e in errs:
+					if isinstance(e, dict):
+						e["field"] = f"cards[{i}].sample"
+			raise
+
+
 def _guard():
 	from huf.ai.gateway_adapters import whatsapp_template_guard as guard
 
@@ -2081,6 +2106,12 @@ def create_template(
 	if spec["header_type"] in wt.MEDIA_HEADER_TYPES and not spec["header_handle"]:
 		try:
 			spec["header_handle"] = upload_header_handle(acct, spec["header_type"], spec["header_sample"], http_post, http_get)
+		except BridgeError as exc:
+			return exc.payload
+
+	if spec.get("cards"):
+		try:
+			upload_card_handles(acct, spec, http_post, http_get)
 		except BridgeError as exc:
 			return exc.payload
 
@@ -3089,7 +3120,7 @@ def edit_template(
 	if declared not in (None, "") and str(declared).upper() != merged["parameter_format"]:
 		return _err("immutable_field", field="parameter_format", message="The variable format (numbered or named) cannot be changed after creation.")
 	current_header = str(merged.get("header_type") or "").upper()
-	for key in ("body", "template", "sample_values", "named_samples", "header", "header_type", "sample", "header_handle", "footer", "buttons"):
+	for key in ("body", "template", "sample_values", "named_samples", "header", "header_type", "sample", "header_handle", "footer", "buttons", "cards"):
 		if key in payload:
 			merged[key] = payload[key]
 	if "template" in payload and "body" not in payload:
@@ -3159,9 +3190,17 @@ def edit_template(
 			if reuploaded:
 				return _err("media_header_edit_unsupported", message="The current media header cannot be re-sent and its sample could not be fetched; provide a new sample file.", detail=exc.payload.get("message"))
 			return exc.payload
+	cards_edited = bool(payload.get("cards"))
+	if cards_edited:
+		try:
+			upload_card_handles(acct, spec, http_post, http_get)
+		except BridgeError as exc:
+			return exc.payload
 	meta = wt.build_meta_payload(spec)
 	built = meta["components"]
-	if base_components is not None:
+	if cards_edited:
+		components = built  # the CAROUSEL is rebuilt whole (cards have no partial merge)
+	elif base_components is not None:
 		changed = {sec for sec, keys in _SECTION_KEYS.items() if any(k in payload for k in keys)}
 		if reuploaded:
 			changed.add("HEADER")
