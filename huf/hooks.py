@@ -398,6 +398,7 @@ scheduler_events = {
         ]
     },
     "hourly": [
+        "huf.ai.tool_confirmation.sweep_expired",
         "huf.ai.channels.commerce.cart_recovery.run_cart_recovery",
         "huf.ai.mcp_client.auto_sync_mcp_server_tools",
         "huf.ai.mcp_oauth.auto_refresh_oauth_tokens",

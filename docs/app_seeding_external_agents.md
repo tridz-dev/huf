@@ -20,6 +20,12 @@ knowledge, triggers) still overwrite.
 - Enforced in `PermissionAwareToolRegistry._can_use_tool` (load) and
   `huf.ai.tools.registry.assert_tool_role(tool, user)` (call time; raises
   `frappe.PermissionError`; the integrator wires it in `sdk_tools`).
+- Also enforced on the shared path `huf.ai.tools.invocation.invoke_tool` (flows,
+  procedures, approval resume), so a flow cannot run a role-restricted tool as a user
+  without the role (Administrator passes). Only the approval-resume call skips it
+  (internal `_skip_role_check`; the role is re-checked in `decide`).
+- Decision: `requires_confirmation` parking is an agent-chat control only. It is NOT
+  applied to flows/procedures (those have their own human.approval nodes).
 
 ## Agents
 Seed `agent_icon` (default `SquareAsterisk`) and `allowed_roles`

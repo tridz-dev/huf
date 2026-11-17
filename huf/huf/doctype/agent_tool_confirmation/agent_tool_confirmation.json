@@ -10,6 +10,7 @@
   "state",
   "conversation",
   "agent_run",
+  "agent",
   "expires_at",
   "args_hash",
   "summary",
@@ -59,6 +60,12 @@
    "fieldname": "agent_run",
    "fieldtype": "Data",
    "label": "Agent Run",
+   "read_only": 1
+  },
+  {
+   "fieldname": "agent",
+   "fieldtype": "Data",
+   "label": "Agent",
    "read_only": 1
   },
   {

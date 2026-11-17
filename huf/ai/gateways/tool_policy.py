@@ -165,7 +165,7 @@ def _channel_arg(args: dict) -> str:
 	return str((args or {}).get("channel") or "").strip()
 
 
-def _park(ctx, tool_name, args, agent_run_id, conversation_id) -> str:
+def _park(ctx, tool_name, args, agent_run_id, conversation_id, agent_name=None) -> str:
 	"""Park a requires_confirmation call (every run type). Fails closed."""
 	try:
 		if _CONFIRMER is not None and ctx:
@@ -175,7 +175,7 @@ def _park(ctx, tool_name, args, agent_run_id, conversation_id) -> str:
 		from huf.ai import tool_confirmation
 
 		return json.dumps(
-			tool_confirmation.park(tool_name, dict(args or {}), agent_run_id, conversation_id), default=str
+			tool_confirmation.park(tool_name, dict(args or {}), agent_run_id, conversation_id, agent_name), default=str
 		)
 	except Exception:
 		frappe.log_error(title="tool confirmation park failed")
@@ -186,7 +186,7 @@ def _park(ctx, tool_name, args, agent_run_id, conversation_id) -> str:
 
 
 def check_tool_call(
-	tool_name, args, agent_run_id, requires_confirmation=False, conversation_id=None
+	tool_name, args, agent_run_id, requires_confirmation=False, conversation_id=None, agent_name=None
 ) -> str | None:
 	"""Return a JSON tool result string if the call must NOT run, else None (proceed)."""
 	try:
@@ -199,7 +199,7 @@ def check_tool_call(
 	if not ctx:
 		# Not a gateway run (web / mobile / desktop): only the confirmation gate applies.
 		if requires_confirmation:
-			return _park(None, tool_name, args, agent_run_id, conversation_id)
+			return _park(None, tool_name, args, agent_run_id, conversation_id, agent_name)
 		return None
 	try:
 		gateway, channel = ctx["gateway"], ctx.get("channel")
@@ -222,7 +222,8 @@ def check_tool_call(
 						reason="exfiltration_guard",
 					)
 		if requires_confirmation:
-			return _park(ctx, tool_name, args, agent_run_id, conversation_id or channel)
+			# never pass the channel as a conversation id: it would address a bogus realtime event
+			return _park(ctx, tool_name, args, agent_run_id, conversation_id, agent_name)
 	except Exception:
 		# Gateway run, but the gate itself failed: fail closed.
 		return _denied("Tool call blocked: the gateway tool policy could not be evaluated.")
