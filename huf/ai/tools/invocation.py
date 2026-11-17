@@ -317,6 +317,7 @@ async def invoke_tool(
 	ctx: RunContext | None = None,
 	telemetry: bool = False,
 	blocking: bool = False,
+	_skip_role_check: bool = False,
 ) -> ToolResult:
 	"""Single call path: resolve -> permission check -> run-context merge ->
 	extra_args injection -> ignore_permissions strip -> guest-doctype-pin
@@ -334,6 +335,16 @@ async def invoke_tool(
 	tool_doc = resolve_tool_doc(tool_name)
 	if not tool_doc:
 		return ToolResult(success=False, error=f"Tool '{tool_name}' not found in Agent Tool Function")
+
+	if not _skip_role_check and tool_doc.get("name"):
+		# Shared-path role/outbound enforcement (required_roles; outbound defaults to System Manager).
+		# _skip_role_check is internal: only the approval-resume call (role-checked in decide()) sets it.
+		from huf.ai.tools.registry import assert_tool_role
+
+		try:
+			assert_tool_role(frappe.get_cached_doc("Agent Tool Function", tool_doc["name"]))
+		except frappe.PermissionError as e:
+			return ToolResult(success=False, error=str(e), denied=True)
 
 	tool_type = tool_doc.get("types")
 	allowed_for_guest = bool(tool_doc.get("allowed_for_guest"))
@@ -498,10 +509,13 @@ def invoke_tool_sync(
 	ctx: RunContext | None = None,
 	telemetry: bool = False,
 	blocking: bool = False,
+	_skip_role_check: bool = False,
 ) -> ToolResult:
 	"""Synchronous wrapper around ``invoke_tool`` for callers (Flow Engine
 	today) that are not themselves async.
 	"""
 	return _run_coroutine_sync(
-		invoke_tool(tool_name, args, ctx=ctx, telemetry=telemetry, blocking=blocking)
+		invoke_tool(
+			tool_name, args, ctx=ctx, telemetry=telemetry, blocking=blocking, _skip_role_check=_skip_role_check
+		)
 	)
