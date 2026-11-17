@@ -118,6 +118,16 @@ class TestMediaUpload(unittest.TestCase):
 		self.assertTrue(mu.is_expired_media_error({"message": "Media not found"}))
 		self.assertFalse(mu.is_expired_media_error({"message": "rate limit"}))
 
+	def test_expired_detection_live_verified_2026_11_18(self):
+		self.assertTrue(mu.is_expired_media_error({"graph_code": 131000, "message": "Something went wrong"}))
+		for t in ("document", "image", "video", "audio"):
+			msg = f"JSON schema constraint 'type' for {t}.id expected [integer, null]"
+			self.assertTrue(mu.is_expired_media_error({"graph_code": 100, "message": msg}))
+		self.assertFalse(mu.is_expired_media_error({"graph_code": 100, "message": "Invalid parameter"}))
+		# link-based header: never a re-upload candidate
+		self.assertFalse(mu.is_expired_media_error({"graph_code": 131000, "message": "x"}, sent_media_id=False))
+		self.assertFalse(mu.is_expired_media_error({"message": "Media not found"}, sent_media_id=False))
+
 	def test_resolve_header_uses_id_not_link(self):
 		items, errs = wt.normalize_header_params([{"type": "document", "file": "F-1", "filename": "bill.pdf"}])
 		self.assertEqual(errs, [])

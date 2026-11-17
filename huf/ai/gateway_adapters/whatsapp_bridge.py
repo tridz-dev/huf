@@ -1077,7 +1077,7 @@ def send_template(
 		try:
 			posted = _post_once()
 		except BridgeError as exc:
-			if file_ref is None or not _mu.is_expired_media_error(exc.payload):
+			if file_ref is None or not _mu.is_expired_media_error(exc.payload, sent_media_id=True):
 				raise
 			# cached media id expired on Meta's side: re-upload once and resend
 			try:

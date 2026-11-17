@@ -180,13 +180,34 @@ def upload_private_pdf(
 	return media_id
 
 
-def is_expired_media_error(detail: dict[str, Any]) -> bool:
+_MEDIA_ID_FIELD_RE = re.compile(r"\b(document|image|video|audio)\.id\b", re.I)
+
+
+def is_expired_media_error(detail: dict[str, Any], sent_media_id: bool = True) -> bool:
+	"""True when a send failure means "re-upload the media and retry once".
+
+	Verified live 2026-11-18 (Meta Cloud API v21.0): an unknown numeric media id returns HTTP 500 / code
+	131000 "Something went wrong"; a malformed id returns HTTP 400 / code 100 with a JSON-schema message
+	naming ``<type>.id`` (document/image/video/audio). A genuinely expired id was not reproducible, so the
+	older 131009/100 + "media" and "media not found|expired" detection is kept as well.
+
+	``sent_media_id`` must be True only when the failed send carried an uploaded media id (never for link
+	based headers); otherwise nothing is a re-upload candidate. The caller retries at most once.
+	"""
+	if not sent_media_id:
+		return False
+	message = str(detail.get("message") or "")
 	try:
-		if int(detail.get("graph_code")) in _MEDIA_PARAM_CODES and "media" in str(detail.get("message") or "").lower():
-			return True
+		code = int(detail.get("graph_code"))
 	except (TypeError, ValueError):
-		pass
-	return bool(_EXPIRED_RE.search(str(detail.get("message") or "")))
+		code = None
+	if code == 131000:
+		return True
+	if code == 100 and _MEDIA_ID_FIELD_RE.search(message):
+		return True
+	if code in _MEDIA_PARAM_CODES and "media" in message.lower():
+		return True
+	return bool(_EXPIRED_RE.search(message))
 
 
 def file_header_param(components: list[dict[str, Any]]) -> dict[str, Any] | None:
