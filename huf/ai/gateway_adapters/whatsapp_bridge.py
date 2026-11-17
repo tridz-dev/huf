@@ -36,6 +36,8 @@ from huf.ai.whatsapp import outbound_policy as policy, pre_send, template_plain
 from huf.ai.gateway_adapters.whatsapp_parts.bridge_utils import _button_sig, _clean_reason, _parse_ts
 from huf.ai.gateway_adapters import whatsapp_messages as wm
 from huf.ai.gateway_adapters import whatsapp_templates as wt
+from huf.ai.gateway_adapters.whatsapp_template_parts import authentication as wt_auth, carousel as wt_carousel, send_params as wt_send_params
+from huf.ai.gateway_adapters.whatsapp_parts import header_upload
 
 GRAPH_HOST = "https://graph.facebook.com"
 # Newest Graph version that is >= ~3 months old (v25.0 released 2026-02-18; v26.0 is too new).
@@ -796,7 +798,7 @@ def _template_row(docname: str) -> dict[str, Any] | None:
 	extra = _get_extra(row.get("whatsapp_account"), docname) or {}
 	row["parameter_format"] = extra.get("parameter_format") or ""
 	row["header_format"] = extra.get("header_format") or ""
-	row["carousel_cards"] = wt.carousel_cards(extra.get("components_json"))
+	row["carousel_cards"] = wt_carousel.carousel_cards(extra.get("components_json"))
 	return row
 
 
@@ -1170,7 +1172,7 @@ def _check_send_against_template(
 	"""Compare raw send params with the template definition (counts, header kind, button kinds)."""
 	errors: list[dict[str, str]] = []
 	tv = wt._template_view(view)
-	if tv["auth"]:  # authentication templates: wt.build_otp_components validates the single code and builds body + url button
+	if tv["auth"]:  # authentication templates: wt_auth.build_otp_components validates the single code and builds body + url button
 		return errors
 	if tv["fmt"] != "NAMED":  # NAMED mismatches (param_missing / param_unknown) come from build_send_components
 		given = list(body_params.values()) if isinstance(body_params, dict) else list(body_params or [])
@@ -1206,7 +1208,7 @@ def _check_send_against_template(
 			errors.append(wt._e("header_params", "invalid_type", "This template has a LOCATION header; provide a location."))
 	elif items:
 		errors.append(wt._e("header_params", "not_expected", "This template has no header."))
-	buttons_n, _ = wt.normalize_button_params(button_params)
+	buttons_n, _ = wt_send_params.normalize_button_params(button_params)
 	buttons = tpl.get("buttons") or []
 	dynamic = {i for i, b in enumerate(buttons) if b.get("button_type") == "Visit Website" and b.get("url_type") == "Dynamic"}
 	copy_idx = {i for i, b in enumerate(buttons) if b.get("button_type") == wt.DOCTYPE_BUTTON_TYPE["COPY_CODE"]}
@@ -1662,8 +1664,6 @@ def _docname_taken_by_other_account(account_name: str, docname: str) -> dict[str
 	return None
 
 
-_MEDIA_MIME_PREFIXES = {"IMAGE": ("image/",), "VIDEO": ("video/",), "DOCUMENT": ("application/", "text/")}
-_HEADER_SAMPLE_LIMITS = {"IMAGE": 5 * _MB, "VIDEO": 16 * _MB, "DOCUMENT": 100 * _MB}
 
 
 def _sample_problem(code: str, message: str) -> BridgeError:
@@ -1841,105 +1841,6 @@ def _preflight_link(kind: str, link: str | None, http_get: Callable[..., Any] | 
 	preflight_media_link(kind, link, http_get)
 
 
-def _read_header_sample(
-	sample: str, header_type: str, http_get: Callable[..., Any] | None = None
-) -> tuple[bytes, str]:
-	"""Bytes and MIME type of a media header sample: a public URL or an uploaded Frappe File."""
-	import mimetypes
-
-	if wt.is_http_url(sample):
-		resp = _fetch_sample(sample, http_get or _default_get)
-		content = resp.content
-		mime = str((getattr(resp, "headers", None) or {}).get("Content-Type") or "").split(";")[0].strip().lower()
-		mime = mime or (mimetypes.guess_type(urlparse(sample).path)[0] or "")
-	else:
-		name = frappe.db.get_value("File", {"file_url": sample}, "name")
-		if not name:
-			raise _sample_problem("sample_not_found", "No uploaded file matches this sample path.")
-		content = frappe.get_doc("File", name).get_content()
-		if isinstance(content, str):
-			content = content.encode()
-		mime = mimetypes.guess_type(sample)[0] or ""
-	if not mime.startswith(_MEDIA_MIME_PREFIXES[header_type]):
-		raise _sample_problem("invalid_sample", f"The sample is {mime or 'of unknown type'}, not an {header_type} file.")
-	if not content:
-		raise _sample_problem("invalid_sample", "The sample file is empty.")
-	if len(content) > _HEADER_SAMPLE_LIMITS[header_type]:
-		raise _sample_problem("sample_too_large", f"The {header_type} sample is larger than {_HEADER_SAMPLE_LIMITS[header_type] // _MB} MB.")
-	return content, mime
-
-
-def _upload_file_name(sample: str, mime: str) -> str:
-	"""``file_name`` query param of the upload session (documented as required)."""
-	base = os.path.basename(urlparse(sample).path) if wt.is_http_url(sample) else os.path.basename(sample)
-	base = re.sub(r"[^A-Za-z0-9._-]", "_", base)[:100]
-	return base or "sample" + (mimetypes.guess_extension(mime) or "")
-
-
-def upload_header_handle(
-	acct: dict[str, Any],
-	header_type: str,
-	sample: str,
-	http_post: Callable[..., Any] | None = None,
-	http_get: Callable[..., Any] | None = None,
-) -> str:
-	"""Meta resumable upload of a header sample; returns the ``header_handle`` (``h``).
-
-	Two calls, as in Meta's Resumable Upload API: ``POST /{app_id}/uploads`` opens a session
-	(file length and type), ``POST /{session id}`` with the raw bytes returns the handle. Raises
-	:class:`BridgeError` (validation error for a bad sample, ``upload_failed`` for a Meta refusal).
-	"""
-	if not acct.get("app_id"):
-		raise _sample_problem("app_id_missing", "Set the App ID on the WhatsApp Account to upload header samples.")
-	content, mime = _read_header_sample(sample, header_type, http_get)
-	http_post = http_post or _default_post
-	base = f"{acct['url']}/{acct['version']}"
-	try:
-		opened = http_post(
-			f"{base}/{acct['app_id']}/uploads",
-			params={"file_length": len(content), "file_type": mime, "file_name": _upload_file_name(sample, mime)},
-			headers={"Authorization": f"Bearer {acct['token']}"},
-			timeout=_HTTP_TIMEOUT,
-		)
-		code = getattr(opened, "status_code", 200)
-		if isinstance(code, int) and code >= 400:
-			raise BridgeError(_graph_err("upload_failed", opened))
-		session = str(opened.json()["id"])
-		sent = http_post(
-			f"{base}/{session}",
-			data=content,
-			headers={"Authorization": f"OAuth {acct['token']}", "file_offset": "0"},
-			timeout=60,
-		)
-		code = getattr(sent, "status_code", 200)
-		if isinstance(code, int) and code >= 400:
-			raise BridgeError(_graph_err("upload_failed", sent))
-		return str(sent.json()["h"])
-	except BridgeError:
-		raise
-	except Exception as exc:
-		raise BridgeError(_graph_err("upload_failed", exc)) from exc
-
-
-def upload_card_handles(
-	acct: dict[str, Any], spec: dict[str, Any], http_post: Callable[..., Any] | None = None,
-	http_get: Callable[..., Any] | None = None,
-) -> None:
-	"""Upload every carousel card header sample (same resumable upload as header media) and set its ``header_handle``."""
-	for i, card in enumerate(spec.get("cards") or []):
-		if card["header_handle"]:
-			continue
-		try:
-			card["header_handle"] = upload_header_handle(acct, card["header_type"], card["header_sample"], http_post, http_get)
-		except BridgeError as exc:
-			errs = exc.payload.get("errors")
-			if isinstance(errs, list):
-				for e in errs:
-					if isinstance(e, dict):
-						e["field"] = f"cards[{i}].sample"
-			raise
-
-
 def _guard():
 	from huf.ai.gateway_adapters import whatsapp_template_guard as guard
 
@@ -2105,13 +2006,13 @@ def create_template(
 
 	if spec["header_type"] in wt.MEDIA_HEADER_TYPES and not spec["header_handle"]:
 		try:
-			spec["header_handle"] = upload_header_handle(acct, spec["header_type"], spec["header_sample"], http_post, http_get)
+			spec["header_handle"] = header_upload.upload_header_handle(acct, spec["header_type"], spec["header_sample"], http_post, http_get)
 		except BridgeError as exc:
 			return exc.payload
 
 	if spec.get("cards"):
 		try:
-			upload_card_handles(acct, spec, http_post, http_get)
+			header_upload.upload_card_handles(acct, spec, http_post, http_get)
 		except BridgeError as exc:
 			return exc.payload
 
@@ -3010,7 +2911,7 @@ def get_template(name: str) -> dict[str, Any]:
 		"footer": {"text": row["footer"]} if row.get("footer") else None,
 		"buttons": _button_dicts(name),
 	}
-	cards = wt.carousel_cards(meta_components)
+	cards = wt_carousel.carousel_cards(meta_components)
 	if cards is not None:
 		view["carousel"] = cards  # card definitions for the send dialog (header_type, body_vars, buttons)
 	business_id = ""
@@ -3185,7 +3086,7 @@ def edit_template(
 				return _err("media_header_edit_unsupported", message="The current media header cannot be re-sent and its sample could not be fetched; provide a new sample file.")
 			return wt.validation_error([problem])
 		try:
-			spec["header_handle"] = upload_header_handle(acct, spec["header_type"], spec["header_sample"], http_post, http_get)
+			spec["header_handle"] = header_upload.upload_header_handle(acct, spec["header_type"], spec["header_sample"], http_post, http_get)
 		except BridgeError as exc:
 			if reuploaded:
 				return _err("media_header_edit_unsupported", message="The current media header cannot be re-sent and its sample could not be fetched; provide a new sample file.", detail=exc.payload.get("message"))
@@ -3193,7 +3094,7 @@ def edit_template(
 	cards_edited = bool(payload.get("cards"))
 	if cards_edited:
 		try:
-			upload_card_handles(acct, spec, http_post, http_get)
+			header_upload.upload_card_handles(acct, spec, http_post, http_get)
 		except BridgeError as exc:
 			return exc.payload
 	meta = wt.build_meta_payload(spec)

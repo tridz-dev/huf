@@ -3,6 +3,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from huf.ai.gateway_adapters import whatsapp_templates as wt
+from huf.ai.gateway_adapters.whatsapp_template_parts import send_params as wt_send_params
 from huf.ai.whatsapp import media_upload as mu
 from huf.ai.whatsapp.broadcast import params as bp
 
@@ -129,7 +130,7 @@ class TestMediaUpload(unittest.TestCase):
 		self.assertFalse(mu.is_expired_media_error({"message": "Media not found"}, sent_media_id=False))
 
 	def test_resolve_header_uses_id_not_link(self):
-		items, errs = wt.normalize_header_params([{"type": "document", "file": "F-1", "filename": "bill.pdf"}])
+		items, errs = wt_send_params.normalize_header_params([{"type": "document", "file": "F-1", "filename": "bill.pdf"}])
 		self.assertEqual(errs, [])
 		comps = wt.build_template_components(None, items, None, "document")
 		with patch.object(mu, "upload_private_pdf", return_value="M9"):

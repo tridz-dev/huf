@@ -6,6 +6,7 @@
 import unittest
 
 from huf.ai.gateway_adapters import whatsapp_templates as wt
+from huf.ai.gateway_adapters.whatsapp_template_parts import carousel as wt_carousel
 
 IMG = "https://cdn.example/a.png"
 
@@ -88,8 +89,8 @@ class CarouselSendTest(unittest.TestCase):
 
 	def test_view_and_cards(self):
 		self.assertEqual(len(wt.components_to_view(COMPS)["carousel"]), 2)
-		self.assertEqual(wt.carousel_cards(COMPS)[0]["header_type"], "IMAGE")
-		self.assertIsNone(wt.carousel_cards([{"type": "BODY", "text": "x"}]))
+		self.assertEqual(wt_carousel.carousel_cards(COMPS)[0]["header_type"], "IMAGE")
+		self.assertIsNone(wt_carousel.carousel_cards([{"type": "BODY", "text": "x"}]))
 
 
 class CarouselBroadcastParamsTest(unittest.TestCase):
