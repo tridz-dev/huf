@@ -36,7 +36,7 @@ class TestToolConfirmationE2E(IntegrationTestCase):
 	def _history_rows(self, pending):
 		"""What the streaming layer persists for a parked call: the user turn, then ONE combined assistant row
 		(declaration + 'awaiting approval' result) under the call id."""
-		calls = [{"id": CALL_ID, "type": "function", "function": {"name": "send_campaign", "arguments": json.dumps(ARGS)}}]
+		calls = [{"id": CALL_ID, "type": "function", "function": {"name": "whatsapp", "arguments": json.dumps(ARGS)}}]
 		for idx, row in enumerate(
 			[
 				{"role": "user", "kind": "Message", "content": "send hello"},
@@ -55,7 +55,7 @@ class TestToolConfirmationE2E(IntegrationTestCase):
 	def _park(self):
 		out = json.loads(
 			tool_policy.check_tool_call(
-				"send_campaign", dict(ARGS), None, True, conversation_id=self.conv, agent_name=None, tool_call_id=CALL_ID
+				"whatsapp", dict(ARGS), None, True, conversation_id=self.conv, agent_name=None, tool_call_id=CALL_ID
 			)
 		)
 		self.assertEqual(out["type"], "confirmation_request")
@@ -76,8 +76,7 @@ class TestToolConfirmationE2E(IntegrationTestCase):
 			ex.assert_called_once()
 		self.assertEqual(frappe.db.get_value(tc.DOCTYPE, req["id"], "state"), "executed")
 		events = [c.kwargs["message"]["type"] for c in pub.call_args_list]
-		self.assertEqual(events, ["approval-requested", "approval-resolved"] if "approval-requested" in events else ["approval-resolved"])
-		self.assertIn("approval-resolved", events)
+		self.assertEqual(events, ["approval-requested", "approval-resolved"])
 
 		history = ConversationManager("x").get_conversation_history(self.conv)
 		tool_msgs = [m for m in history if m.get("role") == "tool" and m.get("tool_call_id") == CALL_ID]
