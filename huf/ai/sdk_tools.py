@@ -936,6 +936,15 @@ def create_function_tool(
                 if (_gate := tool_gate(name, args_dict, _frappe_run_context_dict(ctx), requires_confirmation)) is not None:
                     return _gate  # gateway tool policy / confirm gate
 
+                from huf.ai.tools.registry import assert_tool_role
+
+                _tool_docname = frappe.db.get_value("Agent Tool Function", {"tool_name": name}, "name")
+                if _tool_docname:
+                    try:
+                        assert_tool_role(frappe.get_cached_doc("Agent Tool Function", _tool_docname))
+                    except frappe.PermissionError as e:
+                        return json.dumps({"error": str(e), "denied": True})
+
                 if allowed_for_guest and frappe.session.user == "Guest":
                     if tool_type in _GUEST_DOCTYPE_PINNED_TYPES and not _extra_args.get("reference_doctype"):
                         return json.dumps({

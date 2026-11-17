@@ -164,16 +164,13 @@ def assert_user_may_run(tool_name: str, user: str) -> None:
 	"""Re-check, at approval time, that ``user`` may still run the tool."""
 	from huf.ai.tools import registry
 
-	# TODO-integrator: N05 adds assert_tool_role in huf.ai.tools.registry; used automatically once present.
-	role_check = getattr(registry, "assert_tool_role", None)
-	if callable(role_check):
-		try:
-			role_check(tool_name, user)
-		except Exception as e:
-			raise RoleDenied(str(e)) from e
 	tool_doc = frappe.db.get_value("Agent Tool Function", {"tool_name": tool_name}, "name")
 	if not tool_doc:
 		raise RoleDenied(f"tool '{tool_name}' no longer exists")
+	try:
+		registry.assert_tool_role(frappe.get_doc("Agent Tool Function", tool_doc), user)
+	except frappe.PermissionError as e:
+		raise RoleDenied(str(e)) from e
 	if not registry.PermissionAwareToolRegistry._can_use_tool(frappe.get_doc("Agent Tool Function", tool_doc), user):
 		raise RoleDenied(f"user '{user}' may no longer use '{tool_name}'")
 
