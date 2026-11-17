@@ -86,6 +86,13 @@ describe('SendTemplateDialog', () => {
     expect(send).toHaveBeenCalledWith(expect.objectContaining({ header_params: [{ type: 'image', link: 'https://example.com/a.png' }] }));
   });
 
+  it('sends a private File path in a document header as a file reference', async () => {
+    const { user } = open(template({ header_type: 'DOCUMENT', template: 'Body' }), { gateway: 'GW-1', initialTo: '+15551234567' });
+    await user.type(screen.getByLabelText(/Header document/), '/private/files/bill.pdf');
+    await user.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send).toHaveBeenCalledWith(expect.objectContaining({ header_params: [{ type: 'document', file: '/private/files/bill.pdf' }] }));
+  });
+
   it('sends no header when a media header link is left empty', async () => {
     const { user } = open(template({ header_type: 'DOCUMENT', template: 'Body' }), { gateway: 'GW-1', initialTo: '+15551234567' });
     await user.click(screen.getByRole('button', { name: 'Send' }));

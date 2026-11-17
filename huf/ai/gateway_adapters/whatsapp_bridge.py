@@ -1020,6 +1020,14 @@ def send_template(
 	if errors:
 		raise BridgeError(send_error(errors))
 	components += copy_comps
+	from huf.ai.whatsapp import media_upload as _mu
+
+	file_ref = _mu.source_file(components)
+	if file_ref is not None:
+		try:
+			_mu.resolve_file_headers(acct, components, http_post=http_post)
+		except _mu.MediaUploadError as exc:
+			raise BridgeError(exc.payload()) from exc
 
 	header_type = view.get("header_type") or ""
 	header_given = any(c.get("type") == "header" for c in components)
@@ -1061,10 +1069,27 @@ def send_template(
 		}
 		if (ref := _clean_opaque_ref(opaque_ref)):
 			payload["biz_opaque_callback_data"] = ref
-		if force_graph:
-			posted = _graph_post(acct, payload, http_post, marketing_api=marketing_api)
-		else:
-			posted = {"wamid": _graph_post_message(acct, payload, http_post), "message_status": None}
+		def _post_once() -> dict[str, Any]:
+			if force_graph:
+				return _graph_post(acct, payload, http_post, marketing_api=marketing_api)
+			return {"wamid": _graph_post_message(acct, payload, http_post), "message_status": None}
+
+		try:
+			posted = _post_once()
+		except BridgeError as exc:
+			if file_ref is None or not _mu.is_expired_media_error(exc.payload):
+				raise
+			# cached media id expired on Meta's side: re-upload once and resend
+			try:
+				fresh = [{"type": "header", "parameters": [{"type": "document", "document": {"file": file_ref}}]}]
+				old = payload["template"]["components"][0]["parameters"][0]["document"] if components and components[0].get("type") == "header" else {}
+				if old.get("filename"):
+					fresh[0]["parameters"][0]["document"]["filename"] = old["filename"]
+				_mu.resolve_file_headers(acct, fresh, http_post=http_post, force=True)
+			except _mu.MediaUploadError as up:
+				raise BridgeError(up.payload()) from up
+			payload["template"]["components"][0] = fresh[0]
+			posted = _post_once()
 		wamid = posted["wamid"]
 		if redact_params:
 			mirror: dict[str, Any] = {"template_parameters": "***"}

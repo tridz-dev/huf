@@ -48,6 +48,10 @@ def header_error(header: Any) -> str | None:
 		if isinstance(item, dict):
 			if str(item.get("type") or "").lower() == "location":
 				return location_error(item)
+			if str(item.get("file") or "").strip() and not item.get("link"):
+				if str(item.get("type") or "document").lower() != "document":
+					return "a file header must be a document"
+				continue
 			link = str(item.get("link") or "")
 			if link and not link.lower().startswith("https://"):
 				return "a media header link must start with https://"

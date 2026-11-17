@@ -851,6 +851,12 @@ def normalize_header_params(header_params: Any) -> tuple[list[Any], list[dict[st
 				out.append({"type": "location", "location": loc})
 			elif kind not in ("image", "document", "video"):
 				errors.append(_e("header_params[0].type", "invalid_type", "Media header type must be image, document or video."))
+			elif kind == "document" and str(item.get("file") or "").strip() and not link:
+				# private Frappe File: uploaded to Meta media at send time and sent by id
+				doc_file: dict[str, Any] = {"type": "document", "file": str(item["file"]).strip()}
+				if item.get("filename"):
+					doc_file["filename"] = str(item["filename"])[:240]
+				out.append(doc_file)
 			elif not is_http_url(link):
 				errors.append(_e("header_params[0].link", "invalid_link", "Media header needs an http(s) link."))
 			else:
@@ -912,7 +918,7 @@ def build_template_components(
 			if kind == "location":
 				components.append({"type": "header", "parameters": [{"type": "location", "location": item["location"]}]})
 				continue
-			media: dict[str, Any] = {"link": item["link"]}
+			media: dict[str, Any] = {"file": item["file"]} if "file" in item else {"link": item["link"]}
 			if kind == "document" and item.get("filename"):
 				media["filename"] = item["filename"]
 			components.append({"type": "header", "parameters": [{"type": kind, kind: media}]})

@@ -40,6 +40,8 @@ export function SendTemplateDialog({ template, onClose, gateway, initialTo = '' 
     .map((b, index) => ({ b, index }))
     .filter(({ b }) => b.button_type === 'Visit Website' && b.url_type === 'Dynamic');
 
+  // a Frappe File path (not http) on a DOCUMENT header is uploaded server-side from the private File
+  const documentFileRef = (type: string, v: string) => (type === 'DOCUMENT' && !/^https?:\/\//i.test(v) ? { type: 'document', file: v } : null);
   const send = async () => {
     if (!template || !gateway) return;
     setBusy(true);
@@ -47,7 +49,7 @@ export function SendTemplateDialog({ template, onClose, gateway, initialTo = '' 
     const header_params: HeaderParam[] = headerNeedsText
       ? [headerValue]
       : headerNeedsMedia && headerValue.trim()
-        ? [{ type: headerType === 'IMAGE' ? 'image' : 'document', link: headerValue.trim() }]
+        ? [documentFileRef(headerType, headerValue.trim()) ?? { type: headerType === 'IMAGE' ? 'image' : 'document', link: headerValue.trim() }]
         : [];
     const button_params: ButtonParam[] = dynamicUrlButtons.map(({ index }) => ({ index, sub_type: 'url', text: urlSuffixes[index] ?? '' }));
     const v = (k: string) => (cardValues[k] ?? '').trim();
@@ -103,8 +105,8 @@ export function SendTemplateDialog({ template, onClose, gateway, initialTo = '' 
             )}
             {headerNeedsMedia && (
               <div className="space-y-1">
-                <Label htmlFor="wa-send-header">{headerType === 'IMAGE' ? 'Header image link' : 'Header document link'}</Label>
-                <Input id="wa-send-header" value={headerValue} onChange={(e) => setHeaderValue(e.target.value)} placeholder="https://example.com/file" />
+                <Label htmlFor="wa-send-header">{headerType === 'IMAGE' ? 'Header image link' : 'Header document link or private File'}</Label>
+                <Input id="wa-send-header" value={headerValue} onChange={(e) => setHeaderValue(e.target.value)} placeholder="https://example.com/file or /private/files/bill.pdf" />
               </div>
             )}
             {holes.map((n, i) => (
