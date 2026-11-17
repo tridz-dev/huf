@@ -156,7 +156,7 @@ class TestOtp(unittest.TestCase):
 		res = otp.send_otp("GW", PHONE, SENTINEL)
 		with patch("huf.ai.whatsapp.otp.frappe.db.get_value", return_value={"status": "delivered", "type": "Outgoing"}):
 			self.assertEqual(otp.get_otp_status(res["message_id"])["status"], "delivered")
-			with patch.object(frappe.session, "user", "someone.else@example.com"):
+			with patch.object(frappe, "session", frappe._dict(user="someone.else@example.com")):
 				self.assertEqual(otp.get_otp_status(res["message_id"])["error"], "not_found")
 
 	# --- SMS fallback (HUFCRM-01b) ---
