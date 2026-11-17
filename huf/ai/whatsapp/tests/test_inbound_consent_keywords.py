@@ -22,10 +22,23 @@ from huf.ai.gateway_adapters.types import GatewayInboundRequest
 CALLS = "huf.ai.channels.channel_consent."
 
 
+SMS_URL = "https://huf.test/api/method/huf.ai.gateway_webhook.receive"
+
+
 def _sms_request(body_text, token="tok", sign=True):
-	body = urlencode({"From": "+15550001111", "Body": body_text, "MessageSid": "SM1"}).encode()
-	sig = base64.b64encode(hmac.new(token.encode(), body, hashlib.sha1).digest()).decode() if sign else ""
-	return GatewayInboundRequest(method="POST", headers={"X-Twilio-Signature": sig}, query={}, body=body)
+	# Twilio signs URL + sorted POST params (key+value); the adapter verifies the exact URL.
+	params = {"From": "+15550001111", "Body": body_text, "MessageSid": "SM1"}
+	body = urlencode(params).encode()
+	signed = SMS_URL + "".join(f"{k}{v}" for k, v in sorted(params.items()))
+	sig = base64.b64encode(hmac.new(token.encode(), signed.encode(), hashlib.sha1).digest()).decode() if sign else ""
+	return GatewayInboundRequest(
+		method="POST",
+		headers={"X-Twilio-Signature": sig},
+		query={},
+		body=body,
+		url=SMS_URL,
+		path="/api/method/huf.ai.gateway_webhook.receive",
+	)
 
 
 class TestInboundKeywords(FrappeTestCase):

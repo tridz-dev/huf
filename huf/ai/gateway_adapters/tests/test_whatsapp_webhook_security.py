@@ -157,6 +157,9 @@ class TestWhatsAppWebhookSecurity(IntegrationTestCase):
 			headers=headers,
 			content_length=len(body),
 			get_data=lambda: body,
+			url="https://huf.test/api/method/huf.ai.gateway_webhook.receive",
+			path="/api/method/huf.ai.gateway_webhook.receive",
+			query_string=b"",
 		)
 		return body
 
@@ -168,7 +171,14 @@ class TestWhatsAppWebhookSecurity(IntegrationTestCase):
 			"hub.challenge": CHALLENGE,
 		}
 		frappe.request = SimpleNamespace(
-			args=query, method="GET", headers={}, content_length=0, get_data=lambda: b""
+			args=query,
+			method="GET",
+			headers={},
+			content_length=0,
+			get_data=lambda: b"",
+			url="https://huf.test/api/method/huf.ai.gateway_webhook.receive",
+			path="/api/method/huf.ai.gateway_webhook.receive",
+			query_string=b"",
 		)
 
 	def _gateway_event_count(self) -> int:
