@@ -9,7 +9,7 @@ from frappe.utils import add_to_date, now_datetime
 
 from huf.ai import tool_confirmation as tc
 from huf.ai.gateways import tool_policy
-from huf.ai.tools.invocation import ToolResult, invoke_tool_sync
+from huf.ai.tools.invocation import invoke_tool_sync
 
 ARGS = {"recipients": ["+911"], "template": "promo", "message": "Hi", "channel": "whatsapp"}
 
