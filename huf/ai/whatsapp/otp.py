@@ -230,7 +230,6 @@ def _send(user, gateway, phone, code, template, idempotency_key, fallback=None, 
 		result = bridge.send_template(
 			account, to, row.get("actual_name") or row.get("template_name") or row["name"],
 			[code], None, trusted=True, language_code=row.get("language_code"),
-			button_params=[{"index": 0, "sub_type": "copy_code", "code": code}],
 			gateway_name=gateway, force_graph=True, redact_params=True,
 		)
 	except bridge.BridgeError as exc:

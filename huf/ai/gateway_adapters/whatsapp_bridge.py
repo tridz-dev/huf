@@ -940,6 +940,7 @@ def _send_view(tpl: dict[str, Any]) -> dict[str, Any]:
 		"header_text": (tpl.get("header") or "") if htype == "TEXT" else "",
 		"parameter_format": tpl.get("parameter_format") or "",
 		"carousel_cards": tpl.get("carousel_cards"),
+		"category": tpl.get("category") or "",
 	}
 
 
@@ -1144,6 +1145,8 @@ def _check_send_against_template(
 	"""Compare raw send params with the template definition (counts, header kind, button kinds)."""
 	errors: list[dict[str, str]] = []
 	tv = wt._template_view(view)
+	if tv["auth"]:  # authentication templates: wt.build_otp_components validates the single code and builds body + url button
+		return errors
 	if tv["fmt"] != "NAMED":  # NAMED mismatches (param_missing / param_unknown) come from build_send_components
 		given = list(body_params.values()) if isinstance(body_params, dict) else list(body_params or [])
 		expected = len(tv["body_vars"])

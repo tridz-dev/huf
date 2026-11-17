@@ -78,6 +78,15 @@ class TestOtp(unittest.TestCase):
 		self._user.start()
 		self.addCleanup(self._user.stop)
 
+	def test_payload_matches_meta_authentication_shape(self):
+		res = otp.send_otp("GW", PHONE, SENTINEL)
+		self.assertTrue(res["success"])
+		comps = self.sent[0]["template"]["components"]
+		self.assertEqual(comps, [
+			{"type": "body", "parameters": [{"type": "text", "text": SENTINEL}]},
+			{"type": "button", "sub_type": "url", "index": "0", "parameters": [{"type": "text", "text": SENTINEL}]},
+		])
+
 	def test_sentinel_never_leaks(self):
 		logger = logging.getLogger()
 		with self.assertLogs(logger, level="DEBUG") as cm, patch("frappe.log_error") as log_error:
