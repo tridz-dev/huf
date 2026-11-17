@@ -156,7 +156,7 @@ Full design, API and limits: [WhatsApp Broadcast](../whatsapp/BROADCAST.md). Man
 
 ## 11. External app hooks
 
-Huf fires three hooks for external apps (for example Loyal Arrow). Register them in the external app's `hooks.py`. Each value is a dotted path or a list of dotted paths; handlers run in registration order.
+Huf fires three hooks for external apps (for example a CRM app). Register them in the external app's `hooks.py`. Each value is a dotted path or a list of dotted paths; handlers run in registration order.
 
 ```python
 # external_app/hooks.py
@@ -220,3 +220,30 @@ Fired from the statuses loop in `huf/ai/gateway_webhook.py`. Two sources: (1) `_
   - Only the first Meta error is passed as `error_code` and `error_title`. All errors are kept in the Gateway Event's `delivery_error` text, which is redacted and capped.
   - The status is written with `db.set_value`, which triggers no doc events, so this hook is the only signal.
   - The hook runs inside the webhook request. A later rollback does not unsend the message.
+
+### huf_audience_refresh (refresh before a broadcast starts)
+
+Source: `huf/ai/whatsapp/broadcast/audiences/external.py`. An app built on Huf can manage an audience's members itself (an "externally managed" audience, see the `upsert_audience_members` API below). Register the refresh in the app's `hooks.py`:
+
+```python
+huf_audience_refresh = ["external_app.huf_hooks.refresh_audience"]
+```
+
+- Called as `fn(audience=<audience name>, managed_by=<source label>)`; the return value is ignored. A hook that does not manage that audience should simply return.
+- Runs before a broadcast that includes an externally managed audience starts, once per registered hook per such audience. Each call runs in its own background job (its own site and database connection, queue `short`); the start waits for it.
+- The hook normally calls `upsert_audience_members` itself. Its writes are committed in the job's connection, so keep them to the audience it was called for.
+- Hooks MUST be idempotent. If the wait times out, the start is refused but a hook that was already running keeps going and its writes stand.
+- Wait limit: the `audience_refresh_timeout_seconds` limit (policy default 30 s).
+- Fail closed: no registered hook, a hook error, or a timeout refuses the start with `audience_refresh_failed`, naming the audience. Hook errors are logged as "Audience refresh hook failed".
+
+### upsert_audience_members (whitelisted, POST)
+
+`huf.ai.whatsapp.broadcast.audiences.external.upsert_audience_members` is the only write path for an externally managed audience; the UI, CSV and manual member endpoints refuse such audiences.
+
+- Args: `audience` (name; empty to create), `members` (list of `{recipient, display_name, params, tags, consent_source, consent_at}`), `mode` (`replace` default, or `merge`), `source` (required label of the managing app, at most 60 characters), `idempotency_key` (optional, at most 140 characters), `create` (for a new audience: `{gateway, title, consent_source, consent_basis, consent_purposes, consent_attested, description, default_consent_at}`, as for `create_audience`).
+- `replace` makes the audience exactly the given members (stale members are removed after the new set is written, in one transaction); `merge` only adds or updates. Each member keeps its own consent source and date; the broadcast's consent attestation is unchanged.
+- Ownership: the audience records `managed_by` (the `source`) and `managed_by_user` (the creating user). Only that user (or a System Manager) with the same `source` may change it, and the caller needs write on the audience's Gateway.
+- Size cap: more than `audience_external_max_members` contacts (policy default 50000) in one call is refused (`too_many`).
+- Idempotency: a repeated `idempotency_key` for the audience is a no-op (`{"success": true, "noop": true}`). The last 20 keys are kept per audience, so an A, B, A replay is also caught; a failed refresh releases its key.
+- Error codes (`{"success": false, "error": ..., "message": ...}`): `source_required`, `invalid` (bad `mode` or over-long key), `too_many`, `empty_replace` (`replace` with no members), `no_valid_members` (`replace` where no contact was usable; includes up to 50 `invalid` rows), `not_externally_managed`, `owner_mismatch`, `source_mismatch`. In each case the audience is left as it was.
+- Success returns `audience`, `created`, `added`, `updated`, `removed`, `invalid_total`, `invalid` (first 50) and `skipped_total`, plus the refreshed counts.
