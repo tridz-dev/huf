@@ -83,4 +83,4 @@ class TestFixB(IntegrationTestCase):
 			tool_policy, "resolve_gateway_context", return_value={"gateway": "g", "channel": "C1"}
 		), patch.object(tool_policy, "is_tool_allowed", return_value=True):
 			tool_policy.check_tool_call("send_campaign", dict(ARGS), "run1", True, conversation_id=None)
-		self.assertIsNone(p.call_args.args[3])
+		self.assertIsNone(p.call_args.args[4])

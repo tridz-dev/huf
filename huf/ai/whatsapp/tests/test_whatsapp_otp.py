@@ -265,5 +265,5 @@ class TestOtp(unittest.TestCase):
 				patch("huf.ai.gateway_adapters.sms.send_sms_message", sms):
 			res = otp.send_otp("GW", PHONE, SENTINEL, **self.FB)
 		self.assertEqual(otp.get_otp_status(res["message_id"])["status"], "sent")
-		with patch.object(frappe.session, "user", "someone.else@example.com"):
+		with patch.dict(frappe.session, {"user": "someone.else@example.com"}):
 			self.assertEqual(otp.get_otp_status(res["message_id"])["error"], "not_found")
