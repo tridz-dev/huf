@@ -3,6 +3,7 @@
 
 """WP-B: audience API against the database (import, members, masking, consent, selection, delete guard)."""
 
+import inspect
 import unittest
 from unittest.mock import patch
 
@@ -214,7 +215,7 @@ class TestImport(AudienceTestCase):
 		with patch.object(imp.frappe.db, "commit"), _limits(audience_import_chunk=10), \
 				patch.object(aud.frappe, "publish_realtime", side_effect=lambda *a, **k: events.append(a)), \
 				patch("huf.ai.whatsapp.broadcast.progress.throttle_seconds", return_value=0):
-			imp.run_import_job(**{k: kwargs[k] for k in ("audience", "rows", "on_conflict", "job_id", "user")})
+			imp.run_import_job(**{k: kwargs[k] for k in ("audience", "rows", "on_conflict", "import_job_id", "user")})
 		state = api.get_import_status(job_id=out["job_id"], audience=name)
 		self.assertEqual((state["status"], state["result"]["added"]), ("done", 30))
 		self.assertEqual(state["member_count"], 30)
@@ -227,6 +228,36 @@ class TestImport(AudienceTestCase):
 		name = self.make()
 		with _limits(audience_max_import_rows=2):
 			self.assertEqual(_import(name, rows=[{"phone": "447700900123"}] * 3)["error"], "too_many")
+
+
+# frappe.enqueue's own parameters (frappe.utils.background_jobs.enqueue): consumed by enqueue, never forwarded.
+ENQUEUE_RESERVED = {
+	"method", "queue", "timeout", "event", "is_async", "job_name", "now", "enqueue_after_commit",
+	"on_success", "on_failure", "at_front", "job_id", "deduplicate", "at_front_when_starved",
+}
+
+
+class TestImportEnqueueContract(AudienceTestCase):
+	def _captured(self):
+		name = self.make()
+		rows = [{"phone": f"4477009{i:05d}"} for i in range(30)]
+		with _limits(audience_inline_import_rows=10), patch.object(api.frappe, "enqueue") as enqueue:
+			out = _import(name, rows=rows)
+		return name, out, enqueue.call_args
+
+	def test_forwarded_kwargs_bind_to_run_import_job_signature(self):
+		_, _, call = self._captured()
+		forwarded = {k: v for k, v in call.kwargs.items() if k not in ENQUEUE_RESERVED}
+		sig = inspect.signature(imp.run_import_job)
+		sig.bind(**forwarded)  # raises TypeError on a missing/unexpected argument (the original job_id bug)
+		self.assertFalse(set(sig.parameters) & ENQUEUE_RESERVED)
+
+	def test_run_import_job_runs_with_exactly_the_forwarded_kwargs(self):
+		name, out, call = self._captured()
+		forwarded = {k: v for k, v in call.kwargs.items() if k not in ENQUEUE_RESERVED}
+		with patch.object(imp.frappe.db, "commit"), patch.object(aud.frappe, "publish_realtime"):
+			imp.run_import_job(**forwarded)
+		self.assertEqual(api.get_import_status(job_id=out["job_id"], audience=name)["status"], "done")
 
 
 class TestMembersAndMasking(AudienceTestCase):

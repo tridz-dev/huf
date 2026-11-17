@@ -217,7 +217,7 @@ def get_job_state(job_id: str) -> dict | None:
 		return None
 
 
-def run_import_job(audience: str, rows: list[dict], on_conflict: str, job_id: str, user: str) -> None:
+def run_import_job(audience: str, rows: list[dict], on_conflict: str, import_job_id: str, user: str) -> None:
 	"""Background import of a large list. Reports progress through the job state and a realtime event.
 
 	``progress.py`` publishes per-broadcast counters only, so the throttle (``progress.throttle_seconds()``) is
@@ -229,8 +229,8 @@ def run_import_job(audience: str, rows: list[dict], on_conflict: str, job_id: st
 
 	frappe.set_user(user)
 	last = {"t": 0.0}
-	state = {"job_id": job_id, "audience": audience, "status": "running", "processed": 0, "total": len(rows)}
-	set_job_state(job_id, state)
+	state = {"job_id": import_job_id, "audience": audience, "status": "running", "processed": 0, "total": len(rows)}
+	set_job_state(import_job_id, state)
 
 	def report(info: dict, force: bool = False):
 		now = time.time()
@@ -238,7 +238,7 @@ def run_import_job(audience: str, rows: list[dict], on_conflict: str, job_id: st
 			return
 		last["t"] = now
 		state.update(info)
-		set_job_state(job_id, state)
+		set_job_state(import_job_id, state)
 		try:
 			frappe.publish_realtime("wa_audience_import_progress", dict(state), user=user)
 		except Exception:

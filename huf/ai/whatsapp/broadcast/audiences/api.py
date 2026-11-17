@@ -311,10 +311,12 @@ def import_members(
 			"huf.ai.whatsapp.broadcast.audiences.importer.run_import_job",
 			queue="long",
 			timeout=3600,
+			# ``job_id`` is reserved by frappe.enqueue (RQ job id, not forwarded); used only as dedup key.
+			job_id=f"huf-wa-import-{job_id}",
 			audience=audience,
 			rows=mapped,
 			on_conflict=on_conflict,
-			job_id=job_id,
+			import_job_id=job_id,
 			user=frappe.session.user,
 		)
 		_audit(audience, "import queued", rows=len(mapped), job_id=job_id)
