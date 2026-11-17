@@ -13,7 +13,8 @@ export type GatewayProvider =
   | 'Slack'
   | 'Email'
   | 'Google Chat'
-  | 'Microsoft Teams';
+  | 'Microsoft Teams'
+  | 'SMS';
 
 export type GatewayPolicy = 'Disabled' | 'Pairing' | 'Allow list' | 'Open';
 

@@ -1,17 +1,26 @@
-"""SMS (Twilio / Plivo / Frappe SMS Settings) Gateway Adapter for two-way SMS communications."""
+"""SMS gateway adapter (Twilio two-way, Twilio send-only, Frappe SMS Settings).
 
-# PARKED PROVIDER (2026-09-05) - review completed by agent; owner sign-off pending.
-# The fail-open inbound bypass was removed (see docs/gateways/SMS_SECURITY_REVIEW.md).
-# Do not treat as production-approved until the owner signs off on provider choice and residual risks.
+Modes (credential ``mode``, required, no inference): ``twilio`` (send + signed inbound),
+``send_only`` (Twilio send, inbound always rejected), ``frappe_sms`` (Frappe SMS Settings
+send, inbound always rejected).
+
+Fail-closed guarantees: unset/unknown mode, missing credentials, a missing or wrong
+X-Twilio-Signature, or an undeterminable request URL all reject inbound. Verification uses
+Twilio's real scheme (URL + sorted POST params, HMAC-SHA1, constant-time compare; JSON bodies
+also verify ``bodySHA256``). Send failures raise; ids are never fabricated as "sent".
+
+Security review: docs/gateways/SMS_SECURITY_REVIEW.md
+"""
 
 from __future__ import annotations
 
 import base64
-import hmac
 import hashlib
+import hmac
+import json
 import uuid
 from typing import Any, Callable, Mapping
-from urllib.parse import parse_qs
+from urllib.parse import parse_qsl, urlsplit
 
 import frappe
 
@@ -44,6 +53,8 @@ class SMSGatewayAdapter(GatewayAdapter):
 			GatewayCredentialField("account_sid", "Twilio Account SID (twilio/send_only modes)", required=False),
 			GatewayCredentialField("auth_token", "Twilio Auth Token (twilio/send_only modes)", required=False),
 			GatewayCredentialField("from_number", "Twilio Phone Number (+1... / Sender ID)", required=False),
+			GatewayCredentialField("webhook_base_url", "Public origin Twilio calls, e.g. https://crm.example.com (twilio mode; recommended behind proxies)", required=False, secret=False),
+			GatewayCredentialField("trusted_proxy", "Set to 1 only if X-Forwarded-Proto/Host are set by your own proxy (twilio mode)", required=False, secret=False),
 		)
 	)
 	capabilities = GatewayCapabilities(
@@ -62,28 +73,112 @@ class SMSGatewayAdapter(GatewayAdapter):
 		self._account_sid = credentials.get("account_sid", "") or ""
 		self._auth_token = credentials.get("auth_token", "") or ""
 		self._from_number = credentials.get("from_number", "") or ""
+		self._webhook_base_url = str(credentials.get("webhook_base_url", "") or "").strip().rstrip("/")
+		self._trusted_proxy = str(credentials.get("trusted_proxy", "") or "").strip().lower() in ("1", "true", "yes")
 		self._http_post = http_post
 
-	def verify_inbound(self, request: GatewayInboundRequest) -> bool:
-		"""Fail closed. Only explicit mode 'twilio' with credentials and a valid signature passes.
+	@staticmethod
+	def _header(request: GatewayInboundRequest, name: str) -> str:
+		for key, value in (request.headers or {}).items():
+			if str(key).lower() == name.lower():
+				return str(value).strip()
+		return ""
 
-		Missing/unknown mode, send_only, frappe_sms, missing credentials, missing or
-		invalid X-Twilio-Signature all return False.
+	def _public_url(self, request: GatewayInboundRequest) -> str:
+		"""The exact URL Twilio called, or "" when it cannot be determined (caller rejects)."""
+		tail = (request.path or "") + (f"?{request.query_string}" if request.query_string else "")
+		if self._webhook_base_url:
+			if not self._webhook_base_url.startswith(("https://", "http://")) or not request.path:
+				return ""
+			return self._webhook_base_url + tail
+		if self._trusted_proxy:
+			proto = self._header(request, "X-Forwarded-Proto").split(",")[0].strip().lower()
+			host = self._header(request, "X-Forwarded-Host").split(",")[0].strip()
+			if proto not in ("http", "https") or not host or not request.path:
+				return ""
+			return f"{proto}://{host}{tail}"
+		return request.url or ""
+
+	@staticmethod
+	def _url_candidates(url: str) -> list[str]:
+		"""Twilio signs the URL as configured; accept it with or without the default port."""
+		parts = urlsplit(url)
+		if not parts.scheme or not parts.hostname:
+			return []
+		default = {"https": 443, "http": 80}.get(parts.scheme)
+		out = [url]
+		try:
+			port = parts.port
+		except ValueError:
+			return []
+		host = parts.hostname if ":" not in parts.hostname else f"[{parts.hostname}]"
+		if port is not None and port == default:
+			out.append(parts._replace(netloc=host).geturl())
+		elif port is None and default:
+			out.append(parts._replace(netloc=f"{host}:{default}").geturl())
+		return out
+
+	@staticmethod
+	def _is_json(request: GatewayInboundRequest) -> bool:
+		for key, value in (request.headers or {}).items():
+			if str(key).lower() == "content-type":
+				return "json" in str(value).lower()
+		return False
+
+	@staticmethod
+	def _form_params(request: GatewayInboundRequest) -> list[tuple[str, str]]:
+		body = (request.body or b"").decode("utf-8", "replace")
+		if body:
+			return parse_qsl(body, keep_blank_values=True)
+		return list((request.query or {}).items()) if request.method.upper() == "GET" else []
+
+	def verify_inbound(self, request: GatewayInboundRequest) -> bool:
+		"""Fail closed. Only mode 'twilio' with credentials and a valid Twilio signature passes.
+
+		X-Twilio-Signature = base64(HMAC-SHA1(auth_token, URL + sorted POST params as key+value)).
+		For JSON bodies Twilio signs only the URL, which carries ?bodySHA256=<hex sha256(body)>;
+		that hash is verified too.
 		"""
 		if self._mode != "twilio" or not self._auth_token or not self._account_sid:
 			return False
-		signature = request.headers.get("X-Twilio-Signature", "").strip()
+		signature = self._header(request, "X-Twilio-Signature")
 		if not signature:
 			return False
-		mac = hmac.new(self._auth_token.encode("utf-8"), request.body or b"", hashlib.sha1)
-		expected = base64.b64encode(mac.digest()).decode("utf-8")
-		return hmac.compare_digest(signature, expected)
+		url = self._public_url(request)
+		candidates = self._url_candidates(url) if url else []
+		if not candidates:
+			return False
+		body = request.body or b""
+		if self._is_json(request):
+			query = dict(parse_qsl(urlsplit(url).query, keep_blank_values=True))
+			expected_hash = hashlib.sha256(body).hexdigest()
+			if not hmac.compare_digest(str(query.get("bodySHA256", "")).lower(), expected_hash):
+				return False
+			suffix = ""
+		else:
+			params = sorted(self._form_params(request))
+			suffix = "".join(f"{k}{v}" for k, v in params)
+		key = self._auth_token.encode("utf-8")
+		ok = False
+		for candidate in candidates:  # no early exit: keep timing independent of which matches
+			mac = hmac.new(key, (candidate + suffix).encode("utf-8"), hashlib.sha1)
+			expected = base64.b64encode(mac.digest()).decode("utf-8")
+			ok |= hmac.compare_digest(signature.encode("utf-8"), expected.encode("utf-8"))
+		return ok
 
 	def normalize_inbound(self, request: GatewayInboundRequest) -> NormalizedGatewayEvent:
 		if not self.verify_inbound(request):
 			raise PermissionError("SMS inbound rejected: unverified or inbound disabled")
-		body_str = request.body.decode("utf-8") if request.body else ""
-		params = parse_qs(body_str) if "=" in body_str else request.query
+		if self._is_json(request):
+			try:
+				data = json.loads((request.body or b"").decode("utf-8") or "{}")
+			except ValueError:
+				data = {}
+			params = {str(k): v for k, v in data.items()} if isinstance(data, dict) else {}
+		else:
+			params = {}
+			for k, v in self._form_params(request):
+				params.setdefault(k, v)
 
 		def get_val(key: str) -> str:
 			v = params.get(key)

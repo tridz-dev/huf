@@ -1275,6 +1275,13 @@ def register_integration_services():
 			"description": "Microsoft Teams bot for messaging",
 			"required_credentials": _adapter_required_credentials("microsoft_teams")
 		},
+		{
+			"service_name": "sms",
+			"category": "Communication",
+			"surface": "Gateway",
+			"description": "SMS via Twilio (two-way, signed inbound), Twilio send-only or Frappe SMS Settings",
+			"required_credentials": _adapter_required_credentials("sms")
+		},
 
 
 		# Developer Tools

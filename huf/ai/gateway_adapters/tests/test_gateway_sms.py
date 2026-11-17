@@ -12,12 +12,29 @@ from huf.ai.gateway_adapters.types import GatewayInboundRequest, GatewayReply
 BODY = b"From=+1234567890&To=+0987654321&Body=Hello&MessageSid=SM1"
 
 
-def _req(body=BODY, headers=None):
-	return GatewayInboundRequest(body=body, headers=headers or {}, query={}, method="POST")
+URL = "https://crm.example.com/api/method/huf.ai.gateway_webhook.handle_gateway_webhook?gateway_name=g1"
+PATH = "/api/method/huf.ai.gateway_webhook.handle_gateway_webhook"
+QS = "gateway_name=g1"
 
 
-def _sig(token, body=BODY):
-	return base64.b64encode(hmac.new(token.encode(), body, hashlib.sha1).digest()).decode()
+def _req(body=BODY, headers=None, url=URL, path=PATH, qs=QS):
+	return GatewayInboundRequest(
+		body=body, headers=headers or {}, query={}, method="POST", url=url, path=path, query_string=qs
+	)
+
+
+def twilio_sig(token, url, params):
+	data = url + "".join(f"{k}{v}" for k, v in sorted(params.items()))
+	return base64.b64encode(hmac.new(token.encode(), data.encode(), hashlib.sha1).digest()).decode()
+
+
+FORM = {"From": "+1234567890", "To": "+0987654321", "Body": "Hello", "MessageSid": "SM1"}
+
+
+def _sig(token, body=BODY, url=URL):
+	from urllib.parse import parse_qsl
+
+	return twilio_sig(token, url, dict(parse_qsl(body.decode(), keep_blank_values=True)))
 
 
 TW = {"mode": "twilio", "account_sid": "AC1", "auth_token": "tok", "from_number": "+1555"}
@@ -49,6 +66,77 @@ class TestSMSInboundFailClosed(unittest.TestCase):
 	def test_valid_signature_accepted(self):
 		a = SMSGatewayAdapter(TW)
 		self.assertTrue(a.verify_inbound(_req(headers={"X-Twilio-Signature": _sig("tok")})))
+
+	def test_twilio_published_vector(self):
+		# Twilio security docs worked example.
+		url = "https://example.com/myapp.php?foo=1&bar=2"
+		params = {"CallSid": "CA1234567890ABCDE", "Caller": "+14158675310", "Digits": "1234",
+			"From": "+14158675310", "To": "+18005551212"}
+		self.assertEqual(twilio_sig("12345", url, params), "L/OH5YylLD5NRKLltdqwSvS0BnU=")
+		body = "&".join(f"{k}={v.replace('+', '%2B')}" for k, v in reversed(list(params.items()))).encode()
+		a = SMSGatewayAdapter({**TW, "auth_token": "12345"})
+		req = _req(body, {"X-Twilio-Signature": "L/OH5YylLD5NRKLltdqwSvS0BnU="}, url, "/myapp.php", "foo=1&bar=2")
+		self.assertTrue(a.verify_inbound(req))
+
+	def test_body_only_hmac_rejected(self):
+		sig = base64.b64encode(hmac.new(b"tok", BODY, hashlib.sha1).digest()).decode()
+		self.assertFalse(SMSGatewayAdapter(TW).verify_inbound(_req(headers={"X-Twilio-Signature": sig})))
+
+	def test_tampered_param_and_wrong_url_rejected(self):
+		a = SMSGatewayAdapter(TW)
+		sig = _sig("tok")
+		self.assertFalse(a.verify_inbound(_req(BODY.replace(b"Hello", b"Hacked"), {"X-Twilio-Signature": sig})))
+		self.assertFalse(a.verify_inbound(_req(headers={"X-Twilio-Signature": sig}, url=URL.replace("g1", "g2"))))
+
+	def test_header_case_insensitive_and_default_port(self):
+		a = SMSGatewayAdapter(TW)
+		self.assertTrue(a.verify_inbound(_req(headers={"x-twilio-signature": _sig("tok")})))
+		ported = URL.replace("crm.example.com", "crm.example.com:443")
+		self.assertTrue(a.verify_inbound(_req(headers={"X-Twilio-Signature": _sig("tok")}, url=ported)))
+
+	def test_undeterminable_url_rejected(self):
+		a = SMSGatewayAdapter(TW)
+		self.assertFalse(a.verify_inbound(_req(headers={"X-Twilio-Signature": _sig("tok")}, url="")))
+
+	def test_base_url_setting_overrides_internal_url(self):
+		a = SMSGatewayAdapter({**TW, "webhook_base_url": "https://crm.example.com/"})
+		req = _req(headers={"X-Twilio-Signature": _sig("tok")}, url="http://127.0.0.1:8000" + PATH + "?" + QS)
+		self.assertTrue(a.verify_inbound(req))
+
+	def test_forwarded_headers_ignored_unless_trusted(self):
+		fwd = {"X-Forwarded-Proto": "https", "X-Forwarded-Host": "crm.example.com"}
+		internal = "http://127.0.0.1:8000" + PATH + "?" + QS
+		h = {"X-Twilio-Signature": _sig("tok"), **fwd}
+		self.assertFalse(SMSGatewayAdapter(TW).verify_inbound(_req(headers=h, url=internal)))
+		self.assertTrue(SMSGatewayAdapter({**TW, "trusted_proxy": "1"}).verify_inbound(_req(headers=h, url=internal)))
+		# trusted proxy but headers absent: fail closed
+		self.assertFalse(SMSGatewayAdapter({**TW, "trusted_proxy": "1"}).verify_inbound(
+			_req(headers={"X-Twilio-Signature": _sig("tok")}, url=internal)))
+
+	def test_json_body_sha256(self):
+		body = b'{"From": "+1", "Body": "hi", "MessageSid": "SMj"}'
+		url = URL + "&bodySHA256=" + hashlib.sha256(body).hexdigest()
+		qs = QS + "&bodySHA256=" + hashlib.sha256(body).hexdigest()
+		h = {"X-Twilio-Signature": twilio_sig("tok", url, {}), "Content-Type": "application/json"}
+		a = SMSGatewayAdapter(TW)
+		self.assertTrue(a.verify_inbound(_req(body, h, url, PATH, qs)))
+		self.assertEqual(a.normalize_inbound(_req(body, h, url, PATH, qs)).provider_event_id, "SMj")
+		# body altered after signing: hash mismatch
+		self.assertFalse(a.verify_inbound(_req(body + b" ", h, url, PATH, qs)))
+		# no bodySHA256 in URL
+		h2 = {"X-Twilio-Signature": twilio_sig("tok", URL, {}), "Content-Type": "application/json"}
+		self.assertFalse(a.verify_inbound(_req(body, h2)))
+
+	def test_stop_keyword_wired_after_verification(self):
+		body = b"From=%2B1&Body=STOP&MessageSid=SM5"
+		a = SMSGatewayAdapter(TW)
+		with patch("huf.ai.channels.channel_consent.handle_keyword") as hk:
+			a.normalize_inbound(_req(body, {"X-Twilio-Signature": _sig("tok", body)}))
+			hk.assert_called_once_with("sms", "+1", "STOP", "sms_inbound")
+			hk.reset_mock()
+			with self.assertRaises(PermissionError):
+				a.normalize_inbound(_req(body))
+			hk.assert_not_called()
 
 	def test_normalize_refuses_unverified(self):
 		with self.assertRaises(PermissionError):
