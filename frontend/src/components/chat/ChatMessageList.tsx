@@ -5,9 +5,11 @@ import { getConversationMessages, createAgentRunFeedback, getConversation, hostF
 import { cn } from "@/lib/utils";
 
 import { useInfiniteScroll } from "@/hooks/useInfiniteScroll";
-import { useChatSocket, type ToolCallEvent, type NewAgentMessageEvent, type AgentRunStatusEvent, type ConversationTitleUpdatedEvent, type FrontendToolCallEvent } from '@/hooks/useChatSocket';
+import { useChatSocket, type ToolCallEvent, type NewAgentMessageEvent, type AgentRunStatusEvent, type ConversationTitleUpdatedEvent, type FrontendToolCallEvent, type ApprovalEvent } from '@/hooks/useChatSocket';
 import { executeClientToolCall, resetClientToolCallTracking } from '@/lib/clientToolDispatcher';
 import { ChatMessage as ChatMessageComponent } from './ChatMessage';
+import { ToolConfirmationCard } from './ToolConfirmationCard';
+import { getPendingConfirmations, normalize as normalizeConfirmation, parseConfirmationRequest, type ToolConfirmation } from '@/services/toolConfirmationApi';
 import { ChatInput, type ChatInputHandle } from './ChatInput';
 import { ColdStartHero, StarterPromptGrid } from './EmptyChatState';
 import { OutputsCard } from './OutputsCard';
@@ -241,8 +243,54 @@ export function ChatMessageList({
         });
     }, [chatId]);
 
+    // N06 confirm-before-send: latest known state per confirmation id.
+    const [confirmations, setConfirmations] = useState<Record<string, ToolConfirmation>>({});
+    const upsertConfirmation = useCallback((c: ToolConfirmation) => {
+        setConfirmations((prev) => ({ ...prev, [c.id]: c }));
+    }, []);
+
+    const handleApproval = useCallback((event: ApprovalEvent) => {
+        if (event.conversation_id && event.conversation_id !== chatId) return;
+        if (event.confirmation && typeof event.confirmation === 'object') {
+            upsertConfirmation(normalizeConfirmation(event.confirmation));
+        }
+    }, [chatId, upsertConfirmation]);
+
+    // Events are best-effort: load pending approvals on open.
+    useEffect(() => {
+        setConfirmations({});
+        if (!chatId) return;
+        let cancelled = false;
+        getPendingConfirmations(chatId)
+            .then((list) => {
+                if (cancelled) return;
+                setConfirmations((prev) => {
+                    const next = { ...prev };
+                    list.forEach((c) => { if (!next[c.id]) next[c.id] = c; });
+                    return next;
+                });
+            })
+            .catch(() => { /* non-fatal: history + realtime still render cards */ });
+        return () => { cancelled = true; };
+    }, [chatId]);
+
+    // After a decision, append the follow-up (confirmation_result) message from the conversation.
+    const handleConfirmationDecided = useCallback(async () => {
+        if (!chatId) return;
+        try {
+            const latest = await getConversationMessages({ conversation: chatId, limit: 10, start: 0 });
+            setMessages((prev) => {
+                const known = new Set(prev.map((m) => m.key));
+                const fresh = latest.data.filter((item) => !known.has(item.id));
+                if (fresh.length === 0) return prev;
+                return [...prev, ...mergeConversationItemsIntoMessages([], fresh, false)];
+            });
+        } catch { /* the card already shows the decided state */ }
+    }, [chatId]);
+
     useChatSocket({
         conversationId: chatId,
+        onApproval: handleApproval,
         onToolUpdate: handleToolUpdate,
         onNewMessage: handleNewMessage,
         onAgentRunStatus: handleAgentRunStatus,
@@ -465,9 +513,24 @@ export function ChatMessageList({
                                         precedingUserMessage={precedingUserMessage}
                                         onRegenerate={handleRegenerate}
                                         onSendText={(text) => chatInputRef.current?.send(text)}
+                                        confirmationOverrides={confirmations}
+                                        onConfirmationUpdated={upsertConfirmation}
+                                        onConfirmationDecided={handleConfirmationDecided}
                                     />
                                 );
                             })}
+                            {Object.values(confirmations)
+                                .filter((c) => c.state === 'pending' && !messages.some((m) =>
+                                    m.kind === 'Tool Result' &&
+                                    parseConfirmationRequest(m.versions[0]?.content ?? m.tools?.[0]?.result)?.id === c.id))
+                                .map((c) => (
+                                    <ToolConfirmationCard
+                                        key={`confirmation-${c.id}`}
+                                        confirmation={c}
+                                        onUpdated={upsertConfirmation}
+                                        onDecided={handleConfirmationDecided}
+                                    />
+                                ))}
                             {artifacts && artifacts.length > 0 && onOpenArtifact && (
                                 <OutputsCard
                                     artifacts={artifacts}
