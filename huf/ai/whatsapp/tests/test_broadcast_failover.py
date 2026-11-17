@@ -76,7 +76,9 @@ class TestFailover(FrappeTestCase):
 
 	def test_consent_skip(self):
 		self._row()
-		with patch("huf.ai.channels.channel_consent.has_consent", _consent(("email",))):
+		with patch("huf.ai.channels.channel_consent.has_consent", _consent(("email",))), patch.dict(
+			failover.__dict__, {"_send_sms": self.sms, "_send_email": self.email}
+		):
 			bs.apply_status("wamid.fo1", "failed", TS, UNDELIVERABLE, gateway=GW)
 		d, att = self._doc()
 		self.assertEqual(att[0]["status"], "skipped")

@@ -74,7 +74,7 @@ class TestOtp(unittest.TestCase):
 		for p in patches:
 			p.start()
 			self.addCleanup(p.stop)
-		self._user = patch.object(frappe.session, "user", self.user)
+		self._user = patch.object(frappe, "session", frappe._dict(user=self.user))
 		self._user.start()
 		self.addCleanup(self._user.stop)
 

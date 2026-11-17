@@ -119,7 +119,10 @@ class TestRefreshBeforeStart(AudienceTestCase):
 		def boom(**kw):
 			raise RuntimeError("down")
 
-		with self.hooks(["app.refresh"]), patch.object(frappe, "get_attr", return_value=boom):
+		real_get_attr = frappe.get_attr
+		# Only the refresh hook resolves to boom; frappe.log_error's own controller hooks must still resolve.
+		fake = patch.object(frappe, "get_attr", side_effect=lambda path, *a, **k: boom if path == "app.refresh" else real_get_attr(path, *a, **k))
+		with self.hooks(["app.refresh"]), fake:
 			with self.assertRaises(StartRefused) as ctx:
 				runner._refresh_external_audiences(self.broadcast)
 		self.assertEqual(ctx.exception.code, "audience_refresh_failed")
