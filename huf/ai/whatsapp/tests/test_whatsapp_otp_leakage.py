@@ -3,7 +3,7 @@
 Covers idempotency_conflict, rate-limit refund, and a scan of every text column for the code after the
 WhatsApp and SMS-fallback paths ran (twilio mode mocked).
 
-Run: bench --site test_site run-tests --app huf --module huf.ai.whatsapp.tests.test_whatsapp_otp_realstate
+Run: bench --site test_site run-tests --app huf --module huf.ai.whatsapp.tests.test_whatsapp_otp_leakage
 """
 
 import logging
@@ -24,7 +24,7 @@ def _phone() -> str:
 	return "9199" + "".join(str(random.randint(0, 9)) for _ in range(8))
 
 
-class TestOtpRealState(base.TestOtp):
+class TestOtpLeakage(base.TestOtp):
 	"""Re-run the whole OTP suite on real Redis, plus the extra checks below."""
 
 	def setUp(self):
@@ -109,5 +109,5 @@ class TestOtpRealState(base.TestOtp):
 
 # Only the real-state tests above run here; the inherited unit tests assume a dict-backed fake cache.
 for _name in dir(base.TestOtp):
-	if _name.startswith("test_") and _name not in TestOtpRealState.__dict__:
-		setattr(TestOtpRealState, _name, None)
+	if _name.startswith("test_") and _name not in TestOtpLeakage.__dict__:
+		setattr(TestOtpLeakage, _name, None)

@@ -1,4 +1,4 @@
-"""FIX-B tests. Run: bench run-tests --module huf.ai.tests.test_tool_confirmation_fixb"""
+"""FIX-B tests. Run: bench run-tests --module huf.ai.tests.test_tool_confirmation_sweeper_and_agent_scope"""
 
 import json
 from unittest.mock import patch
@@ -14,7 +14,9 @@ from huf.ai.tools.invocation import ToolResult, invoke_tool_sync
 ARGS = {"recipients": ["+911"], "template": "promo", "message": "Hi", "channel": "whatsapp"}
 
 
-class TestFixB(IntegrationTestCase):
+class SweeperScopeCase(IntegrationTestCase):
+	"""Shared fixture/helpers; no test_ methods so subclasses do not rerun each other."""
+
 	def setUp(self):
 		frappe.set_user("Administrator")
 
@@ -24,6 +26,7 @@ class TestFixB(IntegrationTestCase):
 	def _park(self):
 		return json.loads(tool_policy.check_tool_call("send_campaign", dict(ARGS), None, True))
 
+class TestSweeperAndAgentScope(SweeperScopeCase):
 	def test_failed_execution_in_job_is_recorded_and_args_cleared(self):
 		req = self._park()
 		with patch.object(tc, "assert_user_may_run"), patch.object(frappe, "enqueue"):
@@ -91,7 +94,7 @@ class TestFixB(IntegrationTestCase):
 		self.assertIsNone(p.call_args.args[4])
 
 
-class TestFixSweeperAndRun(TestFixB):
+class TestFixSweeperAndRun(SweeperScopeCase):
 	def _approve(self):
 		req = self._park()
 		with patch.object(tc, "assert_user_may_run"), patch.object(frappe, "enqueue"):

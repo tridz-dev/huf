@@ -15,7 +15,7 @@ from huf.ai.whatsapp.broadcast.checks.start_gate import StartRefused
 from huf.ai.whatsapp.tests.test_whatsapp_audience_api import GW, AudienceTestCase, _limits
 
 CREATE = dict(
-	gateway=GW, title="Loyal", consent_source="loyalty signup", consent_basis="opt-in form",
+	gateway=GW, title="CRM list", consent_source="crm signup", consent_basis="opt-in form",
 	consent_purposes=["marketing"], consent_attested=True,
 )  # fmt: skip
 
@@ -26,7 +26,7 @@ def _m(n, **kw):
 
 class TestUpsertAtomicity(AudienceTestCase):
 	def up(self, audience=None, members=None, **kw):
-		kw.setdefault("source", "loyalty")
+		kw.setdefault("source", "crm")
 		return external.upsert_audience_members(audience=audience, members=members, **kw)
 
 	def made(self):
@@ -87,15 +87,15 @@ class TestRefreshJob(AudienceTestCase):
 	def test_job_success_sets_ok_flag_and_caller_returns(self):
 		calls = []
 		with self._run_job_inline(lambda **kw: calls.append(kw)):
-			external._run_hook("app.refresh", 5, "a", "loyalty")
-		self.assertEqual(calls, [{"audience": "a", "managed_by": "loyalty"}])
+			external._run_hook("app.refresh", 5, "a", "crm")
+		self.assertEqual(calls, [{"audience": "a", "managed_by": "crm"}])
 
 	def test_job_error_fails_closed_with_message(self):
 		def boom(**kw):
 			raise ValueError("down")
 
 		with self._run_job_inline(boom), self.assertRaises(RuntimeError) as ctx:
-			external._run_hook("app.refresh", 5, "a", "loyalty")
+			external._run_hook("app.refresh", 5, "a", "crm")
 		self.assertIn("down", str(ctx.exception))
 
 	def test_timeout_without_worker_fails_closed(self):
@@ -103,19 +103,19 @@ class TestRefreshJob(AudienceTestCase):
 
 		started = time.monotonic()
 		with patch.object(frappe, "enqueue") as enq, patch.object(external, "_POLL", 0.05), self.assertRaises(TimeoutError):
-			external._run_hook("app.refresh", 1, "a", "loyalty")
+			external._run_hook("app.refresh", 1, "a", "crm")
 		self.assertLess(time.monotonic() - started, 4)
 		kw = enq.call_args.kwargs
 		self.assertEqual(kw["timeout"], 1 + external._SLACK)
 		# the late job sees the cancelled flag and does not start the hook
 		ran = []
 		with patch.object(frappe, "get_attr", return_value=lambda **k: ran.append(k)):
-			external.refresh_hook_job("app.refresh", kw["token"], "a", "loyalty")
+			external.refresh_hook_job("app.refresh", kw["token"], "a", "crm")
 		self.assertEqual(ran, [])
 
 	def test_late_completion_after_timeout_does_not_unrefuse(self):
 		with patch.object(frappe, "enqueue") as enq, patch.object(external, "_POLL", 0.05), self.assertRaises(TimeoutError):
-			external._run_hook("app.refresh", 1, "a", "loyalty")
+			external._run_hook("app.refresh", 1, "a", "crm")
 		token = enq.call_args.kwargs["token"]
 		cache = frappe.cache()
 		cache.set_value(external._flag_key(token), {"state": "cancelled"}, expires_in_sec=60)
@@ -126,14 +126,14 @@ class TestRefreshJob(AudienceTestCase):
 
 		seen = []
 		with self._run_job_inline(lambda **kw: seen.append(threading.current_thread())):
-			external._run_hook("app.refresh", 5, "a", "loyalty")
+			external._run_hook("app.refresh", 5, "a", "crm")
 		self.assertIs(seen[0], threading.current_thread())
 
 	def test_timeout_blocks_start(self):
 		bc = self.draft_broadcast(self.make("Slow"))
 		with patch.object(frappe, "get_hooks", side_effect=lambda key=None, *a, **k: ["app.slow"] if key == external.HOOK else []), \
 			patch.object(external, "_run_hook", side_effect=TimeoutError("no answer within 1s")), \
-			patch.object(external, "external_audiences", return_value=[{"name": "x", "managed_by": "loyalty"}]):
+			patch.object(external, "external_audiences", return_value=[{"name": "x", "managed_by": "crm"}]):
 			with self.assertRaises(StartRefused) as ctx:
 				runner._refresh_external_audiences(bc)
 		self.assertEqual(ctx.exception.code, "audience_refresh_failed")
@@ -141,7 +141,7 @@ class TestRefreshJob(AudienceTestCase):
 
 class TestUpsert(AudienceTestCase):
 	def up(self, audience=None, members=None, **kw):
-		kw.setdefault("source", "loyalty")
+		kw.setdefault("source", "crm")
 		return external.upsert_audience_members(audience=audience, members=members, **kw)
 
 	def made(self):
@@ -152,9 +152,9 @@ class TestUpsert(AudienceTestCase):
 	def test_create_flags_audience_and_keeps_member_consent(self):
 		name = self.made()
 		row = frappe.db.get_value(aud.AUDIENCE, name, ["externally_managed", "managed_by"], as_dict=True)
-		self.assertEqual((row.externally_managed, row.managed_by), (1, "loyalty"))
+		self.assertEqual((row.externally_managed, row.managed_by), (1, "crm"))
 		member = frappe.get_all(aud.MEMBER, {"audience": name}, ["consent_source", "source"])[0]
-		self.assertEqual((member.consent_source, member.source), ("app", "loyalty"))
+		self.assertEqual((member.consent_source, member.source), ("app", "crm"))
 
 	def test_replace_removes_stale_merge_keeps(self):
 		name = self.made()
@@ -166,7 +166,7 @@ class TestUpsert(AudienceTestCase):
 
 	def test_other_source_and_manual_audience_refused(self):
 		name = self.made()
-		self.assertEqual(self.up(name, [_m(1)], source="crm")["error"], "source_mismatch")
+		self.assertEqual(self.up(name, [_m(1)], source="app-x")["error"], "source_mismatch")
 		manual = self.make("Manual")
 		self.assertEqual(self.up(manual, [_m(1)])["error"], "not_externally_managed")
 
@@ -203,7 +203,7 @@ class TestUpsert(AudienceTestCase):
 
 class TestReadOnly(AudienceTestCase):
 	def test_manual_paths_refused_server_side(self):
-		name = external.upsert_audience_members(audience=None, members=[_m(1)], source="loyalty", create=CREATE)["audience"]
+		name = external.upsert_audience_members(audience=None, members=[_m(1)], source="crm", create=CREATE)["audience"]
 		for out in (
 			api.update_audience(audience=name, title="x"),
 			api.delete_audience(audience=name),
@@ -211,7 +211,7 @@ class TestReadOnly(AudienceTestCase):
 			api.remove_members(audience=name, recipients=["919800000001"]),
 		):
 			self.assertEqual(out["error"], "invalid")
-			self.assertIn("managed by loyalty", out["message"] if "message" in out else str(out))
+			self.assertIn("managed by crm", out["message"])
 		with self.assertRaises(frappe.ValidationError):
 			imp.import_rows(name, [_m(9)])
 		self.assertEqual(len(self.members(name)), 1)
@@ -220,7 +220,7 @@ class TestReadOnly(AudienceTestCase):
 class TestRefreshBeforeStart(AudienceTestCase):
 	def setUp(self):
 		super().setUp()
-		name = external.upsert_audience_members(audience=None, members=[_m(1)], source="loyalty", create=CREATE)["audience"]
+		name = external.upsert_audience_members(audience=None, members=[_m(1)], source="crm", create=CREATE)["audience"]
 		self.audience = name
 		self.broadcast = self.draft_broadcast(name)
 
@@ -236,12 +236,9 @@ class TestRefreshBeforeStart(AudienceTestCase):
 		calls = []
 		with self.hooks(["app.refresh"]), patch.object(external, "_run_hook", side_effect=lambda path, t, a, m: calls.append({"audience": a, "managed_by": m})):
 			self.assertTrue(external.run_refresh_hooks(self.broadcast))
-		self.assertEqual(calls, [{"audience": self.audience, "managed_by": "loyalty"}])
+		self.assertEqual(calls, [{"audience": self.audience, "managed_by": "crm"}])
 
 	def test_hook_error_blocks_start(self):
-		def boom(**kw):
-			raise RuntimeError("down")
-
 		with self.hooks(["app.refresh"]), patch.object(external, "_run_hook", side_effect=RuntimeError("down")):
 			with self.assertRaises(StartRefused) as ctx:
 				runner._refresh_external_audiences(self.broadcast)
