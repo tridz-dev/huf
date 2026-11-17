@@ -7,6 +7,7 @@ DOCUMENT header is sent by media ``id``. Neither the access token nor file bytes
 from __future__ import annotations
 
 import hashlib
+import posixpath
 import time
 import re
 from typing import Any, Callable
@@ -44,24 +45,58 @@ def max_bytes() -> int:
 	return max(1, min(configured, META_DOC_LIMIT))
 
 
-def _find_file(ref: str) -> Any:
+_PRIVATE_PREFIX = "/private/files/"
+
+
+def _is_safe_private_url(url: Any) -> bool:
+	"""Only ``/private/files/<name>`` with no traversal, backslash, NUL or encoded dots/slashes."""
+	from urllib.parse import unquote
+
+	if not isinstance(url, str) or not url.startswith(_PRIVATE_PREFIX):
+		return False
+	for candidate in (url, unquote(url), unquote(unquote(url))):
+		if "\\" in candidate or "\x00" in candidate or ".." in candidate.split("/"):
+			return False
+		if not candidate.startswith(_PRIVATE_PREFIX) or posixpath.normpath(candidate) != candidate.rstrip("/"):
+			return False
+	return len(url) > len(_PRIVATE_PREFIX)
+
+
+def _find_file(ref: str, requesting_user: str | None = None) -> Any:
+	"""Resolve ``ref`` (a File docname, or a /private/files URL) to a File doc.
+
+	A docname resolves exactly one row. A URL resolves EVERY File row with that file_url and each
+	must be private and readable by the requester, so a row someone else owns cannot launder access.
+	Raises file_forbidden otherwise; the path must be inside the private files dir.
+	"""
 	ref = str(ref or "").strip()
-	name = None
-	if ref and frappe.db.exists("File", ref):
-		name = ref
-	elif ref:
-		name = frappe.db.get_value("File", {"file_url": ref}, "name")
-	if not name:
+	if not ref:
 		raise MediaUploadError("file_not_found", "File not found.")
-	return frappe.get_doc("File", name)
+	user = requesting_user or frappe.session.user
+	if ref.startswith("/") or "://" in ref:
+		names = frappe.get_all("File", filters={"file_url": ref}, pluck="name")
+	elif frappe.db.exists("File", ref):
+		names = [ref]
+	else:
+		names = []
+	if not names:
+		raise MediaUploadError("file_not_found", "File not found.")
+	docs = [frappe.get_doc("File", n) for n in names]
+	for d in docs:
+		if (
+			d.is_folder
+			or not int(d.is_private or 0)
+			or not _is_safe_private_url(d.file_url)
+			or not frappe.has_permission("File", "read", doc=d, user=user)
+		):
+			raise MediaUploadError("file_forbidden", "You are not permitted to read this file.")
+	return docs[0]
 
 
 def load_pdf(file_ref: Any, requesting_user: str | None = None) -> tuple[bytes, str]:
 	"""Permission-checked, validated PDF bytes and a default filename."""
 	user = requesting_user or frappe.session.user
-	doc = _find_file(str(file_ref or ""))
-	if doc.is_folder or not frappe.has_permission("File", "read", doc=doc, user=user):
-		raise MediaUploadError("file_forbidden", "You are not permitted to read this file.")
+	doc = _find_file(str(file_ref or ""), user)
 	fname = str(doc.file_name or doc.name)
 	if not fname.lower().endswith(".pdf"):
 		raise MediaUploadError("not_pdf", "Only PDF files can be attached.")
@@ -178,7 +213,7 @@ def resolve_file_headers(
 	ref = doc.pop("file")
 	media_id = upload_private_pdf(acct, ref, requesting_user, http_post, force)
 	if not doc.get("filename"):
-		doc["filename"] = _find_file(ref).file_name
+		doc["filename"] = _find_file(ref, requesting_user).file_name
 	doc["id"] = media_id
 	return True
 
