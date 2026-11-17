@@ -71,49 +71,66 @@ class TestUpsertAtomicity(AudienceTestCase):
 		self.assertTrue(any(c.kwargs.get("for_update") for c in spy.call_args_list))
 
 
-class TestRefreshDeadline(AudienceTestCase):
-	def test_timeout_fails_closed_and_does_not_hang(self):
-		import threading
+class TestRefreshJob(AudienceTestCase):
+	"""The hook runs in its own RQ job; the caller polls a cache flag and never shares frappe.local."""
+
+	def _run_job_inline(self, hook):
+		"""Stand-in for the worker: run refresh_hook_job directly when enqueue is called."""
+		def fake_enqueue(method, **kw):
+			with patch.object(frappe, "get_attr", return_value=hook):
+				external.refresh_hook_job(kw["path"], kw["token"], kw["audience"], kw["managed_by"])
+
+		return patch.object(frappe, "enqueue", side_effect=fake_enqueue)
+
+	def test_job_success_sets_ok_flag_and_caller_returns(self):
+		calls = []
+		with self._run_job_inline(lambda **kw: calls.append(kw)):
+			external._run_hook("app.refresh", 5, "a", "loyalty")
+		self.assertEqual(calls, [{"audience": "a", "managed_by": "loyalty"}])
+
+	def test_job_error_fails_closed_with_message(self):
+		def boom(**kw):
+			raise ValueError("down")
+
+		with self._run_job_inline(boom), self.assertRaises(RuntimeError) as ctx:
+			external._run_hook("app.refresh", 5, "a", "loyalty")
+		self.assertIn("down", str(ctx.exception))
+
+	def test_timeout_without_worker_fails_closed(self):
 		import time
 
-		release = threading.Event()
 		started = time.monotonic()
-		with self.assertRaises(TimeoutError):
-			external._call_with_deadline(lambda **kw: release.wait(5), 1)
-		release.set()
-		self.assertLess(time.monotonic() - started, 3)
+		with patch.object(frappe, "enqueue") as enq, patch.object(external, "_POLL", 0.05), self.assertRaises(TimeoutError):
+			external._run_hook("app.refresh", 1, "a", "loyalty")
+		self.assertLess(time.monotonic() - started, 4)
+		kw = enq.call_args.kwargs
+		self.assertEqual(kw["timeout"], 1 + external._SLACK)
+		# the late job sees the cancelled flag and does not start the hook
+		ran = []
+		with patch.object(frappe, "get_attr", return_value=lambda **k: ran.append(k)):
+			external.refresh_hook_job("app.refresh", kw["token"], "a", "loyalty")
+		self.assertEqual(ran, [])
 
-	def test_hook_result_and_error_cross_the_thread(self):
-		calls = []
-		external._call_with_deadline(lambda **kw: calls.append(kw), 5, audience="a")
-		self.assertEqual(calls, [{"audience": "a"}])
-		with self.assertRaises(ValueError):
-			external._call_with_deadline(lambda **kw: (_ for _ in ()).throw(ValueError("x")), 5)
+	def test_late_completion_after_timeout_does_not_unrefuse(self):
+		with patch.object(frappe, "enqueue") as enq, patch.object(external, "_POLL", 0.05), self.assertRaises(TimeoutError):
+			external._run_hook("app.refresh", 1, "a", "loyalty")
+		token = enq.call_args.kwargs["token"]
+		cache = frappe.cache()
+		cache.set_value(external._flag_key(token), {"state": "cancelled"}, expires_in_sec=60)
+		self.assertEqual(cache.get_value(external._flag_key(token)), {"state": "cancelled"})
 
-	def test_frappe_context_propagates_into_hook_thread(self):
+	def test_hook_does_not_run_in_another_thread(self):
 		import threading
 
-		seen = {}
-
-		def hook(**kw):
-			seen["thread"] = threading.current_thread().name
-			seen["user"] = frappe.session.user
-			seen["site"] = frappe.local.site
-			seen["db"] = frappe.db.get_value("User", "Administrator", "name")
-			seen["write"] = frappe.db.sql("select 1")[0][0]
-
-		main_user, main_site = frappe.session.user, frappe.local.site
-		external._call_with_deadline(hook, 5)
-		self.assertEqual(seen["thread"], "huf-audience-refresh")
-		self.assertEqual(seen["user"], main_user)
-		self.assertEqual(seen["site"], main_site)
-		self.assertEqual(seen["db"], "Administrator")
-		self.assertEqual(seen["write"], 1)
+		seen = []
+		with self._run_job_inline(lambda **kw: seen.append(threading.current_thread())):
+			external._run_hook("app.refresh", 5, "a", "loyalty")
+		self.assertIs(seen[0], threading.current_thread())
 
 	def test_timeout_blocks_start(self):
 		bc = self.draft_broadcast(self.make("Slow"))
 		with patch.object(frappe, "get_hooks", side_effect=lambda key=None, *a, **k: ["app.slow"] if key == external.HOOK else []), \
-			patch.object(external, "_call_with_deadline", side_effect=TimeoutError("no answer within 1s")), \
+			patch.object(external, "_run_hook", side_effect=TimeoutError("no answer within 1s")), \
 			patch.object(external, "external_audiences", return_value=[{"name": "x", "managed_by": "loyalty"}]):
 			with self.assertRaises(StartRefused) as ctx:
 				runner._refresh_external_audiences(bc)
@@ -205,9 +222,8 @@ class TestRefreshBeforeStart(AudienceTestCase):
 			external.run_refresh_hooks(self.broadcast)
 
 	def test_hook_called_with_audience(self):
-		fake = patch.object(frappe, "get_attr", return_value=lambda **kw: calls.append(kw))
 		calls = []
-		with self.hooks(["app.refresh"]), fake:
+		with self.hooks(["app.refresh"]), patch.object(external, "_run_hook", side_effect=lambda path, t, a, m: calls.append({"audience": a, "managed_by": m})):
 			self.assertTrue(external.run_refresh_hooks(self.broadcast))
 		self.assertEqual(calls, [{"audience": self.audience, "managed_by": "loyalty"}])
 
@@ -215,10 +231,7 @@ class TestRefreshBeforeStart(AudienceTestCase):
 		def boom(**kw):
 			raise RuntimeError("down")
 
-		real_get_attr = frappe.get_attr
-		# Only the refresh hook resolves to boom; frappe.log_error's own controller hooks must still resolve.
-		fake = patch.object(frappe, "get_attr", side_effect=lambda path, *a, **k: boom if path == "app.refresh" else real_get_attr(path, *a, **k))
-		with self.hooks(["app.refresh"]), fake:
+		with self.hooks(["app.refresh"]), patch.object(external, "_run_hook", side_effect=RuntimeError("down")):
 			with self.assertRaises(StartRefused) as ctx:
 				runner._refresh_external_audiences(self.broadcast)
 		self.assertEqual(ctx.exception.code, "audience_refresh_failed")

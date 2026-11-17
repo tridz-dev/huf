@@ -14,16 +14,16 @@ Register a refresh in the managing app's ``hooks.py``::
     huf_audience_refresh = ["my_app.huf_hooks.refresh_audience"]
 
 The function receives ``audience=<name>, managed_by=<source>`` and returns nothing; it calls
-``upsert_audience_members`` itself. A hook that does not manage that audience simply returns. Hooks run in a
-worker thread with a deadline (``audience_refresh_timeout_seconds``); on a timeout the start is refused but the
-thread cannot be killed, so a hook must be idempotent and safe to cancel or repeat.
+``upsert_audience_members`` itself. A hook that does not manage that audience simply returns. Each hook runs in its
+own background job (own site and database connection; nothing is shared with the starting request) and the start
+waits up to ``audience_refresh_timeout_seconds`` for its result. On an error or timeout the start is refused; a
+hook that was already running keeps going on its own, so a hook MUST be idempotent and safe to repeat.
 """
 
 from __future__ import annotations
 
-import contextvars
 import json
-import threading
+import time
 from typing import Any
 
 import frappe
@@ -181,28 +181,62 @@ class RefreshFailed(frappe.ValidationError):
 	pass
 
 
-def _call_with_deadline(fn, seconds: int, **kwargs: Any) -> None:
-	"""Run ``fn(**kwargs)`` in a worker thread (with this request's frappe context) and wait at most ``seconds``.
+_SLACK = 15  # seconds the job may outlive the caller's wait
+_POLL = 0.25
+_FLAG_TTL = 600
 
-	Works on any worker (RQ, gunicorn, threads) unlike SIGALRM. On timeout raises ``TimeoutError`` and abandons
-	the thread: Python cannot kill it, so a hook may still be running afterwards. Hooks MUST therefore be idempotent
-	and safe to cancel (the refresh is simply retried on the next start); the caller fails closed."""
-	box: dict[str, BaseException] = {}
-	ctx = contextvars.copy_context()
 
-	def run() -> None:
-		try:
-			ctx.run(fn, **kwargs)
-		except BaseException as exc:  # noqa: BLE001 - relayed to the waiting caller
-			box["error"] = exc
+def _flag_key(token: str) -> str:
+	return f"huf_audience_refresh:{token}"
 
-	worker = threading.Thread(target=run, name="huf-audience-refresh", daemon=True)
-	worker.start()
-	worker.join(seconds)
-	if worker.is_alive():
-		raise TimeoutError(f"no answer within {seconds}s")
-	if "error" in box:
-		raise box["error"]
+
+def refresh_hook_job(path: str, token: str, audience: str, managed_by: str) -> None:
+	"""RQ job: run one refresh hook in this worker's own site/db connection and publish ok/error under ``token``.
+
+	The hook commits its own writes (it calls ``upsert_audience_members``). If the caller already gave up
+	(``cancelled`` flag) the hook is not started. Hooks MUST be idempotent: a hook that was already running when
+	the caller timed out finishes on its own and its writes stand, but the caller has refused that start."""
+	cache = frappe.cache()
+	if cache.get_value(_flag_key(token)) == {"state": "cancelled"}:
+		return
+	try:
+		frappe.get_attr(path)(audience=audience, managed_by=managed_by)
+		frappe.db.commit()
+		result = {"state": "ok"}
+	except Exception as exc:  # noqa: BLE001 - relayed to the waiting caller
+		frappe.db.rollback()
+		frappe.log_error(title="Audience refresh hook failed", message=f"{path} for {audience}: {frappe.get_traceback()}")
+		result = {"state": "error", "message": str(exc)[:300]}
+	if cache.get_value(_flag_key(token)) != {"state": "cancelled"}:
+		cache.set_value(_flag_key(token), result, expires_in_sec=_FLAG_TTL)
+
+
+def _run_hook(path: str, seconds: int, audience: str, managed_by: str) -> None:
+	"""Run a hook in its own RQ job and wait at most ``seconds`` for its result flag. Raises ``TimeoutError`` or
+	``RuntimeError``. frappe.local / the db connection are never shared with another thread."""
+	token = frappe.generate_hash(length=16)
+	cache = frappe.cache()
+	frappe.enqueue(
+		"huf.ai.whatsapp.broadcast.audiences.external.refresh_hook_job",
+		queue="short",
+		timeout=seconds + _SLACK,
+		path=path, token=token, audience=audience, managed_by=managed_by,
+	)  # fmt: skip
+	deadline = time.monotonic() + seconds
+	try:
+		while True:
+			result = cache.get_value(_flag_key(token))
+			if isinstance(result, dict) and result.get("state") == "ok":
+				return
+			if isinstance(result, dict) and result.get("state") == "error":
+				raise RuntimeError(result.get("message") or "hook failed")
+			if time.monotonic() >= deadline:
+				cache.set_value(_flag_key(token), {"state": "cancelled"}, expires_in_sec=_FLAG_TTL)
+				raise TimeoutError(f"no answer within {seconds}s")
+			time.sleep(_POLL)
+	finally:
+		if cache.get_value(_flag_key(token)) != {"state": "cancelled"}:
+			cache.delete_value(_flag_key(token))
 
 
 def external_audiences(broadcast: str) -> list[dict]:
@@ -232,8 +266,9 @@ def run_refresh_hooks(broadcast: str) -> bool:
 			raise RefreshFailed(f"Audience {target['name']} is managed by {target['managed_by']}, which has no refresh registered. The broadcast was not started.")
 		for path in hooks:
 			try:
-				_call_with_deadline(frappe.get_attr(path), timeout, audience=target["name"], managed_by=target["managed_by"])
+				_run_hook(path, timeout, target["name"], target["managed_by"])
 			except Exception as exc:
 				frappe.log_error(title="Audience refresh failed", message=f"{path} for {target['name']}: {exc}")
 				raise RefreshFailed(f"Audience {target['name']} could not be refreshed by {target['managed_by']} ({exc}). The broadcast was not started.") from exc
+	frappe.db.commit()  # end our snapshot so the resnapshot sees what the hook jobs committed
 	return True
