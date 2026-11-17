@@ -407,7 +407,6 @@ scheduler_events = {
     ]
 }
 
-
 # Testing
 # -------
 
