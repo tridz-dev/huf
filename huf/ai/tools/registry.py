@@ -66,6 +66,29 @@ class PermissionAwareToolRegistry:
         
         return all_tools
     
+    @staticmethod
+    def effective_required_roles(tool_doc) -> list:
+        """Roles a user must hold (any one) to use the tool; [] means unrestricted.
+
+        Outbound tools with no explicit roles fail closed to System Manager.
+        """
+        raw = getattr(tool_doc, "required_roles", None) or ""
+        roles = [r.strip() for r in raw.replace("\n", ",").split(",") if r.strip()]
+        if not roles and getattr(tool_doc, "is_outbound", 0):
+            roles = ["System Manager"]
+        return roles
+
+    @classmethod
+    def _user_has_required_role(cls, tool_doc, user: str) -> bool:
+        roles = cls.effective_required_roles(tool_doc)
+        if not roles:
+            return True
+        if not user or user == "Guest":
+            return False
+        if user == "Administrator":
+            return True
+        return bool(set(roles) & set(frappe.get_roles(user)))
+
     @classmethod
     def _can_use_tool(cls, tool_doc, user: str) -> bool:
         """Check if user has permission for this tool"""
@@ -75,6 +98,10 @@ class PermissionAwareToolRegistry:
         if tool_doc.is_read_only and tool_type in cls.MUTATING_TOOL_TYPES:
             return False
         
+        # Per-tool role requirement (never guest-allowed; outbound fails closed)
+        if not cls._user_has_required_role(tool_doc, user):
+            return False
+
         #Guest Restrictions
         if user == "Guest":
             #Explicitly Allowed
@@ -618,3 +645,20 @@ def sync_app_tools(app_name=None):
         logger.warning(f"Validation/Operation warning: {e!s}")
     except Exception as e:  # boundary exception handler: external provider/tool boundary
         logger.warning(f"Failed to sync tools for app '{app_name}': {e!s}")
+
+
+
+def assert_tool_role(tool, user: str | None = None) -> None:
+    """Call-time recheck of a tool's required roles.
+
+    ``tool`` is a Agent Tool Function doc or its name. Raises
+    ``frappe.PermissionError`` when ``user`` (default: session user) lacks the
+    role; guests never pass for role-gated or outbound tools.
+    """
+    user = user or frappe.session.user
+    tool_doc = frappe.get_cached_doc("Agent Tool Function", tool) if isinstance(tool, str) else tool
+    if not PermissionAwareToolRegistry._user_has_required_role(tool_doc, user):
+        frappe.throw(
+            frappe._("You do not have the required role to use tool {0}").format(tool_doc.name),
+            frappe.PermissionError,
+        )

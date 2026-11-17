@@ -116,6 +116,19 @@ def on_app_installed(app_name):
     except Exception as e:
         frappe.log_error(title="App Seeding Error", message=f"Error in on_app_installed for {app_name}: {e}")
 
+def on_migrate():
+    """after_migrate hook: idempotently re-seed external apps.
+
+    Admin edits to seed-owned fields are preserved (see loaders._upsert_doc).
+    """
+    try:
+        for res in seed_all():
+            if res.errors:
+                frappe.log_error(title="App Seeding", message=f"Seeding errors for {res.app}: {res.errors}")
+    except Exception as e:
+        frappe.log_error(title="App Seeding Error", message=f"Error in on_migrate: {e}")
+
+
 @frappe.whitelist()
 def seed_all_apps():
     """Whitelist endpoint to trigger manual sync from UI."""

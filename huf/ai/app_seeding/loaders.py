@@ -1,4 +1,53 @@
+import json
+
 import frappe
+
+# Seed-owned fields = every key in the seed payload except provenance/meta.
+# `seed_snapshot` (hidden JSON on the doc) records the values last written by
+# the seeder; a field whose current value differs from its snapshot was edited
+# by an admin and is not overwritten on re-seed. Docs without a snapshot
+# (first adoption) take the seed values.
+_SEED_META_KEYS = {"source_app", "source_file", "doctype", "name", "seed_snapshot"}
+
+
+def _norm(value):
+    if isinstance(value, list):
+        return [dict(r) if isinstance(r, dict) else r for r in value]
+    return value
+
+
+def _seed_values(data: dict) -> dict:
+    return {k: _norm(v) for k, v in data.items() if k not in _SEED_META_KEYS}
+
+
+def _current(doc, key, seeded):
+    cur = doc.get(key)
+    if isinstance(seeded, list):
+        rows = []
+        for i, srow in enumerate(seeded):
+            row = cur[i] if i < len(cur or []) else None
+            if row is None:
+                return None
+            rows.append({k: row.get(k) for k in srow})
+        return rows if len(cur or []) == len(seeded) else None
+    return cur
+
+
+def _apply_seed_preserving_edits(doc, data: dict):
+    new = _seed_values(data)
+    try:
+        old = json.loads(doc.get("seed_snapshot") or "null")
+    except ValueError:
+        old = None
+    for key, value in new.items():
+        if old is not None and key in old:
+            cur = _current(doc, key, old[key])
+            if cur != old[key]:
+                continue  # admin edited this field since last seed: keep it
+        doc.set(key, data[key])
+    doc.source_app = data.get("source_app")
+    doc.source_file = data.get("source_file")
+    doc.seed_snapshot = json.dumps(new)
 
 
 def _validate_row_link_refs(child_doctype: str, row: dict, row_index: int) -> list:
@@ -115,13 +164,20 @@ def _upsert_doc(doctype: str, key_field: str, data: dict, source_app: str, sourc
     data["source_file"] = source_file
 
     try:
+        tracks = bool(frappe.get_meta(doctype).get_field("seed_snapshot"))
         if docname:
             doc = frappe.get_doc(doctype, docname)
-            doc.update(data)
+            if tracks:
+                _apply_seed_preserving_edits(doc, data)
+            else:
+                doc.update(data)
             doc.save(ignore_permissions=True)
         else:
             data["doctype"] = doctype
-            frappe.get_doc(data).insert(ignore_permissions=True)
+            doc = frappe.get_doc(data)
+            if tracks:
+                doc.seed_snapshot = json.dumps(_seed_values(data))
+            doc.insert(ignore_permissions=True)
         return True, None
     except Exception as e:
         return False, str(e)

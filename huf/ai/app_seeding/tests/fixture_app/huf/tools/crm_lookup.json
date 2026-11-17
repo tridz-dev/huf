@@ -1,0 +1,1 @@
+{"tool_name": "n05_fixture_lookup", "description": "Read-only lookup", "types": "Custom Function", "function_path": "frappe.ping", "required_roles": "N05 Manager"}

@@ -143,6 +143,7 @@ after_app_install = [
 ]
 after_migrate = [
     "huf.install.after_migrate",
+    "huf.ai.app_seeding.seeder.on_migrate",
     "huf.ai.skills.hooks.sync_app_skills",
     "huf.install.seed_voice_engines",
     "huf.ai.channels.run_as.ensure_all_audit_fields",
