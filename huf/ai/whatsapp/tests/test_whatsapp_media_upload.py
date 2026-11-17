@@ -1,7 +1,6 @@
+import unittest
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
-
-from frappe.tests import unittest.TestCase
 
 from huf.ai.gateway_adapters import whatsapp_templates as wt
 from huf.ai.whatsapp import media_upload as mu
