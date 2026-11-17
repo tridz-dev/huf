@@ -5,7 +5,7 @@ const BASE = 'huf.ai.whatsapp.management';
 
 export const TEMPLATE_NAME_RE = /^[a-z0-9_]+$/;
 export const TEMPLATE_NAME_MAX = 512;
-export const TEMPLATE_CATEGORIES = ['MARKETING', 'UTILITY'] as const;
+export const TEMPLATE_CATEGORIES = ['MARKETING', 'UTILITY', 'AUTHENTICATION'] as const;
 export type TemplateCategory = (typeof TEMPLATE_CATEGORIES)[number];
 
 export interface FieldError {
@@ -231,6 +231,10 @@ export interface WizardTemplatePayload {
   buttons?: WizardPayloadButton[];
   /** Utility only: message validity in seconds. */
   ttl_seconds?: number;
+  /** Authentication only: fixed WhatsApp format options. */
+  add_security_recommendation?: boolean;
+  code_expiration_minutes?: number;
+  otp_button_text?: string;
 }
 export type WizardEditPayload = Omit<WizardTemplatePayload, 'template_name' | 'language_code' | 'header_type'> & {
   header_type?: WizardPayloadHeaderType | '';

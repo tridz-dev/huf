@@ -1,6 +1,6 @@
 import type { VariableType } from './variables';
 
-export type TemplateCategoryId = 'MARKETING' | 'UTILITY';
+export type TemplateCategoryId = 'MARKETING' | 'UTILITY' | 'AUTHENTICATION';
 export type WizardHeaderType = 'none' | 'text' | 'image' | 'video' | 'document' | 'location';
 export type WizardButtonType = 'QUICK_REPLY' | 'URL' | 'PHONE_NUMBER' | 'COPY_CODE';
 
@@ -46,6 +46,12 @@ export interface TemplateWizardDraft {
   /** Message validity in seconds (Utility only); null keeps the WhatsApp default. */
   ttl: number | null;
   samples: Record<string, string>;
+  /** Authentication only: add "For your security, do not share this code." */
+  securityRecommendation: boolean;
+  /** Authentication only: minutes the code is valid for; null shows no expiry line. */
+  codeExpiryMinutes: number | null;
+  /** Authentication only: label of the copy-code button. */
+  otpButtonText: string;
 }
 
 export const headerSampleKey = (token: string) => `header.${token}`;
@@ -66,5 +72,33 @@ export function emptyDraft(category: TemplateCategoryId = 'MARKETING'): Template
     buttons: [],
     ttl: null,
     samples: {},
+    securityRecommendation: true,
+    codeExpiryMinutes: 10,
+    otpButtonText: OTP_BUTTON_DEFAULT,
+  };
+}
+
+export const OTP_BUTTON_DEFAULT = 'Copy code';
+export const OTP_BODY = '{{1}} is your verification code.';
+export const OTP_SECURITY = ' For your security, do not share this code.';
+export const OTP_SAMPLE_CODE = '123456';
+
+/**
+ * Authentication templates have a fixed WhatsApp format, so the body, footer and the one
+ * copy-code button are derived from the three options. Keeps preview and review honest.
+ */
+export function applyAuthenticationFormat(draft: TemplateWizardDraft): TemplateWizardDraft {
+  if (draft.category !== 'AUTHENTICATION') return draft;
+  const label = draft.otpButtonText.trim() || OTP_BUTTON_DEFAULT;
+  const button = { ...emptyButton('COPY_CODE', 'otp-copy-code'), text: label, codeExample: OTP_SAMPLE_CODE };
+  return {
+    ...draft,
+    header: { type: 'none', text: '', mediaSample: '' },
+    body: OTP_BODY + (draft.securityRecommendation ? OTP_SECURITY : ''),
+    footer: draft.codeExpiryMinutes === null ? '' : `This code expires in ${draft.codeExpiryMinutes} minutes.`,
+    buttons: [button],
+    variableType: 'number',
+    ttl: null,
+    samples: { '1': OTP_SAMPLE_CODE },
   };
 }

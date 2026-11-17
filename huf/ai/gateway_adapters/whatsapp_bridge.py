@@ -65,7 +65,7 @@ DEFAULT_MIME_PREFIXES = (
 # Never allowed even though a prefix above would match (active content).
 _BLOCKED_MIME_PREFIXES = ("image/svg", "text/html", "application/xhtml")
 # AUTHENTICATION is intentionally unsupported: Meta requires OTP button components.
-TEMPLATE_CATEGORIES = ("MARKETING", "UTILITY")
+TEMPLATE_CATEGORIES = ("MARKETING", "UTILITY", "AUTHENTICATION")
 FORWARD_RETRY_DELAY_SECONDS = 5
 _TEMPLATE_NAME_RE = re.compile(r"^[a-z0-9_]+$")
 _HTTP_TIMEOUT = 15

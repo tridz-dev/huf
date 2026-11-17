@@ -7,7 +7,9 @@ import type {
   WizardTemplatePayload,
 } from '@/services/whatsappApi';
 import {
+  applyAuthenticationFormat,
   emptyButton,
+  OTP_BUTTON_DEFAULT,
   emptyDraft,
   headerSampleKey,
   type TemplateCategoryId,
@@ -48,6 +50,20 @@ function buttonToApi(b: WizardButton): WizardPayloadButton {
 
 /** Create / draft payload for a (validated) wizard draft. */
 export function toCreatePayload(draft: TemplateWizardDraft): WizardTemplatePayload {
+  if (draft.category === 'AUTHENTICATION') {
+    // Fixed WhatsApp format: no body, header, footer or buttons are sent, only the three options.
+    const auth: WizardTemplatePayload = {
+      template_name: draft.name,
+      category: 'AUTHENTICATION',
+      language_code: draft.language,
+      template: '',
+      parameter_format: 'POSITIONAL',
+      add_security_recommendation: draft.securityRecommendation,
+      otp_button_text: draft.otpButtonText.trim() || OTP_BUTTON_DEFAULT,
+    };
+    if (draft.codeExpiryMinutes !== null) auth.code_expiration_minutes = draft.codeExpiryMinutes;
+    return auth;
+  }
   const payload: WizardTemplatePayload = {
     template_name: draft.name,
     category: draft.category,
@@ -85,6 +101,7 @@ export function toEditPayload(draft: TemplateWizardDraft): WizardEditPayload {
   const rest: Partial<WizardTemplatePayload> = toCreatePayload(draft);
   delete rest.template_name;
   delete rest.language_code;
+  if (draft.category === 'AUTHENTICATION') return rest as WizardEditPayload;
   return {
     ...(rest as WizardEditPayload),
     header_type: rest.header_type ?? '',
@@ -93,10 +110,27 @@ export function toEditPayload(draft: TemplateWizardDraft): WizardEditPayload {
   };
 }
 
+/** Authentication options from a stored template's components (Meta returns the footer as text, the expiry in minutes). */
+function authenticationFromDetail(detail: TemplateDetail, draft: TemplateWizardDraft): TemplateWizardDraft {
+  const { body, footer, buttons } = detail.components;
+  const expiry = /(\d+)\s+minutes?/i.exec(footer?.text ?? '');
+  return {
+    ...draft,
+    name: detail.template_name,
+    language: detail.language_code,
+    securityRecommendation: /do not share/i.test(body.text),
+    codeExpiryMinutes: expiry ? Number(expiry[1]) : null,
+    otpButtonText: buttons[0]?.text || OTP_BUTTON_DEFAULT,
+  };
+}
+
 /** Prefill the wizard from a stored template (edit mode). */
 export function fromTemplateDetail(detail: TemplateDetail): TemplateWizardDraft {
-  const category: TemplateCategoryId = detail.category?.toUpperCase() === 'UTILITY' ? 'UTILITY' : 'MARKETING';
+  const rawCategory = detail.category?.toUpperCase();
+  const category: TemplateCategoryId =
+    rawCategory === 'UTILITY' ? 'UTILITY' : rawCategory === 'AUTHENTICATION' ? 'AUTHENTICATION' : 'MARKETING';
   const draft = emptyDraft(category);
+  if (category === 'AUTHENTICATION') return applyAuthenticationFormat(authenticationFromDetail(detail, draft));
   const { header, body, footer, buttons } = detail.components;
   const bodyTokens = findVariableTokens(body.text);
   const headerTokens = header?.text ? findVariableTokens(header.text) : [];

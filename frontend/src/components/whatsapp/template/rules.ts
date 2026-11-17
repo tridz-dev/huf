@@ -19,6 +19,8 @@ export const WIZARD_LIMITS = {
   copyCode: 20,
   ttlMin: 30,
   ttlMax: 12 * 60 * 60,
+  otpExpiryMin: 1,
+  otpExpiryMax: 90,
 } as const;
 
 /** {fieldPath: message}. Paths: name, language, header.text, header.mediaSample, body, footer, buttons, buttons.<i>.<field>, ttl, samples.<key>. */
@@ -152,6 +154,18 @@ export function validateDraft(draft: TemplateWizardDraft): FieldErrors {
   if (nameProblem) errors.name = nameProblem;
   if (!draft.language.trim()) errors.language = 'Choose a language.';
   else if (!isKnownLocale(draft.language)) errors.language = 'This language is not supported by WhatsApp.';
+
+  if (draft.category === 'AUTHENTICATION') {
+    // Fixed format: only the expiry and button label are editable.
+    const m = draft.codeExpiryMinutes;
+    if (m !== null && (!Number.isInteger(m) || m < WIZARD_LIMITS.otpExpiryMin || m > WIZARD_LIMITS.otpExpiryMax)) {
+      errors.codeExpiryMinutes = `Code expiry must be between ${WIZARD_LIMITS.otpExpiryMin} and ${WIZARD_LIMITS.otpExpiryMax} minutes.`;
+    }
+    if (draft.otpButtonText.length > WIZARD_LIMITS.buttonText) {
+      errors.otpButtonText = `Button text is limited to ${WIZARD_LIMITS.buttonText} characters.`;
+    }
+    return errors;
+  }
 
   // Header
   const sampleOwners: { key: string; token: string }[] = [];

@@ -15,6 +15,7 @@ import {
 import { TemplatePreview } from '../TemplatePreview';
 import { kindById, type TemplateKind } from '../template/catalogue';
 import { emptyDraft, type TemplateWizardDraft, type WizardButton, type WizardHeader } from '../template/draft';
+import { applyAuthenticationFormat } from '../template/draft';
 import { toCreatePayload, toEditPayload } from '../template/payload';
 import { stepOfField, validateDraft } from '../template/rules';
 import { addButton, moveButton, switchVariableType } from './draftActions';
@@ -115,7 +116,7 @@ export function TemplateWizard(props: TemplateWizardProps) {
   );
 
   const edit = useCallback((fn: (d: TemplateWizardDraft) => TemplateWizardDraft) => {
-    setDraft(fn);
+    setDraft((d) => applyAuthenticationFormat(fn(d)));
     setServerFields({});
     setNotices([]);
   }, []);
@@ -199,7 +200,7 @@ export function TemplateWizard(props: TemplateWizardProps) {
   };
 
   const model = useMemo(() => draftToPreviewModel(draft), [draft]);
-  const kindLabel = kind ? `${kind.title} · ${kind.subtype}` : draft.category === 'UTILITY' ? 'Utility' : 'Marketing';
+  const kindLabel = kind ? `${kind.title} · ${kind.subtype}` : draft.category === 'UTILITY' ? 'Utility' : draft.category === 'AUTHENTICATION' ? 'Authentication' : 'Marketing';
   const finalLabel = isEdit ? 'Submit changes to WhatsApp' : direct ? 'Submit to WhatsApp' : 'Request approval';
 
   const buttonId = () => `new-${(buttonSeq.current += 1)}`;

@@ -39,6 +39,54 @@ export function WriteStep(p: Props) {
   const ttl = draft.ttl;
   const choices = ttl !== null && !TTL_CHOICES.includes(ttl) ? [...TTL_CHOICES, ttl].sort((a, b) => a - b) : TTL_CHOICES;
 
+  if (draft.category === 'AUTHENTICATION') {
+    const expiryError = field.error('codeExpiryMinutes');
+    const buttonError = field.error('otpButtonText');
+    return (
+      <>
+        <SetupSection draft={draft} field={field} locked={p.lockIdentity} onChange={p.onChange} onVariableType={p.onVariableType} />
+        <Section title="One-time password" description="WhatsApp fixes the wording of these messages. You can only choose the options below.">
+          <div className="flex items-center gap-3">
+            <Switch
+              id="tpl-otp-security"
+              checked={draft.securityRecommendation}
+              onCheckedChange={(on) => p.onChange({ securityRecommendation: on })}
+            />
+            <Label htmlFor="tpl-otp-security">Add security recommendation (do not share this code)</Label>
+          </div>
+          <div className="flex items-center gap-3">
+            <Switch
+              id="tpl-otp-expiry-on"
+              checked={draft.codeExpiryMinutes !== null}
+              onCheckedChange={(on) => p.onChange({ codeExpiryMinutes: on ? 10 : null })}
+            />
+            <Label htmlFor="tpl-otp-expiry-on">Show code expiry in minutes</Label>
+            {draft.codeExpiryMinutes !== null && (
+              <Input
+                aria-label="Code expiry in minutes"
+                type="number"
+                min={WIZARD_LIMITS.otpExpiryMin}
+                max={WIZARD_LIMITS.otpExpiryMax}
+                className="w-24"
+                value={draft.codeExpiryMinutes}
+                onChange={(e) => p.onChange({ codeExpiryMinutes: Number(e.target.value) })}
+              />
+            )}
+          </div>
+          {expiryError && <p role="alert" className="text-[11px] text-destructive">{expiryError}</p>}
+          <Field id="tpl-otp-button" label="Copy code button label" error={buttonError} counter={{ length: draft.otpButtonText.length, max: WIZARD_LIMITS.buttonText }}>
+            <Input
+              {...controlA11y('tpl-otp-button', buttonError)}
+              value={draft.otpButtonText}
+              onChange={(e) => p.onChange({ otpButtonText: e.target.value })}
+              onBlur={() => field.touch('otpButtonText')}
+            />
+          </Field>
+        </Section>
+      </>
+    );
+  }
+
   return (
     <>
       {p.editsLeft != null && (

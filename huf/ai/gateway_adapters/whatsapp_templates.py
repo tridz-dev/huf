@@ -46,8 +46,19 @@ TTL_MIN = 30
 TTL_MAX = 43200
 TTL_CATEGORIES = ("UTILITY",)
 
-# Categories a template may be created in. AUTHENTICATION is deliberately rejected for now.
-CATEGORIES = ("UTILITY", "MARKETING")
+# Categories a template may be created in.
+CATEGORIES = ("UTILITY", "MARKETING", "AUTHENTICATION")
+
+# Authentication templates use a fixed Meta format: Meta writes the body ("<code> is your
+# verification code.", plus "For your security, do not share this code." when
+# add_security_recommendation is set); we only choose the recommendation, the expiry
+# footer and the copy-code button label.
+OTP_BODY = "{{1}} is your verification code."
+OTP_BODY_SECURITY = " For your security, do not share this code."
+OTP_BUTTON_TEXT_DEFAULT = "Copy code"
+OTP_EXPIRY_MIN = 1
+OTP_EXPIRY_MAX = 90
+OTP_CODE_MAX = 15  # unverified (from memory): Meta caps the copy-code value at 15 characters
 
 HEADER_TYPES = ("TEXT", "IMAGE", "VIDEO", "DOCUMENT", "LOCATION")
 MEDIA_HEADER_TYPES = ("IMAGE", "VIDEO", "DOCUMENT")
@@ -212,8 +223,8 @@ def validate_template_spec(payload: dict[str, Any]) -> tuple[dict[str, Any], lis
 	# ---- category / ttl
 	category = str(payload.get("category") or "").strip().upper()
 	if category == "AUTHENTICATION":
-		errors.append(_e("category", "category_not_supported", "Authentication templates are not supported yet."))
-	elif category and category not in CATEGORIES:
+		return _validate_authentication(payload)
+	if category and category not in CATEGORIES:
 		errors.append(_e("category", "invalid_category", f"Category must be one of {', '.join(CATEGORIES)}."))
 	ttl = _ttl_value(payload)
 	if ttl is not None:
@@ -395,6 +406,59 @@ def validate_template_spec(payload: dict[str, Any]) -> tuple[dict[str, Any], lis
 	return spec, errors
 
 
+def _validate_authentication(payload: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, str]]]:
+	"""Spec for an AUTHENTICATION template (fixed Meta format, copy-code button)."""
+	errors: list[dict[str, str]] = []
+	for key, label in (("header", "header"), ("header_type", "header"), ("footer", "footer"), ("buttons", "buttons")):
+		if payload.get(key) not in (None, "", [], {}):
+			errors.append(_e(key, "not_allowed", f"Authentication templates have a fixed format and no custom {label}."))
+	if _ttl_value(payload) is not None:
+		errors.append(_e("ttl_seconds", "ttl_not_allowed", "ttl_seconds can only be set on UTILITY templates."))
+	recommendation = payload.get("add_security_recommendation")
+	if recommendation is None:
+		recommendation = False
+	if not isinstance(recommendation, bool):
+		errors.append(_e("add_security_recommendation", "invalid", "add_security_recommendation must be true or false."))
+		recommendation = False
+	expiry = payload.get("code_expiration_minutes")
+	if expiry == "":
+		expiry = None
+	if expiry is not None:
+		if isinstance(expiry, bool) or not isinstance(expiry, int):
+			errors.append(_e("code_expiration_minutes", "invalid_expiry", "code_expiration_minutes must be an integer."))
+			expiry = None
+		elif not OTP_EXPIRY_MIN <= expiry <= OTP_EXPIRY_MAX:
+			errors.append(
+				_e("code_expiration_minutes", "expiry_out_of_range", f"code_expiration_minutes must be {OTP_EXPIRY_MIN}-{OTP_EXPIRY_MAX}.")
+			)
+	button_text = str(payload.get("otp_button_text") or OTP_BUTTON_TEXT_DEFAULT).strip()
+	if len(button_text) > BUTTON_TEXT_MAX:
+		errors.append(_e("otp_button_text", "too_long", f"Button text is {len(button_text)} characters; the limit is {BUTTON_TEXT_MAX}."))
+	declared = str(payload.get("parameter_format") or "").strip().upper()
+	if declared and declared != "POSITIONAL":
+		errors.append(_e("parameter_format", "parameter_format_mismatch", "Authentication templates use a positional code variable."))
+	spec = {
+		"body": OTP_BODY + (OTP_BODY_SECURITY if recommendation else ""),
+		"parameter_format": "POSITIONAL",
+		"sample_values": [],
+		"named_samples": [],
+		"header_type": "",
+		"header_text": "",
+		"header_sample": "",
+		"header_variable": "",
+		"header_handle": "",
+		"footer": f"This code expires in {expiry} minutes." if isinstance(expiry, int) else "",
+		"buttons": [],
+		"category": "AUTHENTICATION",
+		"ttl_seconds": None,
+		"notes": [],
+		"add_security_recommendation": recommendation,
+		"code_expiration_minutes": expiry if isinstance(expiry, int) else None,
+		"otp_button_text": button_text,
+	}
+	return spec, errors
+
+
 def expand_url_example(prefix: str, example: str) -> tuple[str, str]:
 	"""Full example URL for a dynamic URL button, plus a note when a bare suffix was expanded.
 
@@ -539,6 +603,19 @@ def build_meta_payload(spec: dict[str, Any], media_header: dict[str, Any] | None
 
 def build_meta_components(spec: dict[str, Any], media_header: dict[str, Any] | None = None) -> list[dict[str, Any]]:
 	"""FULL Graph ``components`` array for a validated spec (create or edit)."""
+	if spec.get("category") == "AUTHENTICATION":
+		# Meta authentication format: BODY carries no text, FOOTER only the expiry, one OTP copy-code button
+		body_auth: dict[str, Any] = {"type": "BODY"}
+		if spec.get("add_security_recommendation"):
+			body_auth["add_security_recommendation"] = True
+		auth: list[dict[str, Any]] = [body_auth]
+		if spec.get("code_expiration_minutes") is not None:
+			auth.append({"type": "FOOTER", "code_expiration_minutes": spec["code_expiration_minutes"]})
+		auth.append({
+			"type": "BUTTONS",
+			"buttons": [{"type": "OTP", "otp_type": "COPY_CODE", "text": spec.get("otp_button_text") or OTP_BUTTON_TEXT_DEFAULT}],
+		})
+		return auth
 	named = spec.get("parameter_format") == "NAMED"
 	body: dict[str, Any] = {"type": "BODY", "text": spec["body"]}
 	if named and spec.get("named_samples"):
@@ -759,7 +836,13 @@ def _template_view(template: Any) -> dict[str, Any]:
 	body_vars, header_vars = variables(body), variables(header) if htype in ("", "TEXT") else []
 	if fmt not in PARAMETER_FORMATS:
 		fmt = "NAMED" if any(not v.isdigit() for v in body_vars + header_vars) else "POSITIONAL"
-	return {"fmt": fmt, "body_vars": body_vars, "header_vars": header_vars, "header_type": htype}
+	is_auth = (isinstance(template, dict) and str(template.get("category") or "").upper() == "AUTHENTICATION") or any(
+		isinstance(c, dict)
+		and str(c.get("type") or "").upper() == "BUTTONS"
+		and any(isinstance(b, dict) and str(b.get("type") or "").upper() == "OTP" for b in c.get("buttons") or [])
+		for c in (template if isinstance(template, list) else [])
+	)
+	return {"fmt": fmt, "body_vars": body_vars, "header_vars": header_vars, "header_type": htype, "auth": is_auth}
 
 
 def _named_values(field: str, raw: Any, names: list[str], errors: list[dict[str, str]]) -> list[tuple[str, Any]]:
@@ -804,6 +887,8 @@ def build_send_components(
 	"""
 	errors: list[dict[str, str]] = []
 	view = _template_view(template)
+	if view["auth"]:
+		return build_otp_components(body_params)
 	named = view["fmt"] == "NAMED"
 	components: list[dict[str, Any]] = []
 
@@ -841,6 +926,26 @@ def build_send_components(
 	errors += berr
 	components += build_template_components(None, None, buttons_n)
 	return components, errors
+
+
+def build_otp_components(code: Any) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
+	"""Send components for an authentication template: the code as the body parameter and as
+	the copy-code (url) button parameter. The code is never echoed into error messages."""
+	if isinstance(code, dict):
+		code = next(iter(code.values()), None)
+	elif isinstance(code, (list, tuple)):
+		if len(code) != 1:
+			return [], [_e("body_params", "param_count_mismatch", "An authentication template takes exactly one parameter: the code.")]
+		code = code[0]
+	text = str(code if code is not None else "").strip()
+	if not text:
+		return [], [_e("body_params", "empty_param", "The one-time code cannot be empty.")]
+	if len(text) > OTP_CODE_MAX or not re.fullmatch(r"[A-Za-z0-9]+", text):
+		return [], [_e("body_params", "invalid_code", f"The code must be 1-{OTP_CODE_MAX} letters or digits.")]
+	return [
+		{"type": "body", "parameters": [{"type": "text", "text": text}]},
+		{"type": "button", "sub_type": "url", "index": "0", "parameters": [{"type": "text", "text": text}]},
+	], []
 
 
 def validate_media_request(

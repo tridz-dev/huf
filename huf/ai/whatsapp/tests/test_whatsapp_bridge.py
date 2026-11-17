@@ -336,11 +336,8 @@ class TestBridge(unittest.TestCase):
 		with avail(False):
 			self.assertIsNone(wb.template_language("ACC", "reopen"))
 
-	def test_authentication_category_is_not_supported(self):
-		self.assertEqual(wb.TEMPLATE_CATEGORIES, ("MARKETING", "UTILITY"))
-		with avail(), patch.object(frappe, "has_permission", return_value=True):
-			res = wb.create_template("ACC", {"template_name": "otp", "category": "AUTHENTICATION", "language_code": "en"})
-		self.assertEqual(res["error"], "invalid_category")
+	def test_authentication_category_is_supported(self):
+		self.assertEqual(wb.TEMPLATE_CATEGORIES, ("MARKETING", "UTILITY", "AUTHENTICATION"))
 
 	def test_list_templates(self):
 		with avail(False):
