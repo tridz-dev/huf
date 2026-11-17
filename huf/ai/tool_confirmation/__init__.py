@@ -13,7 +13,6 @@ from __future__ import annotations
 import json
 
 import frappe
-from frappe import _
 
 from huf.ai.api_support import require_permission
 from huf.ai.tool_confirmation.hashing import (  # noqa: F401 (re-exported)
@@ -325,7 +324,6 @@ def decide(id, approve):
 
 	doc.decision = "Approved" if approve else "Denied"
 	doc.decided_by, doc.decided_at = user, now_datetime()
-	result = None
 	if not approve:
 		doc.state = "denied"
 		_close(doc, clear_args=True)

@@ -5,7 +5,6 @@
 
 from __future__ import annotations
 
-import re
 from typing import Any
 
 from huf.ai.gateway_adapters import whatsapp_templates as wt

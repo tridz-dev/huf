@@ -241,7 +241,6 @@ def send_one(recipient_name: str) -> str:
 		return "skipped"
 
 	body, header, button = _merge_params(bc, row)
-	own_params = _json(row.get("params"))
 	carousel = _merge_carousel(bc, row.get("params"))
 	opaque = row.get("opaque_ref") or recipient_name
 	use_mm = (bc.get("send_via") or "messages") == "marketing_messages"
