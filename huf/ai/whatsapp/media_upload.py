@@ -7,6 +7,7 @@ DOCUMENT header is sent by media ``id``. Neither the access token nor file bytes
 from __future__ import annotations
 
 import hashlib
+import time
 import re
 from typing import Any, Callable
 
@@ -131,9 +132,13 @@ def upload_private_pdf(
 	if not force:
 		cached = frappe.cache().hget(_CACHE_KEY, _cache_key(digest, phone_id))
 		if cached:
-			return cached.decode() if isinstance(cached, bytes) else str(cached)
+			cached = cached.decode() if isinstance(cached, bytes) else str(cached)
+			media_id, _, expiry = cached.partition("|")
+			if expiry.isdigit() and int(expiry) > time.time():
+				return media_id
+			frappe.cache().hdel(_CACHE_KEY, _cache_key(digest, phone_id))
 	media_id = _post(acct, data, filename, http_post)
-	frappe.cache().hset(_CACHE_KEY, _cache_key(digest, phone_id), media_id)
+	frappe.cache().hset(_CACHE_KEY, _cache_key(digest, phone_id), f"{media_id}|{int(time.time()) + CACHE_TTL_SECONDS}")
 	return media_id
 
 
