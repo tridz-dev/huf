@@ -8,7 +8,7 @@ from frappe.tests import IntegrationTestCase
 
 from huf.ai import tool_confirmation as tc
 from huf.ai.gateways import tool_policy
-from huf.ai.tools.outbound_actions import READ_ONLY_ACTIONS, is_outbound_call
+from huf.ai.tools.messaging.outbound_actions import READ_ONLY_ACTIONS, is_outbound_call
 
 
 class TestOutboundActionGating(IntegrationTestCase):

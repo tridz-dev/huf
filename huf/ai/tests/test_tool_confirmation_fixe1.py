@@ -64,7 +64,7 @@ class TestFixE1(IntegrationTestCase):
 		self.assertEqual(frappe.db.get_value(tc.DOCTYPE, req["id"], "tool_call_id"), "call_xyz")
 
 	def test_whatsapp_summarizer(self):
-		from huf.ai.tools.confirmation_summaries import whatsapp
+		from huf.ai.tools.messaging.confirmation_summaries import whatsapp
 
 		s = whatsapp({"action": "send_template", "template_name": "promo", "to": "+1"})
 		self.assertEqual((s["recipient_count"], s["template"], s["channel"]), (1, "promo", "whatsapp"))

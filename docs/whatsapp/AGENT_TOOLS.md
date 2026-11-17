@@ -1,7 +1,7 @@
 # WhatsApp agent tools (generic, built in)
 
 Huf ships six built-in agent tools so any app's agent can run audiences and broadcasts without writing its own.
-They live in `huf/ai/tools/whatsapp_broadcast_tools.py`, are registered through the `huf_tools` hook and synced to
+They live in `huf/ai/tools/messaging/whatsapp_broadcast_tools.py`, are registered through the `huf_tools` hook and synced to
 `Agent Tool Function` rows. Each one calls the same whitelisted functions the Huf UI uses
 (`broadcast/api.py`, `broadcast/schedule.py`, `audiences/api.py`), as the signed-in user: Gateway write authority,
 size caps, rate limits and opt-out policy all apply. No tool uses `ignore_permissions` or the externally-managed

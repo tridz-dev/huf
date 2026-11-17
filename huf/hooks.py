@@ -469,7 +469,7 @@ huf_tools = [
     "huf.ai.tools.gateways.reply.GATEWAY_REPLY_TOOLS",
     "huf.ai.tools.gateways.send.GATEWAY_SEND_TOOLS",
     "huf.ai.tools.gateways.handoff.GATEWAY_HANDOFF_TOOLS",
-    "huf.ai.tools.whatsapp_broadcast_tools.WHATSAPP_BROADCAST_TOOLS",
+    "huf.ai.tools.messaging.whatsapp_broadcast_tools.WHATSAPP_BROADCAST_TOOLS",
 ]
 
 # Knowledge Backends Hook
