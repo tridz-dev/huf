@@ -21,6 +21,10 @@ export const WIZARD_LIMITS = {
   ttlMax: 12 * 60 * 60,
   otpExpiryMin: 1,
   otpExpiryMax: 90,
+  cardsMin: 2,
+  cardsMax: 10,
+  cardBody: 160, // unverified (from memory): Meta card body limit
+  cardButtons: 2, // unverified (from memory)
 } as const;
 
 /** {fieldPath: message}. Paths: name, language, header.text, header.mediaSample, body, footer, buttons, buttons.<i>.<field>, ttl, samples.<key>. */
@@ -94,6 +98,48 @@ function checkTokens(
   return tokens;
 }
 
+/** Card errors use paths cards (list level) and cards.<i>.mediaSample|body|samples.<n>|buttons|buttons.<j>.<field>. */
+function validateCards(draft: TemplateWizardDraft, errors: FieldErrors): void {
+  const { cards } = draft;
+  if (cards.length < WIZARD_LIMITS.cardsMin || cards.length > WIZARD_LIMITS.cardsMax) {
+    errors.cards = `A carousel needs ${WIZARD_LIMITS.cardsMin} to ${WIZARD_LIMITS.cardsMax} cards.`;
+  }
+  cards.forEach((c, i) => {
+    const p = `cards.${i}`;
+    const media = c.mediaSample.trim();
+    if (!media) errors[`${p}.mediaSample`] = 'Add a sample image or video for this card.';
+    else if (!isMediaSample(media)) errors[`${p}.mediaSample`] = 'The sample must be an http(s) link or an uploaded file.';
+    if (!c.body.trim()) errors[`${p}.body`] = 'Each card needs text.';
+    else if (c.body.length > WIZARD_LIMITS.cardBody) errors[`${p}.body`] = `Card text is limited to ${WIZARD_LIMITS.cardBody} characters.`;
+    else {
+      const tokens = findVariableTokens(c.body);
+      const nums = [...new Set(tokens.map((t) => Number(t.token)))].sort((a, b) => a - b);
+      if (hasStrayBraces(c.body) || tokens.some((t) => t.kind !== 'number')) {
+        errors[`${p}.body`] = 'Card text can only use numbered variables like {{1}}.';
+      } else if (nums.some((n, k) => n !== k + 1)) {
+        errors[`${p}.body`] = 'Variables must be numbered {{1}}, {{2}}, ... without gaps.';
+      } else {
+        nums.forEach((n) => {
+          const problem = sampleProblem(c.samples[n - 1] ?? '', String(n));
+          if (problem) errors[`${p}.samples.${n}`] = problem;
+          else if ((c.samples[n - 1] ?? '').includes(',')) errors[`${p}.samples.${n}`] = 'Examples cannot contain commas.';
+        });
+      }
+    }
+    if (c.buttons.length === 0) errors[`${p}.buttons`] = 'Each card needs at least one button.';
+    else if (c.buttons.length > WIZARD_LIMITS.cardButtons) errors[`${p}.buttons`] = `A card allows at most ${WIZARD_LIMITS.cardButtons} buttons.`;
+    const sub: FieldErrors = {};
+    validateButtons(c.buttons, sub);
+    for (const [k, v] of Object.entries(sub)) {
+      if (k !== 'buttons') errors[`${p}.${k}`] = v;
+    }
+  });
+  const shape = (c: (typeof cards)[number]) => c.buttons.map((b) => b.type).join(',');
+  if (cards.length > 1 && cards.some((c) => shape(c) !== shape(cards[0]))) {
+    errors.cards ??= 'Every card must have the same buttons in the same order.';
+  }
+}
+
 function validateButtons(buttons: readonly WizardButton[], errors: FieldErrors): void {
   const { buttonsTotal, urlButtons, phoneButtons, copyCodeButtons } = WIZARD_LIMITS;
   const count = (t: WizardButton['type']) => buttons.filter((b) => b.type === t).length;
@@ -164,6 +210,24 @@ export function validateDraft(draft: TemplateWizardDraft): FieldErrors {
     if (draft.otpButtonText.length > WIZARD_LIMITS.buttonText) {
       errors.otpButtonText = `Button text is limited to ${WIZARD_LIMITS.buttonText} characters.`;
     }
+    return errors;
+  }
+
+  if (draft.carousel) {
+    if (draft.category !== 'MARKETING') errors.category = 'Carousel templates must be Marketing.';
+    const body = draft.body;
+    if (!body.trim()) errors.body = 'Body is required.';
+    else if (body.length > WIZARD_LIMITS.body) errors.body = `Body is limited to ${WIZARD_LIMITS.body} characters.`;
+    else {
+      const tokens = checkTokens('body', body, draft, errors, 'body');
+      if (!errors.body) {
+        for (const t of tokens) {
+          const problem = sampleProblem(draft.samples[t.token] ?? '', t.token);
+          if (problem) errors[`samples.${t.token}`] = problem;
+        }
+      }
+    }
+    validateCards(draft, errors);
     return errors;
   }
 

@@ -15,6 +15,8 @@ export interface TemplateKind {
   goodFor: string[];
   customisable: string[];
   sample: PreviewModel;
+  /** Marketing media carousel (cards editor instead of header/footer/buttons). */
+  carousel?: boolean;
 }
 
 export const TEMPLATE_KINDS: readonly TemplateKind[] = [
@@ -31,6 +33,23 @@ export const TEMPLATE_KINDS: readonly TemplateKind[] = [
       header: { kind: 'text', text: 'Summer sale is here' },
       body: 'Hi Alex, enjoy 20% off everything until Sunday. Tap below to see what is new.',
       footer: 'Reply STOP to opt out',
+      buttons: [{ type: 'URL', text: 'Shop now' }],
+    },
+  },
+  {
+    id: 'marketing_carousel',
+    category: 'MARKETING',
+    title: 'Marketing',
+    subtype: 'Media carousel',
+    availability: 'available',
+    carousel: true,
+    description: 'Show 2 to 10 scrollable cards, each with an image or video, a short text and buttons.',
+    goodFor: ['Product showcases', 'Multiple offers in one message', 'Collections and lookbooks'],
+    customisable: ['Body', 'Cards', 'Card media', 'Card buttons'],
+    sample: {
+      header: null,
+      body: 'Hi Alex, our new arrivals are here. Swipe to see them.',
+      footer: '',
       buttons: [{ type: 'URL', text: 'Shop now' }],
     },
   },

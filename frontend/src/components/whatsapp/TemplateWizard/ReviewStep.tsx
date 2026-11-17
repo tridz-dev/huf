@@ -55,10 +55,21 @@ export function ReviewStep({ draft, kindLabel, isEdit, direct, intro }: Props) {
         <Row label="Name">
           <span className="font-mono">{draft.name}</span> · {localeLabel(draft.language)}
         </Row>
-        <Row label="Header">{headerSummary(draft)}</Row>
+        {!draft.carousel && <Row label="Header">{headerSummary(draft)}</Row>}
         <Row label="Body"><span className="whitespace-pre-wrap">{draft.body}</span></Row>
-        <Row label="Footer">{draft.footer.trim() || 'None'}</Row>
-        <Row label="Buttons">
+        {draft.carousel && (
+          <Row label="Cards">
+            <ol className="list-decimal space-y-0.5 pl-4">
+              {draft.cards.map((c) => (
+                <li key={c.id}>
+                  <span className="text-xs text-steel">{c.headerType}</span> {c.body} <span className="text-xs text-steel">({c.buttons.map((b) => b.text || 'Button').join(', ')})</span>
+                </li>
+              ))}
+            </ol>
+          </Row>
+        )}
+        {!draft.carousel && <Row label="Footer">{draft.footer.trim() || 'None'}</Row>}
+        {!draft.carousel && <Row label="Buttons">
           {draft.buttons.length === 0 ? 'None' : (
             <ul className="space-y-0.5">
               {draft.buttons.map((b) => (
@@ -66,7 +77,7 @@ export function ReviewStep({ draft, kindLabel, isEdit, direct, intro }: Props) {
               ))}
             </ul>
           )}
-        </Row>
+        </Row>}
         {samples.length > 0 && (
           <Row label="Samples">
             <ul className="space-y-0.5">

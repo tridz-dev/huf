@@ -91,6 +91,20 @@ function pathFor(raw: string, draft: TemplateWizardDraft): string | null {
     return bodyTokens(draft).includes(name) ? `samples.${name}` : 'body';
   }
 
+  if (field === 'cards') return 'cards';
+  const card = /^cards\[?\.?(\d+)\]?\.(\w+)(?:\[?\.?(\d+)\]?(?:\.(\w+))?)?$/.exec(field);
+  if (card) {
+    const i = Number(card[1]);
+    const sub = card[2];
+    if (sub === 'sample' || sub === 'header_type') return `cards.${i}.mediaSample`;
+    if (sub === 'body') return `cards.${i}.body`;
+    if (sub === 'sample_values') return `cards.${i}.body`;
+    if (sub === 'buttons') {
+      const mapped = card[4] ? own(BUTTON_FIELD, card[4])?.(draft.cards[i]?.buttons[Number(card[3])]?.type ?? 'QUICK_REPLY') : null;
+      return mapped && card[3] !== undefined ? `cards.${i}.buttons.${card[3]}.${mapped}` : `cards.${i}.buttons`;
+    }
+    return 'cards';
+  }
   if (field === 'buttons') return 'buttons';
   const button = /^buttons\.(\d+)(?:\.(\w+))?$/.exec(field);
   if (button) {

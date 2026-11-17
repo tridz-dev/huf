@@ -11,7 +11,16 @@ export type PreviewHeader =
 /** Sample values by position ({{1}} is index 0) or by name ({{first_name}}). */
 export type PreviewVariables = readonly string[] | Readonly<Record<string, string>>;
 
+export interface PreviewCard {
+  header: { kind: 'image' | 'video'; url?: string };
+  body: string;
+  samples?: PreviewVariables;
+  buttons: { type: PreviewButtonType; text: string }[];
+}
+
 export interface PreviewModel {
+  /** Media carousel cards, shown as a scrollable row under the bubble. */
+  cards?: PreviewCard[];
   header: PreviewHeader | null;
   body: string;
   samples?: PreviewVariables;

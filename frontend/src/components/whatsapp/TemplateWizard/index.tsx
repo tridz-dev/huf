@@ -14,6 +14,7 @@ import {
 } from '@/services/whatsappApi';
 import { TemplatePreview } from '../TemplatePreview';
 import { kindById, type TemplateKind } from '../template/catalogue';
+import { addCard, addCardButton, moveCard, removeCard, removeCardButton, startCarousel, updateCard, updateCardButton } from '../template/cards';
 import { emptyDraft, type TemplateWizardDraft, type WizardButton, type WizardHeader } from '../template/draft';
 import { applyAuthenticationFormat } from '../template/draft';
 import { toCreatePayload, toEditPayload } from '../template/payload';
@@ -78,7 +79,7 @@ export function TemplateWizard(props: TemplateWizardProps) {
   const [draft, setDraft] = useState<TemplateWizardDraft>(() =>
     initial ?? (copyFrom ? { ...copyFrom, name: `${copyFrom.name}_v2` } : emptyDraft()),
   );
-  const [kindId, setKindId] = useState(() => ((initial ?? copyFrom) ? `${(initial ?? copyFrom)!.category.toLowerCase()}_default` : 'marketing_default'));
+  const [kindId, setKindId] = useState(() => ((initial ?? copyFrom) ? ((initial ?? copyFrom)!.carousel ? 'marketing_carousel' : `${(initial ?? copyFrom)!.category.toLowerCase()}_default`) : 'marketing_default'));
   const [touched, setTouched] = useState<ReadonlySet<string>>(new Set());
   const [attempts, setAttempts] = useState(0);
   const [serverFields, setServerFields] = useState<Record<string, string>>({});
@@ -124,7 +125,9 @@ export function TemplateWizard(props: TemplateWizardProps) {
 
   const selectKind = (k: TemplateKind) => {
     setKindId(k.id);
-    if (k.category && k.category !== draft.category) patch({ category: k.category, ttl: null });
+    if (k.carousel) edit((d) => startCarousel({ ...d, category: 'MARKETING', ttl: null }, (n) => `card-${(buttonSeq.current += 1)}-${n}`));
+    else if (draft.carousel) patch({ carousel: false });
+    if (k.category && k.category !== draft.category && !k.carousel) patch({ category: k.category, ttl: null });
   };
 
   const next = () => {
@@ -235,6 +238,15 @@ export function TemplateWizard(props: TemplateWizardProps) {
                 onMoveButton={(i, by) => edit((d) => moveButton(d, i, by))}
                 onRemoveButton={(i) => edit((d) => ({ ...d, buttons: d.buttons.filter((_, idx) => idx !== i) }))}
                 onButton={setButton}
+                cardActions={{
+                  onAdd: () => edit((d) => addCard(d, `card-${(buttonSeq.current += 1)}`)),
+                  onRemove: (i) => edit((d) => removeCard(d, i)),
+                  onMove: (i, by) => edit((d) => moveCard(d, i, by)),
+                  onCard: (i, p) => edit((d) => updateCard(d, i, p)),
+                  onAddButton: (type) => edit((d) => addCardButton(d, type, `cb-${(buttonSeq.current += 1)}`)),
+                  onRemoveButton: (j) => edit((d) => removeCardButton(d, j)),
+                  onButton: (i, j, p) => edit((d) => updateCardButton(d, i, j, p)),
+                }}
               />
             </StepLayout>
           )}
