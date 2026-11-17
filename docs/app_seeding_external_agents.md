@@ -33,4 +33,4 @@ Seed `agent_icon` (default `SquareAsterisk`) and `allowed_roles`
 
 ## Decisions
 - Prefer plain agent tools over flows (#873 is design-only; no flow seeding).
-- Loyal Arrow Knowledge Input / Flow Definition loaders are deferred.
+- Knowledge Input / Flow Definition loaders for external apps are deferred.

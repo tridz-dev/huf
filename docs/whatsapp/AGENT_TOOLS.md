@@ -37,10 +37,10 @@ creates the audience in the UI and the agent passes its name as `audience`.
 In the app's agent JSON (`<app>/huf/agents/*.json`), reference the tools by name next to the app's own tools:
 
 ```json
-{"agent_name": "Loyalty Manager",
+{"agent_name": "Messaging Assistant",
  "tools": ["whatsapp_list_templates", "whatsapp_audience_upsert", "whatsapp_broadcast_create",
            "whatsapp_broadcast_start", "whatsapp_broadcast_status", "whatsapp_broadcast_retry_failed",
-           "loyalty_segment_members"]}
+           "customer_segment_members"]}
 ```
 
 Re-seeding only tightens flags (`is_outbound`, `requires_confirmation`), so these settings cannot be loosened by an app.

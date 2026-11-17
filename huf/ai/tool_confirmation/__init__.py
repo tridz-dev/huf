@@ -1,7 +1,5 @@
 """Confirm-before-send: park a ``requires_confirmation`` tool call until the requesting user approves.
 
-Contract (frozen): Tracks/safwan-erooth.LoyaltyCRMEnablers/N06_CONTRACT.md.
-
 Flow: ``tool_policy.check_tool_call`` calls :func:`park` for EVERY run (gateway, web, mobile) when a tool
 is flagged ``requires_confirmation``. The call is stored in ``Agent Tool Confirmation`` (canonical args
 hash, requesting user, 15 min expiry, single use) and a ``confirmation_request`` is returned to the model

@@ -1,7 +1,7 @@
 # Copyright (c) 2026, Huf and contributors
 # For license information, please see license.txt
 
-"""Externally managed audiences: another app (a CRM, a loyalty app) keeps an audience's members up to date.
+"""Externally managed audiences: another app (a CRM) keeps an audience's members up to date.
 
 ``upsert_audience_members`` is the one write path. The audience is flagged ``externally_managed`` with a
 ``managed_by`` source label (display only) and the creating user in ``managed_by_user``; only that user (or a

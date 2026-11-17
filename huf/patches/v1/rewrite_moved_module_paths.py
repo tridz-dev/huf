@@ -62,8 +62,17 @@ MAPPING = {
 	"huf.ai.whatsapp_send_file.": "huf.ai.whatsapp.send_file.",
 	"huf.ai.whatsapp_send_keys.": "huf.ai.whatsapp.send_keys.",
 	"huf.ai.whatsapp_send_scope.": "huf.ai.whatsapp.send_scope.",
-	"huf.ai.whatsapp_token_check.": "huf.ai.whatsapp.token_check.",
+	"huf.ai.whatsapp_token_check.": "huf.ai.whatsapp.setup.token_check.",
 	"huf.ai.whatsapp_voice_reply.": "huf.ai.whatsapp.voice_reply.",
+	"huf.ai.tools.confirmation_summaries.": "huf.ai.tools.messaging.confirmation_summaries.",
+	"huf.ai.tools.outbound_actions.": "huf.ai.tools.messaging.outbound_actions.",
+	"huf.ai.tools.whatsapp_broadcast_tools.": "huf.ai.tools.messaging.whatsapp_broadcast_tools.",
+	"huf.ai.whatsapp.broadcast.cost.": "huf.ai.whatsapp.broadcast.support.cost.",
+	"huf.ai.whatsapp.broadcast.failover.": "huf.ai.whatsapp.broadcast.support.failover.",
+	"huf.ai.whatsapp.broadcast.fallback_config.": "huf.ai.whatsapp.broadcast.support.fallback_config.",
+	"huf.ai.whatsapp.setup_stage.": "huf.ai.whatsapp.setup.setup_stage.",
+	"huf.ai.whatsapp.credential_sync.": "huf.ai.whatsapp.setup.credential_sync.",
+	"huf.ai.whatsapp.token_check.": "huf.ai.whatsapp.setup.token_check.",
 }
 
 # (doctype, fieldname) pairs that hold a dotted Python path
