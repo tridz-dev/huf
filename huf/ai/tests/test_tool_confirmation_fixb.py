@@ -1,0 +1,86 @@
+"""FIX-B tests. Run: bench run-tests --module huf.ai.tests.test_tool_confirmation_fixb"""
+
+import json
+from unittest.mock import patch
+
+import frappe
+from frappe.tests import IntegrationTestCase
+from frappe.utils import add_to_date, now_datetime
+
+from huf.ai import tool_confirmation as tc
+from huf.ai.gateways import tool_policy
+from huf.ai.tools.invocation import ToolResult, invoke_tool_sync
+
+ARGS = {"recipients": ["+911"], "template": "promo", "message": "Hi", "channel": "whatsapp"}
+
+
+class TestFixB(IntegrationTestCase):
+	def setUp(self):
+		frappe.set_user("Administrator")
+
+	def tearDown(self):
+		frappe.set_user("Administrator")
+
+	def _park(self):
+		return json.loads(tool_policy.check_tool_call("send_campaign", dict(ARGS), None, True))
+
+	def test_failed_execution_is_committed_and_args_cleared(self):
+		req = self._park()
+		with (
+			patch.object(tc, "assert_user_may_run"),
+			patch.object(tc, "_execute", side_effect=RuntimeError("boom")),
+			patch.object(frappe.db, "commit") as commit,
+		):
+			with self.assertRaises(tc.ExecutionFailed):
+				tc.decide(req["id"], True)
+		self.assertTrue(commit.call_count >= 2)  # approved mark + failed state
+		row = frappe.get_doc(tc.DOCTYPE, req["id"])
+		self.assertEqual(row.state, "failed")
+		self.assertFalse(row.raw_args)
+
+	def test_sweeper_expires_and_clears(self):
+		req = self._park()
+		frappe.db.set_value(tc.DOCTYPE, req["id"], "expires_at", add_to_date(now_datetime(), minutes=-1))
+		req2 = self._park()
+		frappe.db.set_value(tc.DOCTYPE, req2["id"], "state", "executed")  # terminal still holding raw_args
+		out = tc.sweep_expired()
+		self.assertGreaterEqual(out["expired"], 1)
+		self.assertEqual(frappe.db.get_value(tc.DOCTYPE, req["id"], "state"), "expired")
+		self.assertFalse(frappe.db.get_value(tc.DOCTYPE, req["id"], "raw_args"))
+		self.assertFalse(frappe.db.get_value(tc.DOCTYPE, req2["id"], "raw_args"))
+
+	def test_agent_scope_denied_when_tool_removed(self):
+		doc = frappe._dict(agent="Nonexistent Agent", tool="send_campaign")
+		with self.assertRaises(tc.RoleDenied):
+			tc.assert_agent_scope(doc, "Administrator")
+
+	def test_agent_scope_noop_without_agent(self):
+		tc.assert_agent_scope(frappe._dict(agent="", tool="x"), "Administrator")
+
+	def test_invoke_tool_denies_user_without_role(self):
+		tool_doc = {"name": "T1", "tool_name": "t1", "types": "Custom Function"}
+		with (
+			patch("huf.ai.tools.invocation.resolve_tool_doc", return_value=tool_doc),
+			patch("huf.ai.tools.registry.assert_tool_role", side_effect=frappe.PermissionError("no role")),
+			patch("frappe.get_cached_doc"),
+		):
+			res = invoke_tool_sync("t1", {})
+		self.assertFalse(res.success)
+		self.assertTrue(res.denied)
+
+	def test_invoke_tool_skip_flag_bypasses_role_check(self):
+		tool_doc = {"name": "T1", "tool_name": "t1", "types": "Code Execution"}
+		with (
+			patch("huf.ai.tools.invocation.resolve_tool_doc", return_value=tool_doc),
+			patch("huf.ai.tools.registry.assert_tool_role", side_effect=frappe.PermissionError("no role")) as chk,
+		):
+			res = invoke_tool_sync("t1", {}, _skip_role_check=True)
+		chk.assert_not_called()
+		self.assertIn("Code Execution", res.error)
+
+	def test_gateway_run_without_conversation_passes_none(self):
+		with patch.object(tool_policy, "_park", return_value="{}") as p, patch.object(
+			tool_policy, "resolve_gateway_context", return_value={"gateway": "g", "channel": "C1"}
+		), patch.object(tool_policy, "is_tool_allowed", return_value=True):
+			tool_policy.check_tool_call("send_campaign", dict(ARGS), "run1", True, conversation_id=None)
+		self.assertIsNone(p.call_args.args[3])

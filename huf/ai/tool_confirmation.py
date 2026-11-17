@@ -134,7 +134,7 @@ def _publish(event_type: str, doc, agent_run=None):
 
 
 # ------------------------------------------------------------------ park
-def park(tool_name: str, args: dict, agent_run_id=None, conversation_id=None) -> dict:
+def park(tool_name: str, args: dict, agent_run_id=None, conversation_id=None, agent_name=None) -> dict:
 	"""Store the call and return the ``confirmation_request`` dict. Raises on failure (caller fails closed)."""
 	user = frappe.session.user
 	if not user or user == "Guest":
@@ -148,6 +148,7 @@ def park(tool_name: str, args: dict, agent_run_id=None, conversation_id=None) ->
 			"state": "pending",
 			"conversation": conversation_id or "",
 			"agent_run": agent_run_id or "",
+			"agent": agent_name or "",
 			"expires_at": add_to_date(now_datetime(), minutes=EXPIRY_MINUTES),
 			"args_hash": args_hash(args),
 			"summary": json.dumps(build_summary(tool_name, args), default=str),
@@ -175,6 +176,25 @@ def assert_user_may_run(tool_name: str, user: str) -> None:
 		raise RoleDenied(f"user '{user}' may no longer use '{tool_name}'")
 
 
+def assert_agent_scope(doc, user: str) -> None:
+	"""Re-apply agent-level scoping at approval time (tool still on the agent, user still allowed)."""
+	agent = getattr(doc, "agent", None)
+	if not agent:
+		return
+	if not frappe.db.exists("Agent", agent):
+		raise RoleDenied(f"agent '{agent}' no longer exists")
+	agent_doc = frappe.get_doc("Agent", agent)
+	tool_names = {
+		frappe.db.get_value("Agent Tool Function", row.tool, "tool_name") for row in (agent_doc.get("agent_tool") or [])
+	}
+	if doc.tool not in tool_names:
+		raise RoleDenied(f"tool '{doc.tool}' is no longer enabled on agent '{agent}'")
+	from huf.ai.agent.access import check_agent_access
+
+	if not check_agent_access(agent_doc, user):
+		raise RoleDenied(f"user '{user}' may no longer use agent '{agent}'")
+
+
 def _execute(doc, args: dict):
 	from huf.ai.tools.invocation import RunContext, invoke_tool_sync
 
@@ -183,11 +203,17 @@ def _execute(doc, args: dict):
 		agent_run_id=doc.agent_run or None,
 		user=doc.user,
 	)
-	return invoke_tool_sync(doc.tool, args, ctx=ctx)
+	# role already re-checked in decide(); skip the shared-path role check only for this resume call
+	return invoke_tool_sync(doc.tool, args, ctx=ctx, _skip_role_check=True)
 
 
 def _next_index(conversation: str) -> int:
-	row = frappe.db.sql("select max(conversation_index) from `tabAgent Message` where conversation=%s", conversation)
+	# FOR UPDATE serialises concurrent appenders on the conversation's last rows (race-safe index).
+	row = frappe.db.sql(
+		"select max(conversation_index) from (select conversation_index from `tabAgent Message` "
+		"where conversation=%s order by conversation_index desc limit 1 for update) t",
+		conversation,
+	)
 	return cint(row[0][0] if row and row[0] else 0) + 1
 
 
@@ -255,6 +281,7 @@ def decide(id, approve):
 			_close(doc, clear_args=True)
 			frappe.db.commit()
 			raise ArgsChanged(id)
+		assert_agent_scope(doc, user)
 		assert_user_may_run(doc.tool, user)
 	except RoleDenied:
 		doc.state, doc.error = "failed", "permission re-check failed"
@@ -281,6 +308,9 @@ def decide(id, approve):
 	_append_followup(doc, doc.state, _redact(result) if result is not None else {"error": doc.error})
 	_publish("approval-resolved", doc)
 	if doc.state == "failed":
+		# Persist the failed state, cleared raw_args and the follow-up message: Frappe rolls the
+		# request back when an exception is raised, which would revert the row to "approved".
+		frappe.db.commit()
 		raise ExecutionFailed(doc.error or id)
 	return {"confirmation": _serialize(doc), "result": result}
 
@@ -291,3 +321,20 @@ def _close(doc, state=None, clear_args=False):
 	if clear_args:
 		doc.raw_args = ""
 	doc.save(ignore_permissions=True)
+
+
+def sweep_expired() -> dict:
+	"""Scheduler job: expire stale pending rows and clear raw_args from every non-pending row."""
+	now = now_datetime()
+	expired = frappe.db.get_all(
+		DOCTYPE, filters={"state": "pending", "expires_at": ("<=", now)}, pluck="name"
+	)
+	for name in expired:
+		frappe.db.set_value(DOCTYPE, name, {"state": "expired", "raw_args": ""}, update_modified=False)
+	cleared = frappe.db.get_all(
+		DOCTYPE, filters={"state": ("!=", "pending"), "raw_args": ("is", "set")}, pluck="name"
+	)
+	for name in cleared:
+		frappe.db.set_value(DOCTYPE, name, "raw_args", "", update_modified=False)
+	frappe.db.commit()
+	return {"expired": len(expired), "cleared": len(cleared)}
