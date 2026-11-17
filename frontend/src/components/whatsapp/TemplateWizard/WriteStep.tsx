@@ -75,7 +75,7 @@ export function WriteStep(p: Props) {
               />
             )}
           </div>
-          {expiryError && <p role="alert" className="text-[11px] text-destructive">{expiryError}</p>}
+          {expiryError && <p role="alert" className="text-meta text-destructive">{expiryError}</p>}
           <Field id="tpl-otp-button" label="Copy code button label" error={buttonError} counter={{ length: draft.otpButtonText.length, max: WIZARD_LIMITS.buttonText }}>
             <Input
               {...controlA11y('tpl-otp-button', buttonError)}
@@ -140,7 +140,7 @@ export function WriteStep(p: Props) {
               </Select>
             )}
           </div>
-          <p id="tpl-ttl-note" role={ttlError ? 'alert' : undefined} className={ttlError ? 'text-[11px] text-destructive' : 'text-[11px] text-steel'}>
+          <p id="tpl-ttl-note" role={ttlError ? 'alert' : undefined} className={ttlError ? 'text-meta text-destructive' : 'text-meta text-steel'}>
             {ttlError ?? 'If WhatsApp cannot deliver the message in time, it is dropped instead of arriving late.'}
           </p>
         </Section>

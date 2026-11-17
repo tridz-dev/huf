@@ -69,10 +69,10 @@ function CardMedia({ card, index, field, onCard }: { card: WizardCard; index: nu
             {uploading ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" aria-hidden /> : <Upload className="mr-1.5 h-4 w-4" aria-hidden />}
             Upload
           </Button>
-          <input
+          <Input
             ref={fileRef}
             type="file"
-            hidden
+            className="hidden"
             aria-label={`Upload card ${index + 1} sample file`}
             accept={card.headerType === 'video' ? 'video/mp4' : 'image/jpeg,image/png'}
             onChange={(e) => {
@@ -172,13 +172,13 @@ export function CardsSection({ draft, field, onAdd, onRemove, onMove, onCard, on
           <div className="flex items-center justify-between gap-2">
             <span className="text-xs font-medium text-ink">Card {i + 1}</span>
             <span className="flex items-center">
-              <Button type="button" variant="ghost" size="icon" className="h-7 w-7" disabled={i === 0} aria-label={`Move card ${i + 1} up`} onClick={() => onMove(i, -1)}>
+              <Button type="button" variant="ghost" size="icon-sm" disabled={i === 0} aria-label={`Move card ${i + 1} up`} onClick={() => onMove(i, -1)}>
                 <ChevronUp className="h-4 w-4" aria-hidden />
               </Button>
-              <Button type="button" variant="ghost" size="icon" className="h-7 w-7" disabled={i === n - 1} aria-label={`Move card ${i + 1} down`} onClick={() => onMove(i, 1)}>
+              <Button type="button" variant="ghost" size="icon-sm" disabled={i === n - 1} aria-label={`Move card ${i + 1} down`} onClick={() => onMove(i, 1)}>
                 <ChevronDown className="h-4 w-4" aria-hidden />
               </Button>
-              <Button type="button" variant="ghost" size="icon" className="h-7 w-7" disabled={n <= WIZARD_LIMITS.cardsMin} aria-label={`Remove card ${i + 1}`} onClick={() => onRemove(i)}>
+              <Button type="button" variant="ghost" size="icon-sm" disabled={n <= WIZARD_LIMITS.cardsMin} aria-label={`Remove card ${i + 1}`} onClick={() => onRemove(i)}>
                 <Trash2 className="h-4 w-4" aria-hidden />
               </Button>
             </span>
@@ -188,7 +188,7 @@ export function CardsSection({ draft, field, onAdd, onRemove, onMove, onCard, on
           {c.buttons.map((b, j) => (
             <CardButton key={b.id} b={b} card={i} j={j} field={field} onButton={onButton} />
           ))}
-          {field.error(`cards.${i}.buttons`) && <p role="alert" className="text-[11px] text-destructive">{field.error(`cards.${i}.buttons`)}</p>}
+          {field.error(`cards.${i}.buttons`) && <p role="alert" className="text-meta text-destructive">{field.error(`cards.${i}.buttons`)}</p>}
         </div>
       ))}
 
@@ -196,9 +196,9 @@ export function CardsSection({ draft, field, onAdd, onRemove, onMove, onCard, on
         <Button type="button" variant="outline" size="sm" disabled={n >= WIZARD_LIMITS.cardsMax} onClick={onAdd}>
           <Plus className="mr-1.5 h-3.5 w-3.5" aria-hidden /> Add card
         </Button>
-        <span className="text-[11px] text-steel">{n}/{WIZARD_LIMITS.cardsMax}</span>
+        <span className="text-meta text-steel">{n}/{WIZARD_LIMITS.cardsMax}</span>
       </div>
-      {groupError && <p role="alert" className="text-[11px] text-destructive">{groupError}</p>}
+      {groupError && <p role="alert" className="text-meta text-destructive">{groupError}</p>}
     </Section>
   );
 }

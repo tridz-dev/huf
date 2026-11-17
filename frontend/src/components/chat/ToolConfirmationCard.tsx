@@ -93,21 +93,21 @@ export function ToolConfirmationCard({ confirmation, onUpdated, onDecided, now =
 			state={toolState}
 			className="w-full max-w-chat-measure"
 		>
-			<ConfirmationTitle className="flex flex-col gap-1 text-[13px]">
+			<ConfirmationTitle className="flex flex-col gap-1 text-ui-text">
 				<span className="font-medium">{summary.action ?? 'Approval needed'}</span>
-				<dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-[12px]">
+				<dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-micro">
 					{summary.recipient_count !== null && (<><dt className="text-steel">Recipients</dt><dd>{summary.recipient_count}</dd></>)}
 					{summary.template && (<><dt className="text-steel">Template</dt><dd>{summary.template}</dd></>)}
 					{summary.channel && (<><dt className="text-steel">Channel</dt><dd>{summary.channel}</dd></>)}
 					{summary.sample && (<><dt className="text-steel">Sample</dt><dd className="whitespace-pre-wrap">{summary.sample}</dd></>)}
 				</dl>
 				{state === 'pending' && expiry !== null && (
-					<span className="text-[12px] text-steel" data-testid="confirmation-countdown">
+					<span className="text-micro text-steel" data-testid="confirmation-countdown">
 						Expires in {formatCountdown(expiry - tick)}
 					</span>
 				)}
 				{state !== 'pending' && (
-					<span className="text-[12px] text-steel" data-testid="confirmation-state">{STATE_LABEL[state] ?? state}</span>
+					<span className="text-micro text-steel" data-testid="confirmation-state">{STATE_LABEL[state] ?? state}</span>
 				)}
 			</ConfirmationTitle>
 			<ConfirmationRequest>

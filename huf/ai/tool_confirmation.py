@@ -18,6 +18,8 @@ import json
 
 import frappe
 from frappe import _
+
+from huf.ai.api_support import require_permission
 from frappe.utils import add_to_date, cint, get_datetime, get_system_timezone, now_datetime
 
 DOCTYPE = "Agent Tool Confirmation"
@@ -326,6 +328,7 @@ def _append_followup(doc, state: str, result):
 # ------------------------------------------------------------------ API
 @frappe.whitelist()
 def get_pending(conversation=None):
+	require_permission(frappe.session.user != "Guest", "Login required")
 	filters = {"user": frappe.session.user, "state": "pending", "expires_at": (">", now_datetime())}
 	if conversation:
 		filters["conversation"] = conversation
