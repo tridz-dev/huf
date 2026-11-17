@@ -17,7 +17,10 @@ MAX_PDF_BYTES = 16 * 1024 * 1024  # HUF cap; Meta allows up to 100 MB for docume
 META_DOC_LIMIT = 100 * 1024 * 1024
 CACHE_TTL_SECONDS = 7 * 24 * 3600  # Meta media ids live ~30 days
 _CACHE_KEY = "huf_wa_media_id"
-_EXPIRED_CODES = {131052, 131053}
+# Meta reports a missing/expired media id on SEND as 131009 (parameter invalid) or 100 (invalid
+# parameter); both are generic, so they only count when the message also mentions media.
+# 131052 (inbound download) and 131053 (upload) are NOT expired-media errors.
+_MEDIA_PARAM_CODES = {131009, 100}
 _EXPIRED_RE = re.compile(r"media.*(not found|expired|does not exist|invalid)|(not found|expired).*media", re.I)
 
 
@@ -144,7 +147,7 @@ def upload_private_pdf(
 
 def is_expired_media_error(detail: dict[str, Any]) -> bool:
 	try:
-		if int(detail.get("graph_code")) in _EXPIRED_CODES:
+		if int(detail.get("graph_code")) in _MEDIA_PARAM_CODES and "media" in str(detail.get("message") or "").lower():
 			return True
 	except (TypeError, ValueError):
 		pass

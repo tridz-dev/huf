@@ -103,7 +103,11 @@ class TestMediaUpload(unittest.TestCase):
 		self.assertNotIn("SECRET_TOKEN", c.exception.message)
 
 	def test_expired_detection(self):
-		self.assertTrue(mu.is_expired_media_error({"graph_code": 131052}))
+		self.assertTrue(mu.is_expired_media_error({"graph_code": 131009, "message": "Parameter value is not valid: media not found"}))
+		self.assertTrue(mu.is_expired_media_error({"graph_code": 100, "message": "Invalid parameter: media id"}))
+		self.assertFalse(mu.is_expired_media_error({"graph_code": 131009, "message": "Parameter value is not valid"}))
+		self.assertFalse(mu.is_expired_media_error({"graph_code": 131052}))
+		self.assertFalse(mu.is_expired_media_error({"graph_code": 131053}))
 		self.assertTrue(mu.is_expired_media_error({"message": "Media not found"}))
 		self.assertFalse(mu.is_expired_media_error({"message": "rate limit"}))
 
