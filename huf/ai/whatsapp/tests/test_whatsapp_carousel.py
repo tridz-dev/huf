@@ -151,3 +151,24 @@ class CarouselCreateTest(unittest.TestCase):
 		self.assertIn("carousel_top_level_not_allowed", _create_codes([_card_in(), _card_in()], footer="f"))
 		_, errors = wt.validate_template_spec({"category": "UTILITY", "body": "Hello all", "cards": [_card_in(), _card_in()]})
 		self.assertIn("carousel_category_marketing_only", {e["code"] for e in errors})
+
+
+class CarouselLiveRulesTest(unittest.TestCase):
+	def test_card_body_limit_and_buttons(self):
+		ok = "x" * 160
+		self.assertNotIn("card_body_too_long", _create_codes([_card_in(body=ok, sample_values=[]), _card_in()]))
+		self.assertIn("card_body_too_long", _create_codes([_card_in(body="x" * 161, sample_values=[]), _card_in()]))
+		many = [{"type": "QUICK_REPLY", "text": str(i)} for i in range(3)]
+		self.assertIn("card_too_many_buttons", _create_codes([_card_in(buttons=many), _card_in(buttons=many)]))
+		self.assertIn("carousel_top_level_not_allowed", _create_codes([_card_in(), _card_in()], header_type="TEXT", header="h"))
+
+	def test_variable_at_edge(self):
+		def errs(cards, body="Hello all"):
+			_, e = wt.validate_template_spec({"category": "MARKETING", "body": body, "cards": cards})
+			return [(x["field"], x["code"]) for x in e if x["code"] == "variable_at_edge"]
+
+		self.assertEqual(errs([_card_in(), _card_in()]), [])
+		self.assertEqual(errs([_card_in(), _card_in()], body="{{1}} hello all"), [("body", "variable_at_edge")])
+		self.assertEqual(errs([_card_in(), _card_in()], body="hello {{1}}"), [("body", "variable_at_edge")])
+		self.assertEqual(errs([_card_in(body="{{1}} deal"), _card_in()]), [("cards[0].body", "variable_at_edge")])
+		self.assertEqual(errs([_card_in(), _card_in(body="deal {{1}}  ")]), [("cards[1].body", "variable_at_edge")])

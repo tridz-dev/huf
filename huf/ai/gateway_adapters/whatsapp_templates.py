@@ -62,12 +62,16 @@ OTP_CODE_MAX = 15  # unverified (from memory): Meta caps the copy-code value at 
 
 HEADER_TYPES = ("TEXT", "IMAGE", "VIDEO", "DOCUMENT", "LOCATION")
 MEDIA_HEADER_TYPES = ("IMAGE", "VIDEO", "DOCUMENT")
-CAROUSEL_MIN_CARDS = 2  # unverified (from memory): Meta media carousel takes 2-10 cards
+# CAROUSEL_MIN_CARDS is a HUF product rule: Meta accepted a 1-card carousel at create (live 2026-11-18) but documents 2-10 at send.
+# The remaining carousel limits were verified live on 2026-11-18: max 10 cards ((#105) at 11), card body max 160 chars
+# (1/2388337), max 2 buttons per card (100/2388158), no header/footer on the main bubble (100/2388208), and template
+# variables may not be at the start or end of the top-level body or a card body (100/2388299).
+CAROUSEL_MIN_CARDS = 2
 CAROUSEL_MAX_CARDS = 10
 CAROUSEL_HEADER_TYPES = ("IMAGE", "VIDEO")
 CAROUSEL_BUTTON_TYPES = ("QUICK_REPLY", "URL")
-CAROUSEL_MAX_CARD_BUTTONS = 2  # unverified (from memory): Meta allows up to 2 buttons per media card
-CARD_BODY_MAX = 160  # unverified (from memory): Meta card body limit is 160 characters
+CAROUSEL_MAX_CARD_BUTTONS = 2  # verified live 2026-11-18
+CARD_BODY_MAX = 160  # verified live 2026-11-18
 BUTTON_TYPES = ("QUICK_REPLY", "URL", "PHONE_NUMBER", "COPY_CODE")
 # Outbound free-form media kinds (sticker added by T5; limits live in whatsapp_messages)
 MEDIA_KINDS = wm.MEDIA_KINDS
@@ -94,6 +98,8 @@ _BUTTON_ALIASES = {
 
 _PLACEHOLDER_RE = re.compile(r"\{\{\s*(\d+)\s*\}\}")
 _VAR_RE = re.compile(r"\{\{\s*([^{}\s]*)\s*\}\}")
+_EDGE_VAR_START_RE = re.compile(r"^\s*\{\{[^{}]*\}\}")
+_EDGE_VAR_END_RE = re.compile(r"\{\{[^{}]*\}\}\s*$")
 _ANY_BRACES_RE = re.compile(r"\{\{|\}\}")
 # verified: https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/overview/ (named: unique, lowercase letters and underscores); digits and the
 # leading-letter rule are unverified (from memory)
@@ -252,7 +258,7 @@ def validate_template_spec(payload: dict[str, Any]) -> tuple[dict[str, Any], lis
 	body_pos, body_named = _check_variables("body", body, errors) if body else ([], [])
 	body_vars = body_pos or body_named
 	stripped_body = body.strip()
-	# unverified (from memory): Meta rejects templates whose body starts or ends with a variable
+	# Meta rejects bodies that start or end with a variable (verified live for carousel bodies 2026-11-18, error 100/2388299)
 	if body_vars and re.match(r"^\{\{[^{}]*\}\}", stripped_body):
 		errors.append(_e("body", "body_starts_with_variable", "The body cannot start with a variable."))
 	if body_vars and re.search(r"\{\{[^{}]*\}\}$", stripped_body):
@@ -392,7 +398,7 @@ def validate_template_spec(payload: dict[str, Any]) -> tuple[dict[str, Any], lis
 	buttons, button_errors = _validate_buttons(payload.get("buttons"))
 	errors.extend(button_errors)
 
-	cards, card_errors = _validate_cards(payload, category, bool(header_type), footer, payload.get("buttons"))
+	cards, card_errors = _validate_cards(payload, category, bool(header_type), footer, payload.get("buttons"), body)
 	errors.extend(card_errors)
 
 	hvar = (header_pos or header_named or [""])[0] if header_type == "TEXT" else ""
@@ -416,13 +422,18 @@ def validate_template_spec(payload: dict[str, Any]) -> tuple[dict[str, Any], lis
 	return spec, errors
 
 
+def _body_variable_at_edge(text: str) -> bool:
+	return bool(_EDGE_VAR_START_RE.search(text) or _EDGE_VAR_END_RE.search(text))
+
+
 def _validate_cards(
-	payload: dict[str, Any], category: str, has_header: bool, footer: str, top_buttons: Any
+	payload: dict[str, Any], category: str, has_header: bool, footer: str, top_buttons: Any, body: str = ""
 ) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
 	"""Validate the ``cards`` of a media-carousel template (MARKETING only). Returns ``(cards, errors)``.
 
 	Card input: ``{header_type IMAGE|VIDEO, sample | header_handle, body, sample_values, buttons}``.
-	Create schema (Meta ``CAROUSEL`` component with ``cards[].components``) is from memory, not re-verified.
+	Create schema verified live 2026-11-18. Stable codes: ``carousel_card_count``, ``carousel_top_level_not_allowed``,
+	``card_body_too_long`` (>160), ``card_too_many_buttons`` (>2), ``variable_at_edge`` (variable at start/end of a body).
 	"""
 	raw = payload.get("cards")
 	errors: list[dict[str, str]] = []
@@ -436,6 +447,8 @@ def _validate_cards(
 		errors.append(_e("cards", "carousel_card_count", f"A carousel needs {CAROUSEL_MIN_CARDS}-{CAROUSEL_MAX_CARDS} cards."))
 	if has_header or footer or top_buttons not in (None, "", []):
 		errors.append(_e("cards", "carousel_top_level_not_allowed", "A carousel template has a body and cards only: no header, footer or top-level buttons."))
+	if body and _body_variable_at_edge(body):
+		errors.append(_e("body", "variable_at_edge", "Variables cannot be at the start or end of the carousel body (Meta 100/2388299)."))
 	out: list[dict[str, Any]] = []
 	for i, item in enumerate(raw):
 		f = f"cards[{i}]"
@@ -460,7 +473,9 @@ def _validate_cards(
 			errors.append(_e(f"{f}.body", "card_body_missing", "Each card needs body text."))
 		else:
 			if len(body) > CARD_BODY_MAX:
-				errors.append(_e(f"{f}.body", "too_long", f"Card body is {len(body)} characters; the limit is {CARD_BODY_MAX}."))
+				errors.append(_e(f"{f}.body", "card_body_too_long", f"Card body is {len(body)} characters; the limit is {CARD_BODY_MAX}."))
+			if _body_variable_at_edge(body):
+				errors.append(_e(f"{f}.body", "variable_at_edge", f"Variables cannot be at the start or end of card {i}'s body (Meta 100/2388299)."))
 			pos, named = _check_variables(f"{f}.body", body, errors)
 			if named:
 				errors.append(_e(f"{f}.body", "card_named_unsupported", "Card bodies use numbered {{1}} variables."))
