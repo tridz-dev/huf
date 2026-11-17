@@ -18,7 +18,7 @@ On the broadcast (or per recipient row, which overrides it):
 - Recipient row only: `fallback_email` (the address for the email leg; the SMS leg uses the WhatsApp number).
 
 ## When it fires
-Only from `status.apply_status` on a `failed` status with error code 131026, 131030 or 131021. Never for
+Only from `status.apply_status` on a `failed` status with error code 131026 or 131030. Never for
 sent-but-not-delivered timeouts, never for 131050 (user stopped marketing) or the per-user limit skip.
 
 ## Safety

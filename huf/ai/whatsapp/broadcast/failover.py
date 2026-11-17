@@ -29,7 +29,7 @@ from frappe.utils import now_datetime
 RECIPIENT = "WhatsApp Broadcast Recipient"
 BROADCAST = "WhatsApp Broadcast"
 # Meta codes where the message was definitively not delivered and a resend elsewhere is safe.
-RETRY_SAFE_CODES = frozenset({131026, 131030, 131021})
+RETRY_SAFE_CODES = frozenset({131026, 131030})
 SUPPORTED = ("sms", "email")
 ATTEMPTING = "attempting"
 _FIELDS = ("fallback_channels", "fallback_body", "fallback_body_kind", "fallback_sms_gateway", "fallback_email_gateway")
