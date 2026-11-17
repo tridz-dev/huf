@@ -79,11 +79,44 @@ def button_error(buttons: Any) -> str | None:
 	return None
 
 
+def carousel_error(carousel: Any) -> str | None:
+	"""First problem in per-card carousel values (``None`` when fine or empty). Per-card shape/count rules for the
+	template are enforced at send time; here only structure and header links are checked."""
+	if carousel in (None, [], {}):
+		return None
+	cards = carousel.get("cards") if isinstance(carousel, dict) else carousel
+	if not isinstance(cards, list):
+		return "carousel must be a list of cards"
+	if not 2 <= len(cards) <= 10:
+		return "a carousel takes 2 to 10 cards"
+	for i, card in enumerate(cards):
+		if not isinstance(card, dict):
+			return f"card {i} must be an object"
+		head = card.get("header")
+		if isinstance(head, str):
+			head = {"link": head}
+		if not isinstance(head, dict) or not (head.get("id") or head.get("link")):
+			return f"card {i} needs header media (id or link)"
+		if head.get("link") and not str(head["link"]).lower().startswith("https://"):
+			return f"card {i} header link must start with https://"
+		if card.get("body") is not None and not isinstance(card["body"], (list, dict)):
+			return f"card {i} body must be a list of values"
+		if card.get("buttons") is not None:
+			problem = button_error(card["buttons"])
+			if problem:
+				return f"card {i}: {problem}"
+	return None
+
+
 def params_error(params: Any) -> str | None:
 	"""First problem in a recipient's ``params`` (``{"body", "header", "button"}``), or ``None``."""
 	if not isinstance(params, dict):
 		return None
-	return header_error(params.get("header")) or button_error(params.get("button"))
+	return (
+		header_error(params.get("header"))
+		or button_error(params.get("button"))
+		or carousel_error(params.get("carousel"))
+	)
 
 
 def merge_buttons(default: Any, mine: Any) -> Any:

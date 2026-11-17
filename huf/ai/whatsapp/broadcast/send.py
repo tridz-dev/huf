@@ -233,6 +233,8 @@ def send_one(recipient_name: str) -> str:
 		return "skipped"
 
 	body, header, button = _merge_params(bc, row)
+	own_params = _json(row.get("params"))
+	carousel = (own_params.get("carousel") if isinstance(own_params, dict) else None) or _json(bc.get("carousel_params"))
 	opaque = row.get("opaque_ref") or recipient_name
 	use_mm = (bc.get("send_via") or "messages") == "marketing_messages"
 	# fail closed: the template row must still exist with a readable status and category (bridge policy is a
@@ -266,6 +268,7 @@ def send_one(recipient_name: str) -> str:
 			force_graph=True,
 			opaque_ref=opaque,
 			marketing_api=use_mm,
+			carousel_params=carousel or None,
 		)
 	except bridge.BridgeError as exc:
 		return _after_bridge_error(recipient_name, int(row.get("attempts") or 0), exc.payload or {}, bc.get("gateway"), to)

@@ -123,6 +123,8 @@ export interface TemplateDetail {
     body: { text: string; sample_values: string[]; named_samples?: NamedSample[] };
     footer: { text: string } | null;
     buttons: TemplateButton[];
+    /** Media-carousel card definitions (absent for non-carousel templates). */
+    carousel?: CarouselCardDef[];
   };
   state: {
     rejected_reason: string;
@@ -241,6 +243,17 @@ export type WizardEditPayload = Omit<WizardTemplatePayload, 'template_name' | 'l
 };
 
 export type HeaderParam = string | { type: 'image' | 'document' | 'video'; link: string; filename?: string };
+export interface CarouselCardDef {
+  header_type: string;
+  body_vars: string[];
+  buttons: { type: string; dynamic: boolean }[];
+}
+/** Per-card values for a carousel send: header media by link or uploaded media id. */
+export interface CarouselCardParam {
+  header: { type?: 'image' | 'video'; link?: string; id?: string };
+  body: string[];
+  buttons: ButtonParam[];
+}
 export interface ButtonParam {
   index: number;
   sub_type: 'url' | 'quick_reply';
@@ -549,6 +562,7 @@ export const sendTemplateMessage = (args: {
   body_params?: string[];
   header_params?: HeaderParam[];
   button_params?: ButtonParam[];
+  carousel_params?: CarouselCardParam[];
 }) =>
   invoke<Record<string, unknown>>(
     'send_template_message',
@@ -559,6 +573,7 @@ export const sendTemplateMessage = (args: {
       body_params: JSON.stringify(args.body_params ?? []),
       header_params: JSON.stringify(args.header_params ?? []),
       button_params: JSON.stringify(args.button_params ?? []),
+      ...(args.carousel_params?.length ? { carousel_params: JSON.stringify(args.carousel_params) } : {}),
     },
     'post',
   );

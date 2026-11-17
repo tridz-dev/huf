@@ -641,6 +641,7 @@ def send_template_message(
 	button_params: Any = None,
 	language_code: str | None = None,
 	gateway_name: str | None = None,
+	carousel_params: Any = None,
 ) -> dict[str, Any]:
 	"""Send an approved template to a number from a Gateway. Allowed outside the 24h window.
 
@@ -650,7 +651,7 @@ def send_template_message(
 	``body_params`` is an ordered list, or a ``{name: value}`` map for a template with named variables;
 	``header_params`` is one text value, one ``{"type": "image|document|video", "link": ...}`` media object,
 	one ``{"type": "location", "latitude": ..., "longitude": ...}`` object or (named) a one-entry map; ``button_params`` is ``[{"index": 0, "sub_type": "url", "text": "<suffix>"}]``
-	for dynamic URL buttons. Validation failures return ``validation_failed`` with
+	for dynamic URL buttons; ``carousel_params`` is the per-card list for a media-carousel template (header id/link, body, buttons). Validation failures return ``validation_failed`` with
 	an ``errors`` list.
 	"""
 	if not bridge.is_available():
@@ -672,6 +673,7 @@ def send_template_message(
 		body = _parse_json_arg(body_params, "body_params") or []
 		header = _parse_json_arg(header_params, "header_params") or []
 		buttons = _parse_json_arg(button_params, "button_params") or []
+		carousel = _parse_json_arg(carousel_params, "carousel_params") or None
 	except ValueError as exc:
 		return {"success": False, "error": "invalid_params", "message": str(exc)}
 	if isinstance(header, str) or (isinstance(header, dict) and "type" in header):
@@ -681,7 +683,10 @@ def send_template_message(
 	account_name = _resolve_account_name(_gateway_whatsapp_account(gateway_name))
 	if isinstance(account_name, dict):
 		return account_name
-	return bridge.send_template(account_name, phone, template_name, body, header, button_params=buttons, language_code=language_code or None, gateway_name=gateway_name)
+	return bridge.send_template(
+		account_name, phone, template_name, body, header, button_params=buttons, language_code=language_code or None,
+		gateway_name=gateway_name, carousel_params=carousel,
+	)
 
 
 @frappe.whitelist(methods=["POST"])

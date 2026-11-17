@@ -62,6 +62,9 @@ OTP_CODE_MAX = 15  # unverified (from memory): Meta caps the copy-code value at 
 
 HEADER_TYPES = ("TEXT", "IMAGE", "VIDEO", "DOCUMENT", "LOCATION")
 MEDIA_HEADER_TYPES = ("IMAGE", "VIDEO", "DOCUMENT")
+CAROUSEL_MIN_CARDS = 2  # unverified (from memory): Meta media carousel takes 2-10 cards
+CAROUSEL_MAX_CARDS = 10
+CAROUSEL_HEADER_TYPES = ("IMAGE", "VIDEO")
 BUTTON_TYPES = ("QUICK_REPLY", "URL", "PHONE_NUMBER", "COPY_CODE")
 # Outbound free-form media kinds (sticker added by T5; limits live in whatsapp_messages)
 MEDIA_KINDS = wm.MEDIA_KINDS
@@ -674,6 +677,9 @@ def build_meta_components(spec: dict[str, Any], media_header: dict[str, Any] | N
 def components_to_view(components: Any) -> dict[str, Any]:
 	"""Meta components -> ``{header, body, footer, buttons}`` for display (defensive)."""
 	view: dict[str, Any] = {"header": None, "body": None, "footer": None, "buttons": []}
+	cards = carousel_cards(components)
+	if cards is not None:
+		view["carousel"] = cards
 	for comp in components if isinstance(components, list) else []:
 		if not isinstance(comp, dict):
 			continue
@@ -692,6 +698,120 @@ def components_to_view(components: Any) -> dict[str, Any]:
 						{k: btn.get(k) for k in ("type", "text", "url", "phone_number", "example") if btn.get(k) is not None}
 					)
 	return view
+
+
+def carousel_cards(components: Any) -> list[dict[str, Any]] | None:
+	"""Card definitions of a Meta ``CAROUSEL`` component (``None`` when the template has none).
+
+	Each card: ``{header_type, body_vars, buttons: [{type, dynamic}]}`` (display and send validation).
+	"""
+	for comp in components if isinstance(components, list) else []:
+		if not isinstance(comp, dict) or str(comp.get("type") or "").upper() != "CAROUSEL":
+			continue
+		cards: list[dict[str, Any]] = []
+		for card in comp.get("cards") or []:
+			info: dict[str, Any] = {"header_type": "", "body_vars": [], "buttons": []}
+			for c in (card or {}).get("components") or []:
+				if not isinstance(c, dict):
+					continue
+				ctype = str(c.get("type") or "").upper()
+				if ctype == "HEADER":
+					info["header_type"] = str(c.get("format") or "").upper()
+				elif ctype == "BODY":
+					info["body_vars"] = variables(str(c.get("text") or ""))
+				elif ctype == "BUTTONS":
+					for b in c.get("buttons") or []:
+						if isinstance(b, dict):
+							btype = str(b.get("type") or "").upper()
+							dynamic = btype == "URL" and "{{" in str(b.get("url") or "")
+							info["buttons"].append({"type": btype, "dynamic": dynamic})
+			cards.append(info)
+		return cards
+	return None
+
+
+def build_carousel_component(
+	cards_def: list[dict[str, Any]], carousel_params: Any, errors: list[dict[str, str]]
+) -> dict[str, Any] | None:
+	"""Graph ``carousel`` component from per-card params, validated against the template's cards.
+
+	``carousel_params`` is a list (or ``{"cards": [...]}``) of ``{"header": {"type"?, "id"|"link"} | "https://...",
+	"body": [values], "buttons": [{"index", "sub_type": "url"|"quick_reply", "text"}]}`` in card order.
+	Stable codes: ``carousel_required``, ``carousel_card_count``, ``card_header_required``,
+	``card_header_invalid``, ``card_body_count_mismatch``, ``card_button_required``, ``card_button_unexpected``.
+	"""
+	if isinstance(carousel_params, dict):
+		carousel_params = carousel_params.get("cards")
+	if carousel_params is None or carousel_params == []:
+		errors.append(_e("carousel_params", "carousel_required", f"This template is a carousel; provide {len(cards_def)} card(s) of values."))
+		return None
+	if not isinstance(carousel_params, list):
+		errors.append(_e("carousel_params", "carousel_card_count", "carousel_params must be a list of cards."))
+		return None
+	given = len(carousel_params)
+	if not CAROUSEL_MIN_CARDS <= given <= CAROUSEL_MAX_CARDS:
+		errors.append(_e("carousel_params", "carousel_card_count", f"A carousel takes {CAROUSEL_MIN_CARDS}-{CAROUSEL_MAX_CARDS} cards; got {given}."))
+		return None
+	if given != len(cards_def):
+		errors.append(_e("carousel_params", "carousel_card_count", f"This template has {len(cards_def)} card(s); got {given}."))
+		return None
+	out_cards: list[dict[str, Any]] = []
+	for i, (card, definition) in enumerate(zip(carousel_params, cards_def)):
+		field = f"carousel_params[{i}]"
+		card = card if isinstance(card, dict) else {}
+		comps: list[dict[str, Any]] = []
+		# header media (id or https link)
+		htype = definition.get("header_type") or ""
+		raw = card.get("header")
+		media: dict[str, Any] | None = None
+		if isinstance(raw, str) and raw.strip():
+			raw = {"link": raw.strip()}
+		if not isinstance(raw, dict) or not (raw.get("id") or raw.get("link")):
+			errors.append(_e(f"{field}.header", "card_header_required", f"Card {i} needs header media ({htype.lower() or 'image'} id or link)."))
+		else:
+			kind = str(raw.get("type") or htype or "image").lower()
+			if htype and kind != htype.lower():
+				errors.append(_e(f"{field}.header", "card_header_invalid", f"Card {i} header must be {htype.lower()}."))
+			elif kind not in ("image", "video"):
+				errors.append(_e(f"{field}.header", "card_header_invalid", "Card header media must be image or video."))
+			elif raw.get("id"):
+				media = {kind: {"id": str(raw["id"])}}
+			elif is_http_url(str(raw["link"]).strip()):
+				media = {kind: {"link": str(raw["link"]).strip()}}
+			else:
+				errors.append(_e(f"{field}.header", "card_header_invalid", "Card header link must be an http(s) URL."))
+			if media:
+				comps.append({"type": "header", "parameters": [{"type": kind, **media}]})
+		# body values
+		values = card.get("body")
+		values = list(values.values()) if isinstance(values, dict) else list(values or [])
+		expected = len(definition.get("body_vars") or [])
+		if len(values) != expected:
+			errors.append(_e(f"{field}.body", "card_body_count_mismatch", f"Card {i} takes {expected} body parameter(s); got {len(values)}."))
+		elif values:
+			texts = [validate_param_text(f"{field}.body[{j}]", v, errors) for j, v in enumerate(values)]
+			comps.append({"type": "body", "parameters": [{"type": "text", "text": t} for t in texts]})
+		# buttons
+		btns, berr = normalize_button_params(card.get("buttons"))
+		errors += [{**e, "field": e["field"].replace("button_params", f"{field}.buttons", 1)} for e in berr]
+		defs = definition.get("buttons") or []
+		given_idx = set()
+		for bp in btns:
+			idx = bp["index"]
+			bd = defs[idx] if idx < len(defs) else None
+			ok = bd is not None and (
+				(bp["sub_type"] == "quick_reply" and bd["type"] == "QUICK_REPLY")
+				or (bp["sub_type"] == "url" and bd["type"] == "URL" and bd["dynamic"])
+			)
+			if not ok:
+				errors.append(_e(f"{field}.buttons", "card_button_unexpected", f"Card {i} button {idx} does not take a {bp['sub_type']} parameter."))
+			given_idx.add(idx)
+		for idx, bd in enumerate(defs):
+			if bd["type"] == "URL" and bd["dynamic"] and idx not in given_idx:
+				errors.append(_e(f"{field}.buttons", "card_button_required", f"Card {i} button {idx} is a dynamic URL button and needs its URL suffix."))
+		comps += build_template_components(None, None, btns)
+		out_cards.append({"card_index": i, "components": comps})
+	return {"type": "carousel", "cards": out_cards}
 
 
 # --------------------------------------------------------------------- sends
@@ -842,7 +962,11 @@ def _template_view(template: Any) -> dict[str, Any]:
 		and any(isinstance(b, dict) and str(b.get("type") or "").upper() == "OTP" for b in c.get("buttons") or [])
 		for c in (template if isinstance(template, list) else [])
 	)
-	return {"fmt": fmt, "body_vars": body_vars, "header_vars": header_vars, "header_type": htype, "auth": is_auth}
+	cards = template.get("carousel_cards") if isinstance(template, dict) else carousel_cards(template)
+	return {
+		"fmt": fmt, "body_vars": body_vars, "header_vars": header_vars, "header_type": htype, "auth": is_auth,
+		"carousel": cards if isinstance(cards, list) else None,
+	}
 
 
 def _named_values(field: str, raw: Any, names: list[str], errors: list[dict[str, str]]) -> list[tuple[str, Any]]:
@@ -877,6 +1001,7 @@ def build_send_components(
 	body_params: Any = None,
 	header_params: Any = None,
 	button_params: Any = None,
+	carousel_params: Any = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
 	"""Graph ``template.components`` for a send, validating the raw parameters.
 
@@ -925,6 +1050,14 @@ def build_send_components(
 	buttons_n, berr = normalize_button_params(button_params)
 	errors += berr
 	components += build_template_components(None, None, buttons_n)
+
+	# carousel (cards come from the template; absent -> any carousel_params is refused)
+	if view["carousel"] is not None:
+		carousel = build_carousel_component(view["carousel"], carousel_params, errors)
+		if carousel:
+			components.append(carousel)
+	elif carousel_params:
+		errors.append(_e("carousel_params", "carousel_not_expected", "This template is not a carousel."))
 	return components, errors
 
 

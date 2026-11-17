@@ -796,6 +796,7 @@ def _template_row(docname: str) -> dict[str, Any] | None:
 	extra = _get_extra(row.get("whatsapp_account"), docname) or {}
 	row["parameter_format"] = extra.get("parameter_format") or ""
 	row["header_format"] = extra.get("header_format") or ""
+	row["carousel_cards"] = wt.carousel_cards(extra.get("components_json"))
 	return row
 
 
@@ -938,6 +939,7 @@ def _send_view(tpl: dict[str, Any]) -> dict[str, Any]:
 		"header_type": htype,
 		"header_text": (tpl.get("header") or "") if htype == "TEXT" else "",
 		"parameter_format": tpl.get("parameter_format") or "",
+		"carousel_cards": tpl.get("carousel_cards"),
 	}
 
 
@@ -958,9 +960,11 @@ def send_template(
 	opaque_ref: str | None = None,
 	marketing_api: bool = False,
 	redact_params: bool = False,
+	carousel_params: Any = None,
 ) -> dict[str, Any]:
 	"""Send an approved template. ``redact_params`` stores no parameter values in the mirrored ``WhatsApp Message``
-	(OTP sends; needs ``force_graph``). ``force_graph`` always posts to Graph (returns ``wamid`` and ``message_status``),
+	(OTP sends; needs ``force_graph``). ``carousel_params``: per-card ``[{"header": {"id"|"link"}, "body": [...],
+	"buttons": [...]}]`` for a media-carousel template. ``force_graph`` always posts to Graph (returns ``wamid`` and ``message_status``),
 	``opaque_ref`` is echoed on status webhooks, ``marketing_api`` uses the Marketing Messages endpoint.
 
 	``run_id`` / ``solution`` (optional) attribute the send to a Solution for template usage tracking.
@@ -1004,7 +1008,7 @@ def send_template(
 	other_buttons, copy_comps, errors = split_copy_code_params(button_params)
 	view = _send_view(tpl) if tpl else _params_template_view(body_params, header_params)
 	header_raw = _header_list(header_params, bool(tpl))
-	components, build_errors = wt.build_send_components(view, body_params, header_raw, other_buttons)
+	components, build_errors = wt.build_send_components(view, body_params, header_raw, other_buttons, carousel_params)
 	errors += build_errors
 	if tpl:
 		seen = {(e["field"], e["code"]) for e in errors}
@@ -1038,7 +1042,7 @@ def send_template(
 		raise BridgeError(_err("invalid_request", message="marketing_api requires force_graph."))
 	if redact_params and not force_graph:
 		raise BridgeError(_err("invalid_request", message="redact_params requires force_graph."))
-	if force_graph or named or any(c.get("type") in ("header", "button") for c in components) or (tpl and _has_dynamic_url(tpl)):
+	if force_graph or named or any(c.get("type") in ("header", "button", "carousel") for c in components) or (tpl and _has_dynamic_url(tpl)):
 		if not _may_bypass(trusted) and not frappe.has_permission("WhatsApp Message", "create"):
 			raise frappe.PermissionError("Not permitted to send WhatsApp messages")
 		template_payload: dict[str, Any] = {
@@ -2947,6 +2951,9 @@ def get_template(name: str) -> dict[str, Any]:
 		"footer": {"text": row["footer"]} if row.get("footer") else None,
 		"buttons": _button_dicts(name),
 	}
+	cards = wt.carousel_cards(meta_components)
+	if cards is not None:
+		view["carousel"] = cards  # card definitions for the send dialog (header_type, body_vars, buttons)
 	business_id = ""
 	if row.get("whatsapp_account"):
 		business_id = frappe.db.get_value("WhatsApp Account", row["whatsapp_account"], "business_id") or ""
