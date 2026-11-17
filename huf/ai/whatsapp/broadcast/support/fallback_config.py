@@ -104,7 +104,6 @@ def snapshot(doc: Any) -> dict[str, Any]:
 def propagate(broadcast: str) -> None:
 	"""Copy the broadcast's current failover config onto its not-yet-sent recipient rows."""
 	values = snapshot(frappe.get_doc("WhatsApp Broadcast", broadcast))
-	frappe.db.set_value  # noqa: B018 - placeholder to keep import style obvious
 	cols = ", ".join(f"`{k}`=%s" for k in CONFIG_FIELDS)
 	frappe.db.sql(
 		f"update `tabWhatsApp Broadcast Recipient` set {cols} where broadcast=%s and status in ('queued','deferred')",

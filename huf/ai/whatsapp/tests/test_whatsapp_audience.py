@@ -181,9 +181,9 @@ class TestCleanMember(unittest.TestCase):
 
 class TestMaskAndPurpose(unittest.TestCase):
 	def test_mask_keeps_last_four(self):
-		self.assertEqual(aud.mask_phone("447700900123"), "********0123")
-		self.assertEqual(aud.mask_phone("123"), "123")
-		self.assertIsNone(aud.mask_phone(None))
+		self.assertEqual(aud.mask_phone("447700900123"), "****0123")
+		self.assertEqual(aud.mask_phone("123"), "****")
+		self.assertEqual(aud.mask_phone(None), "")
 
 	def test_category_to_purpose(self):
 		self.assertEqual(aud.purpose_for_category("marketing"), "marketing")

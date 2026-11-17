@@ -21,7 +21,6 @@ import hashlib
 import importlib
 import json
 import mimetypes
-import os
 import re
 from collections.abc import Callable
 from contextlib import contextmanager
@@ -36,7 +35,7 @@ from huf.ai.whatsapp import outbound_policy as policy, pre_send, template_plain
 from huf.ai.gateway_adapters.whatsapp_parts.bridge_utils import _button_sig, _clean_reason, _parse_ts
 from huf.ai.gateway_adapters import whatsapp_messages as wm
 from huf.ai.gateway_adapters import whatsapp_templates as wt
-from huf.ai.gateway_adapters.whatsapp_template_parts import authentication as wt_auth, carousel as wt_carousel, send_params as wt_send_params
+from huf.ai.gateway_adapters.whatsapp_template_parts import carousel as wt_carousel, send_params as wt_send_params
 from huf.ai.gateway_adapters.whatsapp_parts import header_upload
 
 GRAPH_HOST = "https://graph.facebook.com"

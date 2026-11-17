@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import json
 import random
-import re
 import time
 from typing import Any
 
@@ -27,12 +26,10 @@ from huf.ai.whatsapp.management import (
 	_gateway_whatsapp_account,
 	_TEMPLATE_RECORD_RE,
 	_parse_json_arg,
-	_iso,
 )
 from huf.ai.gateway_adapters import whatsapp_bridge as bridge
 from huf.ai.whatsapp.broadcast import params as broadcast_params, policy
 from huf.ai.whatsapp.broadcast.support import fallback_config
-from huf.ai.whatsapp.broadcast.checks import start_gate
 
 
 from huf.ai.whatsapp.broadcast.support.api_helpers import (  # noqa: F401 - moved helpers, kept importable from api
@@ -125,8 +122,6 @@ def create_broadcast(
 		return _error("invalid_name", "Template must be the Meta name or '<name>-<language_code>'.")
 	if not title or not str(title).strip():
 		return _error("invalid_title", "A title is required.")
-	from huf.ai.whatsapp.broadcast import recipients as br
-
 	docname = bridge._template_docname(account, str(template).strip(), language_code or None)
 	tpl = None
 	if docname and frappe.db.exists("WhatsApp Templates", docname):

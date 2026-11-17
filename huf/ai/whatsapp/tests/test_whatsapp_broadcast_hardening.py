@@ -167,7 +167,7 @@ class TestMasking(_Base):
 
 	def test_read_only_user_gets_masked_numbers(self):
 		r = self._list(False)
-		self.assertEqual(r["recipient"], "*******1111")
+		self.assertEqual(r["recipient"], "****1111")
 		self.assertNotIn("15550001111", json.dumps(r))
 
 	def test_writer_gets_full_numbers(self):

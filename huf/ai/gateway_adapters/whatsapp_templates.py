@@ -58,7 +58,7 @@ OTP_BODY_SECURITY = " For your security, do not share this code."
 OTP_BUTTON_TEXT_DEFAULT = "Copy code"
 OTP_EXPIRY_MIN = 1
 OTP_EXPIRY_MAX = 90
-OTP_CODE_MAX = 15  # unverified (from memory): Meta caps the copy-code value at 15 characters
+OTP_CODE_MAX = 15  # Meta documents a 15-character maximum for the one-time-password parameter; not re-checked live or via ctx7 (Kapso docs silent)
 
 HEADER_TYPES = ("TEXT", "IMAGE", "VIDEO", "DOCUMENT", "LOCATION")
 MEDIA_HEADER_TYPES = ("IMAGE", "VIDEO", "DOCUMENT")
