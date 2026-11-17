@@ -1,15 +1,15 @@
 """SMS (Twilio / Plivo / Frappe SMS Settings) Gateway Adapter for two-way SMS communications."""
 
-# PARKED PROVIDER (2026-09-05)
-# This adapter is not maintained and must be security-reviewed before re-enabling.
-# Reference: PR #630's "kept intact for future use" is a code-retention note, not a security review flag.
-# SMS adapter has a live fail-open bypass path that requires security review before any re-enable.
-# See HUF_INTEGRATIONS_GATEWAYS_AUDIT.md and HUF_INTEGRATIONS_GATEWAYS_TODO.md for details.
+# PARKED PROVIDER (2026-09-05) - review completed by agent; owner sign-off pending.
+# The fail-open inbound bypass was removed (see docs/gateways/SMS_SECURITY_REVIEW.md).
+# Do not treat as production-approved until the owner signs off on provider choice and residual risks.
 
 from __future__ import annotations
 
+import base64
 import hmac
 import hashlib
+import uuid
 from typing import Any, Callable, Mapping
 from urllib.parse import parse_qs
 
@@ -40,8 +40,9 @@ class SMSGatewayAdapter(GatewayAdapter):
 	provider_id = "sms"
 	credential_schema = GatewayCredentialSchema(
 		(
-			GatewayCredentialField("account_sid", "Twilio Account SID (or 'frappe_sms' to use Frappe SMS Settings)", required=False),
-			GatewayCredentialField("auth_token", "Twilio Auth Token (Optional if using Frappe SMS)", required=False),
+			GatewayCredentialField("mode", "Mode: 'twilio' (inbound+send), 'send_only' (Twilio creds, inbound rejected) or 'frappe_sms' (Frappe SMS Settings, inbound rejected). Required.", required=True),
+			GatewayCredentialField("account_sid", "Twilio Account SID (twilio/send_only modes)", required=False),
+			GatewayCredentialField("auth_token", "Twilio Auth Token (twilio/send_only modes)", required=False),
 			GatewayCredentialField("from_number", "Twilio Phone Number (+1... / Sender ID)", required=False),
 		)
 	)
@@ -57,39 +58,30 @@ class SMSGatewayAdapter(GatewayAdapter):
 		*,
 		http_post: Callable[..., Any] = _requests_post,
 	) -> None:
-		self._account_sid = credentials.get("account_sid", "frappe_sms")
-		self._auth_token = credentials.get("auth_token", "")
-		self._from_number = credentials.get("from_number", "")
+		self._mode = str(credentials.get("mode", "") or "").strip().lower()
+		self._account_sid = credentials.get("account_sid", "") or ""
+		self._auth_token = credentials.get("auth_token", "") or ""
+		self._from_number = credentials.get("from_number", "") or ""
 		self._http_post = http_post
 
 	def verify_inbound(self, request: GatewayInboundRequest) -> bool:
-		"""Verify Twilio signature using X-Twilio-Signature header and HMAC-SHA1.
+		"""Fail closed. Only explicit mode 'twilio' with credentials and a valid signature passes.
 
-		When using Twilio (auth_token is configured), require X-Twilio-Signature header.
-		If using Frappe SMS Settings (account_sid == "frappe_sms"), no signature verification needed.
-
-		Fails closed (returns False) if:
-		- auth_token is configured but X-Twilio-Signature header is missing
-		- HMAC-SHA1 signature validation fails
+		Missing/unknown mode, send_only, frappe_sms, missing credentials, missing or
+		invalid X-Twilio-Signature all return False.
 		"""
-		# If using Frappe SMS Settings (not Twilio), skip signature check
-		if self._account_sid == "frappe_sms" or not self._auth_token:
-			return True
-
-		# Twilio is configured: require X-Twilio-Signature header
+		if self._mode != "twilio" or not self._auth_token or not self._account_sid:
+			return False
 		signature = request.headers.get("X-Twilio-Signature", "").strip()
 		if not signature:
-			return False  # Fail closed on missing header
-
-		# Compute expected HMAC-SHA1 signature per Twilio webhook docs
-		mac = hmac.new(self._auth_token.encode("utf-8"), request.body, hashlib.sha1)
-		import base64
+			return False
+		mac = hmac.new(self._auth_token.encode("utf-8"), request.body or b"", hashlib.sha1)
 		expected = base64.b64encode(mac.digest()).decode("utf-8")
-
-		# Use constant-time comparison to prevent timing attacks
 		return hmac.compare_digest(signature, expected)
 
 	def normalize_inbound(self, request: GatewayInboundRequest) -> NormalizedGatewayEvent:
+		if not self.verify_inbound(request):
+			raise PermissionError("SMS inbound rejected: unverified or inbound disabled")
 		body_str = request.body.decode("utf-8") if request.body else ""
 		params = parse_qs(body_str) if "=" in body_str else request.query
 
@@ -101,7 +93,7 @@ class SMSGatewayAdapter(GatewayAdapter):
 
 		sender_id = get_val("From") or get_val("sender") or get_val("mobile")
 		message_text = get_val("Body") or get_val("text") or get_val("message")
-		message_sid = get_val("MessageSid") or get_val("SmsSid") or f"sms-{hash(body_str)}"
+		message_sid = get_val("MessageSid") or get_val("SmsSid") or f"sms-unknown-{uuid.uuid4().hex}"
 
 		try:
 			num_media = int(get_val("NumMedia") or "0")
@@ -132,30 +124,38 @@ class SMSGatewayAdapter(GatewayAdapter):
 		)
 
 	def send_reply(self, reply: GatewayReply) -> OutboundDelivery:
-		"""Deliver SMS reply via Twilio REST API or native Frappe SMS Settings."""
-		if self._account_sid == "frappe_sms" or not self._account_sid or not self._auth_token:
+		"""Deliver SMS. Raises on any failure; never reports an unreal "sent" status."""
+		if self._mode == "frappe_sms":
 			from frappe.core.doctype.sms_settings.sms_settings import send_sms
+
 			send_sms(receiver_list=[reply.conversation_id], msg=reply.text)
+			# Frappe SMS Settings returns no provider id and no delivery receipt.
 			return OutboundDelivery(
-				provider_message_id=f"frappe-sms-{hash(reply.text)}",
-				provider_response={"status": "sent", "gateway": "Frappe SMS Settings"},
+				provider_message_id=f"frappe-sms-unknown-{uuid.uuid4().hex}",
+				provider_response={"status": "unknown", "gateway": "Frappe SMS Settings"},
 			)
+		if self._mode not in ("twilio", "send_only"):
+			raise ValueError("SMS mode must be explicitly set to twilio, send_only or frappe_sms")
+		if not self._account_sid or not self._auth_token or not self._from_number:
+			raise ValueError("SMS delivery failed: account_sid, auth_token and from_number are required")
 
 		url = f"https://api.twilio.com/2010-04-01/Accounts/{self._account_sid}/Messages.json"
-		payload = {
-			"From": self._from_number,
-			"To": reply.conversation_id,
-			"Body": reply.text,
-		}
-
+		payload = {"From": self._from_number, "To": reply.conversation_id, "Body": reply.text}
 		response = self._http_post(
-			url,
-			auth=(self._account_sid, self._auth_token),
-			data=payload,
-			timeout=10,
+			url, auth=(self._account_sid, self._auth_token), data=payload, timeout=10
 		)
 		body = response.json() if hasattr(response, "json") else response
-		if not isinstance(body, dict) or "sid" not in body:
+		if not isinstance(body, dict) or not body.get("sid") or body.get("error_code"):
 			raise ValueError(f"SMS delivery failed: {body}")
-
 		return OutboundDelivery(str(body["sid"]), provider_response=body)
+
+
+def send_sms_message(gateway: Mapping[str, str] | SMSGatewayAdapter, to: str, body: str) -> dict[str, Any]:
+	"""Send one SMS for OTP/failover. Returns {ok, id, status, error}; never raises."""
+	try:
+		adapter = gateway if isinstance(gateway, SMSGatewayAdapter) else SMSGatewayAdapter(gateway)
+		delivery = adapter.send_reply(GatewayReply(conversation_id=to, text=body))
+		status = str(delivery.provider_response.get("status", "queued"))
+		return {"ok": True, "id": delivery.provider_message_id, "status": status, "error": None}
+	except Exception as exc:  # noqa: BLE001 - failover callers need a result, not a raise
+		return {"ok": False, "id": None, "status": "failed", "error": str(exc)}
