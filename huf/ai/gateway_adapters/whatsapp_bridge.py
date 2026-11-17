@@ -3105,8 +3105,10 @@ def edit_template(
 	# Meta may have reclassified the template (UTILITY -> MARKETING): compare with ITS category, not a stale one
 	current_category = str(state.get("category") or row.get("category") or "").upper()
 	category = str(payload.get("category") or current_category).upper()
-	if category not in TEMPLATE_CATEGORIES:
-		return _err("invalid_category", message="Category must be one of " + ", ".join(TEMPLATE_CATEGORIES))
+	# AUTHENTICATION templates have Meta's fixed OTP shape and are created, not edited into, through this path.
+	editable_categories = tuple(c for c in TEMPLATE_CATEGORIES if c != "AUTHENTICATION")
+	if category not in editable_categories:
+		return _err("invalid_category", message="Category must be one of " + ", ".join(editable_categories))
 	merged["category"] = category
 	ttl = payload.get("message_send_ttl_seconds") if payload.get("message_send_ttl_seconds") is not None else payload.get("ttl_seconds")
 	if ttl is not None and (isinstance(ttl, bool) or not isinstance(ttl, int)):
