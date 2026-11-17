@@ -163,6 +163,7 @@ export function ChatMessageList({
         hasMore,
         sentinelRef,
         error: messagesError,
+        appendItems: appendConversationItems,
     } = useInfiniteScroll<
         { limit?: number; start?: number },
         ChatMessage
@@ -254,7 +255,9 @@ export function ChatMessageList({
         if (event.confirmation && typeof event.confirmation === 'object') {
             upsertConfirmation(normalizeConfirmation(event.confirmation));
         }
+        if (event.type === 'approval-resolved') void refreshHistoryRef.current();
     }, [chatId, upsertConfirmation]);
+    const refreshHistoryRef = useRef<() => Promise<void>>(async () => {});
 
     // Events are best-effort: load pending approvals on open.
     useEffect(() => {
@@ -274,19 +277,45 @@ export function ChatMessageList({
         return () => { cancelled = true; };
     }, [chatId]);
 
-    // After a decision, append the follow-up (confirmation_result) message from the conversation.
-    const handleConfirmationDecided = useCallback(async () => {
-        if (!chatId) return;
+    // After a decision (or an approval-resolved event), pull the follow-up
+    // (confirmation_result) message from history into the infinite-scroll
+    // source list so it survives re-merges (never a local-only append).
+    const refreshHistory = useCallback(async (): Promise<ChatMessage[]> => {
+        if (!chatId) return [];
         try {
             const latest = await getConversationMessages({ conversation: chatId, limit: 10, start: 0 });
-            setMessages((prev) => {
-                const known = new Set(prev.map((m) => m.key));
-                const fresh = latest.data.filter((item) => !known.has(item.id));
-                if (fresh.length === 0) return prev;
-                return [...prev, ...mergeConversationItemsIntoMessages([], fresh, false)];
-            });
-        } catch { /* the card already shows the decided state */ }
-    }, [chatId]);
+            appendConversationItems(latest.data);
+            return latest.data;
+        } catch { return []; /* the card already shows the decided state */ }
+    }, [chatId, appendConversationItems]);
+    const handleConfirmationDecided = useCallback(async (c?: ToolConfirmation) => {
+        const first = await refreshHistory();
+        if (!c || c.state !== 'approved') return;
+        // Async execution: poll get_pending + history until executed|failed (max ~2 min).
+        const terminal = (items: ChatMessage[]): ToolConfirmation | null => {
+            for (const it of items) {
+                const m = typeof it.content === 'string' ? it.content : '';
+                if (!m.includes('confirmation_result') || !m.includes(c.id)) continue;
+                try {
+                    const o = JSON.parse(m);
+                    if (o?.id === c.id && (o.state === 'executed' || o.state === 'failed')) return { ...c, state: o.state };
+                } catch { /* ignore */ }
+            }
+            return null;
+        };
+        let done = terminal(first);
+        for (let i = 0; i < 40 && !done; i++) {
+            await new Promise((r) => setTimeout(r, 3000));
+            try {
+                const pend = (await getPendingConfirmations(chatId)).find((p) => p.id === c.id);
+                if (pend && (pend.state === 'executed' || pend.state === 'failed')) done = pend;
+            } catch { /* keep polling */ }
+            if (!done) done = terminal(await refreshHistory());
+        }
+        if (done) upsertConfirmation(done);
+    }, [chatId, refreshHistory, upsertConfirmation]);
+
+    refreshHistoryRef.current = async () => { await refreshHistory(); };
 
     useChatSocket({
         conversationId: chatId,
