@@ -10,10 +10,11 @@ GUARDED_FIELDS = (
 	"gateway", "template", "whatsapp_account",
 	"status", "scheduled_at", "scheduled_by", "started_by", "started_at", "finished_at", "pause_reason", "resumed_by", "acknowledged_warnings",
 	"max_recipients", "send_via", "mps",
-	"language_code", "body_params", "header_params", "button_params", "cost_estimate",
+	"language_code", "body_params", "header_params", "button_params", "carousel_params", "cost_estimate",
+	"fallback_channels", "fallback_body", "fallback_body_kind", "fallback_sms_gateway", "fallback_email_gateway",
 	*COUNTED, "total",
 )
-JSON_FIELDS = ("body_params", "header_params", "button_params", "cost_estimate")
+JSON_FIELDS = ("body_params", "header_params", "button_params", "carousel_params", "cost_estimate")
 PICK_FIELDS = ("audience", "tag_filter_mode", "tags", "exclude")
 # Values a brand-new row may carry without the broadcast API (the doctype defaults).
 # max_recipients / mps have no doctype default: blank means "use WhatsApp Broadcast Settings".

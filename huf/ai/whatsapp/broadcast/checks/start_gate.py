@@ -175,6 +175,20 @@ def resume_acknowledged(broadcast: str, preview: dict[str, Any]) -> set[str]:
 	return current & stored
 
 
+def check_fallback(broadcast: str) -> None:
+	"""Refuse a start whose failover is half configured: channels without a plain-text body (or a bad kind)."""
+	from huf.ai.whatsapp.broadcast import failover, fallback_config
+
+	cfg = frappe.db.get_value("WhatsApp Broadcast", broadcast, list(fallback_config.CONFIG_FIELDS), as_dict=True) or {}
+	problem = fallback_config.check_complete(cfg.get("fallback_channels"), cfg.get("fallback_body"))
+	if not problem and failover.parse_channels(cfg.get("fallback_channels")):
+		kind = str(cfg.get("fallback_body_kind") or "").strip().lower()
+		if kind and kind not in fallback_config.BODY_KINDS:
+			problem = "fallback_body_kind must be marketing or transactional."
+	if problem:
+		raise StartRefused("fallback_body_required", _(problem))
+
+
 def recheck_locked(broadcast, preview, *, resuming, override_warnings, expected_count):
 	"""Re-count and re-check once the start locks are held; returns ``(fresh preview, acknowledged codes)``.
 
@@ -188,6 +202,7 @@ def recheck_locked(broadcast, preview, *, resuming, override_warnings, expected_
 			),
 			queued=counted,
 		)
+	check_fallback(broadcast)
 	preview = broadcast_limits.preview(broadcast, locked=True) or preview  # sees other starts' commits
 	deferred = int(frappe.db.count(RECIPIENT, {"broadcast": broadcast, "status": "deferred"}) or 0)
 	acknowledged = check_preview(preview, deferred, None if resuming else (override_warnings or []))

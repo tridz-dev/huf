@@ -132,3 +132,35 @@ class TestFailover(FrappeTestCase):
 	def test_parse_channels(self):
 		self.assertEqual(failover.parse_channels('["SMS","sms","push","email"]'), ["sms", "email"])
 		self.assertEqual(failover.parse_channels("not json"), [])
+
+
+class TestFailoverClaimOrder(TestFailover):
+	"""The claim is committed before any provider call and replaced by the result afterwards."""
+
+	def test_claim_visible_before_send_and_replaced_after(self):
+		self._row()
+		seen = {}
+
+		def sms(gw, to, body):
+			seen["during"] = json.loads(frappe.db.get_value(RC, R, "fallback_attempts") or "[]")
+			return {"ok": True, "id": "SM1", "status": "queued", "error": None}
+
+		self.sms = MagicMock(side_effect=sms)
+		self.senders = {"sms": self.sms}
+		self._fail()
+		self.assertEqual([a["status"] for a in seen["during"]], ["attempting"])
+		_d, attempts = self._doc()
+		self.assertNotIn("attempting", [a["status"] for a in attempts])
+		self.assertEqual(attempts[0]["channel"], "sms")
+
+	def test_late_wa_delivered_during_attempt_is_kept(self):
+		self._row()
+
+		def sms(gw, to, body):
+			failover.note_wa_delivered(R, "delivered")
+			return {"ok": True, "id": "SM1", "status": "queued", "error": None}
+
+		self.sms = MagicMock(side_effect=sms)
+		self._fail()
+		_d, attempts = self._doc()
+		self.assertEqual([a["channel"] for a in attempts], ["sms", "whatsapp"])

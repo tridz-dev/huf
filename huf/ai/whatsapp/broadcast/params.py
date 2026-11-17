@@ -123,6 +123,27 @@ def params_error(params: Any) -> str | None:
 	)
 
 
+def _cards(carousel: Any) -> list[Any] | None:
+	cards = carousel.get("cards") if isinstance(carousel, dict) else carousel
+	return cards if isinstance(cards, list) else None
+
+
+def merge_carousel(default: Any, mine: Any) -> Any:
+	"""Broadcast default carousel under the recipient's: card ``i`` of the recipient overrides the same keys of
+	default card ``i``; cards only one side has are kept. Either side empty -> the other."""
+	base, own = _cards(default), _cards(mine)
+	if not own:
+		return base or None
+	if not base:
+		return own
+	out = []
+	for i in range(max(len(base), len(own))):
+		a = base[i] if i < len(base) else None
+		b = own[i] if i < len(own) else None
+		out.append({**a, **b} if isinstance(a, dict) and isinstance(b, dict) else (b if b is not None else a))
+	return out
+
+
 def merge_buttons(default: Any, mine: Any) -> Any:
 	"""Recipient button values replace the default of the same ``index``; other defaults stay."""
 	if not isinstance(default, list) or not isinstance(mine, list):

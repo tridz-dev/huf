@@ -10,7 +10,8 @@ Single shared helper (the OTP SMS fallback reuses ``run_chain``). Rules:
 * Needs an explicit plain-text ``fallback_body`` (no template-to-text guessing) and ``fallback_channels``
   (ordered JSON list such as ["sms", "email"]); recipient-row values override the broadcast's.
 * The recipient row is locked (FOR UPDATE); a non-empty ``fallback_attempts`` is the claim, so duplicate or
-  out-of-order webhooks cannot fire two chains. First terminal outcome wins: a late WA delivered/read is
+  out-of-order webhooks cannot fire two chains. The claim (status ``attempting``) is committed BEFORE any provider
+  call and replaced by the result afterwards. First terminal outcome wins: a late WA delivered/read is
   audited but triggers nothing.
 * ``has_consent`` is checked before each leg (denied -> leg skipped with an audit entry). Email is refused
   when ``fallback_body_kind == "otp"``.
@@ -30,6 +31,7 @@ BROADCAST = "WhatsApp Broadcast"
 # Meta codes where the message was definitively not delivered and a resend elsewhere is safe.
 RETRY_SAFE_CODES = frozenset({131026, 131030, 131021})
 SUPPORTED = ("sms", "email")
+ATTEMPTING = "attempting"
 _FIELDS = ("fallback_channels", "fallback_body", "fallback_body_kind", "fallback_sms_gateway", "fallback_email_gateway")
 
 
@@ -96,7 +98,7 @@ def run_chain(
 	from huf.ai.channels.channel_consent import has_consent
 
 	senders = senders or {}
-	purpose = "utility" if str(body_kind or "").lower() in ("otp", "utility") else "marketing"
+	purpose = "utility" if str(body_kind or "").lower() in ("otp", "utility", "transactional") else "marketing"
 	attempts: list[dict[str, Any]] = []
 	for channel in channels:
 		if channel not in SUPPORTED:
@@ -159,6 +161,12 @@ def maybe_failover(recipient_name: str, error_code: int | None, senders: dict | 
 		body = str(cfg["fallback_body"] or "").strip()
 		if not channels or not body:
 			return False
+		# Claim first and commit BEFORE any provider call: a lost later write can then never cause a second chain,
+		# and the webhook transaction is not held open (row lock included) during network sends.
+		frappe.db.set_value(
+			RECIPIENT, recipient_name, "fallback_attempts", json.dumps([_entry("chain", ATTEMPTING)]), update_modified=False
+		)
+		frappe.db.commit()
 		attempts, delivered = run_chain(
 			channels,
 			phone=row["recipient"],
@@ -169,14 +177,28 @@ def maybe_failover(recipient_name: str, error_code: int | None, senders: dict | 
 			email_gateway=cfg["fallback_email_gateway"] or None,
 			senders=senders,
 		)
-		values: dict[str, Any] = {"fallback_attempts": json.dumps(attempts)}
-		if delivered:
-			values["channel_delivered"] = delivered
-		frappe.db.set_value(RECIPIENT, recipient_name, values, update_modified=False)
+		_finish(recipient_name, attempts, delivered)
 		return True
 	except Exception:
 		frappe.log_error(title="WhatsApp broadcast failover failed", message=frappe.get_traceback())
 		return False
+
+
+def _finish(recipient_name: str, attempts: list[dict[str, Any]], delivered: str | None) -> None:
+	"""Replace the ``attempting`` claim with the chain result, keeping entries added meanwhile (late WA delivery).
+
+	If this write fails the claim stays: the row is never re-sent, the audit just says ``attempting``."""
+	try:
+		row = frappe.db.get_value(RECIPIENT, recipient_name, ["fallback_attempts", "channel_delivered"], as_dict=True, for_update=True) or {}
+		extras = [a for a in _load_attempts(row.get("fallback_attempts")) if a.get("status") != ATTEMPTING]
+		values: dict[str, Any] = {"fallback_attempts": json.dumps(attempts + extras)}
+		if delivered and not row.get("channel_delivered"):
+			values["channel_delivered"] = delivered
+		frappe.db.set_value(RECIPIENT, recipient_name, values, update_modified=False)
+		frappe.db.commit()
+	except Exception:
+		frappe.db.rollback()
+		frappe.log_error(title="WhatsApp broadcast failover result not recorded", message=frappe.get_traceback())
 
 
 def note_wa_delivered(recipient_name: str, status: str) -> None:

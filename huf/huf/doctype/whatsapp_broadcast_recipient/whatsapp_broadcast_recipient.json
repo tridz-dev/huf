@@ -213,10 +213,11 @@
   },
   {
    "fieldname": "fallback_body_kind",
-   "fieldtype": "Data",
+   "fieldtype": "Select",
    "label": "Fallback body kind",
-   "description": "\"otp\" refuses the email leg.",
-   "read_only": 1
+   "description": "marketing needs an explicit marketing opt-in on each channel; transactional does not. Never otp/utility.",
+   "read_only": 1,
+   "options": "\nmarketing\ntransactional"
   },
   {
    "fieldname": "fallback_sms_gateway",
