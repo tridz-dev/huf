@@ -272,7 +272,9 @@ class TestBehaviour(_Settings):
 	def test_endpoints_use_policy_rate_callables(self):
 		from huf.ai.whatsapp.broadcast import api
 
-		src = pathlib.Path(api.__file__).read_text()
+		from huf.ai.whatsapp.broadcast.support import api_controls
+
+		src = pathlib.Path(api.__file__).read_text() + pathlib.Path(api_controls.__file__).read_text()
 		self.assertNotIn("rate_limit(limit=60", src)
 		self.assertIn('policy.rate("rate_start_broadcast")', src)
 

@@ -147,7 +147,7 @@ class TestToolConfirmation(IntegrationTestCase):
 		self.assertTrue(out["confirmation"]["expires_at"].endswith("+00:00"))
 
 	def test_iso_utc_converts_site_timezone(self):
-		with patch.object(tc, "get_system_timezone", return_value="Asia/Kolkata"):
+		with patch("huf.ai.tool_confirmation.hashing.get_system_timezone", return_value="Asia/Kolkata"):
 			self.assertEqual(tc.iso_utc("2026-11-17 15:45:00"), "2026-11-17T10:15:00+00:00")
 
 	def test_hmac_hash_verifies_and_detects_tamper(self):

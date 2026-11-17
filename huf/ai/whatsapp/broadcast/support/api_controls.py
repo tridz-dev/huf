@@ -15,7 +15,7 @@ from frappe.rate_limiter import rate_limit
 
 from huf.ai.whatsapp.broadcast import api as _api, policy
 from huf.ai.whatsapp.broadcast.checks import start_gate
-from huf.ai.whatsapp.broadcast.support.api_helpers import _BROADCAST
+from huf.ai.whatsapp.broadcast.support.api_helpers import _BROADCAST, _BROADCAST_LOG
 
 def _is_api_key_caller() -> bool:
 	"""True when the request is authenticated with an API key/secret (``Authorization: token key:secret``)."""
@@ -97,7 +97,7 @@ def cancel_broadcast(broadcast: str | None = None) -> dict[str, Any]:
 @_api._bridge_guard
 def pause_all_broadcasts(gateway: str | None = None) -> dict[str, Any]:
 	"""Kill switch: pause every running broadcast of a Gateway."""
-	refused = _require_send_authority(gateway)
+	refused = _api._require_send_authority(gateway)
 	if refused:
 		return refused
 	running = frappe.get_all(_BROADCAST, filters={"gateway": gateway, "status": "Running"}, pluck="name") or []

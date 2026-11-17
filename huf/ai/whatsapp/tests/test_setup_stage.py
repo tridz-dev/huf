@@ -126,6 +126,9 @@ class TestSetupStageInStatus(unittest.TestCase):
 	def setUp(self):
 		p = patch("huf.ai.whatsapp.management.frappe")
 		self.frappe = p.start()
+		_extra = patch("huf.ai.whatsapp.setup.credential_view.frappe", self.frappe)
+		_extra.start()
+		self.addCleanup(_extra.stop)
 		self.addCleanup(p.stop)
 		self.frappe.PermissionError = PermissionError
 		self.frappe.get_roles.return_value = ["System Manager"]

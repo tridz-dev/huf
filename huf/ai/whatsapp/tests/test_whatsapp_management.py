@@ -31,6 +31,9 @@ class TestWhatsAppManagement(unittest.TestCase):
 	def setUp(self):
 		frappe_patcher = patch("huf.ai.whatsapp.management.frappe")
 		self.frappe = frappe_patcher.start()
+		_extra = patch("huf.ai.whatsapp.setup.credential_view.frappe", self.frappe)
+		_extra.start()
+		self.addCleanup(_extra.stop)
 		self.addCleanup(frappe_patcher.stop)
 		self.frappe.PermissionError = PermissionError
 		self.frappe.db.exists.return_value = True
@@ -238,6 +241,9 @@ class TestWhatsAppManagementAuthority(unittest.TestCase):
 	def setUp(self):
 		patcher = patch("huf.ai.whatsapp.management.frappe")
 		self.frappe = patcher.start()
+		_extra = patch("huf.ai.whatsapp.setup.credential_view.frappe", self.frappe)
+		_extra.start()
+		self.addCleanup(_extra.stop)
 		self.addCleanup(patcher.stop)
 		self.frappe.PermissionError = PermissionError
 		self.frappe.db.exists.return_value = True
@@ -502,6 +508,9 @@ class TestOutboundTypeEndpoints(unittest.TestCase):
 	def setUp(self):
 		patcher = patch("huf.ai.whatsapp.management.frappe")
 		self.frappe = patcher.start()
+		_extra = patch("huf.ai.whatsapp.setup.credential_view.frappe", self.frappe)
+		_extra.start()
+		self.addCleanup(_extra.stop)
 		self.addCleanup(patcher.stop)
 		self.frappe.PermissionError = PermissionError
 		self.frappe.db.exists.return_value = True
