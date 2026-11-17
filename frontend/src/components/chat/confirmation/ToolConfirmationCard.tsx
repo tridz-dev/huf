@@ -16,7 +16,7 @@ import {
 	confirmationErrorMessage,
 	getConfirmationErrorCode,
 	type ToolConfirmation,
-} from '@/services/toolConfirmationApi';
+} from '@/services/toolConfirmation/toolConfirmationApi';
 
 function formatCountdown(ms: number): string {
 	const total = Math.max(0, Math.floor(ms / 1000));

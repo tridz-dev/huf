@@ -6,14 +6,14 @@ import { MemoryRouter } from 'react-router-dom';
 import { toast } from 'sonner';
 
 import { ToolConfirmationCard } from './ToolConfirmationCard';
-import { ChatMessage } from './ChatMessage';
+import { ChatMessage } from '../ChatMessage';
 import {
 	getConfirmationErrorCode,
 	confirmationErrorMessage,
 	parseConfirmationRequest,
 	parseExpiresAt,
 	type ToolConfirmation,
-} from '@/services/toolConfirmationApi';
+} from '@/services/toolConfirmation/toolConfirmationApi';
 import { call } from '@/lib/frappe-sdk';
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }));

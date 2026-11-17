@@ -6,12 +6,12 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { errorText, uploadPublicFile } from '@/services/whatsappApi';
-import { cardButtonBlocker } from '../template/cards';
-import type { TemplateWizardDraft, WizardButton, WizardCard } from '../template/draft';
-import { WIZARD_LIMITS } from '../template/rules';
-import { extractVariables } from '../template/variables';
-import { controlA11y } from './controlA11y';
-import { Field, Section, type FieldApi } from './fields';
+import { cardButtonBlocker } from '../../template/cards';
+import type { TemplateWizardDraft, WizardButton, WizardCard } from '../../template/draft';
+import { WIZARD_LIMITS } from '../../template/rules';
+import { extractVariables } from '../../template/variables';
+import { controlA11y } from '../controlA11y';
+import { Field, Section, type FieldApi } from '../fields';
 
 export interface CardActions {
   onAdd: () => void;

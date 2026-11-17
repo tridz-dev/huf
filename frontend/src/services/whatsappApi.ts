@@ -1,5 +1,7 @@
 import { call, file } from '@/lib/frappe-sdk';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
+import type { CarouselCardDef, SendTemplateArgs, WizardAuthenticationFields, WizardPayloadCard } from './whatsapp/templateCarouselTypes';
+export type { CarouselCardDef, CarouselCardParam, HeaderParam, SendTemplateArgs, WizardAuthenticationFields, WizardPayloadCard } from './whatsapp/templateCarouselTypes';
 
 const BASE = 'huf.ai.whatsapp.management';
 
@@ -215,16 +217,7 @@ export interface WizardPayloadButton {
   example?: string;
   phone_number?: string;
 }
-export interface WizardPayloadCard {
-  header_type: 'IMAGE' | 'VIDEO';
-  /** Header example media: link or uploaded path. */
-  sample: string;
-  body: string;
-  /** Numbered body variable examples, comma-joined. */
-  sample_values?: string;
-  buttons: WizardPayloadButton[];
-}
-export interface WizardTemplatePayload {
+export interface WizardTemplatePayload extends WizardAuthenticationFields {
   template_name: string;
   category: TemplateCategory;
   language_code: string;
@@ -244,34 +237,11 @@ export interface WizardTemplatePayload {
   cards?: WizardPayloadCard[];
   /** Utility only: message validity in seconds. */
   ttl_seconds?: number;
-  /** Authentication only: fixed WhatsApp format options. */
-  add_security_recommendation?: boolean;
-  code_expiration_minutes?: number;
-  otp_button_text?: string;
 }
 export type WizardEditPayload = Omit<WizardTemplatePayload, 'template_name' | 'language_code' | 'header_type'> & {
   header_type?: WizardPayloadHeaderType | '';
 };
 
-export type HeaderParam =
-  | string
-  | { type: 'image' | 'document' | 'video'; link: string; filename?: string }
-  | { type: 'document'; file: string }; // a private Frappe File, uploaded server-side
-export interface CarouselCardDef {
-  header_type: string;
-  body_vars: string[];
-  buttons: { type: string; dynamic: boolean; text?: string; url?: string; example?: string }[];
-  /** Stored card text, examples and header handle (present on detail views). */
-  body?: string;
-  sample_values?: string[];
-  header_example?: string;
-}
-/** Per-card values for a carousel send: header media by link or uploaded media id. */
-export interface CarouselCardParam {
-  header: { type?: 'image' | 'video'; link?: string; id?: string };
-  body: string[];
-  buttons: ButtonParam[];
-}
 export interface ButtonParam {
   index: number;
   sub_type: 'url' | 'quick_reply';
@@ -572,16 +542,7 @@ export const deleteTemplate = (name: string, acknowledgeShared?: boolean) =>
 export const syncTemplates = (gatewayName: string) =>
   invoke<Record<string, unknown>>('sync_templates', { gateway_name: gatewayName }, 'post');
 
-export const sendTemplateMessage = (args: {
-  /** The Gateway to send from; its WhatsApp account is used, never one chosen by the caller. */
-  gateway_name: string;
-  to: string;
-  template_name: string;
-  body_params?: string[];
-  header_params?: HeaderParam[];
-  button_params?: ButtonParam[];
-  carousel_params?: CarouselCardParam[];
-}) =>
+export const sendTemplateMessage = (args: SendTemplateArgs) =>
   invoke<Record<string, unknown>>(
     'send_template_message',
     {
