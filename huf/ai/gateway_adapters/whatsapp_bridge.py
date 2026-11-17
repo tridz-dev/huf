@@ -957,8 +957,10 @@ def send_template(
 	force_graph: bool = False,
 	opaque_ref: str | None = None,
 	marketing_api: bool = False,
+	redact_params: bool = False,
 ) -> dict[str, Any]:
-	"""Send an approved template. ``force_graph`` always posts to Graph (returns ``wamid`` and ``message_status``),
+	"""Send an approved template. ``redact_params`` stores no parameter values in the mirrored ``WhatsApp Message``
+	(OTP sends; needs ``force_graph``). ``force_graph`` always posts to Graph (returns ``wamid`` and ``message_status``),
 	``opaque_ref`` is echoed on status webhooks, ``marketing_api`` uses the Marketing Messages endpoint.
 
 	``run_id`` / ``solution`` (optional) attribute the send to a Solution for template usage tracking.
@@ -1034,6 +1036,8 @@ def send_template(
 
 	if marketing_api and not force_graph:
 		raise BridgeError(_err("invalid_request", message="marketing_api requires force_graph."))
+	if redact_params and not force_graph:
+		raise BridgeError(_err("invalid_request", message="redact_params requires force_graph."))
 	if force_graph or named or any(c.get("type") in ("header", "button") for c in components) or (tpl and _has_dynamic_url(tpl)):
 		if not _may_bypass(trusted) and not frappe.has_permission("WhatsApp Message", "create"):
 			raise frappe.PermissionError("Not permitted to send WhatsApp messages")
@@ -1057,9 +1061,14 @@ def send_template(
 		else:
 			posted = {"wamid": _graph_post_message(acct, payload, http_post), "message_status": None}
 		wamid = posted["wamid"]
-		mirror: dict[str, Any] = {"template_parameters": ",".join(params)}
-		if body_map:
-			mirror["body_param"] = json.dumps(body_map)
+		if redact_params:
+			mirror: dict[str, Any] = {"template_parameters": "***"}
+			if body_map:
+				mirror["body_param"] = json.dumps({k: "***" for k in body_map})
+		else:
+			mirror = {"template_parameters": ",".join(params)}
+			if body_map:
+				mirror["body_param"] = json.dumps(body_map)
 		header_comp = next((c for c in components if c.get("type") == "header"), None)
 		if header_comp:
 			hp = header_comp["parameters"][0]

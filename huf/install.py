@@ -972,6 +972,10 @@ def create_huf_roles():
 			}).insert(ignore_permissions=True)
 
 
+	# Service role for OTP delivery callers (huf.ai.whatsapp.otp); no desk access, never auto-granted.
+	if not frappe.db.exists("Role", "HUF OTP Sender"):
+		frappe.get_doc({"doctype": "Role", "role_name": "HUF OTP Sender", "desk_access": 0}).insert(ignore_permissions=True)
+
 	# 2. Create (or update) the four Huf Role documents.
 	role_meta = [
 		{
