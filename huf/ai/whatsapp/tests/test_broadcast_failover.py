@@ -49,9 +49,15 @@ class TestFailover(FrappeTestCase):
 			(R, B, status, channels, body, kind, email),
 		)
 
-	def _fail(self, errors=UNDELIVERABLE, status="failed"):
-		with patch("huf.ai.channels.channel_consent.has_consent", _consent()), patch.dict(failover.__dict__, {"_send_sms": self.sms, "_send_email": self.email}):
-			return bs.apply_status("wamid.fo1", status, TS, errors, gateway=GW)
+	def _fail(self, errors=UNDELIVERABLE, status="failed", allowed=("sms", "email")):
+		"""Apply the webhook status (enqueue patched), then run each queued job directly like a worker would."""
+		with patch("frappe.enqueue") as enq:
+			applied = bs.apply_status("wamid.fo1", status, TS, errors, gateway=GW)
+		with patch("huf.ai.channels.channel_consent.has_consent", _consent(allowed)), patch.dict(failover.__dict__, {"_send_sms": self.sms, "_send_email": self.email}):
+			for call in enq.call_args_list:
+				failover.run_failover_job(call.kwargs["recipient_name"])
+		self.enqueued = enq
+		return applied
 
 	def _doc(self):
 		d = frappe.db.get_value(RC, R, ["status", "channel_delivered", "fallback_attempts"], as_dict=True)
@@ -76,10 +82,7 @@ class TestFailover(FrappeTestCase):
 
 	def test_consent_skip(self):
 		self._row()
-		with patch("huf.ai.channels.channel_consent.has_consent", _consent(("email",))), patch.dict(
-			failover.__dict__, {"_send_sms": self.sms, "_send_email": self.email}
-		):
-			bs.apply_status("wamid.fo1", "failed", TS, UNDELIVERABLE, gateway=GW)
+		self._fail(allowed=("email",))
 		d, att = self._doc()
 		self.assertEqual(att[0]["status"], "skipped")
 		self.assertEqual(att[0]["reason"], "no_opt_in")
@@ -89,11 +92,13 @@ class TestFailover(FrappeTestCase):
 	def test_duplicate_webhook_fires_once(self):
 		self._row()
 		self._fail()
+		self.assertEqual(self.enqueued.call_count, 1)
 		self._fail()
+		self.assertEqual(self.enqueued.call_count, 0)  # duplicate webhook: status did not advance, nothing queued
 		self.assertEqual(self.sms.call_count, 1)
-		# direct second trigger is also blocked by the claim
-		with patch("huf.ai.channels.channel_consent.has_consent", _consent()):
-			self.assertFalse(failover.maybe_failover(R, 131026, senders=self.senders))
+		# a duplicate job is also blocked by the claim
+		with patch("huf.ai.channels.channel_consent.has_consent", _consent()), patch.dict(failover.__dict__, {"_send_sms": self.sms}):
+			self.assertFalse(failover.run_failover_job(R))
 		self.assertEqual(self.sms.call_count, 1)
 
 	def test_late_delivered_audited_only(self):
@@ -111,6 +116,21 @@ class TestFailover(FrappeTestCase):
 		self._row()
 		bs.apply_status("wamid.fo1", "delivered", TS, gateway=GW)
 		self.assertEqual(self._doc()[0].channel_delivered, "whatsapp")
+
+	def test_apply_status_does_not_commit_or_call_providers(self):
+		self._row()
+		with patch("frappe.enqueue") as enq, patch.object(frappe.db, "commit") as commit, patch.dict(
+			failover.__dict__, {"_send_sms": self.sms, "_send_email": self.email}
+		):
+			bs.apply_status("wamid.fo1", "failed", TS, UNDELIVERABLE, gateway=GW)
+		commit.assert_not_called()
+		self.sms.assert_not_called()
+		self.email.assert_not_called()
+		self.assertEqual(enq.call_count, 1)
+		kw = enq.call_args.kwargs
+		self.assertEqual((kw["queue"], kw["enqueue_after_commit"], kw["recipient_name"]), ("short", True, R))
+		self.assertTrue(kw["deduplicate"])
+		self.assertEqual(self._doc()[1], [])
 
 	def test_otp_email_refused(self):
 		self._row(channels='["email"]', kind="otp")

@@ -5,7 +5,7 @@
 
 Single shared helper (the OTP SMS fallback reuses ``run_chain``). Rules:
 
-* Trigger only from ``status.apply_status`` on a terminal ``failed`` with a retry-safe error code
+* ``status.apply_status`` only enqueues (``maybe_failover``); ``run_failover_job`` runs in a worker. Trigger only on a terminal ``failed`` with a retry-safe error code
   (``RETRY_SAFE_CODES``). Never on sent-but-not-delivered timeouts; 131050 (user stopped marketing) never fails over.
 * Needs an explicit plain-text ``fallback_body`` (no template-to-text guessing) and ``fallback_channels``
   (ordered JSON list such as ["sms", "email"]); recipient-row values override the broadcast's.
@@ -147,22 +147,42 @@ def _config(row: dict[str, Any]) -> dict[str, Any]:
 	return {k: (row.get(k) or bc.get(k) or "") for k in _FIELDS}
 
 
-def maybe_failover(recipient_name: str, error_code: int | None, senders: dict | None = None) -> bool:
-	"""Called by status.apply_status right after a row became ``failed``. True if a chain ran. Never raises."""
+def maybe_failover(recipient_name: str, error_code: int | None) -> bool:
+	"""Called by status.apply_status right after a row became ``failed``. Cheap: decides eligibility from the
+	error code and enqueues ONE job per recipient (``enqueue_after_commit``). No commit, no lock, no network, so
+	the webhook transaction and its savepoint stay intact. True when a job was queued. Never raises."""
 	try:
 		if int(error_code or 0) not in RETRY_SAFE_CODES:
 			return False
-		cols = ["name", "broadcast", "recipient", "status", "channel_delivered", "fallback_attempts", "fallback_email", *_FIELDS]
-		row = frappe.db.get_value(RECIPIENT, recipient_name, cols, as_dict=True, for_update=True)
+		frappe.enqueue(
+			"huf.ai.whatsapp.broadcast.failover.run_failover_job",
+			queue="short",
+			enqueue_after_commit=True,
+			deduplicate=True,
+			job_id=f"huf-wa-failover-{recipient_name}",
+			recipient_name=recipient_name,
+		)
+		return True
+	except Exception:
+		frappe.log_error(title="WhatsApp broadcast failover enqueue failed", message=frappe.get_traceback())
+		return False
+
+
+def run_failover_job(recipient_name: str, senders: dict | None = None) -> bool:
+	"""The queued job: claim the row, then run the chain. True if a chain ran. Never raises."""
+	try:
+		row = frappe.db.get_value(RECIPIENT, recipient_name, ["name", "broadcast", "recipient", "status", "channel_delivered", "fallback_attempts", "fallback_email", *_FIELDS], as_dict=True, for_update=True)
 		if not row or row["status"] != "failed" or row.get("channel_delivered") or _load_attempts(row.get("fallback_attempts")):
-			return False  # first terminal outcome wins; claim already taken
+			frappe.db.rollback()
+			return False  # first terminal outcome wins (a late WA delivered moved the status on); claim already taken
 		cfg = _config(row)
 		channels = parse_channels(cfg["fallback_channels"])
 		body = str(cfg["fallback_body"] or "").strip()
 		if not channels or not body:
+			frappe.db.rollback()
 			return False
 		# Claim first and commit BEFORE any provider call: a lost later write can then never cause a second chain,
-		# and the webhook transaction is not held open (row lock included) during network sends.
+		# and the row lock is not held open during network sends.
 		frappe.db.set_value(
 			RECIPIENT, recipient_name, "fallback_attempts", json.dumps([_entry("chain", ATTEMPTING)]), update_modified=False
 		)
