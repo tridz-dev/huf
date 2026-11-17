@@ -209,8 +209,10 @@ def upsert_tool(data: dict, source_app: str, source_file: str) -> tuple:
     if data.get("types") not in VALID_TYPES:
         data["types"] = "App Provided"
         
-    tool_type = data.get("tool_type")
-    if tool_type and not frappe.db.exists("Agent Tool Type", tool_type):
+    # Agent Tool Function.tool_type is mandatory; external apps rarely know the category taxonomy.
+    tool_type = data.get("tool_type") or "Miscellaneous"
+    data["tool_type"] = tool_type
+    if not frappe.db.exists("Agent Tool Type", tool_type):
         try:
             frappe.get_doc({
                 "doctype": "Agent Tool Type",
