@@ -41,7 +41,7 @@ export function SendTemplateDialog({ template, onClose, gateway, initialTo = '' 
     .filter(({ b }) => b.button_type === 'Visit Website' && b.url_type === 'Dynamic');
 
   // a Frappe File path (not http) on a DOCUMENT header is uploaded server-side from the private File
-  const documentFileRef = (type: string, v: string) => (type === 'DOCUMENT' && !/^https?:\/\//i.test(v) ? { type: 'document', file: v } : null);
+  const documentFileRef = (type: string, v: string): HeaderParam | null => (type === 'DOCUMENT' && !/^https?:\/\//i.test(v) ? { type: 'document' as const, file: v } : null);
   const send = async () => {
     if (!template || !gateway) return;
     setBusy(true);

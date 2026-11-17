@@ -242,7 +242,10 @@ export type WizardEditPayload = Omit<WizardTemplatePayload, 'template_name' | 'l
   header_type?: WizardPayloadHeaderType | '';
 };
 
-export type HeaderParam = string | { type: 'image' | 'document' | 'video'; link: string; filename?: string };
+export type HeaderParam =
+  | string
+  | { type: 'image' | 'document' | 'video'; link: string; filename?: string }
+  | { type: 'document'; file: string }; // a private Frappe File, uploaded server-side
 export interface CarouselCardDef {
   header_type: string;
   body_vars: string[];
