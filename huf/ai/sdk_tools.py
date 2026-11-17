@@ -632,7 +632,9 @@ def create_agent_tools(agent, model_name: str = None, desktop_ctx: dict | None =
                     tool_type=function_doc.types,
                     allowed_for_guest=bool(function_doc.allowed_for_guest),
                     blocking=is_blocking,
-                    requires_confirmation=bool(getattr(function_doc, "requires_confirmation", 0)),
+                    requires_confirmation=bool(
+                        getattr(function_doc, "requires_confirmation", 0) or getattr(function_doc, "is_outbound", 0)
+                    ),
                 )
 
                 if tool:
@@ -942,7 +944,8 @@ def create_function_tool(
                     except frappe.PermissionError as e:
                         return json.dumps({"error": str(e), "denied": True})
 
-                if (_gate := tool_gate(name, args_dict, _frappe_run_context_dict(ctx), requires_confirmation)) is not None:
+                _gate_ctx = {**_frappe_run_context_dict(ctx), "tool_call_id": getattr(ctx, "tool_call_id", None)}
+                if (_gate := tool_gate(name, args_dict, _gate_ctx, requires_confirmation)) is not None:
                     return _gate  # gateway tool policy / confirm gate
 
                 if allowed_for_guest and frappe.session.user == "Guest":

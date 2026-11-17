@@ -165,8 +165,10 @@ def _channel_arg(args: dict) -> str:
 	return str((args or {}).get("channel") or "").strip()
 
 
-def _park(ctx, tool_name, args, agent_run_id, conversation_id, agent_name=None) -> str:
+def _park(ctx, tool_name, args, agent_run_id, conversation_id, agent_name=None, tool_call_id=None) -> str:
 	"""Park a requires_confirmation call (every run type). Fails closed."""
+	from huf.ai import tool_confirmation
+
 	try:
 		if _CONFIRMER is not None and ctx:
 			out = _CONFIRMER(ctx, tool_name, dict(args or {}))
@@ -175,7 +177,15 @@ def _park(ctx, tool_name, args, agent_run_id, conversation_id, agent_name=None) 
 		from huf.ai import tool_confirmation
 
 		return json.dumps(
-			tool_confirmation.park(tool_name, dict(args or {}), agent_run_id, conversation_id, agent_name), default=str
+			tool_confirmation.park(tool_name, dict(args or {}), agent_run_id, conversation_id, agent_name, tool_call_id),
+			default=str,
+		)
+	except tool_confirmation.SummaryUnresolved:
+		return _denied(
+			f"Tool '{tool_name}' sends messages but its recipient count could not be resolved, so it was not "
+			"executed and no confirmation was created.",
+			error="confirmation_summary_unresolved",
+			requires_confirmation=True,
 		)
 	except Exception:
 		frappe.log_error(title="tool confirmation park failed")
@@ -185,10 +195,28 @@ def _park(ctx, tool_name, args, agent_run_id, conversation_id, agent_name=None) 
 		)
 
 
+def _tool_is_outbound(tool_name) -> bool:
+	"""True when the Agent Tool Function row is flagged ``is_outbound`` (such tools always need confirmation)."""
+	try:
+		return frappe.db.get_value("Agent Tool Function", {"tool_name": tool_name}, "is_outbound") in (1, True, "1")
+	except Exception:
+		return False
+
+
 def check_tool_call(
-	tool_name, args, agent_run_id, requires_confirmation=False, conversation_id=None, agent_name=None
+	tool_name,
+	args,
+	agent_run_id,
+	requires_confirmation=False,
+	conversation_id=None,
+	agent_name=None,
+	is_outbound=False,
+	tool_call_id=None,
 ) -> str | None:
-	"""Return a JSON tool result string if the call must NOT run, else None (proceed)."""
+	"""Return a JSON tool result string if the call must NOT run, else None (proceed).
+
+	Effective confirmation = ``requires_confirmation`` OR ``is_outbound`` (PLAN 06: any outbound tool pauses)."""
+	requires_confirmation = bool(requires_confirmation or is_outbound or _tool_is_outbound(tool_name))
 	try:
 		ctx = resolve_gateway_context(agent_run_id)
 	except Exception:
@@ -199,7 +227,7 @@ def check_tool_call(
 	if not ctx:
 		# Not a gateway run (web / mobile / desktop): only the confirmation gate applies.
 		if requires_confirmation:
-			return _park(None, tool_name, args, agent_run_id, conversation_id, agent_name)
+			return _park(None, tool_name, args, agent_run_id, conversation_id, agent_name, tool_call_id)
 		return None
 	try:
 		gateway, channel = ctx["gateway"], ctx.get("channel")
@@ -223,7 +251,7 @@ def check_tool_call(
 					)
 		if requires_confirmation:
 			# never pass the channel as a conversation id: it would address a bogus realtime event
-			return _park(ctx, tool_name, args, agent_run_id, conversation_id, agent_name)
+			return _park(ctx, tool_name, args, agent_run_id, conversation_id, agent_name, tool_call_id)
 	except Exception:
 		# Gateway run, but the gate itself failed: fail closed.
 		return _denied("Tool call blocked: the gateway tool policy could not be evaluated.")

@@ -30,6 +30,7 @@
   "requires_confirmation",
   "required_roles",
   "is_outbound",
+  "confirmation_summary_path",
   "parameters_section",
   "parameters",
   "params",
@@ -239,6 +240,12 @@
    "fieldtype": "Check",
    "label": "Is Outbound",
    "description": "Tool sends data/messages outside the system. With no Required Roles it fails closed (System Manager only)."
+  },
+  {
+   "fieldname": "confirmation_summary_path",
+   "fieldtype": "Data",
+   "label": "Confirmation Summary Path",
+   "description": "Optional dotted path to fn(args, user) -> {action, recipient_count, template, channel, sample} used to build the confirmation card. Outbound tools whose recipient_count cannot be resolved are refused (fail closed)."
   },
   {
    "fieldname": "seed_snapshot",

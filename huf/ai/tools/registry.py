@@ -559,6 +559,8 @@ def sync_discovered_tools(apps_to_scan=None, use_cache=True):
                 ],
                 "provider_app": app,
                 "service": d.get("service", ""),
+                "is_outbound": int(bool(d.get("is_outbound", 0))),
+                "confirmation_summary_path": d.get("confirmation_summary_path") or "",
             }
             
             if tool_name in existing_tools:
