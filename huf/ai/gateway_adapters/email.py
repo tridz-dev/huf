@@ -86,6 +86,11 @@ class EmailGatewayAdapter(GatewayAdapter):
 		message_text = payload.get("body") or payload.get("text") or payload.get("subject") or ""
 		event_id = payload.get("message_id") or payload.get("id") or str(hash(f"{sender_id}:{message_text}"))
 
+		# Only reached after verify_inbound (webhook secret): an unsubscribe/stop reply updates consent.
+		from huf.ai.channels.channel_consent import handle_keyword
+
+		handle_keyword("email", sender_id, message_text or payload.get("subject"), "email_inbound")
+
 		return NormalizedGatewayEvent(
 			provider_event_id=event_id,
 			sender_id=sender_id,

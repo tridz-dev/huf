@@ -112,6 +112,11 @@ class SMSGatewayAdapter(GatewayAdapter):
 				)
 			)
 
+		# Only reached after verify_inbound (twilio mode + valid signature): STOP/START keywords update consent.
+		from huf.ai.channels.channel_consent import handle_keyword
+
+		handle_keyword("sms", sender_id, message_text, "sms_inbound")
+
 		return NormalizedGatewayEvent(
 			provider_event_id=message_sid,
 			sender_id=sender_id,
