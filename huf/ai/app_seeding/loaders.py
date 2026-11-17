@@ -78,23 +78,22 @@ def _enforce_only_tighten(doc, before: dict, data: dict) -> list:
         if old == tight and new != tight:
             doc.set(k, old)
             warnings.append(f"{label}: ignored seed loosening of {k} ({old} -> {new})")
-    for k in _ROLE_TEXT_FIELDS:
+    for k in _ROLE_TEXT_FIELDS + _ROLE_TABLE_FIELDS:
         if k not in before or k not in data:
             continue
-        cur = _split_roles(doc.get(k))
-        missing = [r for r in before[k] if r not in cur]
-        if missing:
-            doc.set(k, ", ".join(cur + missing))
-            warnings.append(f"{label}: ignored seed removal of {k} {missing}")
-    for k in _ROLE_TABLE_FIELDS:
-        if k not in before or k not in data:
-            continue
-        cur = _table_roles(doc.get(k))
-        missing = [r for r in before[k] if r not in cur]
-        if missing:
-            for r in missing:
-                doc.append(k, {"role": r})
-            warnings.append(f"{label}: ignored seed removal of {k} {missing}")
+        existing = before[k]
+        if not existing:
+            continue  # unrestricted so far: the seed list applies as-is (it tightens)
+        is_table = k in _ROLE_TABLE_FIELDS
+        seeded = _table_roles(doc.get(k)) if is_table else _split_roles(doc.get(k))
+        final = [r for r in existing if r in seeded]
+        if not final:
+            final = list(existing)
+            warnings.append(f"{label}: ignored seed {k} {seeded} (no overlap with existing {existing}); kept existing")
+        elif set(seeded) - set(existing):
+            warnings.append(f"{label}: ignored seed additions to {k} {sorted(set(seeded) - set(existing))}")
+        if final != seeded:
+            doc.set(k, [{"role": r} for r in final] if is_table else ", ".join(final))
     for w in warnings:
         frappe.logger("huf").warning("[app_seeding] %s", w)
     return warnings
