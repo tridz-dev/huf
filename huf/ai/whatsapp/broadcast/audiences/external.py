@@ -4,7 +4,8 @@
 """Externally managed audiences: another app (a CRM, a loyalty app) keeps an audience's members up to date.
 
 ``upsert_audience_members`` is the one write path. The audience is flagged ``externally_managed`` with a
-``managed_by`` source label; only that same ``source`` may change it, and the UI / CSV / manual endpoints refuse it
+``managed_by`` source label (display only) and the creating user in ``managed_by_user``; only that user (or a
+System Manager), with the same ``source``, may change it, and the UI / CSV / manual endpoints refuse it
 (``membership.assert_not_external``). Each member keeps its own consent source and date; the broadcast's consent
 attestation is unchanged. Before a broadcast that uses such an audience starts, :func:`run_refresh_hooks` calls the
 ``huf_audience_refresh`` hooks so the members are current, and refuses to start when a refresh fails.
@@ -55,7 +56,7 @@ def _create(spec: Any, source: str) -> dict[str, Any]:
 	if made.get("error"):
 		return made
 	name = made["audience"]["name"]
-	frappe.db.set_value(aud.AUDIENCE, name, {"externally_managed": 1, "managed_by": source}, update_modified=False)
+	frappe.db.set_value(aud.AUDIENCE, name, {"externally_managed": 1, "managed_by": source, "managed_by_user": frappe.session.user}, update_modified=False)
 	return {"success": True, "name": name, "created": True}
 
 
@@ -114,9 +115,11 @@ def upsert_audience_members(
 		row = audience_api._require_audience_write(audience)
 		if row.get("error"):
 			return row
-		managed = frappe.db.get_value(aud.AUDIENCE, audience, ["externally_managed", "managed_by"], as_dict=True)
+		managed = frappe.db.get_value(aud.AUDIENCE, audience, ["externally_managed", "managed_by", "managed_by_user"], as_dict=True)
 		if not managed.externally_managed:
 			return _error("not_externally_managed", "This audience is managed in Huf; it cannot be changed by another app.")
+		if managed.managed_by_user != frappe.session.user and "System Manager" not in frappe.get_roles():
+			return _error("owner_mismatch", "This audience was created by another user; only that user can change it.")
 		if managed.managed_by != source:
 			return _error("source_mismatch", f"This audience is managed by {managed.managed_by}; only that app can change it.")
 

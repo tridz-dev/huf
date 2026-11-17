@@ -168,6 +168,15 @@ class TestUpsert(AudienceTestCase):
 		manual = self.make("Manual")
 		self.assertEqual(self.up(manual, [_m(1)])["error"], "not_externally_managed")
 
+	def test_ownership_is_bound_to_creating_user_not_source_string(self):
+		name = self.made()
+		self.assertEqual(frappe.db.get_value(aud.AUDIENCE, name, "managed_by_user"), frappe.session.user)
+		frappe.db.set_value(aud.AUDIENCE, name, "managed_by_user", "someone.else@example.com", update_modified=False)
+		with patch.object(frappe, "get_roles", return_value=["Gateway User"]):
+			self.assertEqual(self.up(name, [_m(1)])["error"], "owner_mismatch")  # right label, wrong principal
+		with patch.object(frappe, "get_roles", return_value=["System Manager"]):
+			self.assertTrue(self.up(name, [_m(1)], mode="merge").get("success"))
+
 	def test_idempotency_key_makes_repeat_a_noop(self):
 		name = self.made()
 		first = self.up(name, [_m(5)], mode="merge", idempotency_key="k1")

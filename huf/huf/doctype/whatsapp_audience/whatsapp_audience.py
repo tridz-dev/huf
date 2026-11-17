@@ -7,7 +7,7 @@ from frappe.utils import get_datetime, now_datetime
 
 PURPOSE_FIELDS = ("purpose_marketing", "purpose_utility", "purpose_events")
 # Written only by the audience API / membership code (``in_audience_api``, or raw set_value which skips validate).
-API_ONLY_FIELDS = ("is_adhoc", "member_count", "suppressed_count", "externally_managed", "managed_by", "external_key")
+API_ONLY_FIELDS = ("is_adhoc", "member_count", "suppressed_count", "externally_managed", "managed_by", "managed_by_user", "external_key")
 
 
 class WhatsAppAudience(Document):
