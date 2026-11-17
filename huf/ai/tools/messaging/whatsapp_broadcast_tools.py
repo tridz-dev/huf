@@ -330,7 +330,7 @@ def _p(fieldname: str, description: str, required: int = 0, type_: str = "string
 	return {"label": fieldname.replace("_", " ").title(), "fieldname": fieldname, "type": type_, "required": required, "description": description}
 
 
-_BASE = "huf.ai.tools.whatsapp_broadcast_tools"
+_BASE = "huf.ai.tools.messaging.whatsapp_broadcast_tools"
 _COMMON = {"category": "Communication Tools", "required_roles": REQUIRED_ROLES}
 
 WHATSAPP_BROADCAST_TOOLS = [
@@ -388,7 +388,7 @@ WHATSAPP_BROADCAST_TOOLS = [
 		),
 		"function_path": f"{_BASE}.handle_broadcast_start",
 		"is_outbound": 1,
-		"confirmation_summary_path": "huf.ai.tools.confirmation_summaries.whatsapp_broadcast_start",
+		"confirmation_summary_path": "huf.ai.tools.messaging.confirmation_summaries.whatsapp_broadcast_start",
 		"parameters": [
 			_p("broadcast", "Draft broadcast name", 1),
 			_p("expected_recipient_count", "Queued recipient count the user is approving (from whatsapp_broadcast_status or create)", 1, "number"),

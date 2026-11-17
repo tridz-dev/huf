@@ -36,6 +36,7 @@ import frappe
 
 from huf.ai.tools.call_telemetry import finalize_tool_call_telemetry as _finalize_tool_call_telemetry
 from huf.ai.tools.call_telemetry import start_tool_call_telemetry as _start_tool_call_telemetry
+from huf.ai.tools.support.sync import _run_coroutine_sync
 from huf.ai.tools.types import _GUEST_DOCTYPE_PINNED_TYPES, _GUEST_REPORT_PINNED_TYPES, MUTATING_TOOL_TYPES
 
 logger = frappe.logger("huf")
@@ -479,27 +480,6 @@ async def invoke_tool(
 		_finalize_tool_call_telemetry(telemetry_doc, tool_result)
 
 	return tool_result
-
-
-def _run_coroutine_sync(coro):
-	"""Run a coroutine to completion from synchronous code, at the outermost
-	sync entry point -- one shared utility rather than a new event loop per
-	tool call (the bug the seam audit flagged in the old
-	flow_tool_executor.execute(), §3: a fresh ``asyncio.new_event_loop()`` +
-	``asyncio.set_event_loop()`` per invocation, unsafe if the calling
-	thread ever already has a running loop).
-	"""
-	try:
-		asyncio.get_running_loop()
-	except RuntimeError:
-		return asyncio.run(coro)
-
-	# Already inside a running loop on this thread (e.g. called from async
-	# code) -- run on a fresh thread instead of nesting loops.
-	import concurrent.futures
-
-	with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-		return pool.submit(asyncio.run, coro).result()
 
 
 def invoke_tool_sync(

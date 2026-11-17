@@ -211,9 +211,9 @@ def _explicit_requires_confirmation(tool_name) -> bool:
 
 
 def _needs_confirmation(tool_name, args, requires_confirmation, is_outbound) -> bool:
-	"""Outbound flag is per-action for multi-action tools (see tools.outbound_actions): only sending actions
+	"""Outbound flag is per-action for multi-action tools (see tools.messaging.outbound_actions): only sending actions
 	pause; read actions run. An explicit ``requires_confirmation`` on the tool row still gates every action."""
-	from huf.ai.tools.outbound_actions import is_outbound_call
+	from huf.ai.tools.messaging.outbound_actions import is_outbound_call
 
 	outbound = is_outbound_call(tool_name, args)
 	if outbound is None:

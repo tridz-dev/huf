@@ -9,8 +9,8 @@ from frappe.tests import IntegrationTestCase
 
 from huf.ai import tool_confirmation as tc
 from huf.ai.gateways import tool_policy
-from huf.ai.tools import whatsapp_broadcast_tools as wbt
-from huf.ai.tools.confirmation_summaries import whatsapp_broadcast_start as summarize
+from huf.ai.tools.messaging import whatsapp_broadcast_tools as wbt
+from huf.ai.tools.messaging.confirmation_summaries import whatsapp_broadcast_start as summarize
 from huf.ai.tools.registry import sync_discovered_tools
 from huf.huf.doctype.agent_tool_function.agent_tool_function import OTP_TOOL_DENYLIST
 from huf.ai.whatsapp.broadcast import api as bapi

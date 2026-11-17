@@ -161,7 +161,7 @@ class TestToolConfirmation(IntegrationTestCase):
 			self.assertFalse(p.create or p.write or p.delete, p.role)
 
 	def test_unresolved_recipient_count_on_outbound_tool_is_refused(self):
-		meta = {"is_outbound": 1, "confirmation_summary_path": "huf.ai.tools.confirmation_summaries.whatsapp_broadcast"}
+		meta = {"is_outbound": 1, "confirmation_summary_path": "huf.ai.tools.messaging.confirmation_summaries.whatsapp_broadcast"}
 		with patch.object(tc, "_tool_meta", return_value=meta):
 			out = json.loads(tool_policy.check_tool_call("bulk", {"audience": "A", "template": "t"}, None, True))
 		self.assertTrue(out["denied"])
@@ -169,7 +169,7 @@ class TestToolConfirmation(IntegrationTestCase):
 		self.assertFalse(frappe.db.exists(tc.DOCTYPE, {"tool": "bulk"}))
 
 	def test_custom_summarizer_used(self):
-		meta = {"is_outbound": 1, "confirmation_summary_path": "huf.ai.tools.confirmation_summaries.single_target"}
+		meta = {"is_outbound": 1, "confirmation_summary_path": "huf.ai.tools.messaging.confirmation_summaries.single_target"}
 		with patch.object(tc, "_tool_meta", return_value=meta):
 			s = tc.build_summary("slack_send_message", {"channel": "C1", "text": "yo"})
 		self.assertEqual((s["recipient_count"], s["sample"]), (1, "yo"))

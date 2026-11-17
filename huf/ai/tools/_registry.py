@@ -8,9 +8,9 @@ Each entry is a dict with:
   - category: Agent Tool Type label
   - parameters: list of parameter definitions
 """
-
 from huf.ai.tools import telegram_admin_spec, telegram_tool_spec
 from huf.ai.tools.integration.registry_entries import with_service as _with_service
+from huf.ai.tools.messaging.outbound_actions import flag_outbound as _flag_outbound
 from huf.ai.tools.channel_specs import CHANNEL_TOOLS, COMMERCE_TOOLS, HANDOFF_TOOLS, LMS_TOOLS  # noqa: F401 (re-exported)
 
 # Array parameters whose elements are objects (the doctype row has no item-type field, so the schema
@@ -2839,29 +2839,4 @@ ALL_INTEGRATION_TOOLS = (
 	+ _with_service(SERP_YOUTUBE_TOOLS, "serpapi")
 	+ FRAPPE_CLOUD_TOOLS  # entries already declare service="frappe_cloud"
 )
-ALL_INTEGRATION_TOOLS = (*ALL_INTEGRATION_TOOLS, *CHANNEL_TOOLS)
-
-# Built-in tools that send messages/emails to people outside the system. Flagged ``is_outbound`` so they
-# default to System Manager and ALWAYS pause for user confirmation (PLAN 06). Synced onto the Agent Tool
-# Function row by registry.sync_discovered_tools.
-OUTBOUND_TOOL_NAMES = frozenset(
-	{
-		"whatsapp",
-		"telegram",
-		"messenger",
-		"slack_send_message",
-		"slack_send_thread_reply",
-		"discord_send_message",
-		"google_chat_send_message",
-		"google_chat_send_card",
-		"gmail_send_email",
-		"send_products",
-		"send_wa_flow",
-		"lms_send_certificate",
-	}
-)
-_SUMMARIZERS = {"whatsapp": "huf.ai.tools.confirmation_summaries.whatsapp"}
-for _tool in ALL_INTEGRATION_TOOLS:
-	if _tool.get("tool_name") in OUTBOUND_TOOL_NAMES:
-		_tool["is_outbound"] = 1
-		_tool.setdefault("confirmation_summary_path", _SUMMARIZERS.get(_tool["tool_name"], "huf.ai.tools.confirmation_summaries.single_target"))
+ALL_INTEGRATION_TOOLS = _flag_outbound((*ALL_INTEGRATION_TOOLS, *CHANNEL_TOOLS))

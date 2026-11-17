@@ -12,22 +12,26 @@ to the conversation. The row doubles as the audit record (who / what / when / ha
 
 from __future__ import annotations
 
-import hashlib
-import hmac
 import json
 
 import frappe
 from frappe import _
 
 from huf.ai.api_support import require_permission
-from frappe.utils import add_to_date, cint, get_datetime, get_system_timezone, now_datetime
+from huf.ai.tool_confirmation.hashing import (  # noqa: F401 (re-exported)
+	_hmac_key,
+	args_hash,
+	canonical_args,
+	iso_utc,
+	verify_args_hash,
+)
+from frappe.utils import add_to_date, cint, get_datetime, now_datetime
 
 DOCTYPE = "Agent Tool Confirmation"
 EXPIRY_MINUTES = 15
 APPROVED_STALE_MINUTES = 45  # must exceed the run_approved job timeout (1800s = 30 min)
 _EXECUTING = "__executing__"
 _SAMPLE_LEN = 200
-_TRANSIENT_ARGS = ("ignore_permissions",)
 
 
 class ConfirmationError(frappe.ValidationError):
@@ -53,41 +57,6 @@ ExecutionFailed = _err("confirmation_execution_failed", 500)
 
 
 # ------------------------------------------------------------------ helpers
-def canonical_args(args: dict | None) -> dict:
-	out = dict(args or {})
-	for k in _TRANSIENT_ARGS:
-		out.pop(k, None)
-	return out
-
-
-def _hmac_key() -> bytes:
-	from frappe.utils.password import get_encryption_key
-
-	return str(get_encryption_key()).encode()
-
-
-def args_hash(args: dict | None) -> str:
-	"""HMAC-SHA256 (site encryption key) of the canonical args: a DB-only writer cannot forge a matching hash."""
-	blob = json.dumps(canonical_args(args), sort_keys=True, separators=(",", ":"), default=str)
-	return hmac.new(_hmac_key(), blob.encode(), hashlib.sha256).hexdigest()
-
-
-def verify_args_hash(args: dict | None, expected: str) -> bool:
-	return hmac.compare_digest(args_hash(args), str(expected or ""))
-
-
-def iso_utc(value) -> str | None:
-	"""Naive server-local (site time zone) datetime -> ISO-8601 UTC with offset, e.g. 2026-11-17T10:15:00+00:00."""
-	if not value:
-		return None
-	import pytz
-
-	dt = get_datetime(value).replace(microsecond=0)
-	if dt.tzinfo is None:
-		dt = pytz.timezone(get_system_timezone()).localize(dt)
-	return dt.astimezone(pytz.utc).isoformat()
-
-
 def _first(args: dict, *keys):
 	for k in keys:
 		if args.get(k) not in (None, "", [], {}):

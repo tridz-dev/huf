@@ -34,3 +34,34 @@ def is_outbound_call(tool_name: str, args: dict | None) -> bool | None:
 		return None
 	action = str((args or {}).get("action") or "").strip()
 	return not action or action not in read_only
+
+
+# Built-in tools that send messages/emails to people outside the system. Flagged ``is_outbound`` so they
+# default to System Manager and ALWAYS pause for user confirmation (PLAN 06). Synced onto the Agent Tool
+# Function row by registry.sync_discovered_tools.
+OUTBOUND_TOOL_NAMES = frozenset(
+	{
+		"whatsapp",
+		"telegram",
+		"messenger",
+		"slack_send_message",
+		"slack_send_thread_reply",
+		"discord_send_message",
+		"google_chat_send_message",
+		"google_chat_send_card",
+		"gmail_send_email",
+		"send_products",
+		"send_wa_flow",
+		"lms_send_certificate",
+	}
+)
+_SUMMARIZERS = {"whatsapp": "huf.ai.tools.messaging.confirmation_summaries.whatsapp"}
+
+
+def flag_outbound(tools):
+	"""Mark the outbound built-in tools in ``tools`` (mutates the tool dicts) and return ``tools``."""
+	for _tool in tools:
+		if _tool.get("tool_name") in OUTBOUND_TOOL_NAMES:
+			_tool["is_outbound"] = 1
+			_tool.setdefault("confirmation_summary_path", _SUMMARIZERS.get(_tool["tool_name"], "huf.ai.tools.messaging.confirmation_summaries.single_target"))
+	return tools
