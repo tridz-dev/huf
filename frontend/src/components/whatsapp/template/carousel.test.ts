@@ -3,7 +3,7 @@ import { kindById, isSelectableKind } from './catalogue';
 import { addCard, addCardButton, moveCard, removeCard, removeCardButton, startCarousel, updateCard } from './cards';
 import { emptyDraft } from './draft';
 import { fromTemplateDetail, toCreatePayload } from './payload';
-import { validateDraft } from './rules';
+import { validateDraft, variableAtEdge } from './rules';
 import type { TemplateDetail } from '@/services/whatsappApi';
 
 let n = 0;
@@ -108,5 +108,20 @@ describe('carousel payload', () => {
     expect(d.cards[0]).toMatchObject({ headerType: 'video', mediaSample: '', samples: ['x'] });
     expect(d.cards[1].mediaSample).toBe('https://x.example/i.png');
     expect(d.cards[0].buttons[0].text).toBe('Hi');
+  });
+});
+
+describe('variables at the edge (Meta 100/2388299)', () => {
+  it('detects start and end variables', () => {
+    expect(variableAtEdge('{{1}} hi')).toBe(true);
+    expect(variableAtEdge('hi {{1}}  ')).toBe(true);
+    expect(variableAtEdge('hi {{1}} there')).toBe(false);
+  });
+  it('rejects them in the carousel body and in card bodies', () => {
+    const d = valid();
+    expect(validateDraft(d).body).toBeUndefined();
+    expect(validateDraft({ ...d, body: 'Hi {{1}}', samples: { '1': 'A' } }).body).toMatch(/start or end/);
+    const c = updateCard(d, 1, { body: '{{1}} deal', samples: ['A'] });
+    expect(validateDraft(c)['cards.1.body']).toMatch(/start or end/);
   });
 });

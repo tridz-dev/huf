@@ -23,8 +23,8 @@ export const WIZARD_LIMITS = {
   otpExpiryMax: 90,
   cardsMin: 2,
   cardsMax: 10,
-  cardBody: 160, // unverified (from memory): Meta card body limit
-  cardButtons: 2, // unverified (from memory)
+  cardBody: 160, // verified live 2026-11-18 (Meta 1/2388337)
+  cardButtons: 2, // verified live 2026-11-18 (Meta 100/2388158)
 } as const;
 
 /** {fieldPath: message}. Paths: name, language, header.text, header.mediaSample, body, footer, buttons, buttons.<i>.<field>, ttl, samples.<key>. */
@@ -98,6 +98,11 @@ function checkTokens(
   return tokens;
 }
 
+/** Meta 100/2388299 (live 2026-11-18): a variable cannot be at the start or end of a carousel body or card body. */
+export function variableAtEdge(text: string): boolean {
+  return /^\s*\{\{[^{}]*\}\}/.test(text) || /\{\{[^{}]*\}\}\s*$/.test(text);
+}
+
 /** Card errors use paths cards (list level) and cards.<i>.mediaSample|body|samples.<n>|buttons|buttons.<j>.<field>. */
 function validateCards(draft: TemplateWizardDraft, errors: FieldErrors): void {
   const { cards } = draft;
@@ -118,6 +123,8 @@ function validateCards(draft: TemplateWizardDraft, errors: FieldErrors): void {
         errors[`${p}.body`] = 'Card text can only use numbered variables like {{1}}.';
       } else if (nums.some((n, k) => n !== k + 1)) {
         errors[`${p}.body`] = 'Variables must be numbered {{1}}, {{2}}, ... without gaps.';
+      } else if (variableAtEdge(c.body)) {
+        errors[`${p}.body`] = 'Variables cannot be at the start or end of the card text.';
       } else {
         nums.forEach((n) => {
           const problem = sampleProblem(c.samples[n - 1] ?? '', String(n));
@@ -220,6 +227,9 @@ export function validateDraft(draft: TemplateWizardDraft): FieldErrors {
     else if (body.length > WIZARD_LIMITS.body) errors.body = `Body is limited to ${WIZARD_LIMITS.body} characters.`;
     else {
       const tokens = checkTokens('body', body, draft, errors, 'body');
+      if (!errors.body && variableAtEdge(body)) {
+        errors.body = 'Variables cannot be at the start or end of the body.';
+      }
       if (!errors.body) {
         for (const t of tokens) {
           const problem = sampleProblem(draft.samples[t.token] ?? '', t.token);
