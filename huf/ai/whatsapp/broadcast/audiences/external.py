@@ -196,7 +196,9 @@ def _flag_key(token: str) -> str:
 def refresh_hook_job(path: str, token: str, audience: str, managed_by: str) -> None:
 	"""RQ job: run one refresh hook in this worker's own site/db connection and publish ok/error under ``token``.
 
-	The hook commits its own writes (it calls ``upsert_audience_members``). If the caller already gave up
+	The hook commits its own writes (it calls ``upsert_audience_members``); the ``frappe.db.commit()`` after the
+	call is by design and commits them in THIS job's connection, not the requesting one. Hook contract: idempotent
+	and limited to the audience's members. If the caller already gave up
 	(``cancelled`` flag) the hook is not started. Hooks MUST be idempotent: a hook that was already running when
 	the caller timed out finishes on its own and its writes stand, but the caller has refused that start."""
 	cache = frappe.cache()
@@ -255,6 +257,11 @@ def external_audiences(broadcast: str) -> list[dict]:
 
 def run_refresh_hooks(broadcast: str) -> bool:
 	"""Refresh every externally managed audience the broadcast includes. True when any ran.
+
+	Commits mid-request BY DESIGN: the refresh runs in RQ jobs on their own connection, so this request must end
+	its own snapshot (``frappe.db.commit()`` below) to see what the hook jobs committed. Hook contract: a refresh
+	hook must be idempotent and must only write to the audience it is given (its members); the job commits the
+	hook's writes in its own connection (see ``refresh_hook_job``).
 
 	Fail closed: no registered ``huf_audience_refresh`` hook, a hook error or a timeout raises
 	``RefreshFailed`` (a ValidationError) naming the audience, so the broadcast does not start on stale contacts.
