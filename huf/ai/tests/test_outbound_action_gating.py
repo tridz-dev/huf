@@ -8,7 +8,7 @@ from frappe.tests import IntegrationTestCase
 
 from huf.ai import tool_confirmation as tc
 from huf.ai.gateways import tool_policy
-from huf.ai.tools.outbound_actions import OUTBOUND_ACTIONS, is_outbound_call
+from huf.ai.tools.outbound_actions import READ_ONLY_ACTIONS, is_outbound_call
 
 
 class TestOutboundActionGating(IntegrationTestCase):
@@ -31,7 +31,8 @@ class TestOutboundActionGating(IntegrationTestCase):
 	def test_every_send_action_of_real_tools_is_outbound(self):
 		from huf.ai.tools import whatsapp as wa
 
-		self.assertTrue((wa._SEND_ACTIONS - {"create_template"}) <= OUTBOUND_ACTIONS["whatsapp"])
+		self.assertFalse((wa._SEND_ACTIONS - {"create_template"}) & READ_ONLY_ACTIONS["whatsapp"])
+		self.assertFalse(is_outbound_call("whatsapp", {"action": "create_template"}))
 
 	def test_read_action_runs_send_action_parks(self):
 		with patch.object(tc, "_execute") as ex:

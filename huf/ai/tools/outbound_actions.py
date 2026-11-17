@@ -1,14 +1,12 @@
 """Per-action confirmation gating for multi-action outbound tools.
 
 A multi-action built-in tool (``whatsapp``, ``telegram``, ``messenger``) is flagged ``is_outbound`` on its
-Agent Tool Function row, but only some of its actions send anything. ``OUTBOUND_ACTIONS`` maps a tool name
-to the set of action names that reach people (and therefore pause for confirmation); read-only actions such
-as ``list_templates`` run normally. Fail closed: an empty/unknown action on a mapped tool still confirms.
+Agent Tool Function row, but only some of its actions send anything. ``READ_ONLY_ACTIONS`` maps a tool name
+to the actions that send nothing (``list_templates`` ...); every other action, including an unknown or
+missing one, is treated as outbound and pauses for confirmation (fail closed).
 """
 
 from __future__ import annotations
-
-from huf.ai.tools import telegram_tool_spec
 
 _TELEGRAM_READ_ONLY = frozenset(
 	{
@@ -18,24 +16,20 @@ _TELEGRAM_READ_ONLY = frozenset(
 	}
 )
 
-OUTBOUND_ACTIONS: dict[str, frozenset] = {
-	"whatsapp": frozenset(
-		{
-			"send_message", "send_media", "send_voice_note", "send_location", "send_contact", "send_reaction",
-			"send_template", "send_image", "send_video", "send_audio", "send_document", "send_sticker",
-			"send_buttons", "send_list", "send_cta_url", "send_products",
-		}
-	),
-	"messenger": frozenset({"send_message", "reply_message"}),
-	"telegram": frozenset(telegram_tool_spec.ACTION_ARGS) - _TELEGRAM_READ_ONLY,
+# Fail closed: a mapped tool's action pauses unless it is listed here as read-only (or a draft-only action
+# that sends nothing, like create_template).
+READ_ONLY_ACTIONS: dict[str, frozenset] = {
+	"whatsapp": frozenset({"list_messages", "get_account_info", "list_templates", "get_template_status", "create_template"}),
+	"messenger": frozenset({"list_conversations", "list_messages"}),
+	"telegram": _TELEGRAM_READ_ONLY,
 }
 
 
 def is_outbound_call(tool_name: str, args: dict | None) -> bool | None:
 	"""None when the tool has no per-action map (gate on the tool flag as before); else whether this call's
 	action is an outbound one (an unknown/missing action counts as outbound)."""
-	actions = OUTBOUND_ACTIONS.get(tool_name)
-	if actions is None:
+	read_only = READ_ONLY_ACTIONS.get(tool_name)
+	if read_only is None:
 		return None
 	action = str((args or {}).get("action") or "").strip()
-	return not action or action in actions
+	return not action or action not in read_only
