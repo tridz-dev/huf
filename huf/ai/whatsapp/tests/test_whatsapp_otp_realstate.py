@@ -105,3 +105,9 @@ class TestOtpRealState(base.TestOtp):
 			if n:
 				hits.append((table, col, n))
 		self.assertEqual(hits, [], f"OTP code found in DB columns: {hits}")
+
+
+# Only the real-state tests above run here; the inherited unit tests assume a dict-backed fake cache.
+for _name in dir(base.TestOtp):
+	if _name.startswith("test_") and _name not in TestOtpRealState.__dict__:
+		setattr(TestOtpRealState, _name, None)
