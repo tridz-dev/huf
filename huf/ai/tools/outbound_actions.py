@@ -18,6 +18,7 @@ _TELEGRAM_READ_ONLY = frozenset(
 
 # Fail closed: a mapped tool's action pauses unless it is listed here as read-only (or a draft-only action
 # that sends nothing, like create_template).
+# Decision: whatsapp create_template stays read-only (submits to Meta for review, sends nothing to customers).
 READ_ONLY_ACTIONS: dict[str, frozenset] = {
 	"whatsapp": frozenset({"list_messages", "get_account_info", "list_templates", "get_template_status", "create_template"}),
 	"messenger": frozenset({"list_conversations", "list_messages"}),
