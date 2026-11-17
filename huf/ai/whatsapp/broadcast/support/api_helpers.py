@@ -11,6 +11,7 @@ from typing import Any
 
 import frappe
 
+from huf.ai.flow.gateways.phone_mask import mask_phone as _mask_phone
 from huf.ai.whatsapp.broadcast.support import fallback_config
 from huf.ai.whatsapp.management import _iso, _parse_json_arg
 
@@ -58,11 +59,6 @@ def _broadcast_view(row: dict[str, Any]) -> dict[str, Any]:
 def _queued_count(broadcast: str) -> int:
 	"""Recipients still to send (queued + deferred): same set as broadcast_cost.confirm_token and the runner."""
 	return int(frappe.db.count(_BROADCAST_RECIPIENT, {"broadcast": broadcast, "status": ["in", ["queued", "deferred"]]}) or 0)
-
-
-def _mask_phone(value: Any) -> Any:
-	text = str(value or "")
-	return ("*" * max(len(text) - 4, 0) + text[-4:]) if text else value
 
 
 _LONG_DIGITS_RE = re.compile(r"\d{7,}")

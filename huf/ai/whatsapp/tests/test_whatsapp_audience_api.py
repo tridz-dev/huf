@@ -244,7 +244,7 @@ class TestMembersAndMasking(AudienceTestCase):
 		with patch.object(api, "_gateway_write_allowed", return_value=False), patch.object(api, "_gateway_read_allowed", return_value=True):
 			out = api.list_members(audience=name)
 			self.assertTrue(out["masked"])
-			self.assertEqual([m["recipient"] for m in out["members"]], ["********0123", "********0124", "********0125"])
+			self.assertEqual([m["recipient"] for m in out["members"]], ["****0123", "****0124", "****0125"])
 			self.assertFalse(api.get_audience(audience=name)["audience"]["can_see_numbers"])
 		out = api.list_members(audience=name)
 		self.assertFalse(out["masked"])

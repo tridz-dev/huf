@@ -23,6 +23,7 @@ from typing import Any
 import frappe
 from frappe.utils import cint
 
+from huf.ai.flow.gateways.phone_mask import mask_phone  # noqa: F401 - re-exported as aud.mask_phone
 from huf.ai.gateway_core.constants import ENTRY_STATE_OPTED_OUT
 from huf.ai.whatsapp.broadcast import policy
 
@@ -322,12 +323,6 @@ def refresh_counts(audience: str, gateway: str | None = None) -> dict[str, int]:
 	counts = {"member_count": len(members), "suppressed_count": len(suppressed)}
 	frappe.db.set_value(AUDIENCE, audience, counts, update_modified=False)
 	return counts
-
-
-# --- masking ---------------------------------------------------------------------------------------
-def mask_phone(value: Any) -> Any:
-	text = str(value or "")
-	return ("*" * max(len(text) - 4, 0) + text[-4:]) if text else value
 
 
 # --- externally managed audiences ------------------------------------------------------------------
