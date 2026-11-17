@@ -139,8 +139,7 @@ export interface UseInfiniteScrollReturn<TItem> {
    * Add an item to the beginning of the list (useful for prepending new items)
    */
   addItem: (item: TItem) => void;
-  /** Append items not already present (by id/name) to the END of the list. */
-  appendItems: (items: TItem[]) => void;
+  appendItems: (items: TItem[]) => void; // append items not yet present (by id/name)
 
   /**
    * Total number of items (if provided by API)
@@ -158,6 +157,7 @@ export interface UseInfiniteScrollReturn<TItem> {
   sentinelRef: React.MutableRefObject<HTMLDivElement | null>;
 }
 
+const getItemId = (it: unknown) => { const o = it as { id?: unknown; name?: unknown }; return o.id || o.name; };
 /**
  * Reusable hook for infinite scrolling with pagination, search, and filters
  * Uses Intersection Observer API for efficient scroll detection
@@ -376,8 +376,6 @@ export function useInfiniteScroll<TParams extends PaginationParams, TItem>({
   const addItem = useCallback((item: TItem) => {
     setItems((prev) => {
       // Check if item already exists to avoid duplicates
-      const getItemId = (it: TItem) =>
-        (it as { id?: unknown; name?: unknown }).id || (it as { id?: unknown; name?: unknown }).name;
       const itemId = getItemId(item);
       if (itemId) {
         const exists = prev.some((existingItem) => getItemId(existingItem) === itemId);
@@ -392,16 +390,10 @@ export function useInfiniteScroll<TParams extends PaginationParams, TItem>({
       return [item, ...prev];
     });
   }, []);
-
-  const appendItems = useCallback((incoming: TItem[]) => {
-    const getItemId = (it: TItem) =>
-      (it as { id?: unknown; name?: unknown }).id || (it as { id?: unknown; name?: unknown }).name;
-    setItems((prev) => {
-      const known = new Set(prev.map(getItemId));
-      const fresh = incoming.filter((it) => !known.has(getItemId(it)));
-      return fresh.length ? [...prev, ...fresh] : prev;
-    });
-  }, []);
+  const appendItems = useCallback((incoming: TItem[]) => setItems((prev) => {
+    const known = new Set(prev.map(getItemId)); const fresh = incoming.filter((it) => !known.has(getItemId(it)));
+    return fresh.length ? [...prev, ...fresh] : prev;
+  }), []);
 
   // Track if we should ignore the first intersection (when sentinel is initially visible)
   const ignoreFirstIntersectionRef = useRef(true);

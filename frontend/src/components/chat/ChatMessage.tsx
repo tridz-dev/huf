@@ -19,8 +19,8 @@ import { Image } from '@/components/ai-elements/image';
 import { Video } from '@/components/ai-elements/video';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { MessageType } from './types';
-import { ToolConfirmationCard } from './ToolConfirmationCard';
-import { parseConfirmationRequest, type ToolConfirmation } from '@/services/toolConfirmationApi';
+import { ToolConfirmationCard } from './confirmation/ToolConfirmationCard';
+import { parseConfirmationRequest, type ToolConfirmation } from '@/services/toolConfirmation/toolConfirmationApi';
 import { MessageContentWithArtifacts } from './MessageContentWithArtifacts';
 import { ChatAttachmentCard } from './ChatAttachmentCard';
 import {

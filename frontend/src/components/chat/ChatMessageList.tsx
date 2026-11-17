@@ -5,11 +5,12 @@ import { getConversationMessages, createAgentRunFeedback, getConversation, hostF
 import { cn } from "@/lib/utils";
 
 import { useInfiniteScroll } from "@/hooks/useInfiniteScroll";
-import { useChatSocket, type ToolCallEvent, type NewAgentMessageEvent, type AgentRunStatusEvent, type ConversationTitleUpdatedEvent, type FrontendToolCallEvent, type ApprovalEvent } from '@/hooks/useChatSocket';
-import { executeClientToolCall, resetClientToolCallTracking } from '@/lib/clientToolDispatcher';
+import { useChatSocket, type ToolCallEvent, type NewAgentMessageEvent, type AgentRunStatusEvent, type ConversationTitleUpdatedEvent } from '@/hooks/useChatSocket';
+import { resetClientToolCallTracking } from '@/lib/clientToolDispatcher';
 import { ChatMessage as ChatMessageComponent } from './ChatMessage';
-import { ToolConfirmationCard } from './ToolConfirmationCard';
-import { getPendingConfirmations, normalize as normalizeConfirmation, parseConfirmationRequest, type ToolConfirmation } from '@/services/toolConfirmationApi';
+import { PendingConfirmationCards } from './confirmation/PendingConfirmationCards';
+import { useFrontendToolCall } from './realtime/useFrontendToolCall';
+import { useToolConfirmations } from './confirmation/useToolConfirmations';
 import { ChatInput, type ChatInputHandle } from './ChatInput';
 import { ColdStartHero, StarterPromptGrid } from './EmptyChatState';
 import { OutputsCard } from './OutputsCard';
@@ -230,92 +231,9 @@ export function ChatMessageList({
         resetClientToolCallTracking();
     }, [chatId]);
 
-    // Handle backend-initiated client-side ("frontend") tool calls
-    const handleFrontendToolCall = useCallback((event: FrontendToolCallEvent) => {
-        if (event.conversation_id !== chatId) return;
+    const handleFrontendToolCall = useFrontendToolCall(chatId ?? undefined);
 
-        const callId = event.tool_call_ref ?? event.call_id;
-        if (!callId) return;
-
-        void executeClientToolCall({
-            callId,
-            functionName: event.function_name,
-            toolParams: event.tool_params,
-        });
-    }, [chatId]);
-
-    // N06 confirm-before-send: latest known state per confirmation id.
-    const [confirmations, setConfirmations] = useState<Record<string, ToolConfirmation>>({});
-    const upsertConfirmation = useCallback((c: ToolConfirmation) => {
-        setConfirmations((prev) => ({ ...prev, [c.id]: c }));
-    }, []);
-
-    const handleApproval = useCallback((event: ApprovalEvent) => {
-        if (event.conversation_id && event.conversation_id !== chatId) return;
-        if (event.confirmation && typeof event.confirmation === 'object') {
-            upsertConfirmation(normalizeConfirmation(event.confirmation));
-        }
-        if (event.type === 'approval-resolved') void refreshHistoryRef.current();
-    }, [chatId, upsertConfirmation]);
-    const refreshHistoryRef = useRef<() => Promise<void>>(async () => {});
-
-    // Events are best-effort: load pending approvals on open.
-    useEffect(() => {
-        setConfirmations({});
-        if (!chatId) return;
-        let cancelled = false;
-        getPendingConfirmations(chatId)
-            .then((list) => {
-                if (cancelled) return;
-                setConfirmations((prev) => {
-                    const next = { ...prev };
-                    list.forEach((c) => { if (!next[c.id]) next[c.id] = c; });
-                    return next;
-                });
-            })
-            .catch(() => { /* non-fatal: history + realtime still render cards */ });
-        return () => { cancelled = true; };
-    }, [chatId]);
-
-    // After a decision (or an approval-resolved event), pull the follow-up
-    // (confirmation_result) message from history into the infinite-scroll
-    // source list so it survives re-merges (never a local-only append).
-    const refreshHistory = useCallback(async (): Promise<ChatMessage[]> => {
-        if (!chatId) return [];
-        try {
-            const latest = await getConversationMessages({ conversation: chatId, limit: 10, start: 0 });
-            appendConversationItems(latest.data);
-            return latest.data;
-        } catch { return []; /* the card already shows the decided state */ }
-    }, [chatId, appendConversationItems]);
-    const handleConfirmationDecided = useCallback(async (c?: ToolConfirmation) => {
-        const first = await refreshHistory();
-        if (!c || c.state !== 'approved') return;
-        // Async execution: poll get_pending + history until executed|failed (max ~2 min).
-        const terminal = (items: ChatMessage[]): ToolConfirmation | null => {
-            for (const it of items) {
-                const m = typeof it.content === 'string' ? it.content : '';
-                if (!m.includes('confirmation_result') || !m.includes(c.id)) continue;
-                try {
-                    const o = JSON.parse(m);
-                    if (o?.id === c.id && (o.state === 'executed' || o.state === 'failed')) return { ...c, state: o.state };
-                } catch { /* ignore */ }
-            }
-            return null;
-        };
-        let done = terminal(first);
-        for (let i = 0; i < 40 && !done; i++) {
-            await new Promise((r) => setTimeout(r, 3000));
-            try {
-                const pend = (await getPendingConfirmations(chatId)).find((p) => p.id === c.id);
-                if (pend && (pend.state === 'executed' || pend.state === 'failed')) done = pend;
-            } catch { /* keep polling */ }
-            if (!done) done = terminal(await refreshHistory());
-        }
-        if (done) upsertConfirmation(done);
-    }, [chatId, refreshHistory, upsertConfirmation]);
-
-    refreshHistoryRef.current = async () => { await refreshHistory(); };
+    const { confirmations, upsertConfirmation, handleApproval, handleConfirmationDecided } = useToolConfirmations(chatId ?? undefined, appendConversationItems);
 
     useChatSocket({
         conversationId: chatId,
@@ -542,24 +460,11 @@ export function ChatMessageList({
                                         precedingUserMessage={precedingUserMessage}
                                         onRegenerate={handleRegenerate}
                                         onSendText={(text) => chatInputRef.current?.send(text)}
-                                        confirmationOverrides={confirmations}
-                                        onConfirmationUpdated={upsertConfirmation}
-                                        onConfirmationDecided={handleConfirmationDecided}
+                                        confirmationOverrides={confirmations} onConfirmationUpdated={upsertConfirmation} onConfirmationDecided={handleConfirmationDecided}
                                     />
                                 );
                             })}
-                            {Object.values(confirmations)
-                                .filter((c) => c.state === 'pending' && !messages.some((m) =>
-                                    m.kind === 'Tool Result' &&
-                                    parseConfirmationRequest(m.versions[0]?.content ?? m.tools?.[0]?.result)?.id === c.id))
-                                .map((c) => (
-                                    <ToolConfirmationCard
-                                        key={`confirmation-${c.id}`}
-                                        confirmation={c}
-                                        onUpdated={upsertConfirmation}
-                                        onDecided={handleConfirmationDecided}
-                                    />
-                                ))}
+                            <PendingConfirmationCards confirmations={confirmations} messages={messages} onUpdated={upsertConfirmation} onDecided={handleConfirmationDecided} />
                             {artifacts && artifacts.length > 0 && onOpenArtifact && (
                                 <OutputsCard
                                     artifacts={artifacts}

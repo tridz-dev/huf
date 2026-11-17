@@ -105,9 +105,7 @@ const uiProviders: GatewayProvider[] = [
   'Telegram',
   'Slack',
   'Email',
-  'Google Chat',
-  'Microsoft Teams',
-  'SMS',
+  'Google Chat', 'Microsoft Teams', 'SMS',
 ];
 
 // Interim mitigation (Phase 5, "G1-G6: Google Chat finish path"): Google Chat's

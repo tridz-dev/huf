@@ -13,7 +13,7 @@ import { Field, Section, type FieldApi } from './fields';
 import { HeaderSection } from './HeaderSection';
 import { SamplesPanel } from './SamplesPanel';
 import { SetupSection } from './SetupSection';
-import { CardsSection, type CardActions } from './CardsSection';
+import { CardsSection, type CardActions } from './carousel/CardsSection';
 
 const TTL_CHOICES = [30, 60, 300, 900, 1800, 3600, 7200, 21600, 43200];
 const DEFAULT_TTL = 3600;
