@@ -138,6 +138,31 @@ def update_tool_call_message(
         return False
 
 
+def supersede_duplicate_tool_results(messages: list) -> list:
+    """One tool message per tool_call_id. A parked tool call stores an 'awaiting approval' result under the
+    call id, and the approval follow-up later stores the real outcome under the SAME id; the model API
+    rejects two tool messages for one call. The earliest row keeps its position (right after the assistant
+    declaration) and takes the latest content; the later duplicates are dropped."""
+    last_content = {}
+    counts = defaultdict(int)
+    for msg in messages:
+        if isinstance(msg, dict) and msg.get("role") == "tool" and msg.get("tool_call_id"):
+            counts[msg["tool_call_id"]] += 1
+            last_content[msg["tool_call_id"]] = msg.get("content")
+    if not any(n > 1 for n in counts.values()):
+        return messages
+    seen, out = set(), []
+    for msg in messages:
+        if isinstance(msg, dict) and msg.get("role") == "tool" and counts.get(msg.get("tool_call_id"), 0) > 1:
+            cid = msg["tool_call_id"]
+            if cid in seen:
+                continue
+            seen.add(cid)
+            msg = {**msg, "content": last_content[cid]}
+        out.append(msg)
+    return out
+
+
 def repair_message_sequence(messages: list, conversation_name: str | None = None) -> list:
     """
     Ensure OpenAI-compatible tool-call pairing in a message list.
@@ -154,6 +179,8 @@ def repair_message_sequence(messages: list, conversation_name: str | None = None
     """
     if not messages:
         return messages
+
+    messages = supersede_duplicate_tool_results(messages)
 
     # First pass: identify assistant declarations and tool results.
     assistant_declarations = []  # (index, message, call_ids)
@@ -518,7 +545,7 @@ class ConversationManager:
                     result.extend(ctx)
                 else:
                     result.append(ctx)
-        return result
+        return supersede_duplicate_tool_results(result)
 
     def _resolve_tool_call_details(self, tool_call_id: str, tool_call_link: str):
         """Return (call_id, tool_name, tool_args) for a tool call, preferring the
