@@ -24,18 +24,23 @@ class TestFixB(IntegrationTestCase):
 	def _park(self):
 		return json.loads(tool_policy.check_tool_call("send_campaign", dict(ARGS), None, True))
 
-	def test_failed_execution_is_committed_and_args_cleared(self):
+	def test_failed_execution_in_job_is_recorded_and_args_cleared(self):
 		req = self._park()
-		with (
-			patch.object(tc, "assert_user_may_run"),
-			patch.object(tc, "_execute", side_effect=RuntimeError("boom")),
-			patch.object(frappe.db, "commit") as commit,
-		):
-			with self.assertRaises(tc.ExecutionFailed):
-				tc.decide(req["id"], True)
-		self.assertTrue(commit.call_count >= 2)  # approved mark + failed state
+		with patch.object(tc, "assert_user_may_run"), patch.object(frappe, "enqueue"):
+			tc.decide(req["id"], True)
+		with patch.object(tc, "_execute", side_effect=RuntimeError("boom")):
+			tc.run_approved(req["id"], "Administrator")
 		row = frappe.get_doc(tc.DOCTYPE, req["id"])
 		self.assertEqual(row.state, "failed")
+		self.assertFalse(row.raw_args)
+		self.assertEqual(frappe.session.user, "Administrator")
+
+	def test_sweeper_fails_stale_approved(self):
+		req = self._park()
+		frappe.db.set_value(tc.DOCTYPE, req["id"], {"state": "approved", "modified": add_to_date(now_datetime(), minutes=-31)}, update_modified=False)
+		tc.sweep_expired()
+		row = frappe.get_doc(tc.DOCTYPE, req["id"])
+		self.assertEqual((row.state, row.error), ("failed", "execution_timeout_unknown"))
 		self.assertFalse(row.raw_args)
 
 	def test_sweeper_expires_and_clears(self):

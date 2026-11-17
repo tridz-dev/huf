@@ -13,14 +13,17 @@ to the conversation. The row doubles as the audit record (who / what / when / ha
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 
 import frappe
 from frappe import _
-from frappe.utils import add_to_date, cint, get_datetime, now_datetime
+from frappe.utils import add_to_date, cint, get_datetime, get_system_timezone, now_datetime
 
 DOCTYPE = "Agent Tool Confirmation"
 EXPIRY_MINUTES = 15
+APPROVED_STALE_MINUTES = 30
+_EXECUTING = "__executing__"
 _SAMPLE_LEN = 200
 _TRANSIENT_ARGS = ("ignore_permissions",)
 
@@ -43,6 +46,7 @@ Expired = _err("confirmation_expired", 410)
 AlreadyDecided = _err("confirmation_already_decided", 409)
 ArgsChanged = _err("confirmation_args_changed", 409)
 RoleDenied = _err("confirmation_role_denied", 403)
+SummaryUnresolved = _err("confirmation_summary_unresolved", 400)
 ExecutionFailed = _err("confirmation_execution_failed", 500)
 
 
@@ -54,9 +58,32 @@ def canonical_args(args: dict | None) -> dict:
 	return out
 
 
+def _hmac_key() -> bytes:
+	from frappe.utils.password import get_encryption_key
+
+	return str(get_encryption_key()).encode()
+
+
 def args_hash(args: dict | None) -> str:
+	"""HMAC-SHA256 (site encryption key) of the canonical args: a DB-only writer cannot forge a matching hash."""
 	blob = json.dumps(canonical_args(args), sort_keys=True, separators=(",", ":"), default=str)
-	return hashlib.sha256(blob.encode()).hexdigest()
+	return hmac.new(_hmac_key(), blob.encode(), hashlib.sha256).hexdigest()
+
+
+def verify_args_hash(args: dict | None, expected: str) -> bool:
+	return hmac.compare_digest(args_hash(args), str(expected or ""))
+
+
+def iso_utc(value) -> str | None:
+	"""Naive server-local (site time zone) datetime -> ISO-8601 UTC with offset, e.g. 2026-11-17T10:15:00+00:00."""
+	if not value:
+		return None
+	import pytz
+
+	dt = get_datetime(value).replace(microsecond=0)
+	if dt.tzinfo is None:
+		dt = pytz.timezone(get_system_timezone()).localize(dt)
+	return dt.astimezone(pytz.utc).isoformat()
 
 
 def _first(args: dict, *keys):
@@ -66,8 +93,41 @@ def _first(args: dict, *keys):
 	return None
 
 
-def build_summary(tool: str, args: dict) -> dict:
-	args = args or {}
+def _tool_meta(tool: str) -> dict:
+	return (
+		frappe.db.get_value(
+			"Agent Tool Function",
+			{"tool_name": tool},
+			["is_outbound", "confirmation_summary_path"],
+			as_dict=True,
+		)
+		or {}
+	)
+
+
+def build_summary(tool: str, args: dict, user: str | None = None, meta: dict | None = None) -> dict:
+	"""Summary for the confirmation card. A tool's ``confirmation_summary_path`` summarizer wins over the
+	arg-key heuristic. An outbound tool whose recipient_count stays unresolved raises SummaryUnresolved."""
+	meta = _tool_meta(tool) if meta is None else meta
+	path = (meta or {}).get("confirmation_summary_path")
+	summary = None
+	if path:
+		try:
+			summary = frappe.get_attr(path)(canonical_args(args), user or frappe.session.user)
+		except Exception:
+			frappe.log_error(title="tool_confirmation: summarizer failed")
+			summary = None
+		if isinstance(summary, dict):
+			summary = {**_heuristic_summary(tool, args or {}), **{k: v for k, v in summary.items() if v is not None},
+				"recipient_count": summary.get("recipient_count")}
+	if summary is None:
+		summary = _heuristic_summary(tool, args or {})
+	if (meta or {}).get("is_outbound") and summary.get("recipient_count") is None:
+		raise SummaryUnresolved(f"cannot resolve the recipient count for outbound tool '{tool}'")
+	return summary
+
+
+def _heuristic_summary(tool: str, args: dict) -> dict:
 	rec = _first(args, "recipients", "to", "phones", "phone_numbers", "contacts", "audience_members")
 	if isinstance(rec, (list, tuple, set)):
 		count = len(rec)
@@ -104,7 +164,7 @@ def _serialize(doc) -> dict:
 		"tool": doc.tool,
 		"state": doc.state,
 		"summary": json.loads(doc.summary or "{}"),
-		"expires_at": str(doc.expires_at),
+		"expires_at": iso_utc(doc.expires_at),
 		"conversation": doc.conversation or None,
 		"requires_confirmation": True,
 		"denied": doc.state != "executed",
@@ -134,12 +194,15 @@ def _publish(event_type: str, doc, agent_run=None):
 
 
 # ------------------------------------------------------------------ park
-def park(tool_name: str, args: dict, agent_run_id=None, conversation_id=None, agent_name=None) -> dict:
+def park(
+	tool_name: str, args: dict, agent_run_id=None, conversation_id=None, agent_name=None, tool_call_id=None
+) -> dict:
 	"""Store the call and return the ``confirmation_request`` dict. Raises on failure (caller fails closed)."""
 	user = frappe.session.user
 	if not user or user == "Guest":
 		raise Forbidden("guests cannot approve tool calls")
 	args = canonical_args(args)
+	summary = build_summary(tool_name, args, user)  # may raise SummaryUnresolved: nothing is stored
 	doc = frappe.get_doc(
 		{
 			"doctype": DOCTYPE,
@@ -149,9 +212,10 @@ def park(tool_name: str, args: dict, agent_run_id=None, conversation_id=None, ag
 			"conversation": conversation_id or "",
 			"agent_run": agent_run_id or "",
 			"agent": agent_name or "",
+			"tool_call_id": tool_call_id or "",
 			"expires_at": add_to_date(now_datetime(), minutes=EXPIRY_MINUTES),
 			"args_hash": args_hash(args),
-			"summary": json.dumps(build_summary(tool_name, args), default=str),
+			"summary": json.dumps(summary, default=str),
 			"redacted_args": json.dumps(_redact(args), default=str),
 			"raw_args": json.dumps(args, default=str),
 		}
@@ -208,30 +272,55 @@ def _execute(doc, args: dict):
 
 
 def _next_index(conversation: str) -> int:
-	# FOR UPDATE serialises concurrent appenders on the conversation's last rows (race-safe index).
+	# Lock the conversation row (a derived-table FOR UPDATE does not lock) so concurrent appenders serialise.
+	frappe.db.get_value("Agent Conversation", conversation, "name", for_update=True)
 	row = frappe.db.sql(
-		"select max(conversation_index) from (select conversation_index from `tabAgent Message` "
-		"where conversation=%s order by conversation_index desc limit 1 for update) t",
-		conversation,
+		"select max(conversation_index) from `tabAgent Message` where conversation=%s", conversation
 	)
 	return cint(row[0][0] if row and row[0] else 0) + 1
 
 
+_OUTCOME_NOTE = {
+	"executed": "The user approved and the action was executed. Do not run it again.",
+	"denied": "The user denied this action. It was NOT executed. Do not retry it or run an equivalent action.",
+	"failed": "The user approved but the action FAILED and may not have completed. Do not retry automatically; "
+	"report the failure to the user and let them decide.",
+}
+
+
 def _append_followup(doc, state: str, result):
+	"""Record the outcome so the model sees it on the next turn and does not re-call the tool.
+
+	With the original ``tool_call_id`` the outcome is stored as the tool result for THAT call (valid history).
+	Without one it is a system note, which the history builder keeps (an id-less tool row would be dropped
+	by repair_message_sequence as an orphan)."""
 	if not doc.conversation or not frappe.db.exists("Agent Conversation", doc.conversation):
 		return
-	payload = {"type": "confirmation_result", "id": doc.name, "tool": doc.tool, "state": state, "result": result}
-	frappe.get_doc(
-		{
-			"doctype": "Agent Message",
-			"conversation": doc.conversation,
-			"conversation_index": _next_index(doc.conversation),
-			"content": json.dumps(payload, default=str),
-			"kind": "Tool Result",
-			"role": "tool",
-			"is_agent_message": 1,
-		}
-	).insert(ignore_permissions=True)
+	payload = {
+		"type": "confirmation_result",
+		"id": doc.name,
+		"tool": doc.tool,
+		"state": state,
+		"result": result,
+		"message": _OUTCOME_NOTE.get(state, f"Confirmation {state}."),
+	}
+	call_id = getattr(doc, "tool_call_id", None)
+	row = {
+		"doctype": "Agent Message",
+		"conversation": doc.conversation,
+		"conversation_index": _next_index(doc.conversation),
+		"is_agent_message": 1,
+	}
+	if call_id:
+		row.update(content=json.dumps(payload, default=str), kind="Tool Result", role="tool", tool_call_id=call_id)
+	else:
+		row.update(
+			content=f"[Confirmation {state}: tool '{doc.tool}'] {payload['message']} "
+			+ json.dumps({k: payload[k] for k in ("id", "state", "result")}, default=str),
+			kind="Message",
+			role="system",
+		)
+	frappe.get_doc(row).insert(ignore_permissions=True)
 
 
 # ------------------------------------------------------------------ API
@@ -276,7 +365,7 @@ def decide(id, approve):
 
 	try:
 		args = json.loads(doc.raw_args or "{}")
-		if args_hash(args) != doc.args_hash:
+		if not verify_args_hash(args, doc.args_hash):
 			doc.state, doc.error = "failed", "args hash mismatch"
 			_close(doc, clear_args=True)
 			frappe.db.commit()
@@ -289,30 +378,56 @@ def decide(id, approve):
 		frappe.db.commit()
 		raise
 
-	# Single use: mark before executing so a crash/retry can never run it twice.
+	# Single use: mark before executing so a crash/retry can never run it twice. The tool itself runs in a
+	# background job (a long bulk tool must not hit the HTTP worker timeout); clients refresh on
+	# ``approval-resolved``. Contract states: approved -> executed | failed.
 	doc.state = "approved"
 	_close(doc)
 	frappe.db.commit()
+	frappe.enqueue(
+		"huf.ai.tool_confirmation.run_approved",
+		queue="long",
+		timeout=1800,
+		enqueue_after_commit=True,
+		id=doc.name,
+		user=user,
+	)
+	return {"confirmation": _serialize(doc), "result": None}
+
+
+def run_approved(id, user):
+	"""Background job: execute an approved confirmation as the requesting user and record the outcome."""
+	previous = frappe.session.user
+	frappe.set_user(user)
 	try:
-		res = _execute(doc, args)
-		result = res.as_dict() if hasattr(res, "as_dict") else res
-		ok = bool(getattr(res, "success", True))
-		doc.state = "executed" if ok else "failed"
-		doc.result = json.dumps(_redact(result), default=str)
-		if not ok:
-			doc.error = str(getattr(res, "error", "") or "")[:500]
-	except Exception as e:
-		doc.state, doc.error = "failed", str(e)[:500]
-		frappe.log_error(title="tool_confirmation: execution failed")
-	_close(doc, clear_args=True)
-	_append_followup(doc, doc.state, _redact(result) if result is not None else {"error": doc.error})
-	_publish("approval-resolved", doc)
-	if doc.state == "failed":
-		# Persist the failed state, cleared raw_args and the follow-up message: Frappe rolls the
-		# request back when an exception is raised, which would revert the row to "approved".
+		doc = frappe.get_doc(DOCTYPE, id, for_update=True)
+		if doc.state != "approved" or doc.result or doc.user != user:
+			return  # already running/finished (duplicate job) or tampered: never run twice
+		doc.result = _EXECUTING
+		doc.save(ignore_permissions=True)
 		frappe.db.commit()
-		raise ExecutionFailed(doc.error or id)
-	return {"confirmation": _serialize(doc), "result": result}
+		result = None
+		try:
+			args = json.loads(doc.raw_args or "{}")
+			if not verify_args_hash(args, doc.args_hash):
+				raise ArgsChanged(id)
+			res = _execute(doc, args)
+			result = res.as_dict() if hasattr(res, "as_dict") else res
+			ok = bool(getattr(res, "success", True))
+			doc.state = "executed" if ok else "failed"
+			doc.result = json.dumps(_redact(result), default=str)
+			if not ok:
+				doc.error = str(getattr(res, "error", "") or "")[:500]
+		except Exception as e:
+			doc.state, doc.error = "failed", str(e)[:500]
+			doc.result = ""
+			frappe.log_error(title="tool_confirmation: execution failed")
+		_close(doc, clear_args=True)
+		_append_followup(doc, doc.state, _redact(result) if result is not None else {"error": doc.error})
+		_publish("approval-resolved", doc)
+		frappe.db.commit()
+	finally:
+		frappe.set_user(previous)
 
 
 def _close(doc, state=None, clear_args=False):
@@ -331,10 +446,26 @@ def sweep_expired() -> dict:
 	)
 	for name in expired:
 		frappe.db.set_value(DOCTYPE, name, {"state": "expired", "raw_args": ""}, update_modified=False)
+	stale = frappe.db.get_all(
+		DOCTYPE,
+		filters={
+			"state": "approved",
+			"modified": ("<=", add_to_date(now, minutes=-APPROVED_STALE_MINUTES)),
+			"result": ("in", ("", _EXECUTING, None)),
+		},
+		pluck="name",
+	)
+	for name in stale:
+		frappe.db.set_value(
+			DOCTYPE,
+			name,
+			{"state": "failed", "error": "execution_timeout_unknown", "raw_args": "", "result": ""},
+			update_modified=False,
+		)
 	cleared = frappe.db.get_all(
 		DOCTYPE, filters={"state": ("!=", "pending"), "raw_args": ("is", "set")}, pluck="name"
 	)
 	for name in cleared:
 		frappe.db.set_value(DOCTYPE, name, "raw_args", "", update_modified=False)
 	frappe.db.commit()
-	return {"expired": len(expired), "cleared": len(cleared)}
+	return {"expired": len(expired), "cleared": len(cleared), "stale_approved": len(stale)}

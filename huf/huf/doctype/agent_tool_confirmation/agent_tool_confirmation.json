@@ -11,6 +11,7 @@
   "conversation",
   "agent_run",
   "agent",
+  "tool_call_id",
   "expires_at",
   "args_hash",
   "summary",
@@ -66,6 +67,12 @@
    "fieldname": "agent",
    "fieldtype": "Data",
    "label": "Agent",
+   "read_only": 1
+  },
+  {
+   "fieldname": "tool_call_id",
+   "fieldtype": "Data",
+   "label": "Tool Call ID",
    "read_only": 1
   },
   {

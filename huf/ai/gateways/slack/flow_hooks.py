@@ -35,6 +35,7 @@ def tool_gate(name, args_dict, run_ctx: dict, requires_confirmation: bool):
 
 	return tool_policy.check_tool_call(name, args_dict, run_ctx.get("agent_run_id"), requires_confirmation,
 		conversation_id=run_ctx.get("conversation_id"), agent_name=run_ctx.get("agent_name"),
+		tool_call_id=run_ctx.get("tool_call_id"),
 	)
 
 
