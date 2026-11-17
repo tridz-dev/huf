@@ -457,6 +457,7 @@ def preview_broadcast(broadcast: str | None = None) -> dict[str, Any]:
 
 
 from huf.ai.whatsapp.broadcast.support.api_controls import (  # noqa: E402,F401 - whitelisted endpoints, re-exported
+	_is_api_key_caller,
 	cancel_broadcast,
 	pause_all_broadcasts,
 	pause_broadcast,

@@ -250,7 +250,7 @@ Webhook handling: `sent`, `delivered`, `read`, `played` move a row forward. `fai
 
 ## 8. Costs
 
-The estimate comes from `huf/ai/whatsapp/broadcast/rates.json`. Today every rate in that file is `null` and `rates_verified` is `false`, because the official per-country rate card was not retrievable. As a result:
+The estimate comes from `huf/ai/whatsapp/broadcast/support/rates.json`. Today every rate in that file is `null` and `rates_verified` is `false`, because the official per-country rate card was not retrievable. As a result:
 
 - `cost.total` is `null` and each market has a `rate_unavailable:<category>:<market>` warning. The wizard shows "unavailable".
 - Recipients whose country code is not in the file are counted under `UNKNOWN` with a `market_unknown:<n>_recipients` warning.

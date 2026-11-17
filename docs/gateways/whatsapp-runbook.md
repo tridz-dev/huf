@@ -151,7 +151,7 @@ Full design, API and limits: [WhatsApp Broadcast](../whatsapp/BROADCAST.md). Man
 - Kill switch: `pause_all_broadcasts(gateway)` (the "Stop all broadcasts" button) pauses every running broadcast on the gateway with reason `kill_switch`. Use it first when a template or number is in trouble.
 - Counters self-correct (after each chunk, at completion, every 5 minutes for Running broadcasts). To force a recount: `frappe.get_doc("WhatsApp Broadcast", name).recount(commit=True)` in a bench console.
 - Messaging limit: the preview reads `whatsapp_business_manager_messaging_limit`. If it is unknown the preview warns (`tier_unknown`) and the recipient cap is the only ceiling.
-- Costs: the preview shows cost as unavailable (`cost.total` null) until rates are filled in `huf/ai/whatsapp/broadcast/rates.json` from Meta's official rate card. Check Meta billing for real charges.
+- Costs: the preview shows cost as unavailable (`cost.total` null) until rates are filled in `huf/ai/whatsapp/broadcast/support/rates.json` from Meta's official rate card. Check Meta billing for real charges.
 - Live verification is described in [broadcast-live-verification.md](../whatsapp/broadcast-live-verification.md). Run it only against allow-listed test recipients.
 
 ## 11. External app hooks
