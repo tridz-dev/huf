@@ -147,6 +147,8 @@ class _PreviewBase(unittest.TestCase):
 			patch.object(bl, "get_messaging_limit", return_value=dict(LIMIT_OK)),
 			patch.object(bl, "template_requirements", side_effect=lambda _t: self.requirements),
 			patch.object(bl, "_queued_params", side_effect=lambda _b: list(self.queued_params)),
+			# Audience purpose has its own tests; keep this module DB-free so leftover BCAST-00001 rows can't leak in.
+			patch.object(bl.audience_check, "purpose_issues", return_value=[]),
 		]
 		for p in self.patches:
 			p.start()
