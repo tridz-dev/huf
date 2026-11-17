@@ -12,10 +12,10 @@ Three independent checks, applied in order for a gateway-originated run:
    are refused when they target a different channel than the one the run came from, unless an
    applicable policy sets ``allow_cross_channel_send``. The flag is tracked per agent run in
    the cache (it is cheap, per-run state; fail-closed when the origin channel is unknown).
-3. Confirmation. A tool flagged ``requires_confirmation`` is never executed by the gate. The
-   call is handed to a registered confirmer (``set_confirmer``); with no confirmer registered
-   the call is refused (fail closed). The existing Agent Execution Approval is execution-kind
-   specific and cannot park an arbitrary tool call, so no backend is wired here yet.
+3. Confirmation. A tool flagged ``requires_confirmation`` is never executed by the gate, in ANY
+   run (gateway, web, mobile). It is parked by ``huf.ai.tool_confirmation`` (Agent Tool
+   Confirmation) until the requesting user approves; a registered ``set_confirmer`` overrides
+   that for gateway runs. Any failure to park refuses the call (fail closed).
 """
 
 from __future__ import annotations
@@ -165,7 +165,29 @@ def _channel_arg(args: dict) -> str:
 	return str((args or {}).get("channel") or "").strip()
 
 
-def check_tool_call(tool_name, args, agent_run_id, requires_confirmation=False) -> str | None:
+def _park(ctx, tool_name, args, agent_run_id, conversation_id) -> str:
+	"""Park a requires_confirmation call (every run type). Fails closed."""
+	try:
+		if _CONFIRMER is not None and ctx:
+			out = _CONFIRMER(ctx, tool_name, dict(args or {}))
+			if out is not None:
+				return json.dumps(out, default=str)
+		from huf.ai import tool_confirmation
+
+		return json.dumps(
+			tool_confirmation.park(tool_name, dict(args or {}), agent_run_id, conversation_id), default=str
+		)
+	except Exception:
+		frappe.log_error(title="tool confirmation park failed")
+		return _denied(
+			f"Tool '{tool_name}' requires confirmation and could not be parked. It was not executed.",
+			requires_confirmation=True,
+		)
+
+
+def check_tool_call(
+	tool_name, args, agent_run_id, requires_confirmation=False, conversation_id=None
+) -> str | None:
 	"""Return a JSON tool result string if the call must NOT run, else None (proceed)."""
 	try:
 		ctx = resolve_gateway_context(agent_run_id)
@@ -173,8 +195,11 @@ def check_tool_call(tool_name, args, agent_run_id, requires_confirmation=False) 
 		# A run id exists but the lookup failed: we cannot rule out a gateway run, fail closed.
 		if agent_run_id:
 			return _denied("Tool call blocked: the gateway tool policy could not be evaluated.")
-		return None
+		ctx = None
 	if not ctx:
+		# Not a gateway run (web / mobile / desktop): only the confirmation gate applies.
+		if requires_confirmation:
+			return _park(None, tool_name, args, agent_run_id, conversation_id)
 		return None
 	try:
 		gateway, channel = ctx["gateway"], ctx.get("channel")
@@ -197,15 +222,7 @@ def check_tool_call(tool_name, args, agent_run_id, requires_confirmation=False) 
 						reason="exfiltration_guard",
 					)
 		if requires_confirmation:
-			if _CONFIRMER is not None:
-				out = _CONFIRMER(ctx, tool_name, dict(args or {}))
-				if out is not None:
-					return json.dumps(out, default=str)
-			return _denied(
-				f"Tool '{tool_name}' requires confirmation, which is not available for this "
-				"gateway yet. It was not executed.",
-				requires_confirmation=True,
-			)
+			return _park(ctx, tool_name, args, agent_run_id, conversation_id or channel)
 	except Exception:
 		# Gateway run, but the gate itself failed: fail closed.
 		return _denied("Tool call blocked: the gateway tool policy could not be evaluated.")
