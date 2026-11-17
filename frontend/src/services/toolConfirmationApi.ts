@@ -24,7 +24,7 @@ export interface ToolConfirmation {
   tool: string;
   state: ToolConfirmationState;
   summary: ToolConfirmationSummary;
-  /** Server-local `YYYY-MM-DD HH:MM:SS`. */
+  /** ISO-8601 UTC with offset (legacy naive `YYYY-MM-DD HH:MM:SS` is read as UTC). */
   expires_at: string | null;
   conversation?: string | null;
   error?: string | null;
@@ -78,6 +78,19 @@ export const CONFIRMATION_ERROR_MESSAGES: Record<ToolConfirmationErrorCode, stri
 export function confirmationErrorMessage(error: unknown): string {
   const code = getConfirmationErrorCode(error);
   return code ? CONFIRMATION_ERROR_MESSAGES[code] : 'Could not record your decision. Please try again.';
+}
+
+/**
+ * Parse `expires_at` to an absolute epoch-ms instant. ISO-8601 with an offset
+ * (or Z) is used as-is; a legacy naive `YYYY-MM-DD HH:MM:SS` is treated as UTC
+ * (never device-local, so the countdown does not drift with device timezone).
+ */
+export function parseExpiresAt(value: string | null | undefined): number | null {
+  if (!value) return null;
+  let v = value.trim().replace(' ', 'T');
+  if (!/(Z|[+-]\d{2}(:?\d{2})?)$/i.test(v.replace(/^\d{4}-\d{2}-\d{2}/, ''))) v += 'Z';
+  const t = Date.parse(v);
+  return Number.isNaN(t) ? null : t;
 }
 
 /** Pull a `confirmation_request` object out of tool-result text (plain JSON or JSON embedded in text). */

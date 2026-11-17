@@ -11,6 +11,7 @@ import {
 	getConfirmationErrorCode,
 	confirmationErrorMessage,
 	parseConfirmationRequest,
+	parseExpiresAt,
 	type ToolConfirmation,
 } from '@/services/toolConfirmationApi';
 import { call } from '@/lib/frappe-sdk';
@@ -32,9 +33,9 @@ const pending: ToolConfirmation = {
 	tool: 'gateway_send',
 	state: 'pending',
 	summary: { action: 'Send WhatsApp broadcast', recipient_count: 120, template: 'promo_nov', channel: 'whatsapp', sample: 'Hi Asha, ...' },
-	expires_at: '2026-11-17 10:15:00',
+	expires_at: '2026-11-17T10:15:00+00:00',
 };
-const T0 = new Date('2026-11-17T10:10:00').getTime();
+const T0 = Date.parse('2026-11-17T10:10:00+00:00');
 
 describe('ToolConfirmationCard', () => {
 	it('renders summary, countdown and enabled buttons when pending', () => {
@@ -89,6 +90,23 @@ describe('ToolConfirmationCard', () => {
 		await user.click(screen.getByRole('button', { name: 'Approve' }));
 		await waitFor(() => expect(toast.error).toHaveBeenCalledWith('This approval request expired. Ask the agent to try again.'));
 		expect(onUpdated.mock.calls[0][0].state).toBe('expired');
+	});
+});
+
+describe('expiry parsing and sending state', () => {
+	it('parses ISO with offset as an absolute instant', () => {
+		expect(parseExpiresAt('2026-11-17T10:15:00+00:00')).toBe(Date.UTC(2026, 10, 17, 10, 15));
+		expect(parseExpiresAt('2026-11-17T12:15:00+02:00')).toBe(Date.UTC(2026, 10, 17, 10, 15));
+	});
+	it('treats legacy naive strings as UTC and rejects junk', () => {
+		expect(parseExpiresAt('2026-11-17 10:15:00')).toBe(Date.UTC(2026, 10, 17, 10, 15));
+		expect(parseExpiresAt('nope')).toBeNull();
+		expect(parseExpiresAt(null)).toBeNull();
+	});
+	it('shows Sending… for approved without actions', () => {
+		render(<ToolConfirmationCard confirmation={{ ...pending, state: 'approved' }} now={() => T0} />);
+		expect(screen.getByTestId('confirmation-state').textContent).toBe('Sending…');
+		expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull();
 	});
 });
 

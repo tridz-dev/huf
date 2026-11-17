@@ -12,17 +12,11 @@ import {
 import type { ExtendedToolState } from '@/components/ai-elements/types';
 import {
 	decideConfirmation,
+	parseExpiresAt,
 	confirmationErrorMessage,
 	getConfirmationErrorCode,
 	type ToolConfirmation,
 } from '@/services/toolConfirmationApi';
-
-/** Parse server-local `YYYY-MM-DD HH:MM:SS` as local time. */
-function parseExpiry(expiresAt: string | null): number | null {
-	if (!expiresAt) return null;
-	const t = new Date(expiresAt.replace(' ', 'T')).getTime();
-	return Number.isNaN(t) ? null : t;
-}
 
 function formatCountdown(ms: number): string {
 	const total = Math.max(0, Math.floor(ms / 1000));
@@ -32,7 +26,7 @@ function formatCountdown(ms: number): string {
 }
 
 const STATE_LABEL: Record<string, string> = {
-	approved: 'Approved, running...',
+	approved: 'Sending…',
 	executed: 'Approved and sent',
 	denied: 'Denied',
 	expired: 'Expired',
@@ -52,7 +46,7 @@ export interface ToolConfirmationCardProps {
 export function ToolConfirmationCard({ confirmation, onUpdated, onDecided, now = Date.now }: ToolConfirmationCardProps) {
 	const [busy, setBusy] = useState(false);
 	const [tick, setTick] = useState(() => now());
-	const expiry = parseExpiry(confirmation.expires_at);
+	const expiry = parseExpiresAt(confirmation.expires_at);
 	const isPending = confirmation.state === 'pending';
 	const locallyExpired = isPending && expiry !== null && tick >= expiry;
 	const state = locallyExpired ? 'expired' : confirmation.state;
