@@ -59,7 +59,7 @@ class TestOtp(unittest.TestCase):
 			patch("huf.ai.whatsapp.otp.frappe.get_roles", side_effect=lambda *_: self.roles),
 			patch("huf.ai.whatsapp.otp.frappe.db.exists", return_value=True),
 			patch("huf.ai.whatsapp.otp.frappe.has_permission", return_value=True),
-			patch("huf.ai.whatsapp.broadcast.failover._credentials", return_value={"mode": "twilio"}),
+			patch("huf.ai.whatsapp.broadcast.support.failover._credentials", return_value={"mode": "twilio"}),
 			patch("huf.ai.whatsapp.otp.frappe.get_all", return_value=[dict(TPL)]),
 			patch("huf.ai.whatsapp.otp.management._gateway_whatsapp_account", return_value="ACC"),
 			patch("huf.ai.whatsapp.otp.management._resolve_account_name", return_value="ACC"),
@@ -174,7 +174,7 @@ class TestOtp(unittest.TestCase):
 		with self.assertLogs(logger, level="DEBUG") as cm, patch("frappe.log_error") as log_error, self._optout(), \
 				patch("huf.ai.channels.channel_consent.has_consent", return_value=(True, "ok")) as consent, \
 				patch("huf.ai.gateway_adapters.sms.send_sms_message", sms), \
-				patch("huf.ai.whatsapp.broadcast.failover._credentials", return_value={"mode": "twilio"}):
+				patch("huf.ai.whatsapp.broadcast.support.failover._credentials", return_value={"mode": "twilio"}):
 			logger.debug("probe")
 			res = otp.send_otp("GW", PHONE, SENTINEL, idempotency_key="k9", **self.FB)
 		self.assertTrue(res["success"])
@@ -221,7 +221,7 @@ class TestOtp(unittest.TestCase):
 
 	def test_sms_mode_frappe_sms_refused(self):
 		sms = MagicMock()
-		with self._optout(), patch("huf.ai.whatsapp.broadcast.failover._credentials", return_value={"mode": "frappe_sms"}), \
+		with self._optout(), patch("huf.ai.whatsapp.broadcast.support.failover._credentials", return_value={"mode": "frappe_sms"}), \
 				patch("huf.ai.gateway_adapters.sms.send_sms_message", sms):
 			res = otp.send_otp("GW", PHONE, SENTINEL, **self.FB)
 		self.assertEqual(res["error"], "sms_mode_not_allowed_for_otp")

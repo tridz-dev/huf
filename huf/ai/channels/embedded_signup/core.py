@@ -16,7 +16,7 @@ import frappe
 from frappe import _
 
 from huf.ai.secrets import redact as redact_obj
-from huf.ai.whatsapp import token_check
+from huf.ai.whatsapp.setup import token_check
 
 SETTINGS = "Channel Embedded Signup Settings"
 WABA_DOCTYPE = "Embedded Signup WABA"

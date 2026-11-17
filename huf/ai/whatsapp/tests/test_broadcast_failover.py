@@ -11,7 +11,7 @@ from unittest.mock import MagicMock, patch
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
-from huf.ai.whatsapp.broadcast import failover
+from huf.ai.whatsapp.broadcast.support import failover
 from huf.ai.whatsapp.broadcast import status as bs
 
 BC = "WhatsApp Broadcast"

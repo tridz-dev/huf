@@ -34,7 +34,8 @@ from huf.ai.gateway_adapters import whatsapp_calls as wcalls
 from huf.ai.gateway_adapters import whatsapp_messages as wm
 from huf.ai.gateway_adapters import whatsapp_templates as wt
 from huf.ai.gateway_adapters.whatsapp_bridge import BridgeError
-from huf.ai.whatsapp import pre_send, setup_stage
+from huf.ai.whatsapp import pre_send
+from huf.ai.whatsapp.setup import setup_stage
 
 ADMIN_ROLES = ("System Manager", "Huf Admin")
 WHATSAPP_PROVIDER = "WhatsApp"
@@ -208,41 +209,11 @@ def _gateway_whatsapp_account(gateway_name: str) -> str | None:
 		return None
 
 
-_PRESENCE_KEYS = ("app_secret", "webhook_verify_token", "access_token", "phone_number_id", "app_id")
-
-
-def _credential_presence(integration_settings: str | None) -> dict[str, bool]:
-	"""Report which credential keys are set, never their values."""
-	presence = dict.fromkeys(_PRESENCE_KEYS, False)
-	if not integration_settings:
-		return presence
-	settings = frappe.get_doc("Integration Settings", integration_settings)
-	for row in settings.credentials or []:
-		if row.key in presence:
-			presence[row.key] = bool(row.get_password("value") or "")
-	return presence
-
-
-def _credential_app_id(integration_settings: str | None) -> str:
-	"""Meta app id from an optional ``app_id`` credential (not a secret; used for dashboard links)."""
-	if not integration_settings:
-		return ""
-	settings = frappe.get_doc("Integration Settings", integration_settings)
-	for row in settings.credentials or []:
-		if row.key == "app_id":
-			return str(row.get_password("value") or "").strip()
-	return ""
-
-
-def _credential_phone_number_id(integration_settings: str | None) -> str:
-	"""The gateway credential's phone_number_id (not a secret; it is in the webhook payload)."""
-	if not integration_settings:
-		return ""
-	settings = frappe.get_doc("Integration Settings", integration_settings)
-	for row in settings.credentials or []:
-		if row.key == "phone_number_id":
-			return str(row.get_password("value") or "").strip()
-	return ""
+from huf.ai.whatsapp.setup.credential_view import (  # noqa: E402
+	_credential_app_id,
+	_credential_phone_number_id,
+	_credential_presence,
+)
 
 
 def _account_phone_mismatch(gateway: dict[str, Any]) -> bool:
@@ -1649,7 +1620,7 @@ def can_launch_whatsapp_app(user: str | None = None, app: dict | None = None, **
 def check_token(gateway_name: str | None = None, force: Any = None) -> dict[str, Any]:
 	"""Is this gateway's Meta access token still good? Admin only; 1 call/10 s per gateway, cached 10 min."""
 	_require_admin()
-	from huf.ai.whatsapp import token_check
+	from huf.ai.whatsapp.setup import token_check
 
 	return token_check.check_token_for_gateway(
 		gateway_name or "", force=str(force or "").lower() in ("1", "true", "yes")

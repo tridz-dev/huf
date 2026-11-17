@@ -39,7 +39,7 @@ from typing import Any
 import frappe
 from frappe.utils import add_to_date, now_datetime
 
-from huf.ai.whatsapp import token_check as tc
+from huf.ai.whatsapp.setup import token_check as tc
 from huf.ai.whatsapp.broadcast import policy
 from huf.ai.whatsapp.broadcast.checks import audience_check
 

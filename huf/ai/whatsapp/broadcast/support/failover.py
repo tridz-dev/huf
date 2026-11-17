@@ -155,7 +155,7 @@ def maybe_failover(recipient_name: str, error_code: int | None) -> bool:
 		if int(error_code or 0) not in RETRY_SAFE_CODES:
 			return False
 		frappe.enqueue(
-			"huf.ai.whatsapp.broadcast.failover.run_failover_job",
+			"huf.ai.whatsapp.broadcast.support.failover.run_failover_job",
 			queue="short",
 			enqueue_after_commit=True,
 			deduplicate=True,

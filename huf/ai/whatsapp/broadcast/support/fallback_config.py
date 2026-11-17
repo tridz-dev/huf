@@ -16,7 +16,7 @@ from typing import Any
 
 import frappe
 
-from huf.ai.whatsapp.broadcast import failover
+from huf.ai.whatsapp.broadcast.support import failover
 
 BODY_KINDS = ("marketing", "transactional")
 BODY_MAX = 1600

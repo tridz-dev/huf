@@ -10,7 +10,8 @@ from unittest.mock import patch
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
-from huf.ai.whatsapp.broadcast import failover, fallback_config, params, recipients
+from huf.ai.whatsapp.broadcast import params, recipients
+from huf.ai.whatsapp.broadcast.support import failover, fallback_config
 
 
 class TestFallbackConfig(FrappeTestCase):

@@ -8,7 +8,7 @@ Behaviour is taken from code; file references name the source of truth. Setup gu
 - Meta error 190 means the token is invalid or expired (`huf/ai/gateway_adapters/whatsapp_errors.py`).
 - Rotate the token in BOTH places: the gateway's integration credential `access_token` (used for agent replies) and the linked WhatsApp Account `token` (used by the bridge: confirmations, templates, management). If only one is refreshed, some sends work and others fail with 131005/190.
 - Token check: `check_token(gateway_name, force)` in `huf/ai/whatsapp/management.py` (POST, whitelisted).
-  It calls Meta `debug_token` and `subscribed_apps` (`huf/ai/whatsapp/token_check.py`). The result
+  It calls Meta `debug_token` and `subscribed_apps` (`huf/ai/whatsapp/setup/token_check.py`). The result
   is cached for 600 s and live checks are limited to one per 10 s. `force` bypasses the cache.
 - Health reads only the cached result. A rejected token raises `access_token_invalid` (error),
   blocks the `credentials` step and sets next step "Replace access token".
@@ -27,7 +27,7 @@ Behaviour is taken from code; file references name the source of truth. Setup gu
 - Gateway Events are created only for inbound messages, so the `messages` field must be subscribed.
   `no_events_yet` (warning) means Meta has not sent anything: check the callback URL and subscription.
 - `webhook` and `subscribed` checklist steps are inferred from Huf data (no Meta read API).
-- `subscribed_apps` and `debug_token` response shapes are marked UNVERIFIED in `whatsapp/token_check.py`.
+- `subscribed_apps` and `debug_token` response shapes are marked UNVERIFIED in `whatsapp/setup/token_check.py`.
   If the app entry is missing, the check reports only that some app is subscribed.
 
 ## 3. Health states

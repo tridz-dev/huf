@@ -27,7 +27,7 @@ import frappe
 from frappe import _
 
 from huf.ai.gateway_adapters import whatsapp_bridge as bridge
-from huf.ai.whatsapp import token_check
+from huf.ai.whatsapp.setup import token_check
 
 SERVICE = "whatsapp"
 ACCOUNT_DOCTYPE = "WhatsApp Account"
@@ -249,7 +249,7 @@ def on_credential_update(doc) -> dict[str, Any]:
 	subscribed = subscribe_app(creds)
 	if account:
 		frappe.enqueue(
-			"huf.ai.whatsapp.credential_sync.sync_templates_job",
+			"huf.ai.whatsapp.setup.credential_sync.sync_templates_job",
 			account=account,
 			enqueue_after_commit=True,
 			queue="short",

@@ -11,7 +11,7 @@ if isinstance(frappe, MagicMock):
 	frappe.whitelist = lambda *args, **kwargs: (lambda fn: fn)
 	frappe.PermissionError = PermissionError
 
-from huf.ai.whatsapp import setup_stage as wh  # noqa: E402
+from huf.ai.whatsapp.setup import setup_stage as wh  # noqa: E402
 from huf.ai.whatsapp import management as mgmt  # noqa: E402
 
 STAGES = {

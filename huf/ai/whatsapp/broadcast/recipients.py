@@ -20,7 +20,8 @@ from typing import Any
 
 import frappe
 
-from huf.ai.whatsapp.broadcast import fallback_config, params as broadcast_params, policy
+from huf.ai.whatsapp.broadcast import params as broadcast_params, policy
+from huf.ai.whatsapp.broadcast.support import fallback_config
 
 RECIPIENT_DOCTYPE = "WhatsApp Broadcast Recipient"
 PHONE_HEADERS = {"phone", "recipient", "phone_number", "phone number", "mobile", "wa_id", "whatsapp", "number"}

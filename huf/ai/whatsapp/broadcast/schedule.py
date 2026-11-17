@@ -24,7 +24,8 @@ from frappe.rate_limiter import rate_limit
 from frappe.utils import get_datetime, now_datetime
 
 from huf.ai.gateway_adapters import whatsapp_errors as errors
-from huf.ai.whatsapp.broadcast import fallback_config, limits as broadcast_limits, policy, runner
+from huf.ai.whatsapp.broadcast import limits as broadcast_limits, policy, runner
+from huf.ai.whatsapp.broadcast.support import fallback_config
 from huf.ai.whatsapp.broadcast.api import (
 	_bridge_guard,
 	_broadcast_audit,
