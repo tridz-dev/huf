@@ -19,7 +19,8 @@ knowledge, triggers) still overwrite.
   fails closed to System Manager.
 - Enforced in `PermissionAwareToolRegistry._can_use_tool` (load) and
   `huf.ai.tools.registry.assert_tool_role(tool, user)` (call time; raises
-  `frappe.PermissionError`; the integrator wires it in `sdk_tools`).
+  `frappe.PermissionError`). Call-time enforcement runs in `huf/ai/sdk_tools.py` (`on_invoke_tool`)
+  and in `huf/ai/tools/invocation.py` (`invoke_tool`).
 - Also enforced on the shared path `huf.ai.tools.invocation.invoke_tool` (flows,
   procedures, approval resume), so a flow cannot run a role-restricted tool as a user
   without the role (Administrator passes). Only the approval-resume call skips it

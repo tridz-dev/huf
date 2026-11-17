@@ -296,6 +296,8 @@ The Meta endpoints used: `POST /<PHONE_NUMBER_ID>/messages` or `/marketing_messa
 
 ## 11. Unverified Meta facts
 
+Media-upload re-upload detection, carousel template limits and the variable-at-edge rule are NOT in this list: they were verified live on 2026-11-18 (Cloud API v21.0) and are described in the [WhatsApp README](README.md#media-uploads-and-carousel-templates-verified-live-2026-11-18-cloud-api-v210).
+
 The code works without these, but they should be confirmed against Meta before relying on them:
 
 - Placement and size of `biz_opaque_callback_data` on the send body (top level, truncated to 256 characters in code; Meta may allow 512) and that status webhooks echo it. Rows are also matched by `wamid`.
@@ -311,6 +313,11 @@ The code works without these, but they should be confirmed against Meta before r
 - What Meta does when a broadcast is resumed with more recipients than the remaining 24-hour budget (Huf's over-budget deferral applies at start only).
 - Whether the audience `events` purpose has a corresponding Meta template category (Huf records it; no category requires it).
 - The audience purpose mapping (MARKETING needs `marketing`; UTILITY and AUTHENTICATION need `utility`) is Huf's policy over Meta's opt-in rule, not a Meta requirement.
+
+### Externally managed audiences and failover (pointers)
+
+- An audience can be kept up to date by another app built on Huf. Before a broadcast that includes it starts, Huf calls the app's `huf_audience_refresh` hook and refuses the start (`audience_refresh_failed`) if it fails. Hook contract and the `upsert_audience_members` API: [gateway runbook, section 11](../gateways/whatsapp-runbook.md#11-external-app-hooks). Audience rules: section 15.
+- Cross-channel failover: `create_broadcast` and `update_broadcast` accept `fallback_channels` (ordered subset of `["sms","email"]`; an empty list clears it), `fallback_body` (plain text, required when channels are set), `fallback_body_kind` (`marketing` or `transactional`), `fallback_sms_gateway` and `fallback_email_gateway`. Behaviour and safety: [FAILOVER.md](FAILOVER.md).
 
 ## 12. Known limits
 
