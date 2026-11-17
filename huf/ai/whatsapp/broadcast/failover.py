@@ -19,7 +19,8 @@ Single shared helper (the OTP SMS fallback reuses ``run_chain``). Rules:
 from __future__ import annotations
 
 import json
-from typing import Any, Callable
+from typing import Any
+from collections.abc import Callable
 
 import frappe
 from frappe.utils import now_datetime
