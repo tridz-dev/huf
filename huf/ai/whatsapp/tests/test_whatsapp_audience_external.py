@@ -90,6 +90,26 @@ class TestRefreshDeadline(AudienceTestCase):
 		with self.assertRaises(ValueError):
 			external._call_with_deadline(lambda **kw: (_ for _ in ()).throw(ValueError("x")), 5)
 
+	def test_frappe_context_propagates_into_hook_thread(self):
+		import threading
+
+		seen = {}
+
+		def hook(**kw):
+			seen["thread"] = threading.current_thread().name
+			seen["user"] = frappe.session.user
+			seen["site"] = frappe.local.site
+			seen["db"] = frappe.db.get_value("User", "Administrator", "name")
+			seen["write"] = frappe.db.sql("select 1")[0][0]
+
+		main_user, main_site = frappe.session.user, frappe.local.site
+		external._call_with_deadline(hook, 5)
+		self.assertEqual(seen["thread"], "huf-audience-refresh")
+		self.assertEqual(seen["user"], main_user)
+		self.assertEqual(seen["site"], main_site)
+		self.assertEqual(seen["db"], "Administrator")
+		self.assertEqual(seen["write"], 1)
+
 	def test_timeout_blocks_start(self):
 		bc = self.draft_broadcast(self.make("Slow"))
 		with patch.object(frappe, "get_hooks", side_effect=lambda key=None, *a, **k: ["app.slow"] if key == external.HOOK else []), \

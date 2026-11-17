@@ -79,3 +79,8 @@ class TestCarouselMerge(FrappeTestCase):
 		self.assertEqual(params.merge_carousel(cards, None), cards)
 		self.assertEqual(params.merge_carousel(None, cards), cards)
 		self.assertIsNone(params.merge_carousel(None, None))
+
+
+class TestNoneIsUnset(FrappeTestCase):
+	def test_none_channels_means_no_fallback(self):
+		self.assertIsNone(fallback_config.clean({"fallback_channels": None})["fallback_channels"])

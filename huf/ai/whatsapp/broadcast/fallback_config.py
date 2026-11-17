@@ -31,6 +31,8 @@ def clean_email(value: Any) -> str | None:
 
 
 def _channels(raw: Any) -> list[str]:
+	if raw is None:
+		return []
 	if isinstance(raw, str):
 		raw = json.loads(raw) if raw.strip() else []
 	if not isinstance(raw, (list, tuple)):

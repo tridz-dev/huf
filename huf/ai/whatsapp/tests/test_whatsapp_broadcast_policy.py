@@ -142,7 +142,7 @@ class TestBehaviour(_Settings):
 			patch.object(recipients, "_active_count", return_value=counts.get("active", 0)), \
 			patch.object(recipients, "_total_count", return_value=counts.get("total", 0)), \
 			patch.object(recipients, "_policy_reason", return_value=None), \
-			patch.object(recipients, "_insert_row", side_effect=lambda *a: inserted.append(a)):
+			patch.object(recipients, "_insert_row", side_effect=lambda *a, **k: inserted.append(a)):
 			res = recipients.prepare("B-1", [{"recipient": r} for r in rows])
 		return res, inserted
 
