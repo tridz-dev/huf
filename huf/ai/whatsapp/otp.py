@@ -34,6 +34,8 @@ CALLER_LIMIT, CALLER_WINDOW = 60, 60  # sends per caller per minute
 IDEMPOTENCY_TTL = 24 * 3600
 OWNER_TTL = 7 * 24 * 3600
 _PENDING = "pending"
+FALLBACK_TEXT_MAX = 160 * 3
+SMS_ALLOWED_MODES = {"twilio", "send_only"}  # frappe_sms writes the message (the code) to SMS Log
 
 
 def _err(code: str, message: str, **extra: Any) -> dict[str, Any]:
@@ -162,8 +164,38 @@ def _check_fallback(code, fallback, sms_gateway, fallback_text) -> dict[str, Any
 		return _err("invalid_fallback", "Only 'sms' is allowed as an OTP fallback (email is never allowed).")
 	if not sms_gateway or not frappe.db.exists("Gateway", sms_gateway):
 		return _err("invalid_fallback", "sms_gateway is required for the SMS fallback.")
-	if not fallback_text or "{code}" not in str(fallback_text):
-		return _err("invalid_fallback", "fallback_text containing {code} is required for the SMS fallback.")
+	text = "" if fallback_text is None else str(fallback_text)
+	lowered = text.lower()
+	if (
+		not text
+		or len(text) > FALLBACK_TEXT_MAX
+		or text.count("{code}") != 1
+		or any(bad in lowered for bad in ("http", "www", "://"))
+	):
+		return _err(
+			"invalid_fallback_text",
+			"fallback_text must be at most 480 characters, contain {code} exactly once and no links.",
+		)
+	return None
+
+
+def _sms_mode_blocked(sms_gateway) -> dict[str, Any] | None:
+	"""Refuse gateways whose SMS goes through Frappe core send_sms (it persists the body in SMS Log)."""
+	from huf.ai.whatsapp.broadcast import failover
+
+	try:
+		mode = str((failover._credentials(sms_gateway) or {}).get("mode") or "").strip().lower()
+	except Exception:  # noqa: BLE001
+		mode = ""
+	if mode not in SMS_ALLOWED_MODES:
+		return _err("sms_mode_not_allowed_for_otp", "This SMS gateway mode cannot be used for OTP fallback.")
+	return None
+
+
+def _gateway_forbidden(user, *names) -> dict[str, Any] | None:
+	for name in names:
+		if name and not frappe.has_permission("Gateway", "read", name, user=user):
+			return _err("gateway_forbidden", "You do not have access to this gateway.")
 	return None
 
 
@@ -186,9 +218,16 @@ def _send(user, gateway, phone, code, template, idempotency_key, fallback=None, 
 		return _err("invalid_gateway", "Gateway not found.")
 	if not _CODE_RE.match(code):
 		return _err("invalid_code", "Code must be 4-15 letters or digits.")
+	forbidden = _gateway_forbidden(user, gateway, sms_gateway if fallback else None)
+	if forbidden:
+		return forbidden
 	bad_fb = _check_fallback(code, fallback, sms_gateway, fallback_text)
 	if bad_fb:
 		return bad_fb
+	if fallback:
+		bad_mode = _sms_mode_blocked(sms_gateway)
+		if bad_mode:
+			return bad_mode
 	to = management._validate_recipient(phone)
 	if isinstance(to, dict):
 		return to | {"error": "invalid_phone"}
