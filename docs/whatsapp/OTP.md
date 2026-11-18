@@ -4,8 +4,11 @@ Huf only delivers codes. It never generates or verifies them; verification stays
 
 ## Roles and scoping
 - Callers need the `HUF OTP Sender` role (or System Manager).
-- The caller must also have read permission on the Gateway document, for both `gateway` and `sms_gateway`
-  (`gateway_forbidden` otherwise). Scope a sender to specific gateways with User Permissions on Gateway.
+- Gateway scoping is by User Permission only. A non-System-Manager sender needs a User Permission
+  (allow `Gateway`, for value = the gateway) for both `gateway` and `sms_gateway` when given
+  (`gateway_forbidden` otherwise). A sender with no Gateway User Permission is denied (fail closed).
+- Generic Gateway read stays System Manager-only (the Gateway permission hook is unchanged, since Gateway
+  holds credentials); the OTP check does not depend on it.
 - `send_otp` and `get_otp_status` are not agent tools. They are denylisted (`OTP_TOOL_DENYLIST`) in the
   Agent Tool Function doctype and in app seeding.
 
