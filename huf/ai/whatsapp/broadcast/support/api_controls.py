@@ -19,6 +19,8 @@ from huf.ai.whatsapp.broadcast.support.api_helpers import _BROADCAST, _BROADCAST
 
 def _is_api_key_caller() -> bool:
 	"""True when the request is authenticated with an API key/secret (``Authorization: token key:secret``)."""
+	if not getattr(frappe.local, "request", None):
+		return False  # background job / bench / agent resume: no HTTP request, so not an API-key caller
 	header = frappe.get_request_header("Authorization")
 	return isinstance(header, str) and header.strip().lower().startswith("token ")
 
