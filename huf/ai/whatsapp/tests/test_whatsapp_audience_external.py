@@ -3,7 +3,7 @@
 
 """HUFCRM-07: externally managed audiences (upsert API, server-side read-only, refresh before start)."""
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import frappe
 
@@ -128,6 +128,42 @@ class TestRefreshJob(AudienceTestCase):
 		with self._run_job_inline(lambda **kw: seen.append(threading.current_thread())):
 			external._run_hook("app.refresh", 5, "a", "crm")
 		self.assertIs(seen[0], threading.current_thread())
+
+	def test_flag_reads_bypass_frappe_local_cache(self):
+		# Every read of the refresh flag must skip frappe's request-local cache, or a first None sticks.
+		spy = MagicMock(wraps=frappe.cache())
+		with patch.object(frappe, "cache", return_value=spy), self._run_job_inline(lambda **kw: None):
+			external._run_hook("app.refresh", 5, "a", "crm")
+		flag_reads = [c for c in spy.get_value.call_args_list if str(c.args[0]).startswith("huf_audience_refresh:")]
+		self.assertTrue(flag_reads)
+		self.assertTrue(all(c.kwargs.get("use_local_cache") is False for c in flag_reads), flag_reads)
+
+	def test_first_poll_none_then_worker_result_is_seen(self):
+		# Regression: the first poll caches None in frappe.local.cache; the worker's "ok" must still be seen later.
+		real = frappe.cache()
+		spy = MagicMock(wraps=real)
+		job, calls = {}, []
+
+		def enqueue(method, **kw):
+			job.update(kw)
+
+		def get_value(key, *args, **kwargs):
+			value = real.get_value(key, *args, **kwargs)
+			if not job.get("ran"):  # the worker finishes between the caller's first and second poll
+				job["ran"] = True
+				caller_local = dict(frappe.local.cache)
+				with patch.object(frappe, "get_attr", return_value=lambda **kw: calls.append(kw)):
+					external.refresh_hook_job(job["path"], job["token"], job["audience"], job["managed_by"])
+				# the worker is another process: its writes reach redis but not this request's frappe.local.cache
+				frappe.local.cache.clear()
+				frappe.local.cache.update(caller_local)
+			return value
+
+		spy.get_value.side_effect = get_value
+		with patch.object(frappe, "cache", return_value=spy), patch.object(frappe, "enqueue", side_effect=enqueue), \
+			patch.object(external, "_POLL", 0.01):
+			external._run_hook("app.refresh", 1, "a", "crm")
+		self.assertEqual(calls, [{"audience": "a", "managed_by": "crm"}])
 
 	def test_timeout_blocks_start(self):
 		bc = self.draft_broadcast(self.make("Slow"))
