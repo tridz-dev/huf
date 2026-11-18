@@ -202,7 +202,7 @@ def refresh_hook_job(path: str, token: str, audience: str, managed_by: str) -> N
 	(``cancelled`` flag) the hook is not started. Hooks MUST be idempotent: a hook that was already running when
 	the caller timed out finishes on its own and its writes stand, but the caller has refused that start."""
 	cache = frappe.cache()
-	if cache.get_value(_flag_key(token)) == {"state": "cancelled"}:
+	if cache.get_value(_flag_key(token), use_local_cache=False) == {"state": "cancelled"}:
 		return
 	try:
 		frappe.get_attr(path)(audience=audience, managed_by=managed_by)
@@ -212,7 +212,7 @@ def refresh_hook_job(path: str, token: str, audience: str, managed_by: str) -> N
 		frappe.db.rollback()
 		frappe.log_error(title="Audience refresh hook failed", message=f"{path} for {audience}: {frappe.get_traceback()}")
 		result = {"state": "error", "message": str(exc)[:300]}
-	if cache.get_value(_flag_key(token)) != {"state": "cancelled"}:
+	if cache.get_value(_flag_key(token), use_local_cache=False) != {"state": "cancelled"}:
 		cache.set_value(_flag_key(token), result, expires_in_sec=_FLAG_TTL)
 
 
@@ -230,7 +230,7 @@ def _run_hook(path: str, seconds: int, audience: str, managed_by: str) -> None:
 	deadline = time.monotonic() + seconds
 	try:
 		while True:
-			result = cache.get_value(_flag_key(token))
+			result = cache.get_value(_flag_key(token), use_local_cache=False)
 			if isinstance(result, dict) and result.get("state") == "ok":
 				return
 			if isinstance(result, dict) and result.get("state") == "error":
@@ -240,7 +240,7 @@ def _run_hook(path: str, seconds: int, audience: str, managed_by: str) -> None:
 				raise TimeoutError(f"no answer within {seconds}s")
 			time.sleep(_POLL)
 	finally:
-		if cache.get_value(_flag_key(token)) != {"state": "cancelled"}:
+		if cache.get_value(_flag_key(token), use_local_cache=False) != {"state": "cancelled"}:
 			cache.delete_value(_flag_key(token))
 
 
