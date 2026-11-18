@@ -250,7 +250,7 @@ WHATSAPP_TOOLS = [
 			"send_list (to, body, button_text, sections [{title, rows: [{id, title, description}]}] up to 10 rows, optional header and footer), "
 			"send_cta_url (to, body, display_text, url, optional header and footer). "
 			"All send_* media, location, contact, reaction and interactive actions are free-form: they need an open 24h window (or the gateway's proactive-send setting), are refused for contacts who opted out, and are validated against Meta's limits before sending; "
-			"send_template (to/recipient, template_name, language_code, parameters, header_params, button_params), "
+			"send_template (to/recipient, template_name, language_code, parameters, header_params, button_params, carousel_params for carousel templates), "
 			"list_messages (to: the contact, limit, cursor; newest first, each item has the wamid in message_id), get_account_info, "
 			"list_templates (status; rows include review status and rejection reason), "
 			"create_template (template_name, category, language_code, body, sample_values, optional header_type/header/sample, "
@@ -291,6 +291,7 @@ WHATSAPP_TOOLS = [
 			),
 			_p("header_params", type="array", description="send_template header parameter: one text value, or one {type: image|document, link} object."),
 			_p("button_params", type="array", description="send_template URL button parameters: [{index: 0, sub_type: 'url', text: '<url suffix>'}]."),
+			_p("carousel_params", type="array", description="send_template for a media-carousel template: one entry per card, [{header: {id} or {link} or an https URL, body: [values], buttons: [{index, sub_type: 'url'|'quick_reply', text}]}] in card order (2-10 cards). A JSON list or {cards: [...]} also works."),
 			_p("kind", description="Media kind for send_media: image, document, audio, video or sticker (the send_image/send_video/... actions set it for you)."),
 			_p("link", description="Public https URL of the media (send_media, send_image, send_video, send_audio, send_document, send_sticker). Give only one of link, media_id, file_url, file_id."),
 			_p("file_url", description="Media actions: file_url (/private/files/... or /files/...) of a Huf File created in this conversation (e.g. generate_image / generate_audio output) or uploaded by the user. Give exactly one of link, media_id, file_url, file_id. Other files are refused."),

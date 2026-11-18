@@ -113,3 +113,59 @@ class TestWhatsAppSendTemplateRecordName(unittest.TestCase):
 		):
 			result = json.loads(whatsapp.handle_action("send_template", **{**kw, "template_name": "invalid_wash_day"}))
 		self.assertEqual(result["error"], "language_required")
+
+
+class TestWhatsAppSendTemplateCarouselParams(unittest.TestCase):
+	CARDS = [
+		{"header": {"id": "123"}, "body": ["Blue"], "buttons": [{"index": 0, "sub_type": "url", "text": "a"}]},
+		{"header": {"link": "https://example.com/b.jpg"}, "body": ["Red"], "buttons": [{"index": 0, "sub_type": "url", "text": "b"}]},
+	]
+
+	def _send(self, **overrides):
+		kw = {"to": "15551234567", "template_name": "catalog_carousel", "language_code": "en"}
+		kw.update(overrides)
+		with _bound(), patch.object(whatsapp, "_resolve_bridge_account", return_value={"name": "ACC"}), patch.object(
+			whatsapp.bridge, "send_template", return_value={"message_id": "w1", "name": "m"}
+		) as send:
+			result = json.loads(whatsapp.handle_action("send_template", **kw))
+		return result, send
+
+	def test_carousel_params_reach_bridge_send_template(self):
+		result, send = self._send(carousel_params=self.CARDS)
+		self.assertTrue(result["success"])
+		self.assertEqual(send.call_args.kwargs["carousel_params"], self.CARDS)
+
+	def test_carousel_params_accepts_json_string_and_cards_wrapper(self):
+		for value in (json.dumps(self.CARDS), {"cards": self.CARDS}, json.dumps({"cards": self.CARDS})):
+			with self.subTest(value=type(value).__name__):
+				result, send = self._send(carousel_params=value)
+				self.assertTrue(result["success"])
+				self.assertEqual(send.call_args.kwargs["carousel_params"], self.CARDS)
+
+	def test_omitting_carousel_params_changes_nothing(self):
+		result, send = self._send()
+		self.assertTrue(result["success"])
+		self.assertNotIn("carousel_params", send.call_args.kwargs)
+		self.assertEqual(send.call_args.args[2], "catalog_carousel")
+
+	def test_rejects_non_list_carousel_params_without_sending(self):
+		for value in ("not-json", 42, {"cards_": []}):
+			with self.subTest(value=value):
+				result, send = self._send(carousel_params=value)
+				self.assertFalse(result["success"])
+				self.assertIn("carousel_params", result["error"])
+				send.assert_not_called()
+
+	def test_bridge_validation_failure_surfaces_unchanged(self):
+		payload = {
+			"success": False,
+			"error": "validation_failed",
+			"message": "This template is a carousel; provide 2 card(s) of values.",
+			"errors": [{"field": "carousel_params", "code": "carousel_required", "message": "This template is a carousel; provide 2 card(s) of values."}],
+		}
+		err = whatsapp.bridge.BridgeError(payload)
+		with _bound(), patch.object(whatsapp, "_resolve_bridge_account", return_value={"name": "ACC"}), patch.object(
+			whatsapp.bridge, "send_template", side_effect=err
+		):
+			result = json.loads(whatsapp.handle_action("send_template", to="15551234567", template_name="catalog_carousel"))
+		self.assertEqual(result, payload)
