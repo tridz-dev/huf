@@ -26,6 +26,7 @@ from frappe import _
 
 from huf.ai.gateway_adapters import whatsapp_bridge as bridge
 from huf.ai.whatsapp import management
+from huf.ai.whatsapp.gateway_scope import sender_may_use_gateway
 
 OTP_SENDER_ROLE = "HUF OTP Sender"
 _ALLOWED_ROLES = {OTP_SENDER_ROLE, "System Manager"}
@@ -206,7 +207,7 @@ def _sms_mode_blocked(sms_gateway) -> dict[str, Any] | None:
 
 def _gateway_forbidden(user, *names) -> dict[str, Any] | None:
 	for name in names:
-		if name and not frappe.has_permission("Gateway", "read", name, user=user):
+		if name and not sender_may_use_gateway(user, name):
 			return _err("gateway_forbidden", "You do not have access to this gateway.")
 	return None
 
