@@ -170,7 +170,6 @@ def run_check(creds: dict[str, Any], http_get: Callable[..., Any] = default_http
 	phone_id = str(creds.get("phone_id") or "").strip()
 	waba_id = str(creds.get("waba_id") or "").strip()
 	bearer = {"Authorization": f"Bearer {token}"}
-	secrets = (token, secret)
 
 	use_debug = bool(app_id and secret)
 	out = _empty("debug_token" if use_debug else "phone_number")

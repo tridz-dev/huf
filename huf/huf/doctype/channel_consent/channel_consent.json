@@ -1,0 +1,25 @@
+{
+ "actions": [],
+ "autoname": "hash",
+ "creation": "2026-11-17 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": ["channel", "recipient", "value", "scope", "source", "detail", "attested_by", "attestation_note", "captured_at"],
+ "fields": [
+  {"fieldname":"channel","fieldtype":"Select","in_list_view":1,"label":"Channel","options":"sms\nemail","reqd":1,"read_only":1,"search_index":1},
+  {"description":"Normalized: digits-only phone for sms, lower-cased address for email.","fieldname":"recipient","fieldtype":"Data","in_list_view":1,"label":"Recipient","length":255,"reqd":1,"read_only":1,"search_index":1},
+  {"fieldname":"value","fieldtype":"Select","in_list_view":1,"label":"Value","options":"opt_in\nopt_out","reqd":1,"read_only":1},
+  {"description":"opt_in always covers marketing. opt_out of 'all' (STOP) blocks every purpose; 'marketing' blocks only marketing.","fieldname":"scope","fieldtype":"Select","label":"Scope","options":"marketing\nall","default":"marketing","reqd":1,"read_only":1},
+  {"fieldname":"source","fieldtype":"Select","in_list_view":1,"label":"Source","options":"inbound\nimport\napi\nmanual\nwidget","read_only":1,"default":"api"},
+  {"fieldname":"detail","fieldtype":"Small Text","label":"Detail","read_only":1},
+  {"fieldname":"attested_by","fieldtype":"Link","label":"Attested by","options":"User","read_only":1},
+  {"fieldname":"attestation_note","fieldtype":"Small Text","label":"Attestation note","read_only":1,"description":"Where and how the opt-in was collected."},
+  {"fieldname":"captured_at","fieldtype":"Datetime","label":"Captured at","read_only":1}
+ ],
+ "in_create": 1,
+ "module": "Huf",
+ "name": "Channel Consent",
+ "permissions": [{"read": 1, "role": "System Manager"}],
+ "sort_field": "creation",
+ "sort_order": "DESC"
+}

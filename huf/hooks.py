@@ -143,6 +143,7 @@ after_app_install = [
 ]
 after_migrate = [
     "huf.install.after_migrate",
+    "huf.ai.app_seeding.seeder.on_migrate",
     "huf.ai.skills.hooks.sync_app_skills",
     "huf.install.seed_voice_engines",
     "huf.ai.channels.run_as.ensure_all_audit_fields",
@@ -397,6 +398,7 @@ scheduler_events = {
         ]
     },
     "hourly": [
+        "huf.ai.tool_confirmation.sweep_expired",
         "huf.ai.channels.commerce.cart_recovery.run_cart_recovery",
         "huf.ai.mcp_client.auto_sync_mcp_server_tools",
         "huf.ai.mcp_oauth.auto_refresh_oauth_tokens",
@@ -404,7 +406,6 @@ scheduler_events = {
         "huf.ai.meetings.meeting_recording.recover_stuck_uploaded_chunks"
     ]
 }
-
 
 # Testing
 # -------
@@ -467,6 +468,7 @@ huf_tools = [
     "huf.ai.tools.gateways.reply.GATEWAY_REPLY_TOOLS",
     "huf.ai.tools.gateways.send.GATEWAY_SEND_TOOLS",
     "huf.ai.tools.gateways.handoff.GATEWAY_HANDOFF_TOOLS",
+    "huf.ai.tools.messaging.whatsapp_broadcast_tools.WHATSAPP_BROADCAST_TOOLS",
 ]
 
 # Knowledge Backends Hook

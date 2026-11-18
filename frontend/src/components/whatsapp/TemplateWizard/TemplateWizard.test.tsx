@@ -48,13 +48,25 @@ describe('step 1', () => {
     const nextBtn = screen.getByRole('button', { name: 'Next' });
     expect(screen.getByRole('radio', { name: /Default/ })).toBeChecked();
     expect(nextBtn).toBeEnabled();
-    expect(screen.getByRole('tab', { name: 'Authentication' })).toBeDisabled();
-    expect(screen.queryByText(/Authentication:/, { selector: 'p' })).toBeNull();
+    expect(screen.getByRole('tab', { name: 'Authentication' })).toBeEnabled();
     expect(screen.getAllByText('Coming soon').length).toBeGreaterThan(0);
     expect(screen.getByRole('radio', { name: /Catalogue/ })).toBeDisabled();
     expect(screen.getByRole('link', { name: /template library/ })).toHaveAttribute('rel', 'noopener noreferrer');
     next();
     expect(screen.getByRole('region', { name: 'Write it' })).toBeInTheDocument();
+  });
+});
+
+describe('authentication type', () => {
+  it('selects the fixed-format kind and shows only the OTP options', () => {
+    setup();
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Authentication' }));
+    fireEvent.click(screen.getByRole('radio', { name: /One-time password/ }));
+    next();
+    expect(screen.getByLabelText('Code expiry in minutes')).toHaveValue(10);
+    expect(screen.getByLabelText(/Copy code button label/)).toHaveValue('Copy code');
+    expect(screen.queryByLabelText(/Footer text/)).toBeNull();
+    expect(screen.queryByText('Buttons')).toBeNull();
   });
 });
 

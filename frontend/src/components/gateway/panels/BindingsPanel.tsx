@@ -59,7 +59,7 @@ import {
 import { registerProviderPanel, type ProviderPanelProps } from './index';
 
 const PROVIDERS: GatewayProvider[] = [
-  'WhatsApp', 'Messenger', 'Instagram', 'Telegram', 'Slack', 'Email', 'Google Chat', 'Microsoft Teams',
+  'WhatsApp', 'Messenger', 'Instagram', 'Telegram', 'Slack', 'Email', 'Google Chat', 'Microsoft Teams', 'SMS',
 ];
 
 const MATCH_LABELS: Record<(typeof MATCH_TYPES)[number], string> = {

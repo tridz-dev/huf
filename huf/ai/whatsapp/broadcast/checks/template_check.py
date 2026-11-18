@@ -81,7 +81,7 @@ def template_requirements(template: str) -> dict[str, Any] | None:
 	}
 
 
-def send_problems(req: dict[str, Any], body: Any, header: Any, button: Any) -> dict[str, list[str]]:
+def send_problems(req: dict[str, Any], body: Any, header: Any, button: Any, carousel: Any = None) -> dict[str, list[str]]:
 	"""What the send of one recipient would be refused for, using the same validation as ``bridge.send_template``.
 
 	``{"missing": [labels], "extra": [labels], "invalid": [messages]}`` (all empty when the send would pass).
@@ -93,7 +93,7 @@ def send_problems(req: dict[str, Any], body: Any, header: Any, button: Any) -> d
 	button_list = button if isinstance(button, list) else ([button] if button else [])
 	other, copy_comps, errors = bridge.split_copy_code_params(button_list)
 	header_raw = bridge._header_list(header, True)
-	components, build_errors = wt.build_send_components(view, body, header_raw, other)
+	components, build_errors = wt.build_send_components(view, body, header_raw, other, carousel)
 	errors += build_errors
 	seen = {(e["field"], e["code"]) for e in errors}
 	errors += [
@@ -125,6 +125,8 @@ def send_problems(req: dict[str, Any], body: Any, header: Any, button: Any) -> d
 			extra.append(field)
 		elif code == "required":
 			missing.append("header" if field.startswith("header") else field.replace("_params", ""))
+		elif code == "carousel_required":
+			missing.append("carousel")
 		else:
 			invalid.append(msg or f"{field}: {code}")
 	dedupe = lambda xs: list(dict.fromkeys(xs))  # noqa: E731

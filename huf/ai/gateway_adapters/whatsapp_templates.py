@@ -46,11 +46,32 @@ TTL_MIN = 30
 TTL_MAX = 43200
 TTL_CATEGORIES = ("UTILITY",)
 
-# Categories a template may be created in. AUTHENTICATION is deliberately rejected for now.
-CATEGORIES = ("UTILITY", "MARKETING")
+# Categories a template may be created in.
+CATEGORIES = ("UTILITY", "MARKETING", "AUTHENTICATION")
+
+# Authentication templates use a fixed Meta format: Meta writes the body ("<code> is your
+# verification code.", plus "For your security, do not share this code." when
+# add_security_recommendation is set); we only choose the recommendation, the expiry
+# footer and the copy-code button label.
+OTP_BODY = "{{1}} is your verification code."
+OTP_BODY_SECURITY = " For your security, do not share this code."
+OTP_BUTTON_TEXT_DEFAULT = "Copy code"
+OTP_EXPIRY_MIN = 1
+OTP_EXPIRY_MAX = 90
+OTP_CODE_MAX = 15  # Meta documents a 15-character maximum for the one-time-password parameter; not re-checked live or via ctx7 (Kapso docs silent)
 
 HEADER_TYPES = ("TEXT", "IMAGE", "VIDEO", "DOCUMENT", "LOCATION")
 MEDIA_HEADER_TYPES = ("IMAGE", "VIDEO", "DOCUMENT")
+# CAROUSEL_MIN_CARDS is a HUF product rule: Meta accepted a 1-card carousel at create (live 2026-11-18) but documents 2-10 at send.
+# The remaining carousel limits were verified live on 2026-11-18: max 10 cards ((#105) at 11), card body max 160 chars
+# (1/2388337), max 2 buttons per card (100/2388158), no header/footer on the main bubble (100/2388208), and template
+# variables may not be at the start or end of the top-level body or a card body (100/2388299).
+CAROUSEL_MIN_CARDS = 2
+CAROUSEL_MAX_CARDS = 10
+CAROUSEL_HEADER_TYPES = ("IMAGE", "VIDEO")
+CAROUSEL_BUTTON_TYPES = ("QUICK_REPLY", "URL")
+CAROUSEL_MAX_CARD_BUTTONS = 2  # verified live 2026-11-18
+CARD_BODY_MAX = 160  # verified live 2026-11-18
 BUTTON_TYPES = ("QUICK_REPLY", "URL", "PHONE_NUMBER", "COPY_CODE")
 # Outbound free-form media kinds (sticker added by T5; limits live in whatsapp_messages)
 MEDIA_KINDS = wm.MEDIA_KINDS
@@ -77,6 +98,8 @@ _BUTTON_ALIASES = {
 
 _PLACEHOLDER_RE = re.compile(r"\{\{\s*(\d+)\s*\}\}")
 _VAR_RE = re.compile(r"\{\{\s*([^{}\s]*)\s*\}\}")
+_EDGE_VAR_START_RE = re.compile(r"^\s*\{\{[^{}]*\}\}")
+_EDGE_VAR_END_RE = re.compile(r"\{\{[^{}]*\}\}\s*$")
 _ANY_BRACES_RE = re.compile(r"\{\{|\}\}")
 # verified: https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/overview/ (named: unique, lowercase letters and underscores); digits and the
 # leading-letter rule are unverified (from memory)
@@ -87,6 +110,9 @@ _BAD_PARAM_RE = re.compile(r"[\n\r\t]| {4,}")
 _EMAIL_RE = re.compile(r"[^\s@]+@[^\s@]+\.[^\s@]+")
 _DIGIT_RUN_RE = re.compile(r"\d{7,}")
 _SAMPLE_SEP_RE = re.compile(r"[\s\-().+]")
+
+from huf.ai.gateway_adapters.whatsapp_template_parts import authentication, send_params
+from huf.ai.gateway_adapters.whatsapp_template_parts import carousel as carousel_parts  # noqa: E402  (after constants: parts read them via ``wt``)
 
 
 def _e(field: str, code: str, message: str) -> dict[str, str]:
@@ -212,8 +238,8 @@ def validate_template_spec(payload: dict[str, Any]) -> tuple[dict[str, Any], lis
 	# ---- category / ttl
 	category = str(payload.get("category") or "").strip().upper()
 	if category == "AUTHENTICATION":
-		errors.append(_e("category", "category_not_supported", "Authentication templates are not supported yet."))
-	elif category and category not in CATEGORIES:
+		return authentication._validate_authentication(payload)
+	if category and category not in CATEGORIES:
 		errors.append(_e("category", "invalid_category", f"Category must be one of {', '.join(CATEGORIES)}."))
 	ttl = _ttl_value(payload)
 	if ttl is not None:
@@ -235,7 +261,7 @@ def validate_template_spec(payload: dict[str, Any]) -> tuple[dict[str, Any], lis
 	body_pos, body_named = _check_variables("body", body, errors) if body else ([], [])
 	body_vars = body_pos or body_named
 	stripped_body = body.strip()
-	# unverified (from memory): Meta rejects templates whose body starts or ends with a variable
+	# Meta rejects bodies that start or end with a variable (verified live for carousel bodies 2026-11-18, error 100/2388299)
 	if body_vars and re.match(r"^\{\{[^{}]*\}\}", stripped_body):
 		errors.append(_e("body", "body_starts_with_variable", "The body cannot start with a variable."))
 	if body_vars and re.search(r"\{\{[^{}]*\}\}$", stripped_body):
@@ -375,8 +401,12 @@ def validate_template_spec(payload: dict[str, Any]) -> tuple[dict[str, Any], lis
 	buttons, button_errors = _validate_buttons(payload.get("buttons"))
 	errors.extend(button_errors)
 
+	cards, card_errors = carousel_parts._validate_cards(payload, category, bool(header_type), footer, payload.get("buttons"), body)
+	errors.extend(card_errors)
+
 	hvar = (header_pos or header_named or [""])[0] if header_type == "TEXT" else ""
 	spec = {
+		"cards": cards,
 		"body": body,
 		"parameter_format": parameter_format,
 		"sample_values": samples,
@@ -539,6 +569,19 @@ def build_meta_payload(spec: dict[str, Any], media_header: dict[str, Any] | None
 
 def build_meta_components(spec: dict[str, Any], media_header: dict[str, Any] | None = None) -> list[dict[str, Any]]:
 	"""FULL Graph ``components`` array for a validated spec (create or edit)."""
+	if spec.get("category") == "AUTHENTICATION":
+		# Meta authentication format: BODY carries no text, FOOTER only the expiry, one OTP copy-code button
+		body_auth: dict[str, Any] = {"type": "BODY"}
+		if spec.get("add_security_recommendation"):
+			body_auth["add_security_recommendation"] = True
+		auth: list[dict[str, Any]] = [body_auth]
+		if spec.get("code_expiration_minutes") is not None:
+			auth.append({"type": "FOOTER", "code_expiration_minutes": spec["code_expiration_minutes"]})
+		auth.append({
+			"type": "BUTTONS",
+			"buttons": [{"type": "OTP", "otp_type": "COPY_CODE", "text": spec.get("otp_button_text") or OTP_BUTTON_TEXT_DEFAULT}],
+		})
+		return auth
 	named = spec.get("parameter_format") == "NAMED"
 	body: dict[str, Any] = {"type": "BODY", "text": spec["body"]}
 	if named and spec.get("named_samples"):
@@ -573,6 +616,9 @@ def build_meta_components(spec: dict[str, Any], media_header: dict[str, Any] | N
 	elif htype == "LOCATION":
 		components.append({"type": "HEADER", "format": "LOCATION"})
 	components.append(body)
+	if spec.get("cards"):
+		components.append(carousel_parts._build_carousel_template(spec["cards"]))
+		return components
 	if spec.get("footer"):
 		components.append({"type": "FOOTER", "text": spec["footer"]})
 	if spec.get("buttons"):
@@ -597,6 +643,9 @@ def build_meta_components(spec: dict[str, Any], media_header: dict[str, Any] | N
 def components_to_view(components: Any) -> dict[str, Any]:
 	"""Meta components -> ``{header, body, footer, buttons}`` for display (defensive)."""
 	view: dict[str, Any] = {"header": None, "body": None, "footer": None, "buttons": []}
+	cards = carousel_parts.carousel_cards(components)
+	if cards is not None:
+		view["carousel"] = cards
 	for comp in components if isinstance(components, list) else []:
 		if not isinstance(comp, dict):
 			continue
@@ -618,88 +667,6 @@ def components_to_view(components: Any) -> dict[str, Any]:
 
 
 # --------------------------------------------------------------------- sends
-def validate_param_text(field: str, value: Any, errors: list[dict[str, str]], limit: int = MAX_PARAM_LEN) -> str:
-	text = str(value if value is not None else "")
-	if not text.strip():
-		errors.append(_e(field, "empty_param", "Template parameters cannot be empty."))
-	elif len(text) > limit:
-		errors.append(_e(field, "too_long", f"Parameter is longer than {limit} characters."))
-	elif _BAD_PARAM_RE.search(text):
-		errors.append(_e(field, "bad_param", "Template parameters cannot contain newlines, tabs or 4+ consecutive spaces."))
-	return text
-
-
-def normalize_header_params(header_params: Any) -> tuple[list[Any], list[dict[str, str]]]:
-	"""Header parameters: one text string, or one ``{type, link, filename?}`` media dict
-	(or ``{type: "location", latitude, longitude, name?, address?}`` for LOCATION headers)."""
-	errors: list[dict[str, str]] = []
-	items = list(header_params or [])
-	if len(items) > 1:
-		errors.append(_e("header_params", "too_many", "A template header takes at most one parameter."))
-		return [], errors
-	out: list[Any] = []
-	for item in items:
-		if isinstance(item, dict):
-			kind = str(item.get("type") or "").lower()
-			link = str(item.get("link") or "").strip()
-			if kind == "location":
-				try:
-					loc: dict[str, Any] = {"latitude": float(item["latitude"]), "longitude": float(item["longitude"])}
-				except (KeyError, TypeError, ValueError):
-					errors.append(_e("header_params[0]", "invalid_location", "A location header needs numeric latitude and longitude."))
-					continue
-				for key in ("name", "address"):
-					if item.get(key):
-						loc[key] = str(item[key])
-				out.append({"type": "location", "location": loc})
-			elif kind not in ("image", "document", "video"):
-				errors.append(_e("header_params[0].type", "invalid_type", "Media header type must be image, document or video."))
-			elif not is_http_url(link):
-				errors.append(_e("header_params[0].link", "invalid_link", "Media header needs an http(s) link."))
-			else:
-				media: dict[str, Any] = {"type": kind, "link": link}
-				if kind == "document" and item.get("filename"):
-					media["filename"] = str(item["filename"])[:240]
-				out.append(media)
-		elif isinstance(item, str) and is_http_url(item.strip()):
-			out.append({"type": "", "link": item.strip()})  # kind resolved from the template
-		else:
-			out.append(validate_param_text("header_params[0]", item, errors, HEADER_TEXT_MAX))
-	return out, errors
-
-
-def normalize_button_params(button_params: Any) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
-	"""Button parameters.
-
-	Each entry is ``{"index": 0, "sub_type": "url"|"quick_reply", "text": suffix}``
-	(``payload`` for quick replies). A bare string means the URL suffix of the
-	button at that list position.
-	"""
-	errors: list[dict[str, str]] = []
-	out: list[dict[str, Any]] = []
-	for i, item in enumerate(button_params or []):
-		field = f"button_params[{i}]"
-		if isinstance(item, dict):
-			sub = str(item.get("sub_type") or item.get("type") or "url").lower()
-			try:
-				index = int(item.get("index", i))
-			except (TypeError, ValueError):
-				errors.append(_e(f"{field}.index", "invalid_index", "Button index must be an integer 0-9."))
-				continue
-			value = item.get("text") if item.get("text") is not None else item.get("payload")
-		else:
-			sub, index, value = "url", i, item
-		if sub not in ("url", "quick_reply"):
-			errors.append(_e(f"{field}.sub_type", "invalid_type", "Button parameter type must be url or quick_reply."))
-			continue
-		if not 0 <= index <= 9:
-			errors.append(_e(f"{field}.index", "invalid_index", "Button index must be an integer 0-9."))
-			continue
-		text = validate_param_text(field, value, errors, URL_MAX if sub == "url" else 256)
-		out.append({"index": index, "sub_type": sub, "text": text})
-	return out, errors
-
-
 def build_template_components(
 	body_params: list[Any] | None = None,
 	header_params: list[Any] | None = None,
@@ -715,7 +682,7 @@ def build_template_components(
 			if kind == "location":
 				components.append({"type": "header", "parameters": [{"type": "location", "location": item["location"]}]})
 				continue
-			media: dict[str, Any] = {"link": item["link"]}
+			media: dict[str, Any] = {"file": item["file"]} if "file" in item else {"link": item["link"]}
 			if kind == "document" and item.get("filename"):
 				media["filename"] = item["filename"]
 			components.append({"type": "header", "parameters": [{"type": kind, kind: media}]})
@@ -759,7 +726,17 @@ def _template_view(template: Any) -> dict[str, Any]:
 	body_vars, header_vars = variables(body), variables(header) if htype in ("", "TEXT") else []
 	if fmt not in PARAMETER_FORMATS:
 		fmt = "NAMED" if any(not v.isdigit() for v in body_vars + header_vars) else "POSITIONAL"
-	return {"fmt": fmt, "body_vars": body_vars, "header_vars": header_vars, "header_type": htype}
+	is_auth = (isinstance(template, dict) and str(template.get("category") or "").upper() == "AUTHENTICATION") or any(
+		isinstance(c, dict)
+		and str(c.get("type") or "").upper() == "BUTTONS"
+		and any(isinstance(b, dict) and str(b.get("type") or "").upper() == "OTP" for b in c.get("buttons") or [])
+		for c in (template if isinstance(template, list) else [])
+	)
+	cards = template.get("carousel_cards") if isinstance(template, dict) else carousel_parts.carousel_cards(template)
+	return {
+		"fmt": fmt, "body_vars": body_vars, "header_vars": header_vars, "header_type": htype, "auth": is_auth,
+		"carousel": cards if isinstance(cards, list) else None,
+	}
 
 
 def _named_values(field: str, raw: Any, names: list[str], errors: list[dict[str, str]]) -> list[tuple[str, Any]]:
@@ -794,6 +771,7 @@ def build_send_components(
 	body_params: Any = None,
 	header_params: Any = None,
 	button_params: Any = None,
+	carousel_params: Any = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
 	"""Graph ``template.components`` for a send, validating the raw parameters.
 
@@ -804,6 +782,8 @@ def build_send_components(
 	"""
 	errors: list[dict[str, str]] = []
 	view = _template_view(template)
+	if view["auth"]:
+		return authentication.build_otp_components(body_params)
 	named = view["fmt"] == "NAMED"
 	components: list[dict[str, Any]] = []
 
@@ -813,13 +793,13 @@ def build_send_components(
 	else:
 		header_raw = [header_params] if isinstance(header_params, dict) else list(header_params or [])
 	if named and len(view["header_vars"]) == 1 and header_raw and not isinstance(header_raw[0], dict):
-		text = validate_param_text("header_params[0]", header_raw[0], errors, HEADER_TEXT_MAX)
+		text = send_params.validate_param_text("header_params[0]", header_raw[0], errors, HEADER_TEXT_MAX)
 		components.append({
 			"type": "header",
 			"parameters": [{"type": "text", "parameter_name": view["header_vars"][0], "text": text}],
 		})
 	else:
-		headers_n, herr = normalize_header_params(header_raw)
+		headers_n, herr = send_params.normalize_header_params(header_raw)
 		errors += herr
 		components += build_template_components(None, headers_n, None, view["header_type"].lower())
 
@@ -827,19 +807,27 @@ def build_send_components(
 	if named and view["body_vars"]:
 		params = []
 		for name, value in _named_values("body_params", body_params, view["body_vars"], errors):
-			text = validate_param_text(f"body_params.{name}", value, errors)
+			text = send_params.validate_param_text(f"body_params.{name}", value, errors)
 			params.append({"type": "text", "parameter_name": name, "text": text})
 		components.append({"type": "body", "parameters": params})
 	else:
 		items = list(body_params.values()) if isinstance(body_params, dict) else list(body_params or [])
-		texts = [validate_param_text(f"body_params[{i}]", v, errors) for i, v in enumerate(items)]
+		texts = [send_params.validate_param_text(f"body_params[{i}]", v, errors) for i, v in enumerate(items)]
 		if texts:
 			components.append({"type": "body", "parameters": [{"type": "text", "text": t} for t in texts]})
 
 	# buttons
-	buttons_n, berr = normalize_button_params(button_params)
+	buttons_n, berr = send_params.normalize_button_params(button_params)
 	errors += berr
 	components += build_template_components(None, None, buttons_n)
+
+	# carousel (cards come from the template; absent -> any carousel_params is refused)
+	if view["carousel"] is not None:
+		carousel = carousel_parts.build_carousel_component(view["carousel"], carousel_params, errors)
+		if carousel:
+			components.append(carousel)
+	elif carousel_params:
+		errors.append(_e("carousel_params", "carousel_not_expected", "This template is not a carousel."))
 	return components, errors
 
 

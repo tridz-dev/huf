@@ -112,7 +112,7 @@ class TestPrepare(unittest.TestCase):
 			p.start()
 			self.addCleanup(p.stop)
 
-	def _insert(self, broadcast, recipient, status, skip_reason, params, consent_source, consent_at):
+	def _insert(self, broadcast, recipient, status, skip_reason, params, consent_source, consent_at, **_kw):
 		self.inserted.append(
 			{
 				"recipient": recipient,

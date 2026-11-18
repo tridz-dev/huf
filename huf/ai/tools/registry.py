@@ -1,10 +1,7 @@
 import importlib
-import json
-import os
-from datetime import datetime
 import frappe
 from frappe import _
-from frappe.utils import now_datetime
+from huf.ai.tools.support.scan_cache import _get_apps_to_scan, _update_cached_scans
 from huf.ai.transaction import commit_if_background
 
 logger = frappe.logger("huf")
@@ -66,6 +63,29 @@ class PermissionAwareToolRegistry:
         
         return all_tools
     
+    @staticmethod
+    def effective_required_roles(tool_doc) -> list:
+        """Roles a user must hold (any one) to use the tool; [] means unrestricted.
+
+        Outbound tools with no explicit roles fail closed to System Manager.
+        """
+        raw = getattr(tool_doc, "required_roles", None) or ""
+        roles = [r.strip() for r in raw.replace("\n", ",").split(",") if r.strip()]
+        if not roles and getattr(tool_doc, "is_outbound", 0):
+            roles = ["System Manager"]
+        return roles
+
+    @classmethod
+    def _user_has_required_role(cls, tool_doc, user: str) -> bool:
+        roles = cls.effective_required_roles(tool_doc)
+        if not roles:
+            return True
+        if not user or user == "Guest":
+            return False
+        if user == "Administrator":
+            return True
+        return bool(set(roles) & set(frappe.get_roles(user)))
+
     @classmethod
     def _can_use_tool(cls, tool_doc, user: str) -> bool:
         """Check if user has permission for this tool"""
@@ -75,6 +95,10 @@ class PermissionAwareToolRegistry:
         if tool_doc.is_read_only and tool_type in cls.MUTATING_TOOL_TYPES:
             return False
         
+        # Per-tool role requirement (never guest-allowed; outbound fails closed)
+        if not cls._user_has_required_role(tool_doc, user):
+            return False
+
         #Guest Restrictions
         if user == "Guest":
             #Explicitly Allowed
@@ -206,103 +230,6 @@ class PermissionAwareToolRegistry:
         from huf.ai.capabilities import capability_enabled
 
         return capability_enabled(agent_doc, model_name, "document_artifacts")
-
-def _get_app_modified_time(app_name):
-    """
-    Get modification time of app's hooks.py file as proxy for app changes.
-    
-    Args:
-        app_name: Name of the app
-    
-    Returns:
-        datetime: Modification time of hooks.py, or None if not found
-    """
-    try:
-        app_path = frappe.get_app_path(app_name)
-        hooks_path = os.path.join(app_path, "hooks.py")
-        if os.path.exists(hooks_path):
-            mtime = os.path.getmtime(hooks_path)
-            return datetime.fromtimestamp(mtime)
-    except (OSError, frappe.DoesNotExistError, frappe.ValidationError, AttributeError, ValueError):
-        # Cache probe is best-effort; fail silently
-        pass
-    return None
-
-def _get_cached_scans():
-    """
-    Get cached scan timestamps for each app.
-    
-    Returns:
-        dict: {app_name: datetime}
-    """
-    try:
-        if frappe.db.exists("DocType", CACHE_DOCTYPE):
-            settings = frappe.get_single(CACHE_DOCTYPE)
-            if hasattr(settings, "last_app_scans") and settings.last_app_scans:
-                return json.loads(settings.last_app_scans)
-    except (json.JSONDecodeError, frappe.DoesNotExistError, frappe.ValidationError, AttributeError, TypeError):
-        # Cache may not exist yet; fail silently
-        pass
-    return {}
-
-def _update_cached_scans(apps_scanned):
-    """
-    Update cached scan timestamps for scanned apps.
-    
-    Args:
-        apps_scanned: List of app names that were scanned
-    """
-    try:
-        # Only update cache if Agent Settings DocType exists
-        if not frappe.db.exists("DocType", CACHE_DOCTYPE):
-            return
-        
-        settings = frappe.get_single(CACHE_DOCTYPE)
-        cache = _get_cached_scans()
-        current_time = now_datetime().isoformat()
-        
-        for app in apps_scanned:
-            cache[app] = current_time
-        
-        # Create field if it doesn't exist (for backward compatibility)
-        if not hasattr(settings, "last_app_scans"):
-            return
-        
-        settings.last_app_scans = json.dumps(cache)
-        settings.save(ignore_permissions=True)
-    except (frappe.DoesNotExistError, frappe.ValidationError, TypeError, ValueError, json.JSONDecodeError):
-        # Cache update is non-critical; fail silently
-        pass
-
-def _get_apps_to_scan():
-    """
-    Determine which apps need scanning based on cache and modification times.
-    
-    Returns:
-        list: App names that need scanning
-    """
-    installed_apps = frappe.get_installed_apps()
-    cache = _get_cached_scans()
-    apps_to_scan = []
-    
-    for app in installed_apps:
-        app_modified = _get_app_modified_time(app)
-        last_scan_str = cache.get(app)
-        
-        # If no cache or app modified since last scan, add to scan list
-        if not last_scan_str or not app_modified:
-            apps_to_scan.append(app)
-        else:
-            try:
-                last_scan = datetime.fromisoformat(last_scan_str)
-                if app_modified > last_scan:
-                    apps_to_scan.append(app)
-            except ValueError:
-                # If cache is invalid, scan the app
-                apps_to_scan.append(app)
-    
-    return apps_to_scan
-
 
 def _normalize_hook_tools(hook_value):
     """Normalize huf_tools hook values into a flat list of tool-definition dicts."""
@@ -532,7 +459,11 @@ def sync_discovered_tools(apps_to_scan=None, use_cache=True):
                 ],
                 "provider_app": app,
                 "service": d.get("service", ""),
+                "is_outbound": int(bool(d.get("is_outbound", 0))),
+                "confirmation_summary_path": d.get("confirmation_summary_path") or "",
             }
+            if d.get("required_roles"):
+                payload["required_roles"] = d["required_roles"]
             
             if tool_name in existing_tools:
                 to_update.append((existing_tools[tool_name], payload))
@@ -618,3 +549,20 @@ def sync_app_tools(app_name=None):
         logger.warning(f"Validation/Operation warning: {e!s}")
     except Exception as e:  # boundary exception handler: external provider/tool boundary
         logger.warning(f"Failed to sync tools for app '{app_name}': {e!s}")
+
+
+
+def assert_tool_role(tool, user: str | None = None) -> None:
+    """Call-time recheck of a tool's required roles.
+
+    ``tool`` is a Agent Tool Function doc or its name. Raises
+    ``frappe.PermissionError`` when ``user`` (default: session user) lacks the
+    role; guests never pass for role-gated or outbound tools.
+    """
+    user = user or frappe.session.user
+    tool_doc = frappe.get_cached_doc("Agent Tool Function", tool) if isinstance(tool, str) else tool
+    if not PermissionAwareToolRegistry._user_has_required_role(tool_doc, user):
+        frappe.throw(
+            frappe._("You do not have the required role to use tool {0}").format(tool_doc.name),
+            frappe.PermissionError,
+        )

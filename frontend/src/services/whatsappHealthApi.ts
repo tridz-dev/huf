@@ -4,7 +4,7 @@ import { getFrappeErrorMessage } from '@/lib/frappe-error';
 /**
  * Typed client for the WhatsApp Overview/Settings page: per-gateway health,
  * setup checklist and the token check. The backend (whatsapp/health.py,
- * whatsapp/token_check.py) is built in parallel; this file is the agreed
+ * huf/ai/whatsapp/setup/token_check.py) is built in parallel; this file is the agreed
  * contract. Reconcile field names with the backend's final report if they differ.
  */
 const BASE = 'huf.ai.whatsapp.management';

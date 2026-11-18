@@ -15,7 +15,7 @@ import frappe
 from frappe import _
 from frappe.utils import add_days, getdate, nowdate
 
-from huf.ai.whatsapp.broadcast.cost import market_for_recipient
+from huf.ai.whatsapp.broadcast.support.cost import market_for_recipient
 from huf.permissions import has_capability
 
 RATE_CARD = "Channel Rate Card"

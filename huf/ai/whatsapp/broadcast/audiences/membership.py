@@ -23,6 +23,7 @@ from typing import Any
 import frappe
 from frappe.utils import cint
 
+from huf.ai.flow.gateways.phone_mask import mask_phone  # noqa: F401 - re-exported as aud.mask_phone
 from huf.ai.gateway_core.constants import ENTRY_STATE_OPTED_OUT
 from huf.ai.whatsapp.broadcast import policy
 
@@ -324,7 +325,12 @@ def refresh_counts(audience: str, gateway: str | None = None) -> dict[str, int]:
 	return counts
 
 
-# --- masking ---------------------------------------------------------------------------------------
-def mask_phone(value: Any) -> Any:
-	text = str(value or "")
-	return ("*" * max(len(text) - 4, 0) + text[-4:]) if text else value
+# --- externally managed audiences ------------------------------------------------------------------
+def assert_not_external(audience: str, verb: str = "changed here") -> None:
+	"""Refuse manual edits (UI, CSV import, remove, rename, delete) of an audience another app manages."""
+	managed, owner = frappe.db.get_value(AUDIENCE, audience, ["externally_managed", "managed_by"]) or (0, None)
+	if cint(managed):
+		frappe.throw(
+			f"This audience is managed by {owner or 'another app'} and cannot be {verb}. "
+			"Change it in that app; it keeps the contacts up to date."
+		)

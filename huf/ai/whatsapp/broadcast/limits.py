@@ -39,7 +39,7 @@ from typing import Any
 import frappe
 from frappe.utils import add_to_date, now_datetime
 
-from huf.ai.whatsapp import token_check as tc
+from huf.ai.whatsapp.setup import token_check as tc
 from huf.ai.whatsapp.broadcast import policy
 from huf.ai.whatsapp.broadcast.checks import audience_check
 
@@ -147,7 +147,7 @@ def _broadcast_row(broadcast: str) -> dict[str, Any] | None:
 	return frappe.db.get_value(
 		"WhatsApp Broadcast",
 		broadcast,
-		["gateway", "template", "consent_attested", "body_params", "header_params", "button_params", "max_recipients"],
+		["gateway", "template", "consent_attested", "body_params", "header_params", "button_params", "carousel_params", "max_recipients"],
 		as_dict=True,
 	)
 
@@ -271,7 +271,7 @@ def _check_params(b: dict[str, Any], broadcast: str, blocking: list[dict[str, An
 	req = template_requirements(b.get("template") or "")
 	if not req:
 		return
-	from huf.ai.whatsapp.broadcast.send import _merge_params
+	from huf.ai.whatsapp.broadcast.send import _merge_carousel, _merge_params
 
 	n_missing = n_extra = n_invalid = 0
 	missing: list[str] = []
@@ -279,7 +279,7 @@ def _check_params(b: dict[str, Any], broadcast: str, blocking: list[dict[str, An
 	invalid: list[str] = []
 	for raw, count in _queued_params(broadcast):
 		body, header, button = _merge_params(b, {"params": raw})
-		found = send_problems(req, body, header, button)
+		found = send_problems(req, body, header, button, _merge_carousel(b, raw))
 		if found["missing"]:
 			n_missing += count
 			missing += found["missing"]

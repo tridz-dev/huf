@@ -11,7 +11,7 @@ if isinstance(frappe, MagicMock):
 	frappe.whitelist = lambda *args, **kwargs: (lambda fn: fn)
 	frappe.PermissionError = PermissionError
 
-from huf.ai.whatsapp import setup_stage as wh  # noqa: E402
+from huf.ai.whatsapp.setup import setup_stage as wh  # noqa: E402
 from huf.ai.whatsapp import management as mgmt  # noqa: E402
 
 STAGES = {
@@ -126,6 +126,9 @@ class TestSetupStageInStatus(unittest.TestCase):
 	def setUp(self):
 		p = patch("huf.ai.whatsapp.management.frappe")
 		self.frappe = p.start()
+		_extra = patch("huf.ai.whatsapp.setup.credential_view.frappe", self.frappe)
+		_extra.start()
+		self.addCleanup(_extra.stop)
 		self.addCleanup(p.stop)
 		self.frappe.PermissionError = PermissionError
 		self.frappe.get_roles.return_value = ["System Manager"]

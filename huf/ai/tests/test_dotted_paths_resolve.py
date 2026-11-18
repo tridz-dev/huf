@@ -42,6 +42,12 @@ NOT_A_PYTHON_PATH: dict[str, str] = {
 	"huf.scenery.enabled": "localStorage key in frontend/src/lib/personalization.ts",
 	"huf.scenery.opacity": "localStorage key in frontend/src/lib/personalization.ts",
 	"huf.utils.send_email": "fake method name in frontend/src/services/mockApi.ts mock data",
+	"huf.flow.clipboard.v1": "localStorage/UI key in frontend/src/lib/flow-history/flowClipboard.ts",
+	"huf.flow.condition.writeItYourself": "localStorage/UI key in frontend/src/components/flow/forms/ConditionForm.tsx",
+	"huf.flow.firstRunGuide.dismissed": "localStorage/UI key in frontend/src/components/flow/FirstRunGuide.tsx",
+	"huf.flow.panelWidth": "localStorage/UI key in frontend/src/lib/ui/responsive.ts",
+	"huf.flow.recent.v1": "localStorage/UI key in frontend/src/lib/flow-history/recentFlows.ts",
+	"huf.skillSources.asJson": "localStorage/UI key in frontend/src/components/settings/SkillSourcesEditor.tsx",
 }
 
 

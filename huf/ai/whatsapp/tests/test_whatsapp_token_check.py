@@ -11,7 +11,7 @@ import unittest
 import frappe
 
 from huf.ai.whatsapp import management as mgmt
-from huf.ai.whatsapp import token_check as tc
+from huf.ai.whatsapp.setup import token_check as tc
 from huf.testing import fake_graph_server as fake
 from huf.ai.whatsapp.tests import test_whatsapp_fake_graph as fg
 
@@ -217,7 +217,7 @@ class TestTokenCheckAppSecretMapping(unittest.TestCase):
 	}
 
 	def _run(self, body, status=400):
-		from huf.ai.whatsapp import token_check as tc
+		from huf.ai.whatsapp.setup import token_check as tc
 
 		def http_get(url, params=None, headers=None):
 			return _Resp(status, body)
@@ -228,7 +228,7 @@ class TestTokenCheckAppSecretMapping(unittest.TestCase):
 		)
 
 	def test_code_100_appsecret_proof_maps_to_app_secret_message(self):
-		from huf.ai.whatsapp import token_check as tc
+		from huf.ai.whatsapp.setup import token_check as tc
 
 		r = self._run(self.APPSECRET_ERR)
 		self.assertIs(r["valid"], False)
@@ -241,28 +241,28 @@ class TestTokenCheckAppSecretMapping(unittest.TestCase):
 		self.assertNotIn("expired", r["message"])
 
 	def test_nested_debug_error_appsecret_proof_maps_to_app_secret_message(self):
-		from huf.ai.whatsapp import token_check as tc
+		from huf.ai.whatsapp.setup import token_check as tc
 
 		r = self._run({"data": {"is_valid": False, "error": self.APPSECRET_ERR["error"]}}, status=200)
 		self.assertIs(r["valid"], False)
 		self.assertEqual(r["message"], tc.MSG_APP_SECRET)
 
 	def test_other_code_100_keeps_permission_message(self):
-		from huf.ai.whatsapp import token_check as tc
+		from huf.ai.whatsapp.setup import token_check as tc
 
 		r = self._run({"error": {"message": "Unsupported get request", "code": 100}})
 		self.assertEqual(r["message"], tc.MSG_PERMISSION)
 
 	def test_code_190_keeps_expired_message(self):
-		from huf.ai.whatsapp import token_check as tc
+		from huf.ai.whatsapp.setup import token_check as tc
 
 		r = self._run({"error": {"message": "Session has expired", "code": 190}})
 		self.assertEqual(r["message"], tc.MSG_EXPIRED)
 
 	def test_verify_with_meta_surfaces_app_secret_message(self):
 		import frappe
-		from huf.ai.whatsapp import credential_sync as cs
-		from huf.ai.whatsapp import token_check as tc
+		from huf.ai.whatsapp.setup import credential_sync as cs
+		from huf.ai.whatsapp.setup import token_check as tc
 
 		creds = {
 			"access_token": "EAAFAKE",
@@ -287,7 +287,7 @@ class TestTokenCheckBadSignatureMapping(TestTokenCheckAppSecretMapping):
 	}
 
 	def test_debug_token_190_signature_maps_to_app_secret_message(self):
-		from huf.ai.whatsapp import token_check as tc
+		from huf.ai.whatsapp.setup import token_check as tc
 
 		r = self._run(self.SIGNATURE_ERR)
 		self.assertIs(r["valid"], False)
@@ -295,19 +295,19 @@ class TestTokenCheckBadSignatureMapping(TestTokenCheckAppSecretMapping):
 		self.assertEqual(r["message"], tc.MSG_APP_SECRET)
 
 	def test_plain_190_with_data_error_keeps_expired_message(self):
-		from huf.ai.whatsapp import token_check as tc
+		from huf.ai.whatsapp.setup import token_check as tc
 
 		r = self._run({"data": {"is_valid": False, "error": {"code": 190, "message": "Session has expired"}}}, status=200)
 		self.assertEqual(r["message"], tc.MSG_EXPIRED)
 
 	def test_190_session_expired_without_signature_keeps_expired_message(self):
-		from huf.ai.whatsapp import token_check as tc
+		from huf.ai.whatsapp.setup import token_check as tc
 
 		r = self._run({"error": {"message": "Session has expired on Monday", "type": "OAuthException", "code": 190}})
 		self.assertEqual(r["message"], tc.MSG_EXPIRED)
 
 	def test_190_error_validating_access_token_keeps_expired_message(self):
-		from huf.ai.whatsapp import token_check as tc
+		from huf.ai.whatsapp.setup import token_check as tc
 
 		r = self._run({"error": {"message": "Error validating access token", "type": "OAuthException", "code": 190}})
 		self.assertEqual(r["message"], tc.MSG_EXPIRED)

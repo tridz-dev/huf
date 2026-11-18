@@ -8,9 +8,9 @@ Each entry is a dict with:
   - category: Agent Tool Type label
   - parameters: list of parameter definitions
 """
-
 from huf.ai.tools import telegram_admin_spec, telegram_tool_spec
 from huf.ai.tools.integration.registry_entries import with_service as _with_service
+from huf.ai.tools.messaging.outbound_actions import flag_outbound as _flag_outbound
 from huf.ai.tools.channel_specs import CHANNEL_TOOLS, COMMERCE_TOOLS, HANDOFF_TOOLS, LMS_TOOLS  # noqa: F401 (re-exported)
 
 # Array parameters whose elements are objects (the doctype row has no item-type field, so the schema
@@ -2839,4 +2839,4 @@ ALL_INTEGRATION_TOOLS = (
 	+ _with_service(SERP_YOUTUBE_TOOLS, "serpapi")
 	+ FRAPPE_CLOUD_TOOLS  # entries already declare service="frappe_cloud"
 )
-ALL_INTEGRATION_TOOLS = (*ALL_INTEGRATION_TOOLS, *CHANNEL_TOOLS)
+ALL_INTEGRATION_TOOLS = _flag_outbound((*ALL_INTEGRATION_TOOLS, *CHANNEL_TOOLS))

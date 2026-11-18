@@ -74,6 +74,8 @@ raising it lets it continue. Speed settings are read when each work slice starts
 | `audience_max_members` | Contacts per audience | Huf setting | 200000 | 1 to 1e+07 | contacts | An audience stops accepting new contacts at this size. |
 | `audience_inline_import_rows` | Import size run immediately | Huf setting | 10000 | 1 to 1e+06 | rows | Larger imports run in the background. |
 | `audience_max_import_rows` | Contacts per import | Huf setting | 200000 | 1 to 1e+07 | rows | Most contacts one import may hold. |
+| `audience_external_max_members` | Contacts per external refresh | Internal | 50000 | - | contacts | Most contacts one call from a connected app may send in a single refresh. |
+| `audience_refresh_timeout_seconds` | Audience refresh wait | Internal | 30 | - | seconds | How long starting a broadcast waits for a connected app to refresh its audience before refusing to start. |
 | `audience_max_csv_mb` | Audience CSV size | Huf setting | 20 | 1 to 200 | MB | Largest CSV text accepted for an audience import. |
 | `audience_max_tags_per_member` | Tags per contact | Huf setting | 20 | 1 to 100 | tags | Most tags one contact can carry. |
 | `audience_max_tag_length` | Tag length | Huf setting | 50 | 1 to 200 | characters | Longest tag accepted. |

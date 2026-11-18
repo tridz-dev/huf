@@ -1,6 +1,6 @@
 # WhatsApp Broadcast
 
-A WhatsApp Broadcast sends one approved template to a bounded list of recipients through the Meta WhatsApp Cloud API. The list is typed or pasted in, or built from saved, consented lists called audiences (section 15). It is an automation tool. It is not a campaign platform, a CRM, or an inbox: there is no scheduling, no A/B testing, and replies are not handled by the broadcast (they arrive through the normal inbound flow).
+A WhatsApp Broadcast sends one approved template to a bounded list of recipients through the Meta WhatsApp Cloud API. The list is typed or pasted in, or built from saved, consented lists called audiences (section 15). It is an automation tool. It is not a campaign platform, a CRM, or an inbox: a Draft can be scheduled for a later start (section 5), but there is no A/B testing, and replies are not handled by the broadcast (they arrive through the normal inbound flow).
 
 **Principle.** Huf follows Meta's rules and nothing else is hard-wired. Every other limit Huf applies is a named, visible setting with a default, a range and a stated reason: Channels, a number's Broadcasts, Limits tab (`/channels/whatsapp/n/:gw/broadcasts/limits`), **Broadcast limits** (API: `get_broadcast_limits` / `update_broadcast_limits`, section 14). The full table is in [BROADCAST_LIMITS.md](BROADCAST_LIMITS.md), which is generated from the registry in `broadcast/policy.py`. Broadcasts do not use the agent recipient allowlist (section 2).
 
@@ -21,14 +21,15 @@ In scope:
 - An expired or invalid access token (Meta error 190 / 102) pauses the broadcast with `pause_reason=meta_error_190` and keeps every row sendable; fix the token and resume.
 - Recipients from a list of numbers, a CSV text, or saved audiences (section 15).
 - Preview with coded blocking issues and overridable warnings, and a typed-count confirmation before start (section 14).
+- Scheduled start: a Draft can be scheduled for a time in the future and is started by the `*/5` cron (section 5).
+- Retry: a stopped broadcast's retryable failed rows can be copied into a new Draft that must be attested and started again (section 7).
 - Pause, resume, cancel, and a gateway-wide kill switch.
 - Delivery tracking from Meta status webhooks.
 - Two send paths, chosen by `send_via`: `messages` (`POST /<PHONE_NUMBER_ID>/messages`, default) and `marketing_messages` (`POST /<PHONE_NUMBER_ID>/marketing_messages`, MARKETING templates only; section 10).
 
 Not implemented:
 
-- Retry of failed rows. There is no endpoint (`retry_failed_broadcast_recipients` does not exist, by design; section 7).
-- Scheduling a start time.
+- Retry in place: a stopped broadcast is never reopened to resend its rows. Retry always creates a new Draft (section 7).
 - Groups and free-form messages. Broadcasts send templates only.
 - Cost in the preview while no rates are filled in (section 8).
 - A shared sending-speed budget across broadcasts of one gateway. By default only one broadcast runs per gateway; the `one_active_per_gateway` safety can be switched off (optionally capped by `concurrent_broadcast_max`), in which case broadcasts run side by side and share the gateway's sending speed and 24-hour contact budget (section 14).
@@ -105,7 +106,7 @@ The runner acts as a user who holds write permission on the Gateway (section 5).
 
 ## 5. Lifecycle, runner and pacing
 
-Broadcast `status`: `Draft`, `Queued`, `Running`, `Paused`, `Completed`, `Cancelled`, `Failed`. `Queued` and `Failed` exist in the doctype but no code sets them.
+Broadcast `status`: `Draft`, `Scheduled`, `Queued`, `Running`, `Paused`, `Completed`, `Cancelled`, `Failed`. `Queued` and `Failed` exist in the doctype but no code sets them.
 
 | Action | Allowed from | Result |
 |---|---|---|
@@ -113,6 +114,8 @@ Broadcast `status`: `Draft`, `Queued`, `Running`, `Paused`, `Completed`, `Cancel
 | Add recipients | `Draft` only (`not_draft` otherwise) | Rows added as `queued` or `skipped`. Resets the consent attestation. |
 | Attest consent | `Draft`, `Paused` | Records the attestation. |
 | Preview | any | Computes limits and cost, stores `cost_estimate` on the broadcast. No sends. |
+| Schedule | `Draft` only (`not_draft`); consent attested when required (`consent_not_attested`) | `Scheduled`, with `scheduled_at` and `scheduled_by` set. Recipients are locked (edits are Draft-only). See "Scheduled start" below. |
+| Unschedule | `Scheduled` only (`not_scheduled`) | `Draft`; `scheduled_at` and `scheduled_by` cleared. |
 | Start | `Draft` only | Checks below, then `Running`, `started_by`, `started_at`, first tick enqueued. |
 | Pause | `Running` | `Paused`, `pause_reason` set (truncated to 140 characters). A pause on another state does nothing and returns success. |
 | Resume | `Paused` | Same checks as start. Records the resumer in the read-only `resumed_by` field (a comment cannot change it); the resumer becomes the runner identity (ticks run as the resumer). `started_by` is kept. |
@@ -132,6 +135,19 @@ Start and resume are refused (an exception with a message) unless all of these h
 Start on a `Paused` broadcast is refused ("it can only be started from Draft"); a Paused broadcast goes through `resume_broadcast`, so the person who resumes is authorised and recorded. The write-permission check runs as the caller through `_acting_as`, a context manager that switches user only when the caller differs from the session user, and afterwards restores `session.user`, `sid`, `data` (CSRF token) and the swapped request locals (`form_dict`, cache, role permissions and others) that `frappe.set_user` resets. This is meant to keep the operator's session valid after `start_broadcast`/`resume_broadcast`; it is covered by unit tests only, not by a test through a real HTTP request.
 
 `start_broadcast` additionally requires `confirm_count` to equal the number of `queued` plus `deferred` rows when `require_typed_count` is on and the caller is not authenticated with an API key (section 14). `resume_broadcast` takes no `override_warnings`: it refuses on blocking issues but needs no acknowledgement, and it does not apply the over-budget deferral (section 14). Start does not read gateway health beyond the `Disconnected` connection state, which blocks the preview (`gateway_disconnected`) and stops sends.
+
+### Scheduled start
+
+Code: `huf/ai/whatsapp/broadcast/schedule.py`.
+
+- `schedule_broadcast` takes a Draft and a `scheduled_at` in the future (site timezone; a past time is refused with `scheduled_in_past`). It uses the same preview check, warning acknowledgement and typed count as start (`start_gate`). The acknowledged warning codes are stored and checked again when the broadcast starts. The caller is recorded as `scheduled_by`.
+- The `*/5` cron `start_due` looks at Scheduled broadcasts whose time has come, oldest first, and starts each one through the same `runner._begin` path as a manual start, running as `scheduled_by`. A scheduled start can therefore run up to about 5 minutes after `scheduled_at`.
+- The start checks run again at that moment (consent, one running broadcast per gateway, preview blocking issues, opt-out at send time). If a check refuses the start:
+  - a transient refusal (`another_broadcast_running`, `uncommitted_writes`) leaves the broadcast Scheduled, and the next cron tries again;
+  - any other refusal returns the broadcast to `Draft`, clears `scheduled_at` and `scheduled_by`, and stores the refusal code in `pause_reason`. Nothing is sent.
+- Emergency stop: when the site config `wa_broadcast_emergency_stop` is set, `start_due` starts nothing. The rows stay Scheduled.
+- Kill switch: `pause_all_broadcasts(gateway)` returns that gateway's Scheduled broadcasts to `Draft` with `pause_reason` `kill_switch` (section 13).
+- A Scheduled broadcast can be unscheduled (back to Draft) or cancelled (section 5, Cancel row). It cannot be edited; edits require Draft.
 
 ### Runner
 
@@ -210,7 +226,9 @@ Retry rules:
 
 - A retryable error is retried until the row has made `max_attempts` (5) POST attempts (`attempts` counts claims); the last failure is `failed`. 131049 is not retryable: it is a terminal skip.
 - Backoff after attempt n: 2, 4, 8, 16 s (doubling, capped at 16 s, +/-20% jitter); 131056 is a fixed 6 s; 60 s if no backoff is available. Gateway disconnected waits `gateway_down_defer_seconds` (300 s); an access-token error (190 / 102) waits `auth_defer_seconds` (300 s) and gives the attempt back.
-- There is no per-recipient retry. A `failed` row is a permanent Meta verdict, and `unknown` may already have been delivered. To reach the contacts again, create a new, separately attested broadcast.
+- Retry creates a new broadcast; the stopped one is never reopened. `retry_failed_recipients` (`retry_failed` in `schedule.py`) takes a broadcast in `Completed`, `Cancelled`, `Paused` or `Failed` (otherwise `not_finished`). It creates a new Draft named `<title> (retry)`, copies the template, parameters, limits, gateway and consent source, and adds only its `failed` rows whose error code is retryable (`is_retryable`). Rows with a permanent code, rows with no Meta code (refused before the POST), `skipped` rows and `unknown` rows are not included. If no row qualifies, the call is refused with `nothing_to_retry`.
+- The new Draft's `consent_attested` is 0. It must be attested, previewed and started (or scheduled) like any other broadcast. Opt-out and marketing policy are applied again to the copied rows.
+- A `failed` row with a permanent code is a Meta verdict, and an `unknown` row may already have been delivered. Neither is retried by this path. To message those contacts again, use a new, separately attested broadcast.
 
 Pause rules (the runner stops sending, rows stay as they are; resume is manual):
 
@@ -232,7 +250,7 @@ Webhook handling: `sent`, `delivered`, `read`, `played` move a row forward. `fai
 
 ## 8. Costs
 
-The estimate comes from `huf/ai/whatsapp/broadcast/rates.json`. Today every rate in that file is `null` and `rates_verified` is `false`, because the official per-country rate card was not retrievable. As a result:
+The estimate comes from `huf/ai/whatsapp/broadcast/support/rates.json`. Today every rate in that file is `null` and `rates_verified` is `false`, because the official per-country rate card was not retrievable. As a result:
 
 - `cost.total` is `null` and each market has a `rate_unavailable:<category>:<market>` warning. The wizard shows "unavailable".
 - Recipients whose country code is not in the file are counted under `UNKNOWN` with a `market_unknown:<n>_recipients` warning.
@@ -256,6 +274,9 @@ Write methods are in `huf/ai/whatsapp/broadcast/api.py` (`huf.ai.whatsapp.broadc
 | `pause_broadcast` | write | `broadcast` | `success`, `broadcast`, `status` | `not_found` |
 | `resume_broadcast` | write (Paused only) | `broadcast` | `success`, `broadcast`, `status`, `queued` | `not_found`; runner refusals are raised as validation errors (blocking issues, consent, another broadcast running); no warning acknowledgement is needed |
 | `cancel_broadcast` | write | `broadcast` | `success`, `broadcast`, `status` | `not_found`; raises if already `Completed` or `Cancelled` |
+| `schedule_broadcast` | write (Draft only) | `broadcast`, `scheduled_at`, `confirm_count`, `override_warnings` | `success`, `broadcast`, `status` (`Scheduled`), `scheduled_at` | `not_found`, `invalid_override_warnings`, `invalid_scheduled_at`, `no_recipients`, `confirm_mismatch`, `scheduled_in_past`, `not_draft`, `consent_not_attested`, and the preview codes the start gate uses. Rate limit: `rate_start_broadcast` |
+| `unschedule_broadcast` | write | `broadcast` | `success`, `broadcast`, `status` (`Draft`) | `not_scheduled`, `not_found`. Rate limit: `rate_cancel_broadcast` |
+| `retry_failed_recipients` | write | `broadcast` | `success`, `broadcast` (the new Draft), `retried_from`, `added`, `skipped_total` | `not_finished`, `nothing_to_retry`, `not_found`. Rate limit: `rate_create_broadcast`. Section 7 |
 | `pause_all_broadcasts` | write | `gateway` | `success`, `gateway`, `paused` (names of broadcasts that were Running) | `invalid_gateway`, `not_found` |
 | `list_broadcasts` | read | `gateway` (required unless admin), `status`, `limit` (default 50, max 200), `offset` | `success`, `broadcasts` (each with `counts` object, parsed params, ISO times) | `not_found`, `gateway_required` |
 | `get_broadcast` | read | `broadcast` | `success`, `broadcast` | `not_found` |
@@ -275,6 +296,8 @@ The Meta endpoints used: `POST /<PHONE_NUMBER_ID>/messages` or `/marketing_messa
 
 ## 11. Unverified Meta facts
 
+Media-upload re-upload detection, carousel template limits and the variable-at-edge rule are NOT in this list: they were verified live on 2026-11-18 (Cloud API v21.0) and are described in the [WhatsApp README](README.md#media-uploads-and-carousel-templates-verified-live-2026-11-18-cloud-api-v210).
+
 The code works without these, but they should be confirmed against Meta before relying on them:
 
 - Placement and size of `biz_opaque_callback_data` on the send body (top level, truncated to 256 characters in code; Meta may allow 512) and that status webhooks echo it. Rows are also matched by `wamid`.
@@ -291,6 +314,11 @@ The code works without these, but they should be confirmed against Meta before r
 - Whether the audience `events` purpose has a corresponding Meta template category (Huf records it; no category requires it).
 - The audience purpose mapping (MARKETING needs `marketing`; UTILITY and AUTHENTICATION need `utility`) is Huf's policy over Meta's opt-in rule, not a Meta requirement.
 
+### Externally managed audiences and failover (pointers)
+
+- An audience can be kept up to date by another app built on Huf. Before a broadcast that includes it starts, Huf calls the app's `huf_audience_refresh` hook and refuses the start (`audience_refresh_failed`) if it fails. Hook contract and the `upsert_audience_members` API: [gateway runbook, section 11](../gateways/whatsapp-runbook.md#11-external-app-hooks). Audience rules: section 15.
+- Cross-channel failover: `create_broadcast` and `update_broadcast` accept `fallback_channels` (ordered subset of `["sms","email"]`; an empty list clears it), `fallback_body` (plain text, required when channels are set), `fallback_body_kind` (`marketing` or `transactional`), `fallback_sms_gateway` and `fallback_email_gateway`. Behaviour and safety: [FAILOVER.md](FAILOVER.md).
+
 ## 12. Known limits
 
 ### Known issues / open items
@@ -305,7 +333,7 @@ The code works without these, but they should be confirmed against Meta before r
 
 
 - **US `+1` filter also skips Canada.** The rule is any 11-digit number starting with `1`, for MARKETING templates only.
-- **No per-recipient retry.** `failed`, `skipped` and `unknown` rows are not resent by any action.
+- **Retry is per broadcast, not in place.** `retry_failed_recipients` copies only retryable `failed` rows into a new Draft (section 7). `skipped` and `unknown` rows are never resent by any action.
 - **`unknown` rows are never auto-resent.** A `sent`, `delivered` or `read` webhook moves them forward.
 - **STOP keyword, `user_preferences` marketing stop and send-time 131050 all skip the contact's `queued` and `deferred` rows** in other unfinished broadcasts of the gateway. A 131050 arriving by status webhook also records the marketing stop and skips them.
 - **A template that is paused, disabled, rejected, quality RED, or whose category changes to MARKETING pauses running broadcasts** that use it, until someone resumes. Resume re-runs the start checks.
@@ -319,11 +347,12 @@ The code works without these, but they should be confirmed against Meta before r
 - **Idle revival delay.** A broadcast with only future `deferred` rows is revived by the cron, up to about 5 minutes late.
 - **Held messages are not a delivery signal.** `held_for_quality_assessment` means Meta accepted the request but holds it; the final result arrives by webhook.
 - **Cost estimate is unavailable** until rates are filled in.
-- **No inbox, no scheduling.**
+- **No inbox.** Replies are handled by the normal inbound flow, not by the broadcast.
 
 ## 13. Operations
 
-- **Kill switch.** `pause_all_broadcasts(gateway)` (the "Stop all broadcasts" button in the broadcast tab) pauses every Running broadcast on the gateway with reason `kill_switch`. A tick stops before its next send. Rows in `sending` at that moment finish. Resume is manual per broadcast.
+- **Kill switch.** `pause_all_broadcasts(gateway)` (the "Stop all broadcasts" button in the broadcast tab) pauses every Running broadcast on the gateway with reason `kill_switch`, and returns the gateway's Scheduled broadcasts to Draft (section 5, Scheduled start). A tick stops before its next send. Rows in `sending` at that moment finish. Resume is manual per broadcast.
+- **Scheduled starts off.** Site config `wa_broadcast_emergency_stop` stops `start_due` from starting any scheduled broadcast. Rows stay Scheduled until the flag is cleared or they are unscheduled.
 - **Recount.** Counters are reconciled automatically (section 3). To force it for one broadcast, run `frappe.get_doc("WhatsApp Broadcast", name).recount(commit=True)` in a bench console on the site. Counters can differ from the rows only briefly, while webhooks apply deltas.
 - **Resolving an `unknown` row.** There is no action for it. Look up the recipient in WhatsApp Manager's message log or the business inbox. If the message was delivered, a later `delivered` or `read` webhook matched by `wamid` or row name updates the row. If not delivered, leave it; do not resend inside this broadcast. To message the contact again, include them in a new broadcast.
 - **131049 is final for the broadcast.** The row is `skipped` and the broadcast can complete; there is no 24-hour deferral. Include the contact in a new broadcast later if appropriate.
@@ -481,7 +510,7 @@ Callers with read but not write permission on the gateway see phone numbers as t
 
 ### Delete, rename, edit
 
-- Delete (`delete_audience`) and rename (a new title through `update_audience`) are refused while a broadcast in `Draft`, `Queued`, `Running` or `Paused` uses the audience (`audience_in_use` for delete; the generic `invalid` error for rename). Finished broadcasts keep the audience name on their rows.
+- Delete (`delete_audience`) and rename (a new title through `update_audience`) are refused while a broadcast in `Draft`, `Scheduled`, `Queued`, `Running` or `Paused` uses the audience (`audience_in_use` for delete; the generic `invalid` error for rename). Finished broadcasts keep the audience name on their rows.
 - Deleting an audience deletes its members.
 - Members can be changed only through the audience API; direct REST or desk edits are refused.
 

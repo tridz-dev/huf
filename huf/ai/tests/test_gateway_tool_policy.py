@@ -184,7 +184,7 @@ def make_tool(monkeypatch, fk, flag=False):
 
 	monkeypatch.setattr(sdk_tools, "get_function_from_name", lambda *a, **k: fn)
 	monkeypatch.setattr(sdk_tools, "_check_tool_permission", lambda *a, **k: {"allowed": True})
-	monkeypatch.setattr(sdk_tools, "frappe", SimpleNamespace(session=fk.session, logger=lambda *a: SimpleNamespace(debug=lambda *x: None), get_traceback=lambda: "", log=lambda *a: None))
+	monkeypatch.setattr(sdk_tools, "frappe", SimpleNamespace(session=fk.session, db=SimpleNamespace(get_value=lambda *a, **k: None), PermissionError=PermissionError, logger=lambda *a: SimpleNamespace(debug=lambda *x: None), get_traceback=lambda: "", log=lambda *a: None))
 	tool = sdk_tools.create_function_tool(
 		"slack_send_message", "d", "x.y", {"type": "object", "properties": {}}, tool_type="Custom Function",
 		requires_confirmation=flag,
@@ -220,9 +220,10 @@ class TestModule(SupportCase):
 	# ---------------------------------------------------------------- context
 	def test_non_gateway_run_unaffected(self):
 		fk = self.use(_fx_fk)
-		assert tp.check_tool_call("any", {}, "RUN-X", True) is None
-		assert tp.check_tool_call("any", {}, "RUN-WEB", True) is None
-		assert tp.check_tool_call("any", {}, None, True) is None
+		# Non-gateway runs skip the gateway policy; the confirmation gate (flag True) is covered in test_tool_confirmation.
+		assert tp.check_tool_call("any", {}, "RUN-X", False) is None
+		assert tp.check_tool_call("any", {}, "RUN-WEB", False) is None
+		assert tp.check_tool_call("any", {}, None, False) is None
 
 	def test_context_resolved_and_cached(self):
 		fk = self.use(_fx_fk)
@@ -242,7 +243,7 @@ class TestModule(SupportCase):
 		fk = self.use(_fx_fk)
 		monkeypatch = self.monkeypatch
 		monkeypatch.setattr(tp, "resolve_gateway_context", lambda r: (_ for _ in ()).throw(RuntimeError("x")))
-		assert tp.check_tool_call("t", {}, None, True) is None
+		assert tp.check_tool_call("t", {}, None, False) is None
 
 	def test_db_lookup_exception_fails_closed(self):
 		fk = self.use(_fx_fk)
@@ -426,12 +427,15 @@ class TestModule(SupportCase):
 		monkeypatch = self.monkeypatch
 		fk = self.use(_fx_fk)
 		tool, calls = make_tool(monkeypatch, fk, True)
+		# A requires_confirmation tool is never executed by the gate in ANY run (parked, or refused if it cannot be parked).
+		assert invoke(tool, "RUN-X") and calls == []
+		tool, calls = make_tool(monkeypatch, fk, False)
 		assert json.loads(invoke(tool, "RUN-X")) == {"ok": True} and len(calls) == 1
 
 	def test_wrapper_no_run_context_executes(self):
 		monkeypatch = self.monkeypatch
 		fk = self.use(_fx_fk)
-		tool, calls = make_tool(monkeypatch, fk, True)
+		tool, calls = make_tool(monkeypatch, fk, False)
 		assert json.loads(asyncio.run(tool.on_invoke_tool(None, "{}"))) == {"ok": True}
 
 	def test_wrapper_llm_cannot_spoof_run_id(self):

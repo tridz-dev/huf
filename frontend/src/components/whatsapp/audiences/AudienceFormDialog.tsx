@@ -36,6 +36,7 @@ export function AudienceFormDialog({ gateway, audience, onClose, onSaved }: Prop
     : !editing && !attested ? 'Confirm that these contacts agreed to receive your messages.' : '';
 
   const save = async () => {
+    if (audience?.externally_managed) { setErr(`Managed by ${audience.managed_by || 'another app'}; change it there.`); return; }
     if (missing) { setErr(missing); return; }
     setBusy(true); setErr('');
     const body = { title: title.trim(), description: description.trim(), consent_source: source.trim(), consent_purposes: purposes };

@@ -95,6 +95,7 @@ const providerNames: Record<GatewayProvider, string> = {
   Email: 'Shared Email Inbox',
   'Google Chat': 'Google Workspace Chat',
   'Microsoft Teams': 'MS Teams Channel',
+  SMS: 'SMS Number',
 };
 
 const uiProviders: GatewayProvider[] = [
@@ -104,8 +105,7 @@ const uiProviders: GatewayProvider[] = [
   'Telegram',
   'Slack',
   'Email',
-  'Google Chat',
-  'Microsoft Teams',
+  'Google Chat', 'Microsoft Teams', 'SMS',
 ];
 
 // Interim mitigation (Phase 5, "G1-G6: Google Chat finish path"): Google Chat's

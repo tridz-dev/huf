@@ -14,7 +14,7 @@ const ALL = '__all__';
 const PAGE_SIZE = 50;
 const SUPPRESSED_LABEL: Record<string, string> = { opted_out: 'Opted out', marketing_opted_out: 'Opted out of marketing' };
 
-export function MemberTable({ audience, refreshKey = 0, onChanged }: { audience: string; refreshKey?: number; onChanged?: () => void }) {
+export function MemberTable({ audience, readOnly = false, refreshKey = 0, onChanged }: { audience: string; readOnly?: boolean; refreshKey?: number; onChanged?: () => void }) {
   const [q, setQ] = useState('');
   const [tag, setTag] = useState('');
   const [suppressedOnly, setSuppressedOnly] = useState(false);
@@ -74,6 +74,7 @@ export function MemberTable({ audience, refreshKey = 0, onChanged }: { audience:
           Only opted-out
         </div>
       </div>
+      {readOnly && <p className="text-xs text-steel">This list is kept up to date by another app, so contacts cannot be removed here.</p>}
       {masked && <p className="text-xs text-steel">Numbers are hidden. Only people who manage this WhatsApp gateway can see them.</p>}
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
       {members && members.length === 0 && !error ? (
@@ -95,7 +96,7 @@ export function MemberTable({ audience, refreshKey = 0, onChanged }: { audience:
                   {m.suppressed ? <Badge variant="destructive">{SUPPRESSED_LABEL[m.suppressed] ?? 'Opted out'}</Badge> : 'Active'}
                 </TableCell>
                 <TableCell className="text-right">
-                  {!masked && (
+                  {!masked && !readOnly && (
                     <Button variant="ghost" size="sm" aria-label={`Remove ${m.recipient}`} onClick={() => void remove(m)}>Remove</Button>
                   )}
                 </TableCell>

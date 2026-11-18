@@ -6,7 +6,8 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import { TemplatePreview } from '../TemplatePreview';
 import { isSelectableKind, kindById, TEMPLATE_KINDS, type TemplateKind } from '../template/catalogue';
-import type { TemplateCategoryId } from '../template/draft';
+import { applyAuthenticationFormat, emptyDraft, type TemplateCategoryId } from '../template/draft';
+import { draftToPreviewModel } from './previewModel';
 import { StepLayout } from './fields';
 
 const META_LIBRARY_URL = 'https://business.facebook.com/latest/whatsapp_manager/message_templates';
@@ -24,13 +25,16 @@ export function TypeStep({ kindId, onSelect }: Props) {
   const [tab, setTab] = useState<TemplateCategoryId>(selected?.category ?? 'MARKETING');
   const kinds = kindsFor(tab);
   const previewed = selected && kinds.includes(selected) ? selected : kinds[0];
-  const auth = kindById('authentication');
 
   return (
     <StepLayout
       aside={
         <>
-          <TemplatePreview sample={previewed.id === 'utility_default' ? 'utility_default' : 'marketing_default'} time="10:30" />
+          {previewed.category === 'AUTHENTICATION' ? (
+            <TemplatePreview model={draftToPreviewModel(applyAuthenticationFormat(emptyDraft('AUTHENTICATION')))} time="10:30" />
+          ) : (
+            <TemplatePreview sample={previewed.id === 'utility_default' ? 'utility_default' : 'marketing_default'} time="10:30" />
+          )}
           <div className="space-y-3 rounded-md border border-line bg-panel p-4">
             <div>
               <h3 className="text-sm font-semibold text-ink">Good for</h3>
@@ -57,10 +61,9 @@ export function TypeStep({ kindId, onSelect }: Props) {
         <TabsList>
           <TabsTrigger value="MARKETING">Marketing</TabsTrigger>
           <TabsTrigger value="UTILITY">Utility</TabsTrigger>
-          <TabsTrigger value="AUTHENTICATION" disabled title={auth?.disabledReason} aria-describedby="auth-reason">Authentication</TabsTrigger>
+          <TabsTrigger value="AUTHENTICATION">Authentication</TabsTrigger>
         </TabsList>
       </Tabs>
-      {auth?.disabledReason && <span id="auth-reason" className="sr-only">Authentication: {auth.disabledReason}</span>}
 
       <RadioGroup
         aria-label="Template type"

@@ -7,6 +7,7 @@ import {
   inputToPreviewModel,
   PREVIEW_SAMPLES,
   type PreviewButtonType,
+  type PreviewCard,
   type PreviewHeader,
   type PreviewModel,
   type PreviewSample,
@@ -65,6 +66,32 @@ function MediaHeader({ header }: { header: Exclude<PreviewHeader, { kind: 'text'
   );
 }
 
+function CardRow({ cards }: { cards: PreviewCard[] }) {
+  return (
+    <div className="mt-2 flex gap-2 overflow-x-auto pb-1" data-testid="preview-carousel">
+      {cards.map((c, i) => (
+        <div key={i} className="w-[200px] shrink-0 overflow-hidden rounded-lg border border-line bg-panel shadow-sm" data-testid="preview-card">
+          <MediaHeader header={c.header} />
+          <div className="px-3 py-2">
+            <FormattedText text={c.body} samples={c.samples} className="whitespace-pre-wrap break-words text-sm text-ink" />
+          </div>
+          <div className="space-y-1 px-2 pb-2">
+            {c.buttons.map((b, j) => {
+              const Icon = BUTTON_ICON[b.type];
+              return (
+                <div key={j} className="flex items-center justify-center gap-1.5 rounded-lg bg-paper-deep px-3 py-1.5 text-sm font-medium text-signal-ink">
+                  <Icon className="h-3.5 w-3.5" />
+                  {b.text}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function Buttons({ buttons }: { buttons: { type: PreviewButtonType; text: string }[] }) {
   const [expanded, setExpanded] = useState(false);
   const collapsed = buttons.length > COLLAPSE_ABOVE && !expanded;
@@ -111,7 +138,7 @@ export function TemplatePreview({ input, model: modelProp, sample, time, classNa
     [sample, modelProp, input],
   );
   const stamp = time ?? currentTime();
-  const empty = !model || (!model.header && !model.body.trim() && !model.footer && model.buttons.length === 0);
+  const empty = !model || (!model.header && !model.body.trim() && !model.footer && model.buttons.length === 0 && !model.cards?.length);
   const header = model?.header;
 
   return (
@@ -119,7 +146,7 @@ export function TemplatePreview({ input, model: modelProp, sample, time, classNa
       {empty ? (
         <p className="py-6 text-center text-xs text-steel">Your message preview appears here as you type.</p>
       ) : (
-        <div className="max-w-[320px]">
+        <div className={model.cards?.length ? 'max-w-[420px]' : 'max-w-[320px]'}>
           <div className="overflow-hidden rounded-lg rounded-tl-none border border-line bg-panel shadow-sm">
             {header && header.kind !== 'text' && <MediaHeader header={header} />}
             <div className="space-y-1 px-3 py-2">
@@ -138,6 +165,7 @@ export function TemplatePreview({ input, model: modelProp, sample, time, classNa
             </div>
           </div>
           {model.buttons.length > 0 && <Buttons buttons={model.buttons} />}
+          {model.cards && model.cards.length > 0 && <CardRow cards={model.cards} />}
         </div>
       )}
     </div>

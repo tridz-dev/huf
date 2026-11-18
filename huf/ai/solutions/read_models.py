@@ -77,7 +77,7 @@ def _readable_gateways(candidates=None) -> list[str]:
 def _cached_phone(gateway: str) -> dict:
 	"""The ``phone`` block of the cached token check; cache only, never a network call."""
 	try:
-		from huf.ai.whatsapp.token_check import _result_key
+		from huf.ai.whatsapp.setup.token_check import _result_key
 
 		cached = frappe.cache().get_value(_result_key(gateway), expires=True)
 		phone = cached.get("phone") if isinstance(cached, dict) else None

@@ -5,9 +5,12 @@ import { getConversationMessages, createAgentRunFeedback, getConversation, hostF
 import { cn } from "@/lib/utils";
 
 import { useInfiniteScroll } from "@/hooks/useInfiniteScroll";
-import { useChatSocket, type ToolCallEvent, type NewAgentMessageEvent, type AgentRunStatusEvent, type ConversationTitleUpdatedEvent, type FrontendToolCallEvent } from '@/hooks/useChatSocket';
-import { executeClientToolCall, resetClientToolCallTracking } from '@/lib/clientToolDispatcher';
+import { useChatSocket, type ToolCallEvent, type NewAgentMessageEvent, type AgentRunStatusEvent, type ConversationTitleUpdatedEvent } from '@/hooks/useChatSocket';
+import { resetClientToolCallTracking } from '@/lib/clientToolDispatcher';
 import { ChatMessage as ChatMessageComponent } from './ChatMessage';
+import { PendingConfirmationCards } from './confirmation/PendingConfirmationCards';
+import { useFrontendToolCall } from './realtime/useFrontendToolCall';
+import { useToolConfirmations } from './confirmation/useToolConfirmations';
 import { ChatInput, type ChatInputHandle } from './ChatInput';
 import { ColdStartHero, StarterPromptGrid } from './EmptyChatState';
 import { OutputsCard } from './OutputsCard';
@@ -161,6 +164,7 @@ export function ChatMessageList({
         hasMore,
         sentinelRef,
         error: messagesError,
+        appendItems: appendConversationItems,
     } = useInfiniteScroll<
         { limit?: number; start?: number },
         ChatMessage
@@ -227,22 +231,13 @@ export function ChatMessageList({
         resetClientToolCallTracking();
     }, [chatId]);
 
-    // Handle backend-initiated client-side ("frontend") tool calls
-    const handleFrontendToolCall = useCallback((event: FrontendToolCallEvent) => {
-        if (event.conversation_id !== chatId) return;
+    const handleFrontendToolCall = useFrontendToolCall(chatId ?? undefined);
 
-        const callId = event.tool_call_ref ?? event.call_id;
-        if (!callId) return;
-
-        void executeClientToolCall({
-            callId,
-            functionName: event.function_name,
-            toolParams: event.tool_params,
-        });
-    }, [chatId]);
+    const { confirmations, upsertConfirmation, handleApproval, handleConfirmationDecided } = useToolConfirmations(chatId ?? undefined, appendConversationItems);
 
     useChatSocket({
         conversationId: chatId,
+        onApproval: handleApproval,
         onToolUpdate: handleToolUpdate,
         onNewMessage: handleNewMessage,
         onAgentRunStatus: handleAgentRunStatus,
@@ -465,9 +460,11 @@ export function ChatMessageList({
                                         precedingUserMessage={precedingUserMessage}
                                         onRegenerate={handleRegenerate}
                                         onSendText={(text) => chatInputRef.current?.send(text)}
+                                        confirmationOverrides={confirmations} onConfirmationUpdated={upsertConfirmation} onConfirmationDecided={handleConfirmationDecided}
                                     />
                                 );
                             })}
+                            <PendingConfirmationCards confirmations={confirmations} messages={messages} onUpdated={upsertConfirmation} onDecided={handleConfirmationDecided} />
                             {artifacts && artifacts.length > 0 && onOpenArtifact && (
                                 <OutputsCard
                                     artifacts={artifacts}

@@ -226,7 +226,8 @@ def _inbound_request():
 		body=request.get_data(),
 		headers=dict(request.headers),
 		query=dict(request.args),
-		method=request.method,
+		method=request.method, url=request.url or "", path=request.path or "",
+		query_string=(request.query_string or b"").decode("utf-8", "replace"),
 	)
 
 

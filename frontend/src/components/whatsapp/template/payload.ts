@@ -3,17 +3,22 @@ import type {
   TemplateDraft,
   WizardEditPayload,
   WizardPayloadButton,
+  WizardPayloadCard,
   WizardPayloadHeaderType,
   WizardTemplatePayload,
 } from '@/services/whatsappApi';
 import {
+  applyAuthenticationFormat,
   emptyButton,
+  OTP_BUTTON_DEFAULT,
   emptyDraft,
+  emptyCard,
   headerSampleKey,
   type TemplateCategoryId,
   type TemplateWizardDraft,
   type WizardButton,
   type WizardButtonType,
+  type WizardCard,
   type WizardHeaderType,
 } from './draft';
 import { extractVariables, findVariableTokens, type VariableType } from './variables';
@@ -46,8 +51,34 @@ function buttonToApi(b: WizardButton): WizardPayloadButton {
   }
 }
 
+function cardToApi(c: WizardCard): WizardPayloadCard {
+  const out: WizardPayloadCard = {
+    header_type: c.headerType === 'video' ? 'VIDEO' : 'IMAGE',
+    sample: c.mediaSample.trim(),
+    body: c.body,
+    buttons: c.buttons.map(buttonToApi),
+  };
+  const vars = extractVariables(c.body, 'number');
+  if (vars.length) out.sample_values = vars.map((v) => (c.samples[Number(v) - 1] ?? '').trim()).join(',');
+  return out;
+}
+
 /** Create / draft payload for a (validated) wizard draft. */
 export function toCreatePayload(draft: TemplateWizardDraft): WizardTemplatePayload {
+  if (draft.category === 'AUTHENTICATION') {
+    // Fixed WhatsApp format: no body, header, footer or buttons are sent, only the three options.
+    const auth: WizardTemplatePayload = {
+      template_name: draft.name,
+      category: 'AUTHENTICATION',
+      language_code: draft.language,
+      template: '',
+      parameter_format: 'POSITIONAL',
+      add_security_recommendation: draft.securityRecommendation,
+      otp_button_text: draft.otpButtonText.trim() || OTP_BUTTON_DEFAULT,
+    };
+    if (draft.codeExpiryMinutes !== null) auth.code_expiration_minutes = draft.codeExpiryMinutes;
+    return auth;
+  }
   const payload: WizardTemplatePayload = {
     template_name: draft.name,
     category: draft.category,
@@ -62,6 +93,10 @@ export function toCreatePayload(draft: TemplateWizardDraft): WizardTemplatePaylo
     } else {
       payload.sample_values = bodyVars.map((v) => (draft.samples[v] ?? '').trim()).join(',');
     }
+  }
+  if (draft.carousel) {
+    payload.cards = draft.cards.map(cardToApi);
+    return payload;
   }
   const { header } = draft;
   if (header.type !== 'none') {
@@ -85,6 +120,7 @@ export function toEditPayload(draft: TemplateWizardDraft): WizardEditPayload {
   const rest: Partial<WizardTemplatePayload> = toCreatePayload(draft);
   delete rest.template_name;
   delete rest.language_code;
+  if (draft.category === 'AUTHENTICATION' || draft.carousel) return rest as WizardEditPayload;
   return {
     ...(rest as WizardEditPayload),
     header_type: rest.header_type ?? '',
@@ -93,10 +129,27 @@ export function toEditPayload(draft: TemplateWizardDraft): WizardEditPayload {
   };
 }
 
+/** Authentication options from a stored template's components (Meta returns the footer as text, the expiry in minutes). */
+function authenticationFromDetail(detail: TemplateDetail, draft: TemplateWizardDraft): TemplateWizardDraft {
+  const { body, footer, buttons } = detail.components;
+  const expiry = /(\d+)\s+minutes?/i.exec(footer?.text ?? '');
+  return {
+    ...draft,
+    name: detail.template_name,
+    language: detail.language_code,
+    securityRecommendation: /do not share/i.test(body.text),
+    codeExpiryMinutes: expiry ? Number(expiry[1]) : null,
+    otpButtonText: buttons[0]?.text || OTP_BUTTON_DEFAULT,
+  };
+}
+
 /** Prefill the wizard from a stored template (edit mode). */
 export function fromTemplateDetail(detail: TemplateDetail): TemplateWizardDraft {
-  const category: TemplateCategoryId = detail.category?.toUpperCase() === 'UTILITY' ? 'UTILITY' : 'MARKETING';
+  const rawCategory = detail.category?.toUpperCase();
+  const category: TemplateCategoryId =
+    rawCategory === 'UTILITY' ? 'UTILITY' : rawCategory === 'AUTHENTICATION' ? 'AUTHENTICATION' : 'MARKETING';
   const draft = emptyDraft(category);
+  if (category === 'AUTHENTICATION') return applyAuthenticationFormat(authenticationFromDetail(detail, draft));
   const { header, body, footer, buttons } = detail.components;
   const bodyTokens = findVariableTokens(body.text);
   const headerTokens = header?.text ? findVariableTokens(header.text) : [];
@@ -122,6 +175,25 @@ export function fromTemplateDetail(detail: TemplateDetail): TemplateWizardDraft 
     wizardHeader.mediaSample = header?.sample ?? '';
   }
 
+  const cards = (detail.components.carousel ?? []).map((c, i): WizardCard => {
+    const card = emptyCard(`card-${i + 1}`);
+    card.headerType = String(c.header_type).toUpperCase() === 'VIDEO' ? 'video' : 'image';
+    // A stored Meta upload handle is not a sample; only a real link/path is kept (else re-upload on edit).
+    card.mediaSample = /^(https?:\/\/|\/(private\/)?files\/)/.test(c.header_example ?? '') ? (c.header_example ?? '') : '';
+    card.body = c.body ?? '';
+    card.samples = c.sample_values ?? [];
+    card.buttons = (c.buttons ?? []).flatMap((b, j): WizardButton[] => {
+      const type = String(b.type).toUpperCase();
+      if (type !== 'QUICK_REPLY' && type !== 'URL') return [];
+      const out = emptyButton(type, `card-${i + 1}-b${j}`);
+      out.text = b.text ?? '';
+      out.url = b.url ?? '';
+      if (type === 'URL') out.urlExample = b.example ?? '';
+      return [out];
+    });
+    return card;
+  });
+
   const wizardButtons = buttons.flatMap((b, i): WizardButton[] => {
     const type = String(b.type).toUpperCase() as WizardButtonType;
     if (!BUTTON_TYPES.includes(type)) return [];
@@ -145,6 +217,8 @@ export function fromTemplateDetail(detail: TemplateDetail): TemplateWizardDraft 
     buttons: wizardButtons,
     ttl: category === 'UTILITY' ? (detail.ttl_seconds ?? null) : null,
     samples,
+    carousel: cards.length > 0,
+    cards,
   };
 }
 
@@ -163,6 +237,14 @@ export function fromDraftPayload(record: Pick<TemplateDraft, 'payload' | 'templa
       body: { text: p.template ?? '', sample_values: (p.sample_values ?? '').split(',').filter(Boolean) },
       footer: p.footer ? { text: p.footer } : null,
       buttons: p.buttons ?? [],
+      carousel: (p.cards ?? []).map((c) => ({
+        header_type: c.header_type,
+        header_example: c.sample ?? '',
+        body: c.body,
+        body_vars: [],
+        sample_values: (c.sample_values ?? '').split(',').filter(Boolean),
+        buttons: c.buttons ?? [],
+      })),
     },
   };
   return fromTemplateDetail(detail as unknown as TemplateDetail);

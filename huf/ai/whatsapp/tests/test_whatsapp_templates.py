@@ -7,6 +7,7 @@ import json
 import unittest
 
 from huf.ai.gateway_adapters import whatsapp_templates as wt
+from huf.ai.gateway_adapters.whatsapp_template_parts import send_params as wt_send_params
 
 
 def _codes(errors):
@@ -121,16 +122,16 @@ class TestUrlButtonExample(unittest.TestCase):
 class TestSendBuilders(unittest.TestCase):
 	def test_param_text_rules(self):
 		errors = []
-		wt.validate_param_text("p", "ok", errors)
+		wt_send_params.validate_param_text("p", "ok", errors)
 		self.assertEqual(errors, [])
 		for bad in ("", "a\nb", "a\tb", "a    b"):
 			errors = []
-			wt.validate_param_text("p", bad, errors)
+			wt_send_params.validate_param_text("p", bad, errors)
 			self.assertTrue(errors, repr(bad))
 
 	def test_components(self):
-		headers, e1 = wt.normalize_header_params([{"type": "document", "link": "https://x.example/a.pdf", "filename": "a.pdf"}])
-		buttons, e2 = wt.normalize_button_params(["A-1", {"index": 1, "sub_type": "quick_reply", "payload": "YES"}])
+		headers, e1 = wt_send_params.normalize_header_params([{"type": "document", "link": "https://x.example/a.pdf", "filename": "a.pdf"}])
+		buttons, e2 = wt_send_params.normalize_button_params(["A-1", {"index": 1, "sub_type": "quick_reply", "payload": "YES"}])
 		self.assertEqual((e1, e2), ([], []))
 		comps = wt.build_template_components(["Ann"], headers, buttons)
 		self.assertEqual(comps[0], {"type": "header", "parameters": [{"type": "document", "document": {"link": "https://x.example/a.pdf", "filename": "a.pdf"}}]})
@@ -138,9 +139,9 @@ class TestSendBuilders(unittest.TestCase):
 		self.assertEqual(comps[3]["parameters"], [{"type": "payload", "payload": "YES"}])
 
 	def test_header_param_errors(self):
-		self.assertTrue(wt.normalize_header_params(["a", "b"])[1])
-		self.assertTrue(wt.normalize_header_params([{"type": "image", "link": "notaurl"}])[1])
-		self.assertTrue(wt.normalize_button_params([{"index": 12, "text": "x"}])[1])
+		self.assertTrue(wt_send_params.normalize_header_params(["a", "b"])[1])
+		self.assertTrue(wt_send_params.normalize_header_params([{"type": "image", "link": "notaurl"}])[1])
+		self.assertTrue(wt_send_params.normalize_button_params([{"index": 12, "text": "x"}])[1])
 
 	def test_media_payloads(self):
 		media, errors = wt.validate_media_request("Document", "https://x.example/a.pdf", None, "cap", "a.pdf")

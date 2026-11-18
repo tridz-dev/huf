@@ -9,6 +9,10 @@
   "title",
   "description",
   "is_adhoc",
+  "externally_managed",
+  "managed_by",
+  "managed_by_user",
+  "external_key",
   "section_consent",
   "consent_source",
   "consent_basis",
@@ -57,6 +61,39 @@
    "read_only": 1,
    "set_only_once": 1,
    "description": "Hidden from the audience library."
+  },
+  {
+   "fieldname": "externally_managed",
+   "fieldtype": "Check",
+   "label": "Managed by another app",
+   "default": "0",
+   "read_only": 1,
+   "set_only_once": 1,
+   "description": "Members are written only by the managing app through the audience API."
+  },
+  {
+   "fieldname": "managed_by",
+   "fieldtype": "Data",
+   "label": "Managed by",
+   "length": 60,
+   "read_only": 1,
+   "depends_on": "externally_managed"
+  },
+  {
+   "fieldname": "managed_by_user",
+   "fieldtype": "Data",
+   "label": "Managed by user",
+   "length": 140,
+   "read_only": 1,
+   "depends_on": "externally_managed",
+   "description": "The user who created the audience through the external API; only this user (or a System Manager) may change it."
+  },
+  {
+   "fieldname": "external_key",
+   "fieldtype": "Small Text",
+   "label": "Recent refresh keys",
+   "read_only": 1,
+   "hidden": 1
   },
   {
    "fieldname": "section_consent",

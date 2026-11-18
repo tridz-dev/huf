@@ -15,6 +15,8 @@ export interface TemplateKind {
   goodFor: string[];
   customisable: string[];
   sample: PreviewModel;
+  /** Marketing media carousel (cards editor instead of header/footer/buttons). */
+  carousel?: boolean;
 }
 
 export const TEMPLATE_KINDS: readonly TemplateKind[] = [
@@ -35,6 +37,23 @@ export const TEMPLATE_KINDS: readonly TemplateKind[] = [
     },
   },
   {
+    id: 'marketing_carousel',
+    category: 'MARKETING',
+    title: 'Marketing',
+    subtype: 'Media carousel',
+    availability: 'available',
+    carousel: true,
+    description: 'Show 2 to 10 scrollable cards, each with an image or video, a short text and buttons.',
+    goodFor: ['Product showcases', 'Multiple offers in one message', 'Collections and lookbooks'],
+    customisable: ['Body', 'Cards', 'Card media', 'Card buttons'],
+    sample: {
+      header: null,
+      body: 'Hi Alex, our new arrivals are here. Swipe to see them.',
+      footer: '',
+      buttons: [{ type: 'URL', text: 'Shop now' }],
+    },
+  },
+  {
     id: 'utility_default',
     category: 'UTILITY',
     title: 'Utility',
@@ -51,15 +70,14 @@ export const TEMPLATE_KINDS: readonly TemplateKind[] = [
     },
   },
   {
-    id: 'authentication',
-    category: null,
+    id: 'authentication_default',
+    category: 'AUTHENTICATION',
     title: 'Authentication',
     subtype: 'One-time password',
-    availability: 'disabled',
-    disabledReason: 'One-time password templates use a fixed WhatsApp format and are not available here yet.',
+    availability: 'available',
     description: 'Send codes that let customers verify a transaction or login.',
     goodFor: ['Sign-in codes', 'Transaction verification', 'Account recovery'],
-    customisable: ['Code expiry', 'Security notice'],
+    customisable: ['Code expiry', 'Security notice', 'Button label'],
     sample: {
       header: null,
       body: '123456 is your verification code. For your security, do not share this code.',

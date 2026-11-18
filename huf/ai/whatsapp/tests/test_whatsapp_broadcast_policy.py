@@ -142,7 +142,7 @@ class TestBehaviour(_Settings):
 			patch.object(recipients, "_active_count", return_value=counts.get("active", 0)), \
 			patch.object(recipients, "_total_count", return_value=counts.get("total", 0)), \
 			patch.object(recipients, "_policy_reason", return_value=None), \
-			patch.object(recipients, "_insert_row", side_effect=lambda *a: inserted.append(a)):
+			patch.object(recipients, "_insert_row", side_effect=lambda *a, **k: inserted.append(a)):
 			res = recipients.prepare("B-1", [{"recipient": r} for r in rows])
 		return res, inserted
 
@@ -272,7 +272,9 @@ class TestBehaviour(_Settings):
 	def test_endpoints_use_policy_rate_callables(self):
 		from huf.ai.whatsapp.broadcast import api
 
-		src = pathlib.Path(api.__file__).read_text()
+		from huf.ai.whatsapp.broadcast.support import api_controls
+
+		src = pathlib.Path(api.__file__).read_text() + pathlib.Path(api_controls.__file__).read_text()
 		self.assertNotIn("rate_limit(limit=60", src)
 		self.assertIn('policy.rate("rate_start_broadcast")', src)
 

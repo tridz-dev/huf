@@ -229,6 +229,7 @@ const HEALTH_PROVIDERS: GatewayProvider[] = [
   'Email',
   'Google Chat',
   'Microsoft Teams',
+  'SMS',
 ];
 
 for (const provider of HEALTH_PROVIDERS) {

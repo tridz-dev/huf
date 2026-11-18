@@ -54,7 +54,7 @@ export function AudiencesPage({ gateway }: { gateway: string }) {
           <li key={a.name} className="rounded-md border p-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
-                <p className="text-sm font-medium">{a.title}</p>
+                <p className="text-sm font-medium">{a.title}{a.externally_managed && <Badge variant="outline" className="ml-2 normal-case tracking-normal">{`Managed by ${a.managed_by || 'another app'}`}</Badge>}</p>
                 <p className="text-xs text-steel">
                   {`${a.member_count} contacts${a.suppressed_count ? `, ${a.suppressed_count} opted out` : ''} · ${a.consent_source}`}
                 </p>
@@ -64,18 +64,22 @@ export function AudiencesPage({ gateway }: { gateway: string }) {
                 <Button variant="outline" size="sm" onClick={() => setOpen(open === a.name ? null : a.name)}>
                   {open === a.name ? 'Hide contacts' : 'View contacts'}
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => setDialog({ kind: 'import', audience: a })}>Import</Button>
-                <Button variant="ghost" size="sm" onClick={() => setDialog({ kind: 'form', audience: a })}>Edit</Button>
-                {armed === a.name ? (
-                  <Button variant="destructive" size="sm" onClick={() => void remove(a)}>Confirm delete</Button>
-                ) : (
-                  <Button variant="ghost" size="sm" onClick={() => setArmed(a.name)}>Delete</Button>
+                {!a.externally_managed && (
+                  <>
+                    <Button variant="outline" size="sm" onClick={() => setDialog({ kind: 'import', audience: a })}>Import</Button>
+                    <Button variant="ghost" size="sm" onClick={() => setDialog({ kind: 'form', audience: a })}>Edit</Button>
+                    {armed === a.name ? (
+                      <Button variant="destructive" size="sm" onClick={() => void remove(a)}>Confirm delete</Button>
+                    ) : (
+                      <Button variant="ghost" size="sm" onClick={() => setArmed(a.name)}>Delete</Button>
+                    )}
+                  </>
                 )}
               </div>
             </div>
             {selected?.name === a.name && (
               <div className="mt-3 border-t pt-3">
-                <MemberTable audience={a.name} refreshKey={tick} onChanged={() => void load()} />
+                <MemberTable audience={a.name} readOnly={Boolean(a.externally_managed)} refreshKey={tick} onChanged={() => void load()} />
               </div>
             )}
           </li>

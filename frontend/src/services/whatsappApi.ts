@@ -1,11 +1,13 @@
 import { call, file } from '@/lib/frappe-sdk';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
+import type { CarouselCardDef, SendTemplateArgs, WizardAuthenticationFields, WizardPayloadCard } from './whatsapp/templateCarouselTypes';
+export type { CarouselCardDef, CarouselCardParam, HeaderParam, SendTemplateArgs, WizardAuthenticationFields, WizardPayloadCard } from './whatsapp/templateCarouselTypes';
 
 const BASE = 'huf.ai.whatsapp.management';
 
 export const TEMPLATE_NAME_RE = /^[a-z0-9_]+$/;
 export const TEMPLATE_NAME_MAX = 512;
-export const TEMPLATE_CATEGORIES = ['MARKETING', 'UTILITY'] as const;
+export const TEMPLATE_CATEGORIES = ['MARKETING', 'UTILITY', 'AUTHENTICATION'] as const;
 export type TemplateCategory = (typeof TEMPLATE_CATEGORIES)[number];
 
 export interface FieldError {
@@ -123,6 +125,8 @@ export interface TemplateDetail {
     body: { text: string; sample_values: string[]; named_samples?: NamedSample[] };
     footer: { text: string } | null;
     buttons: TemplateButton[];
+    /** Media-carousel card definitions (absent for non-carousel templates). */
+    carousel?: CarouselCardDef[];
   };
   state: {
     rejected_reason: string;
@@ -213,7 +217,7 @@ export interface WizardPayloadButton {
   example?: string;
   phone_number?: string;
 }
-export interface WizardTemplatePayload {
+export interface WizardTemplatePayload extends WizardAuthenticationFields {
   template_name: string;
   category: TemplateCategory;
   language_code: string;
@@ -229,6 +233,8 @@ export interface WizardTemplatePayload {
   sample?: string;
   footer?: string;
   buttons?: WizardPayloadButton[];
+  /** Marketing media carousel: 2-10 cards (the template then has no header, footer or top-level buttons). */
+  cards?: WizardPayloadCard[];
   /** Utility only: message validity in seconds. */
   ttl_seconds?: number;
 }
@@ -236,7 +242,6 @@ export type WizardEditPayload = Omit<WizardTemplatePayload, 'template_name' | 'l
   header_type?: WizardPayloadHeaderType | '';
 };
 
-export type HeaderParam = string | { type: 'image' | 'document' | 'video'; link: string; filename?: string };
 export interface ButtonParam {
   index: number;
   sub_type: 'url' | 'quick_reply';
@@ -537,15 +542,7 @@ export const deleteTemplate = (name: string, acknowledgeShared?: boolean) =>
 export const syncTemplates = (gatewayName: string) =>
   invoke<Record<string, unknown>>('sync_templates', { gateway_name: gatewayName }, 'post');
 
-export const sendTemplateMessage = (args: {
-  /** The Gateway to send from; its WhatsApp account is used, never one chosen by the caller. */
-  gateway_name: string;
-  to: string;
-  template_name: string;
-  body_params?: string[];
-  header_params?: HeaderParam[];
-  button_params?: ButtonParam[];
-}) =>
+export const sendTemplateMessage = (args: SendTemplateArgs) =>
   invoke<Record<string, unknown>>(
     'send_template_message',
     {
@@ -555,6 +552,7 @@ export const sendTemplateMessage = (args: {
       body_params: JSON.stringify(args.body_params ?? []),
       header_params: JSON.stringify(args.header_params ?? []),
       button_params: JSON.stringify(args.button_params ?? []),
+      ...(args.carousel_params?.length ? { carousel_params: JSON.stringify(args.carousel_params) } : {}),
     },
     'post',
   );

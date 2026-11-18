@@ -163,7 +163,9 @@
   "seeding_metadata_section",
   "source_app",
   "source_file",
-  "is_system"
+  "is_system",
+  "agent_icon",
+  "seed_snapshot"
  ],
  "fields": [
   {
@@ -1223,6 +1225,20 @@
    "label": "Solution",
    "options": "Solution",
    "description": "Solution this agent belongs to."
+  },
+  {
+   "default": "SquareAsterisk",
+   "fieldname": "agent_icon",
+   "fieldtype": "Data",
+   "label": "Agent Icon",
+   "description": "lucide icon name"
+  },
+  {
+   "fieldname": "seed_snapshot",
+   "fieldtype": "Long Text",
+   "label": "Seed Snapshot",
+   "read_only": 1,
+   "hidden": 1
   }
  ],
  "grid_page_length": 50,

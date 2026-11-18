@@ -1,0 +1,1 @@
+{"tool_name": "n05_fixture_open", "description": "Unrestricted tool", "types": "Custom Function", "function_path": "frappe.ping"}

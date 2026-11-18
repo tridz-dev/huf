@@ -8,9 +8,10 @@ vi.mock('./TemplatePreview', () => ({ TemplatePreview: () => <div data-testid="p
 vi.mock('@/services/whatsappApi', async (orig) => ({
   ...(await orig<typeof import('@/services/whatsappApi')>()),
   sendTemplateMessage: vi.fn(),
+  getTemplate: vi.fn(),
 }));
 import { toast } from 'sonner';
-import { sendTemplateMessage, type WhatsAppTemplate } from '@/services/whatsappApi';
+import { getTemplate, sendTemplateMessage, type WhatsAppTemplate } from '@/services/whatsappApi';
 import { SendTemplateDialog } from './SendTemplateDialog';
 
 const template = (over: Partial<WhatsAppTemplate> = {}): WhatsAppTemplate => ({
@@ -28,6 +29,7 @@ function open(t: WhatsAppTemplate | null, props: { gateway?: string; initialTo?:
 beforeEach(() => {
   vi.clearAllMocks();
   send.mockResolvedValue({ success: true });
+  vi.mocked(getTemplate).mockResolvedValue({ success: false } as never);
 });
 
 describe('SendTemplateDialog', () => {
@@ -84,6 +86,13 @@ describe('SendTemplateDialog', () => {
     expect(send).toHaveBeenCalledWith(expect.objectContaining({ header_params: [{ type: 'image', link: 'https://example.com/a.png' }] }));
   });
 
+  it('sends a private File path in a document header as a file reference', async () => {
+    const { user } = open(template({ header_type: 'DOCUMENT', template: 'Body' }), { gateway: 'GW-1', initialTo: '+15551234567' });
+    await user.type(screen.getByLabelText(/Header document/), '/private/files/bill.pdf');
+    await user.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send).toHaveBeenCalledWith(expect.objectContaining({ header_params: [{ type: 'document', file: '/private/files/bill.pdf' }] }));
+  });
+
   it('sends no header when a media header link is left empty', async () => {
     const { user } = open(template({ header_type: 'DOCUMENT', template: 'Body' }), { gateway: 'GW-1', initialTo: '+15551234567' });
     await user.click(screen.getByRole('button', { name: 'Send' }));
@@ -127,5 +136,30 @@ describe('SendTemplateDialog', () => {
     await user.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(onClose).toHaveBeenCalled();
     expect(send).not.toHaveBeenCalled();
+  });
+
+  it('sends per-card header media, body and button values for a carousel template', async () => {
+    vi.mocked(getTemplate).mockResolvedValue({
+      success: true,
+      components: { carousel: [0, 1].map(() => ({ header_type: 'IMAGE', body_vars: ['1'], buttons: [{ type: 'QUICK_REPLY', dynamic: false }, { type: 'URL', dynamic: true }] })) },
+    } as never);
+    const { user } = open(template({ template: 'Hi' }));
+    await user.type(screen.getByLabelText('Recipient'), '+15551234567');
+    await screen.findAllByText('Image link');
+    const field = (id: string) => document.getElementById(id) as HTMLInputElement;
+    for (const i of [0, 1]) {
+      await user.type(field(`wa-card-${i}-h`), `https://cdn.example/${i}.png`);
+      await user.type(field(`wa-card-${i}-b0`), `deal${i}`);
+      await user.type(field(`wa-card-${i}-u0`), `pay${i}`);
+      await user.type(field(`wa-card-${i}-u1`), `s${i}`);
+    }
+    await user.click(screen.getByRole('button', { name: 'Send' }));
+    const arg = send.mock.calls[0][0];
+    expect(arg.carousel_params).toHaveLength(2);
+    expect(arg.carousel_params?.[1]).toEqual({
+      header: { type: 'image', link: 'https://cdn.example/1.png' },
+      body: ['deal1'],
+      buttons: [{ index: 0, sub_type: 'quick_reply', text: 'pay1' }, { index: 1, sub_type: 'url', text: 's1' }],
+    });
   });
 });

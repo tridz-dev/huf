@@ -10,6 +10,7 @@ from unittest.mock import MagicMock, patch
 import frappe
 
 from huf.ai.gateway_adapters import whatsapp_bridge as wb
+from huf.ai.gateway_adapters.whatsapp_parts import header_upload
 
 NOW = datetime(2026, 1, 10, 12, 0, 0)
 ACCT = {
@@ -336,11 +337,8 @@ class TestBridge(unittest.TestCase):
 		with avail(False):
 			self.assertIsNone(wb.template_language("ACC", "reopen"))
 
-	def test_authentication_category_is_not_supported(self):
-		self.assertEqual(wb.TEMPLATE_CATEGORIES, ("MARKETING", "UTILITY"))
-		with avail(), patch.object(frappe, "has_permission", return_value=True):
-			res = wb.create_template("ACC", {"template_name": "otp", "category": "AUTHENTICATION", "language_code": "en"})
-		self.assertEqual(res["error"], "invalid_category")
+	def test_authentication_category_is_supported(self):
+		self.assertEqual(wb.TEMPLATE_CATEGORIES, ("MARKETING", "UTILITY", "AUTHENTICATION"))
 
 	def test_list_templates(self):
 		with avail(False):
@@ -868,7 +866,7 @@ class TestSampleRedirects(unittest.TestCase):
 		calls = []
 		with patch.object(wb, "_is_private_host", side_effect=lambda h: h.startswith(("10.", "127.", "internal"))):
 			try:
-				return wb._read_header_sample(start, header, self._get(routes, calls)), calls
+				return header_upload._read_header_sample(start, header, self._get(routes, calls)), calls
 			except wb.BridgeError as exc:
 				return exc.payload, calls
 
