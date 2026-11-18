@@ -67,7 +67,7 @@
       "id": "run_agent",
       "name": "Run AI Agent",
       "description": "Delegate a task to another specialized AI Agent in your system.",
-      "icon": "bot",
+      "icon": "agent",
       "toolTypes": [
         "Run Agent"
       ]

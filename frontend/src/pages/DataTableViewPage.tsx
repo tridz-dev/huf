@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2, Loader2, Database, RefreshCcw, MoreVertical, Upload, Bot } from 'lucide-react';
+import { Plus, Pencil, Trash2, Loader2, Database, RefreshCcw, MoreVertical, Upload, SquareAsterisk } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { FilterBar } from '@/components/dashboard/filters/FilterBar';
@@ -129,7 +129,7 @@ export function DataTableViewPage({ onHeaderActionsChange }: DataTableViewPagePr
 							Edit table
 						</DropdownMenuItem>
 						<DropdownMenuItem onClick={() => setAgentAccessOpen(true)}>
-							<Bot className="w-3.5 h-3.5 mr-2" />
+							<SquareAsterisk className="w-3.5 h-3.5 mr-2" />
 							Add to agent…
 						</DropdownMenuItem>
 						<DropdownMenuItem

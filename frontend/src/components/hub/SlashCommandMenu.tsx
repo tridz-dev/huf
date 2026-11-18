@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Workflow, Bot, Users, Database, DollarSign, BookOpen, Settings, ArrowRight } from 'lucide-react';
+import { Workflow, SquareAsterisk, Users, Database, DollarSign, BookOpen, Settings, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 interface Command {
@@ -12,7 +12,7 @@ interface Command {
 
 const COMMANDS: Command[] = [
   { id: '/flow', label: 'Flow', description: 'Create, edit, or manage workflows', icon: Workflow },
-  { id: '/agent', label: 'Agent', description: 'Create, configure, or run agents', icon: Bot },
+  { id: '/agent', label: 'Agent', description: 'Create, configure, or run agents', icon: SquareAsterisk },
   { id: '/users', label: 'Users', description: 'Manage users and permissions', icon: Users },
   { id: '/runs', label: 'Executions', description: 'View and manage agent runs', icon: Database },
   { id: '/cost', label: 'Cost', description: 'View costs and optimize spending', icon: DollarSign },

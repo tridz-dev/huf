@@ -5,7 +5,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Plus, Bot, Workflow } from 'lucide-react';
+import { Plus, SquareAsterisk, Workflow } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export function HomeHeaderActions() {
@@ -34,7 +34,7 @@ export function HomeHeaderActions() {
             Open flows
           </DropdownMenuItem>
           <DropdownMenuItem onClick={handleNewAgent}>
-            <Bot className="w-4 h-4 mr-2" />
+            <SquareAsterisk className="w-4 h-4 mr-2" />
             Open agents
           </DropdownMenuItem>
         </DropdownMenuContent>

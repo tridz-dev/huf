@@ -1,4 +1,4 @@
-import { Bot, Code2, Globe, type LucideIcon } from 'lucide-react';
+import { SquareAsterisk, Code2, Globe, type LucideIcon } from 'lucide-react';
 import { getCategoryIcon } from './toolCategoryIcon';
 
 /**
@@ -9,7 +9,7 @@ import { getCategoryIcon } from './toolCategoryIcon';
 export function getToolIconForType(types?: string, service?: string, toolType?: string): LucideIcon {
   if (service || toolType) return getCategoryIcon(service || toolType);
   if (types === 'GET' || types === 'POST') return Globe;
-  if (types === 'Run Agent') return Bot;
+  if (types === 'Run Agent') return SquareAsterisk;
   return Code2;
 }
 
