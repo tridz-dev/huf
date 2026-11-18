@@ -20,9 +20,16 @@ from huf.ai.whatsapp.broadcast import api as mgmt
 @unittest.skipIf(isinstance(frappe, MagicMock), "needs real frappe.local")
 class TestApiKeyCallerWithoutRequest(unittest.TestCase):
 	def test_no_http_request_is_not_api_key_caller(self):
-		saved = frappe.local.__dict__.pop("request", None)
+		missing = object()
+		saved = getattr(frappe.local, "request", missing)
+		frappe.local.request = None  # unbound / absent request, as in an RQ job
 		try:
 			self.assertFalse(mgmt._is_api_key_caller())
 		finally:
-			if saved is not None:
+			if saved is missing:
+				try:
+					del frappe.local.request
+				except AttributeError:
+					pass
+			else:
 				frappe.local.request = saved
