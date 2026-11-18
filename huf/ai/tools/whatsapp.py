@@ -65,6 +65,7 @@ import requests
 
 from huf.ai import run_delivery
 from huf.ai.whatsapp import pre_send, send_file as send_file
+from huf.ai.whatsapp.parts.carousel_args import _carousel_list
 from huf.ai.whatsapp.parts.tool_args import _body_values, _json_list
 from huf.ai.gateway_adapters import whatsapp_bridge as bridge
 from huf.ai.gateway_adapters import whatsapp_messages as wm
@@ -850,20 +851,6 @@ def _send_interactive(kwargs: dict, kind: str) -> str:
 	)
 
 
-def _carousel_list(value: Any) -> list | None:
-	"""Per-card ``carousel_params``: a list, a JSON list, or ``{"cards": [...]}``; None when it is none of these."""
-	if isinstance(value, str) and value.strip():
-		try:
-			value = json.loads(value)
-		except ValueError:
-			return None
-	if isinstance(value, dict):
-		if "cards" not in value:
-			return None
-		value = value["cards"]
-	return _json_list(value)
-
-
 def _send_template(kwargs: dict) -> str:
 	"""Send a pre-approved WhatsApp template message.
 
@@ -885,10 +872,8 @@ def _send_template(kwargs: dict) -> str:
 		return _error("Recipient ('to') and 'template_name' are required")
 	if not isinstance(parameters, (list, dict)):
 		return _error("'parameters' must be a list of strings (or a {name: value} map for a named-variable template)")
-	if header_params is None or button_params is None:
-		return _error("'header_params' and 'button_params' must be lists (or JSON lists)")
-	if carousel_params is None:
-		return _error("'carousel_params' must be a list of cards (or a JSON list, or {\"cards\": [...]})")
+	if header_params is None or button_params is None or carousel_params is None:
+		return _error("'header_params', 'button_params' and 'carousel_params' must be lists (or JSON lists; carousel_params may be {\"cards\": [...]})")
 
 	refusal = _allowlist_refusal(recipient)
 	if refusal:

@@ -273,10 +273,7 @@ WHATSAPP_TOOLS = [
 			_p("message", description="Message text for send_message. Alias: text."),
 			_p("text", description="Alias for 'message'."),
 			_p("template_name", description="Template name for send_template, or the new template's name for create_template."),
-			_p(
-				"category",
-				description="Template category for create_template: MARKETING or UTILITY.",
-			),
+			_p("category", description="Template category for create_template: MARKETING or UTILITY."),
 			_p("language_code", description="Template language code, e.g. 'en' or 'en_US' (default 'en')."),
 			_p("body", description="create_template: template body text (use {{1}}, {{2}} for variables). send_buttons / send_list / send_cta_url: the message text (buttons and cta_url max 1024, list max 4096)."),
 			_p("sample_values", description="Comma-separated example values for the body placeholders (create_template)."),
