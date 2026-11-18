@@ -2,6 +2,11 @@
 
 Status: review completed (agent + Opus reviews passed). The SMS adapter is re-enabled (HUFCRM-02); its 26 tests were run on a real bench.
 
+## Decision
+- No separate SMS provider is adopted. Outbound SMS is sent through Frappe's own SMS Settings (HTTP gateway URL, message and receiver parameters, and static parameters), using the adapter's `frappe_sms` mode.
+- In `frappe_sms` mode inbound SMS is always rejected. Frappe SMS Settings provides no inbound channel and no delivery receipt (status is `unknown`).
+- Deployments that need inbound SMS must select `twilio` mode explicitly and supply the credentials and webhook settings described below.
+
 ## Findings (develop code)
 1. Fail-open inbound: `verify_inbound` returned True when `auth_token` was empty or `account_sid == "frappe_sms"`; `account_sid` defaulted to `frappe_sms`, so an empty credential set accepted any unauthenticated POST (spoofed inbound SMS to the agent).
 2. Mode was inferred from missing credentials.
@@ -32,5 +37,5 @@ Status: review completed (agent + Opus reviews passed). The SMS adapter is re-en
 - HUF_INTEGRATIONS_GATEWAYS_AUDIT.md / _TODO.md referenced in the old header were not found in the worktree.
 
 ## Owner decisions (non-blocking)
-- SMS provider choice for OTP/failover (Twilio, Plivo, Frappe SMS Settings, other) and who funds ongoing review.
+- SMS provider choice: resolved, see Decision above (Frappe SMS Settings, no separate provider). Who funds ongoing review remains open.
 - Whether inbound two-way SMS is wanted at all (recommended: send_only for OTP/failover).
