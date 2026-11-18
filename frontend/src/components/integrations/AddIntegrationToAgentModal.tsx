@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Bot, Loader2, Search, Wrench, AlertCircle } from 'lucide-react';
+import { SquareAsterisk, Loader2, Search, Wrench, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   Dialog,
@@ -194,7 +194,7 @@ export function AddIntegrationToAgentModal({
       <DialogScrollContent className="sm:max-w-2xl">
         <DialogScrollHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Bot className="w-5 h-5" />
+            <SquareAsterisk className="w-5 h-5" />
             Use in agent
           </DialogTitle>
           <DialogDescription>
@@ -278,7 +278,7 @@ export function AddIntegrationToAgentModal({
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-sm font-medium text-steel">
-                <Bot className="w-4 h-4" />
+                <SquareAsterisk className="w-4 h-4" />
                 Select agents
                 <Badge variant="outline" className="ml-1">
                   {selectedAgentNames.size}

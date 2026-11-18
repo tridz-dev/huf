@@ -1,4 +1,4 @@
-import { Database, Globe, Cpu, Bot, Code, Search, Mail } from 'lucide-react';
+import { Database, Globe, Cpu, SquareAsterisk, Code, Search, Mail } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import type { ToolTemplate } from '@/types/toolTemplate.types';
@@ -12,7 +12,7 @@ const iconMap = {
   database: Database,
   globe: Globe,
   cpu: Cpu,
-  bot: Bot,
+  agent: SquareAsterisk,
   code: Code,
   search: Search,
   mail: Mail,

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Bot, Loader2, PlugZap } from 'lucide-react';
+import { SquareAsterisk, Loader2, PlugZap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
@@ -405,7 +405,7 @@ export function IntegrationSettingsDetailsPage({
               type="button"
               data-testid="integration-use-in-agent"
             >
-              <Bot className="w-4 h-4 mr-2" />
+              <SquareAsterisk className="w-4 h-4 mr-2" />
               Use in agent
             </Button>
           )}

@@ -1,4 +1,4 @@
-import { Bot, History, MessageSquarePlus } from "lucide-react";
+import { SquareAsterisk, History, MessageSquarePlus } from "lucide-react";
 import type { ReactNode } from "react";
 import { useUser } from "@/contexts/UserContext";
 import ChatAvatar from "@/components/chat/ChatAvatar";
@@ -50,7 +50,7 @@ export function ChatAgentSelector({
   if (error) {
     return (
       <CenteredState
-        icon={<Bot className="size-5" />}
+        icon={<SquareAsterisk className="size-5" />}
         title="Chat is unavailable"
         description={error}
       />
@@ -60,7 +60,7 @@ export function ChatAgentSelector({
   if (agents.length === 0) {
     return (
       <CenteredState
-        icon={<Bot className="size-5" />}
+        icon={<SquareAsterisk className="size-5" />}
         title="No chat access available"
         description="There are no enabled chat agents available for your account."
       />
