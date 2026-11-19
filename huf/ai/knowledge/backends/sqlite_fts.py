@@ -2,7 +2,10 @@
 
 import json
 import os
-import sqlite3
+try:
+    import pysqlite3 as sqlite3
+except ImportError:
+    import sqlite3
 import uuid
 from contextlib import contextmanager
 from typing import Any, ClassVar
