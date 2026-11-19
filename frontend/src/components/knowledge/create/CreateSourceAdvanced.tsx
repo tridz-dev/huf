@@ -4,8 +4,8 @@ import { FormField, FormItem, FormLabel, FormControl, FormDescription, FormMessa
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { knowledgeTypes, knowledgeScopes } from '@/data/knowledge';
-import type { KnowledgeSourceFormValues } from './types';
-import { AdvancedConfigFields } from './AdvancedConfigFields';
+import type { KnowledgeSourceFormValues } from '../types';
+import { AdvancedConfigFields } from '../AdvancedConfigFields';
 import { isSmartSearch } from './createSourceHelpers';
 
 type Name = keyof KnowledgeSourceFormValues;

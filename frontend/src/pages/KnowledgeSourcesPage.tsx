@@ -7,7 +7,7 @@ import { FilterBar, GridView, LoadMoreButton, EmptyState } from '../components/d
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
 import { deleteKnowledgeSource, getKnowledgeSources, updateKnowledgeSource } from '../services/knowledgeApi';
 import { getFrappeErrorMessage } from '../lib/frappe-error';
-import { CreateSourceDialog } from '../components/knowledge/CreateSourceDialog';
+import { CreateSourceDialog } from '../components/knowledge/create/CreateSourceDialog';
 import { ConfirmActionDialog } from '../components/knowledge/import/ConfirmActionDialog';
 import { AddContentDialog } from '../components/knowledge/import/AddContentDialog';
 import { SourceCard } from '../components/knowledge/library/SourceCard';

@@ -16,9 +16,9 @@ import { createKnowledgeSource } from '@/services/knowledgeApi';
 import { linkKnowledgeToAgent } from '@/services/agentApi';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
 import type { KnowledgeSourceDoc } from '@/types/knowledge.types';
-import { knowledgeSourceFormSchema, type KnowledgeSourceFormValues } from './types';
+import { knowledgeSourceFormSchema, type KnowledgeSourceFormValues } from '../types';
 import { CreateSourceStepName } from './CreateSourceStepName';
-import { AddContentDialog } from './import/AddContentDialog';
+import { AddContentDialog } from '../import/AddContentDialog';
 import { CREATE_SOURCE_DEFAULTS, buildCreatePayload, isSmartSearch } from './createSourceHelpers';
 
 interface CreateSourceDialogProps {

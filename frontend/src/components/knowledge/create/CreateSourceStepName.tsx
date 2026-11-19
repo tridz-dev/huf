@@ -9,7 +9,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { Label } from '@/components/ui/label';
 import { getModels, getProviders } from '@/services/providerApi';
 import type { AIModel, AIProvider } from '@/types/agent.types';
-import type { KnowledgeSourceFormValues } from './types';
+import type { KnowledgeSourceFormValues } from '../types';
 import { CreateSourceAdvanced } from './CreateSourceAdvanced';
 import { dimensionForModel, isSmartSearch, looksLikeEmbeddingModel } from './createSourceHelpers';
 
