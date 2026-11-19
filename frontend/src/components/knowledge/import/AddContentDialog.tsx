@@ -38,6 +38,8 @@ interface AddContentDialogProps {
   onStarted: (ingestion: string) => void;
   /** Called after a Text or Web page input is created directly (no ingestion). */
   onInputAdded?: () => void;
+  /** When set, shows a "Skip for now" link (used by the create flow). */
+  onSkip?: () => void;
 }
 
 async function uploadPrivate(file: File, onProgress: (pct: number) => void): Promise<string> {
@@ -61,6 +63,7 @@ export function AddContentDialog({
   sourceLabel,
   onStarted,
   onInputAdded,
+  onSkip,
 }: AddContentDialogProps) {
   const [options, setOptions] = useState<ImportOptions | null>(null);
   const [optionsError, setOptionsError] = useState<string | null>(null);
@@ -235,6 +238,11 @@ export function AddContentDialog({
           )}
         </DialogScrollBody>
         <DialogScrollFooter>
+          {onSkip && (
+            <Button type="button" variant="link" className="mr-auto" onClick={onSkip} disabled={busy}>
+              Skip for now
+            </Button>
+          )}
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>
             Cancel
           </Button>
