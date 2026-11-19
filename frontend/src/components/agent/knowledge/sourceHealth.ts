@@ -51,16 +51,38 @@ export function foldCounts(rows: Array<{ status: string; count: number }>): Inpu
   return c;
 }
 
+export interface HealthInput {
+  disabled: boolean;
+  status?: string | null;
+  total: number;
+  ready: number;
+  failed: number;
+  inProgress: number;
+  activeIngestion?: boolean;
+}
+
+/** Single source of truth for the source health rules. */
+export function evaluateHealth(i: HealthInput): SourceHealth {
+  if (i.disabled) return 'paused';
+  if (i.status === 'Error') return 'broken';
+  if (i.activeIngestion || i.inProgress > 0 || i.status === 'Indexing' || i.status === 'Rebuilding') return 'updating';
+  if (i.total === 0) return 'empty';
+  if (i.failed > 0) return 'attention';
+  return i.ready > 0 ? 'ready' : 'empty';
+}
+
 export function computeHealth(
   source: Pick<KnowledgeSourceDoc, 'status' | 'disabled'>,
   counts: InputCounts,
 ): SourceHealth {
-  if (source.disabled) return 'paused';
-  if (source.status === 'Error') return 'broken';
-  if (counts.total === 0) return 'empty';
-  if (counts.pending > 0 || source.status === 'Indexing' || source.status === 'Rebuilding') return 'updating';
-  if (counts.failed > 0) return 'attention';
-  return counts.indexed > 0 ? 'ready' : 'empty';
+  return evaluateHealth({
+    disabled: !!source.disabled,
+    status: source.status,
+    total: counts.total,
+    ready: counts.indexed,
+    failed: counts.failed,
+    inProgress: counts.pending,
+  });
 }
 
 /**
