@@ -95,6 +95,19 @@ export function countInputs(inputs: Array<Pick<KnowledgeInputDoc, 'status'>>): I
   return c;
 }
 
+/** Same buckets as countInputs, from server-side per-status counts. */
+export function countFromStatusRows(rows: Array<{ status: string; count: number }>): InputCounts {
+  const c: InputCounts = { total: 0, ready: 0, failed: 0, skipped: 0, inProgress: 0 };
+  for (const { status, count } of rows) {
+    c.total += count;
+    if (status === 'Indexed') c.ready += count;
+    else if (status === 'Error') c.failed += count;
+    else if (status === 'Skipped') c.skipped += count;
+    else c.inProgress += count;
+  }
+  return c;
+}
+
 /** Plain-language health model computed client-side. */
 export function computeHealth(
   source: Pick<KnowledgeSourceDoc, 'status' | 'disabled' | 'error_message'> | null,

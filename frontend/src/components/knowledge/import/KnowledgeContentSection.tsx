@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Plus } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -8,7 +8,8 @@ import { AddContentDialog } from './AddContentDialog';
 import { DocumentsSummary, HealthBadge } from './DocumentsSummary';
 import { IngestionProblemsSheet } from './IngestionProblemsSheet';
 import { IngestionProgressCard } from './IngestionProgressCard';
-import { computeHealth, countInputs } from './ingestionLabels';
+import { computeHealth, countFromStatusRows, countInputs, type InputCounts } from './ingestionLabels';
+import { getKnowledgeInputStatusCounts } from '@/services/knowledgeApi';
 
 interface KnowledgeContentSectionProps {
   knowledgeSource: string;
@@ -35,7 +36,19 @@ export function KnowledgeContentSection({
   const { active, latest } = useActiveIngestion(knowledgeSource, bump);
   const ingestion = shown ?? active;
 
-  const counts = useMemo(() => countInputs(inputs), [inputs]);
+  const [serverCounts, setServerCounts] = useState<InputCounts | null>(null);
+  useEffect(() => {
+    let alive = true;
+    getKnowledgeInputStatusCounts(knowledgeSource)
+      .then((rows) => alive && setServerCounts(countFromStatusRows(rows)))
+      .catch(() => alive && setServerCounts(null));
+    return () => {
+      alive = false;
+    };
+  }, [knowledgeSource, inputs, bump]);
+  // The loaded list is capped; prefer exact server-side totals.
+  const localCounts = useMemo(() => countInputs(inputs), [inputs]);
+  const counts = serverCounts ?? localCounts;
   const health = computeHealth(source, counts, !!active);
 
   if (!source) return null;

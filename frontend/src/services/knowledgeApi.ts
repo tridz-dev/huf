@@ -261,6 +261,22 @@ export async function getKnowledgeInputs(
   }
 }
 
+/** Per-status input counts for a source, computed server-side (no row cap). */
+export async function getKnowledgeInputStatusCounts(
+  knowledgeSource: string,
+): Promise<Array<{ status: string; count: number }>> {
+  const rows = await db.getDocList(doctype['Knowledge Input'], {
+    fields: ['status', { COUNT: '*', as: 'count' }] as never,
+    filters: [['knowledge_source', '=', knowledgeSource]],
+    groupBy: 'status',
+    limit: 50,
+  } as never);
+  return (rows as unknown as Array<{ status: string; count: number | string }>).map((r) => ({
+    status: r.status,
+    count: Number(r.count) || 0,
+  }));
+}
+
 export async function createKnowledgeInput(
   data: Partial<KnowledgeInputDoc>,
 ): Promise<KnowledgeInputDoc> {
