@@ -160,18 +160,39 @@ def run_ingestion(ingestion_name: str, entries: list | None = None, slice: int =
 
 	try:
 		try:
-			if entries is not None:
-				materialize(ingestion_name, entries)
+			# Materialize whenever fewer rows exist than were accepted at
+			# submit: an interrupted first slice (crash mid-materialize, lost
+			# enqueue) is recoverable from the manifest persisted on the
+			# header. Rows already materialized are handled idempotently.
+			manifest = load_manifest(
+				entries,
+				frappe.db.get_value("Knowledge Ingestion", ingestion_name, "manifest_json"),
+			)
+			if manifest is not None:
+				declared = frappe.db.get_value("Knowledge Ingestion", ingestion_name, "total_items") or 0
+				if needs_materialization(
+					frappe.db.count("Knowledge Input", {"ingestion": ingestion_name}), declared
+				):
+					materialize(ingestion_name, manifest)
 
-			frappe.db.set_value(
-				"Knowledge Ingestion",
-				ingestion_name,
-				{
-					"status": "Running",
-					"started_at": frappe.db.get_value("Knowledge Ingestion", ingestion_name, "started_at") or now_datetime(),
-				},
+			# Header -> Running, but only from Queued: a concurrent
+			# cancel_ingestion() sets Cancelled and must not be overwritten
+			# back to Running (conditional UPDATE acts as the status guard).
+			frappe.db.sql(
+				"""
+				UPDATE `tabKnowledge Ingestion`
+				SET status = 'Running',
+					started_at = COALESCE(started_at, %s)
+				WHERE name = %s AND status = 'Queued'
+				""",
+				(now_datetime(), ingestion_name),
 			)
 			frappe.db.commit()
+
+			header_status = frappe.db.get_value("Knowledge Ingestion", ingestion_name, "status")
+			if header_status != "Running":
+				# Cancelled concurrently (or otherwise not startable).
+				return {"status": "skipped", "reason": f"Ingestion is {header_status}"}
 
 			_processed_slice(ingestion_name, lock_key)
 			return _finalize_or_self_chain(ingestion_name, slice)

@@ -19,6 +19,7 @@ from .bulk_runner import (
 	compute_progress,
 	count_ingestion_items,
 	run_ingestion,
+	serialize_manifest,
 	slice_job_id,
 )
 
@@ -107,6 +108,9 @@ def submit_files(knowledge_source: str, files):
 			"knowledge_source": knowledge_source,
 			"status": "Queued",
 			"total_items": len(accepted),
+			# Persist the accepted manifest so recovery/retry slices can
+			# re-materialize without the enqueue args (M1 recovery contract).
+			"manifest_json": serialize_manifest(accepted),
 		}
 	).insert()
 

@@ -10,11 +10,14 @@ recover_stalled_ingestions, bulk_api.submit_files, and the DocType
 controllers -- needs a live bench and is deliberately not covered here.
 """
 
+import json
+
 from huf.ai.knowledge.bulk_runner import (
 	compute_progress,
 	decide_idempotency,
 	load_manifest,
 	needs_materialization,
+	serialize_manifest,
 	should_adopt_row,
 	should_finalize,
 	slice_job_id,
@@ -137,3 +140,52 @@ class TestRowAdoptionRule:
 		# Unknown status -> treat as live (conservative: never steal rows).
 		assert should_adopt_row("ING-00001", None) is False
 		assert should_adopt_row("ING-00001", "SomeFutureStatus") is False
+
+
+class TestManifestPersistence:
+	"""M1: the accepted manifest is persisted on the header at submit and the
+	runner materializes whenever counts.total < total_items, so an interrupted
+	first slice is recoverable without the enqueue args."""
+
+	def test_explicit_entries_win_over_stored(self):
+		entries = [{"external_key": "a"}]
+		assert load_manifest(entries, '[{"external_key": "b"}]') is entries
+
+	def test_stored_manifest_used_when_entries_none(self):
+		manifest = [{"external_key": "a", "checksum": "a" * 64}]
+		assert load_manifest(None, json.dumps(manifest)) == manifest
+
+	def test_no_manifest_returns_none(self):
+		assert load_manifest(None, None) is None
+		assert load_manifest(None, "") is None
+
+	def test_corrupt_stored_manifest_returns_none(self):
+		assert load_manifest(None, "{not json") is None
+
+	def test_non_list_stored_manifest_returns_none(self):
+		assert load_manifest(None, '{"external_key": "a"}') is None
+
+	def test_materialization_needed_when_short(self):
+		assert needs_materialization(0, 5) is True
+		assert needs_materialization(3, 5) is True
+
+	def test_no_materialization_when_complete(self):
+		assert needs_materialization(5, 5) is False
+		# Over-materialized (should not happen) is also fine.
+		assert needs_materialization(6, 5) is False
+
+	def test_zero_declared_needs_no_materialization(self):
+		assert needs_materialization(0, 0) is False
+
+	def test_serialize_manifest_roundtrip(self):
+		entries = [{"external_key": "a", "checksum": None, "file": "FILE-1", "file_url": "/files/a.pdf"}]
+		assert json.loads(serialize_manifest(entries)) == entries
+
+	def test_serialize_manifest_empty_is_json_list(self):
+		assert json.loads(serialize_manifest([])) == []
+
+	def test_serialize_manifest_capped(self):
+		assert serialize_manifest([{"external_key": "a"}], max_bytes=4) is None
+
+	def test_serialize_manifest_unserializable_is_none(self):
+		assert serialize_manifest([{"external_key": object()}]) is None

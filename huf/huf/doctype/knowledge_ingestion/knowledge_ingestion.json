@@ -12,7 +12,8 @@
   "started_at",
   "finished_at",
   "error_message",
-  "slice_seq"
+  "slice_seq",
+  "manifest_json"
  ],
  "fields": [
   {
@@ -70,6 +71,13 @@
    "fieldtype": "Int",
    "hidden": 1,
    "label": "Slice Seq",
+   "read_only": 1
+  },
+  {
+   "fieldname": "manifest_json",
+   "fieldtype": "Long Text",
+   "hidden": 1,
+   "label": "Manifest JSON",
    "read_only": 1
   }
  ],
