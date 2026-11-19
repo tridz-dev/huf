@@ -69,7 +69,13 @@ def validate_config(source_kind: str, config: dict, roots=None) -> dict:
 	conn, root = config.get("ssh_connection"), config.get("root_path")
 	if not isinstance(conn, str) or not conn or not isinstance(root, str) or not root.strip():
 		frappe.throw(_("config.ssh_connection and config.root_path are required"))
-	return {"ssh_connection": conn, "root_path": root.strip()}
+	from huf.ai.knowledge.sources.sftp_client import normalize_root
+
+	try:
+		root = normalize_root(root)
+	except ValueError as e:
+		frappe.throw(str(e))
+	return {"ssh_connection": conn, "root_path": root}
 
 
 def _check_base_permissions(knowledge_source: str, source_kind: str) -> None:
