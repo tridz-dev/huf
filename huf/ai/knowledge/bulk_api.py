@@ -15,7 +15,7 @@ import frappe
 from frappe import _
 from frappe.utils import cint, now_datetime
 
-from .ingestion_origin import sanitize_source_config
+from .sources.origin import sanitize_source_config
 from .bulk_runner import (
 	ACTIVE_INGESTION_STATUSES,
 	compute_progress,

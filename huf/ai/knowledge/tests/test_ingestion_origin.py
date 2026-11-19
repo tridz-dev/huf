@@ -1,6 +1,6 @@
 import json
 
-from huf.ai.knowledge.ingestion_origin import sanitize_source_config
+from huf.ai.knowledge.sources.origin import sanitize_source_config
 
 
 def test_keeps_only_safe_keys():
