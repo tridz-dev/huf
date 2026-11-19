@@ -126,7 +126,7 @@ def process_knowledge_input(knowledge_input: str, skip_lock: bool = False) -> di
 						"text": chunk.text,
 						"char_start": chunk.char_start,
 						"char_end": chunk.char_end,
-						"metadata": chunk_metadata(extracted.metadata, chunk.char_start),
+						"metadata": chunk_metadata(extracted.metadata, chunk.char_start, chunk.char_end),
 					}
 				)
 

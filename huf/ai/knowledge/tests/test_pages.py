@@ -24,3 +24,13 @@ class TestPageMapping(unittest.TestCase):
 		src = {"file_type": "txt"}
 		self.assertEqual(chunk_metadata(src, 5), {"file_type": "txt"})
 		self.assertEqual(chunk_metadata(None, 5), {})
+
+
+def test_chunk_spanning_pages_records_page_end():
+	from huf.ai.knowledge.pages import chunk_metadata
+
+	meta = {"file_type": "pdf", "page_offsets": [[0, 1], [100, 2], [200, 3]]}
+	out = chunk_metadata(meta, 150, 260)
+	assert out["page"] == 2 and out["page_end"] == 3 and "page_offsets" not in out
+	same = chunk_metadata(meta, 110, 190)
+	assert same["page"] == 2 and "page_end" not in same

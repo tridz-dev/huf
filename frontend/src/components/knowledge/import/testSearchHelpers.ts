@@ -46,7 +46,10 @@ export function matchLevels(results: TestResult[]): MatchLevel[] {
 export function locationOf(r: TestResult): string {
   const m = r.metadata ?? {};
   const page = m.page ?? m.page_number;
-  if (page != null && page !== '') return `page ${String(page)}`;
+  if (page != null && page !== '') {
+    const end = m.page_end;
+    return end != null && end !== '' && String(end) !== String(page) ? `pages ${String(page)}–${String(end)}` : `page ${String(page)}`;
+  }
   const idx = Number(m.chunk_index);
   return Number.isFinite(idx) ? `passage ${idx + 1}` : '';
 }
