@@ -8,6 +8,8 @@ existing ``process_knowledge_input()`` per item, with the per-source lock in
 play. See docs/bulk-ingestion-contract.md for the frozen contract.
 """
 
+from __future__ import annotations
+
 import time
 
 import frappe
