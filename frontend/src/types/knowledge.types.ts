@@ -16,7 +16,7 @@ export type KnowledgeSourceStatus = 'Pending' | 'Indexing' | 'Ready' | 'Error' |
 export type KnowledgeStorageMode = 'Frappe File';
 
 export type KnowledgeInputType = 'File' | 'Text' | 'URL';
-export type KnowledgeInputStatus = 'Pending' | 'Processing' | 'Indexed' | 'Error';
+export type KnowledgeInputStatus = 'Pending' | 'Processing' | 'Indexed' | 'Error' | 'Skipped';
 
 /**
  * Knowledge Source document from Frappe
@@ -103,6 +103,9 @@ export interface KnowledgeInputDoc {
 
 	// Core fields
 	knowledge_source: string;
+	ingestion?: string | null;
+	skip_reason?: string | null;
+	external_key?: string | null;
 	input_type: KnowledgeInputType;
 
 	// Type-specific fields
