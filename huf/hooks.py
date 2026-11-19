@@ -386,6 +386,8 @@ scheduler_events = {
             "huf.ai.whatsapp.broadcast.stale.resume_stale",
             # Flow Runs whose worker stopped (Queued/Running with no change for 30 min) -> Failed.
             "huf.ai.flow.engine.sweep_stale_runs",
+            "huf.ai.external.sessions.expire_stale_leases",
+            "huf.ai.external.approvals.expire_pending_approvals",
             "huf.ai.whatsapp.broadcast.schedule.start_due",
             "huf.ai.whatsapp.broadcast.status.sweep_pending",
         ],
@@ -420,7 +422,7 @@ scheduler_events = {
 # Request Events
 # ----------------
 before_request = ["huf.ai.telegram_web_access_enforce.enforce"]
-# after_request = ["huf.utils.after_request"]
+after_request = ["huf.ai.external.oauth.add_auth_challenge"]
 
 # Job Events
 # ----------

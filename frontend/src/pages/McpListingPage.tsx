@@ -1,8 +1,10 @@
 import { useEffect } from 'react';
 import { Calendar, Settings, Tag, Server } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { PageFrame } from '@/layouts/PageFrame';
+import { ExternalAgentsPanel } from '@/components/external/ExternalAgentsPanel';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FilterBar, GridView, ItemCard, LoadMoreButton, EmptyState } from '../components/dashboard';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
 import { getMCPServers } from '../services/mcpApi';
@@ -20,8 +22,23 @@ function getMcpStatus(server: MCPServerDoc): { label: string; variant: BadgeVari
   return { label: 'enabled', variant: 'success' };
 }
 
+const TAB_PARAM = 'tab';
+const AGENTS_TAB = 'agents';
+
 export default function McpListingPage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  // The URL is the source of truth so back/forward keeps the tab in step.
+  const tab = searchParams.get(TAB_PARAM) === AGENTS_TAB ? AGENTS_TAB : 'servers';
+
+  const handleTabChange = (value: string) => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (value === AGENTS_TAB) next.set(TAB_PARAM, AGENTS_TAB);
+      else next.delete(TAB_PARAM);
+      return next;
+    });
+  };
 
   const {
     items: servers,
@@ -80,80 +97,96 @@ export default function McpListingPage() {
   return (
     <PageFrame
       title="MCP servers"
+      tabs={
+        <Tabs value={tab} onValueChange={handleTabChange}>
+          <TabsList>
+            <TabsTrigger value="servers">Servers</TabsTrigger>
+            <TabsTrigger value={AGENTS_TAB}>Connected agents</TabsTrigger>
+          </TabsList>
+        </Tabs>
+      }
       filters={
-        <FilterBar
-          searchPlaceholder="Search MCP servers..."
-          searchValue={search}
-          onSearchChange={setSearch}
-        />
+        tab === 'servers' ? (
+          <FilterBar
+            searchPlaceholder="Search MCP servers..."
+            searchValue={search}
+            onSearchChange={setSearch}
+          />
+        ) : undefined
       }
     >
-      {error && !initialLoading && (
-        <div className="text-center py-12">
-          <p className="text-destructive mb-4">Failed to load MCP servers</p>
-          <p className="text-sm text-steel mb-4">{error.message || 'An error occurred while fetching MCP servers.'}</p>
-        </div>
-      )}
-      <GridView
-        items={servers}
-        columns={{ sm: 1, md: 2, lg: 3 }}
-        loading={initialLoading}
-        emptyState={
-          search ? (
-            <EmptyState
-              variant="no-results"
-              icon={Server}
-              title="No MCP servers found"
-              filterTerm={search}
-              secondaryAction={{ label: 'Clear search', onClick: () => setSearch('') }}
-            />
-          ) : (
-            <EmptyState
-              variant="create"
-              icon={Server}
-              title="No MCP servers"
-              description="Connect a server to expand agent capabilities."
-              action={{ label: 'New MCP server', onClick: () => navigate('/mcp/new') }}
-            />
-          )
-        }
-        renderItem={(server) => {
-          const status = getMcpStatus(server);
-          return (
-            <ItemCard
-              title={server.server_name || server.name}
-              description={server.description?.slice(0, 100) || 'No description'}
-              status={{
-                label: status.label,
-                variant: status.variant,
-              }}
-              metadata={[
-                ...(server.tool_namespace ? [{ label: 'Namespace', value: server.tool_namespace, icon: Tag }] : []),
-                { label: 'Last sync', value: server.last_sync ? formatTimeAgo(server.last_sync) : 'Never', icon: Calendar },
-              ]}
-              actions={[
-                {
-                  icon: Settings,
-                  label: 'Configure',
-                  onClick: () => navigate(`/mcp/${server.name}`),
-                },
-              ]}
-              onClick={() => navigate(`/mcp/${server.name}`)}
-            />
-          );
-        }}
-        keyExtractor={(server) => server.name}
-      />
-      <LoadMoreButton
-        hasMore={hasMore}
-        loading={loadingMore}
-        onLoadMore={loadMore}
-        disabled={!!search || initialLoading}
-      />
-      {!hasMore && servers.length > 0 && (
-        <div className="text-center py-4 text-sm font-body text-steel">
-          {total !== undefined ? `Showing all ${total} MCP servers` : 'No more MCP servers to load'}
-        </div>
+      {tab === AGENTS_TAB ? (
+        <ExternalAgentsPanel />
+      ) : (
+        <>
+          {error && !initialLoading && (
+            <div className="text-center py-12">
+              <p className="text-destructive mb-4">Failed to load MCP servers</p>
+              <p className="text-sm text-steel mb-4">{error.message || 'An error occurred while fetching MCP servers.'}</p>
+            </div>
+          )}
+          <GridView
+            items={servers}
+            columns={{ sm: 1, md: 2, lg: 3 }}
+            loading={initialLoading}
+            emptyState={
+              search ? (
+                <EmptyState
+                  variant="no-results"
+                  icon={Server}
+                  title="No MCP servers found"
+                  filterTerm={search}
+                  secondaryAction={{ label: 'Clear search', onClick: () => setSearch('') }}
+                />
+              ) : (
+                <EmptyState
+                  variant="create"
+                  icon={Server}
+                  title="No MCP servers"
+                  description="Connect a server to expand agent capabilities."
+                  action={{ label: 'New MCP server', onClick: () => navigate('/mcp/new') }}
+                />
+              )
+            }
+            renderItem={(server) => {
+              const status = getMcpStatus(server);
+              return (
+                <ItemCard
+                  title={server.server_name || server.name}
+                  description={server.description?.slice(0, 100) || 'No description'}
+                  status={{
+                    label: status.label,
+                    variant: status.variant,
+                  }}
+                  metadata={[
+                    ...(server.tool_namespace ? [{ label: 'Namespace', value: server.tool_namespace, icon: Tag }] : []),
+                    { label: 'Last sync', value: server.last_sync ? formatTimeAgo(server.last_sync) : 'Never', icon: Calendar },
+                  ]}
+                  actions={[
+                    {
+                      icon: Settings,
+                      label: 'Configure',
+                      onClick: () => navigate(`/mcp/${server.name}`),
+                    },
+                  ]}
+                  onClick={() => navigate(`/mcp/${server.name}`)}
+                />
+              );
+            }}
+            keyExtractor={(server) => server.name}
+          />
+          <LoadMoreButton
+            hasMore={hasMore}
+            loading={loadingMore}
+            onLoadMore={loadMore}
+            disabled={!!search || initialLoading}
+          />
+          {!hasMore && servers.length > 0 && (
+            <div className="text-center py-4 text-sm font-body text-steel">
+              {total !== undefined ? `Showing all ${total} MCP servers` : 'No more MCP servers to load'}
+            </div>
+          )}
+        </>
       )}
     </PageFrame>
   );

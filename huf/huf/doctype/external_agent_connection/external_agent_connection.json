@@ -1,0 +1,120 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "hash",
+ "creation": "2026-11-08 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "user",
+  "agent",
+  "runtime_kind",
+  "mode",
+  "enabled",
+  "access_policy_section",
+  "read_policy",
+  "write_policy",
+  "communicate_policy",
+  "hub_tier",
+  "last_seen"
+ ],
+ "fields": [
+  {
+   "fieldname": "user",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "User",
+   "options": "User",
+   "reqd": 1
+  },
+  {
+   "fieldname": "agent",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Agent",
+   "options": "Agent",
+   "reqd": 1
+  },
+  {
+   "default": "claude_code",
+   "fieldname": "runtime_kind",
+   "fieldtype": "Select",
+   "label": "Runtime Kind",
+   "options": "claude_code\ncodex\nother"
+  },
+  {
+   "default": "Connected",
+   "fieldname": "mode",
+   "fieldtype": "Select",
+   "label": "Mode",
+   "options": "Connected\nManaged"
+  },
+  {
+   "default": "1",
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "label": "Enabled"
+  },
+  {
+   "fieldname": "access_policy_section",
+   "fieldtype": "Section Break",
+   "label": "Access policy"
+  },
+  {
+   "default": "Allow",
+   "fieldname": "read_policy",
+   "fieldtype": "Select",
+   "label": "Read Policy",
+   "options": "Allow\nRequires Approval\nDeny"
+  },
+  {
+   "default": "Requires Approval",
+   "fieldname": "write_policy",
+   "fieldtype": "Select",
+   "label": "Write Policy",
+   "options": "Allow\nRequires Approval\nDeny"
+  },
+  {
+   "default": "Requires Approval",
+   "fieldname": "communicate_policy",
+   "fieldtype": "Select",
+   "label": "Communicate Policy",
+   "options": "Allow\nRequires Approval\nDeny"
+  },
+  {
+   "default": "Off",
+   "description": "Lets the connected agent find and, with your approval, create agents, tools, tables and apps. Off by default.",
+   "fieldname": "hub_tier",
+   "fieldtype": "Select",
+   "label": "Builder access",
+   "options": "Off\nBuild\nAdmin"
+  },
+  {
+   "fieldname": "last_seen",
+   "fieldtype": "Datetime",
+   "label": "Last Seen",
+   "read_only": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-11-08 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Huf",
+ "name": "External Agent Connection",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "read": 1,
+   "role": "System Manager",
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

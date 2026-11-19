@@ -1,0 +1,156 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "hash",
+ "creation": "2026-11-08 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "connection",
+  "user",
+  "agent",
+  "conversation",
+  "agent_run",
+  "state",
+  "visibility_mode",
+  "session_token",
+  "native_session_id",
+  "last_seq",
+  "acked_seq",
+  "lease_owner",
+  "lease_expires",
+  "ended_at"
+ ],
+ "fields": [
+  {
+   "fieldname": "connection",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "External Agent Connection",
+   "options": "External Agent Connection",
+   "reqd": 1
+  },
+  {
+   "fieldname": "user",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "User",
+   "options": "User",
+   "reqd": 1
+  },
+  {
+   "fieldname": "agent",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Agent",
+   "options": "Agent",
+   "reqd": 1
+  },
+  {
+   "fieldname": "conversation",
+   "fieldtype": "Link",
+   "label": "Conversation",
+   "options": "Agent Conversation"
+  },
+  {
+   "fieldname": "agent_run",
+   "fieldtype": "Link",
+   "label": "Agent Run",
+   "options": "Agent Run"
+  },
+  {
+   "default": "Active",
+   "fieldname": "state",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "State",
+   "options": "Active\nWaiting for Input\nWaiting for Approval\nRuntime Offline\nCompleted\nFailed\nCancelled"
+  },
+  {
+   "default": "Connected",
+   "fieldname": "visibility_mode",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Visibility Mode",
+   "options": "Connected\nHuf-managed"
+  },
+  {
+   "fieldname": "session_token",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Session Token",
+   "permlevel": 1,
+   "read_only": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "native_session_id",
+   "fieldtype": "Data",
+   "label": "Native Session ID"
+  },
+  {
+   "default": "0",
+   "fieldname": "last_seq",
+   "fieldtype": "Int",
+   "label": "Last Sequence",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "acked_seq",
+   "fieldtype": "Int",
+   "label": "Acknowledged Sequence",
+   "read_only": 1
+  },
+  {
+   "fieldname": "lease_owner",
+   "fieldtype": "Data",
+   "label": "Lease Owner"
+  },
+  {
+   "fieldname": "lease_expires",
+   "fieldtype": "Datetime",
+   "label": "Lease Expires"
+  },
+  {
+   "fieldname": "ended_at",
+   "fieldtype": "Datetime",
+   "label": "Ended At",
+   "read_only": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-11-08 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Huf",
+ "name": "External Agent Session",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "select": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
+   "permlevel": 1,
+   "read": 1,
+   "role": "System Manager",
+   "write": 0
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

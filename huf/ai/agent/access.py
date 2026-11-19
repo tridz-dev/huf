@@ -243,3 +243,27 @@ def resolve_run_identity_and_authorize(
 		fallback_applied=True,
 		fallback_reason=fallback_reason,
 	)
+
+
+NATIVE_MODE = "Native"
+NATIVE_ONLY_MESSAGE = "This agent uses external intelligence and cannot be run by the built-in runner."
+
+
+def is_native_mode(value) -> bool:
+	"""True when an ``execution_mode`` value means the built-in runner may execute the agent."""
+	return value in (None, "", NATIVE_MODE)
+
+
+def assert_native_execution(agent_doc):
+	"""Return ``agent_doc`` unchanged, or refuse it when it is driven by external intelligence.
+
+	Agents with a non-Native ``execution_mode`` run through the External Intelligence session
+	bridge and have no provider or model. Accepts a document object or a dict.
+	"""
+	if isinstance(agent_doc, dict):
+		mode = agent_doc.get("execution_mode")
+	else:
+		mode = getattr(agent_doc, "execution_mode", None)
+	if not is_native_mode(mode):
+		frappe.throw(NATIVE_ONLY_MESSAGE, frappe.PermissionError)
+	return agent_doc
