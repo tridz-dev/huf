@@ -3,6 +3,7 @@
 
 """PostgreSQL/PGVector backend using the LlamaIndex adapter."""
 
+import inspect
 import re
 from typing import Any, ClassVar
 
@@ -38,6 +39,11 @@ class PGVectorBackend(LlamaIndexBackend, KnowledgeBackend):
 		"l2": "vector_l2_ops",
 		"inner_product": "vector_ip_ops",
 	}
+
+	# pgvector's hnsw/ivfflat indexes on `vector` columns cap at 2000 dimensions;
+	# `halfvec` indexes go up to 4000.
+	MAX_INDEXED_VECTOR_DIMS: ClassVar[int] = 2000
+	MAX_INDEXED_HALFVEC_DIMS: ClassVar[int] = 4000
 
 	def __init__(self):
 		super().__init__()
@@ -122,18 +128,48 @@ class PGVectorBackend(LlamaIndexBackend, KnowledgeBackend):
 
 		index_type = self.config.get("index_type")
 		if index_type == "hnsw":
-			hnsw_kwargs = {
-				"hnsw_m": int(self.config.get("hnsw_m") or 16),
-				"hnsw_ef_construction": int(self.config.get("hnsw_ef_construction") or 64),
-				"hnsw_ef_search": int(self.config.get("hnsw_ef_search") or 40),
-			}
+			use_halfvec = False
+			skip_index = False
+			existing_type = None
+			if self.dimension > self.MAX_INDEXED_VECTOR_DIMS:
+				existing_type = self._get_existing_embedding_column_type()
+				if existing_type == "halfvec":
+					use_halfvec = True
+				elif (
+					existing_type is None
+					and self.dimension <= self.MAX_INDEXED_HALFVEC_DIMS
+					and "use_halfvec" in inspect.signature(PGVectorStore.from_params).parameters
+				):
+					use_halfvec = True
+				else:
+					skip_index = True
 
-			distance_metric = self.config.get("distance_metric") or "cosine"
-			hnsw_dist_method = self.PGVECTOR_DISTANCE_TO_OPS.get(distance_metric)
-			if hnsw_dist_method:
-				hnsw_kwargs["hnsw_dist_method"] = hnsw_dist_method
+			if skip_index:
+				frappe.logger().warning(
+					f"PGVector: {self.dimension}-dimension embeddings exceed the "
+					f"{self.MAX_INDEXED_VECTOR_DIMS}-dimension limit for hnsw indexes on a `vector` "
+					f"column (table {self._get_sql_table_name()}); no index will be created and "
+					"exact (sequential) search is used. To get an index, use an embedding model "
+					f"with {self.MAX_INDEXED_VECTOR_DIMS} or fewer dimensions (or reduced output "
+					"dimensionality), or create a new knowledge source so a halfvec table is created."
+				)
+			else:
+				hnsw_kwargs = {
+					"hnsw_m": int(self.config.get("hnsw_m") or 16),
+					"hnsw_ef_construction": int(self.config.get("hnsw_ef_construction") or 64),
+					"hnsw_ef_search": int(self.config.get("hnsw_ef_search") or 40),
+				}
 
-			params["hnsw_kwargs"] = hnsw_kwargs
+				distance_metric = self.config.get("distance_metric") or "cosine"
+				hnsw_dist_method = self.PGVECTOR_DISTANCE_TO_OPS.get(distance_metric)
+				if hnsw_dist_method:
+					if use_halfvec:
+						hnsw_dist_method = hnsw_dist_method.replace("vector_", "halfvec_", 1)
+					hnsw_kwargs["hnsw_dist_method"] = hnsw_dist_method
+
+				params["hnsw_kwargs"] = hnsw_kwargs
+				if use_halfvec:
+					params["use_halfvec"] = True
 
 		params.update(self._get_database_params())
 		# PGVectorStore.from_params does not accept sslmode; it is handled via
@@ -183,6 +219,29 @@ class PGVectorBackend(LlamaIndexBackend, KnowledgeBackend):
 
 	def _get_sql_table_name(self) -> str:
 		return f"data_{self.table_name}"
+
+	def _get_existing_embedding_column_type(self) -> str | None:
+		"""Return the embedding column type ("vector"/"halfvec") of an existing table.
+
+		Returns None when the table does not exist, "unknown" when it cannot be inspected.
+		"""
+		try:
+			engine = create_engine(self._get_sqlalchemy_url())
+			with engine.begin() as conn:
+				row = conn.execute(
+					text(
+						"SELECT format_type(a.atttypid, NULL) FROM pg_attribute a "
+						"WHERE a.attrelid = to_regclass(:tbl) AND a.attname = 'embedding' "
+						"AND NOT a.attisdropped"
+					),
+					{"tbl": f"public.{self._get_sql_table_name()}"},
+				).fetchone()
+			return row[0] if row and row[0] else None
+		except Exception as exc:
+			frappe.logger().warning(f"PGVector table inspection failed for {self.table_name}: {exc!s}")
+			# Unknown: callers must not assume a new table (requesting halfvec
+			# against an existing `vector` column would break queries).
+			return "unknown"
 
 	def _ensure_pgvector_extension(self) -> None:
 		try:
