@@ -366,15 +366,14 @@ class TestFaissBackend(unittest.TestCase):
 		self.assertEqual(self.mock_faiss.IndexFlatL2.call_count, flat_calls_before)
 		self.assertEqual(len(self.backend._chunk_store), 2)
 
-	def test_delete_chunks_error_returns_zero(self):
+	def test_delete_chunks_error_propagates(self):
 		"""A failure during the rebuild is logged and reported as 0."""
 		self._initialize()
 		self.backend.add_chunks(self._chunks(2))
 
 		with patch.object(self.backend, "_rebuild_index", side_effect=RuntimeError("boom")):
-			deleted = self.backend.delete_chunks("input_1")
-
-		self.assertEqual(deleted, 0)
+			with self.assertRaises(RuntimeError):
+				self.backend.delete_chunks("input_1")
 
 	def test_clear(self):
 		"""Clear resets the index and sidecar to empty and persists them."""

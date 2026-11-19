@@ -423,7 +423,8 @@ class ZvecBackend(KnowledgeBackend):
 			return len(matching)
 		except Exception as exc:
 			frappe.logger().warning(f"zvec delete_chunks error for {input_id}: {exc!s}")
-			return 0
+			# Propagate: swallowing would let add_chunks append duplicates on re-index.
+			raise
 
 	def clear(self) -> None:
 		"""Destroy the on-disk collection and recreate it empty."""

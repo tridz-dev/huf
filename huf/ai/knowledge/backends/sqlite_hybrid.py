@@ -2,7 +2,10 @@
 
 import json
 import os
-import sqlite3
+try:
+    import pysqlite3 as sqlite3
+except ImportError:
+    import sqlite3
 import uuid
 from contextlib import contextmanager
 from typing import Any, Dict, List, Optional
@@ -287,18 +290,21 @@ class SQLiteHybridBackend(KnowledgeBackend):
 					   row_number() over (order by v.distance asc) as rnk
 				FROM chunks_vec v
 				JOIN chunks c ON c.rowid = v.rowid
-				WHERE v.embedding MATCH ?
+				WHERE v.embedding MATCH ? AND k = 100
 				{where_sql}
 				LIMIT 100
 			"""
 			fts_cte_sql = f"""
-				SELECT f.rowid, bm25(chunks_fts, 1.0, 0.75) as bm25_score,
-					   row_number() over (order by bm25(chunks_fts, 1.0, 0.75) asc) as rnk
-				FROM chunks_fts f
-				JOIN chunks c ON c.rowid = f.rowid
-				WHERE f.chunks_fts MATCH ?
-				{where_sql}
-				LIMIT 100
+				SELECT rowid, bm25_score,
+					   row_number() over (order by bm25_score asc) as rnk
+				FROM (
+					SELECT f.rowid as rowid, bm25(chunks_fts, 1.0, 0.75) as bm25_score
+					FROM chunks_fts f
+					JOIN chunks c ON c.rowid = f.rowid
+					WHERE f.chunks_fts MATCH ?
+					{where_sql}
+					LIMIT 100
+				)
 			"""
 			params: List[Any] = (
 				[json.dumps(query_embedding)]
@@ -313,15 +319,17 @@ class SQLiteHybridBackend(KnowledgeBackend):
 				SELECT rowid, distance,
 					   row_number() over (order by distance asc) as rnk
 				FROM chunks_vec
-				WHERE embedding MATCH ?
-				LIMIT 100
+				WHERE embedding MATCH ? AND k = 100
 			"""
 			fts_cte_sql = """
-				SELECT rowid, bm25(chunks_fts, 1.0, 0.75) as bm25_score,
-					   row_number() over (order by bm25(chunks_fts, 1.0, 0.75) asc) as rnk
-				FROM chunks_fts
-				WHERE chunks_fts MATCH ?
-				LIMIT 100
+				SELECT rowid, bm25_score,
+					   row_number() over (order by bm25_score asc) as rnk
+				FROM (
+					SELECT f.rowid as rowid, bm25(chunks_fts, 1.0, 0.75) as bm25_score
+					FROM chunks_fts f
+					WHERE chunks_fts MATCH ?
+					LIMIT 100
+				)
 			"""
 			params = [json.dumps(query_embedding), safe_fts_query, top_k]
 
@@ -371,6 +379,7 @@ class SQLiteHybridBackend(KnowledgeBackend):
 						metadata = json.loads(row["metadata"])
 					except json.JSONDecodeError:
 						pass
+				metadata["input_id"] = row["input_id"]
 
 				results.append(
 					ChunkResult(

@@ -402,12 +402,13 @@ class TestPineconeBackend(unittest.TestCase):
 		self.assertEqual(deleted, 0)
 		self.mock_store.delete_nodes.assert_not_called()
 
-	def test_delete_chunks_error_returns_zero(self):
-		"""A Pinecone failure during delete is logged and reported as 0."""
+	def test_delete_chunks_error_propagates(self):
+		"""A Pinecone failure during delete propagates so re-index never appends duplicates."""
 		self._initialize()
 		self.mock_store.get_nodes.side_effect = RuntimeError("boom")
 
-		self.assertEqual(self.backend.delete_chunks("input_1"), 0)
+		with self.assertRaises(RuntimeError):
+			self.backend.delete_chunks("input_1")
 
 	def test_clear(self):
 		"""Clear deletes every vector in this source's namespace."""

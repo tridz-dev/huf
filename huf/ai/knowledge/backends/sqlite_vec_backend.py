@@ -2,7 +2,10 @@
 
 import json
 import os
-import sqlite3
+try:
+    import pysqlite3 as sqlite3
+except ImportError:
+    import sqlite3
 import uuid
 from contextlib import contextmanager
 from typing import Any, Dict, List, Optional
@@ -269,6 +272,8 @@ class SQLiteVecBackend(KnowledgeBackend):
 						metadata = json.loads(row["metadata"])
 					except json.JSONDecodeError:
 						pass
+				# Provenance: expose the owning Knowledge Input (stored as a column).
+				metadata.setdefault("input_id", row["input_id"])
 
 				score = 1.0 / (1.0 + float(row["distance"] or 0.0))
 				results.append(

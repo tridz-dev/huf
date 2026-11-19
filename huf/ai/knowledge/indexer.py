@@ -23,7 +23,7 @@ def _build_backend_config(source) -> dict:
 		"chunk_overlap": source.chunk_overlap,
 	}
 
-	if source.knowledge_type in ("sqlite_vec", "chroma", "pgvector", "redis", "zvec", "weaviate", "faiss", "pinecone"):
+	if source.knowledge_type in ("sqlite_vec", "sqlite_hybrid", "chroma", "pgvector", "redis", "zvec", "weaviate", "faiss", "pinecone"):
 
 		config["embedding_model"] = source.embedding_model
 		config["vector_dimension"] = source.vector_dimension
@@ -83,16 +83,18 @@ def process_knowledge_input(knowledge_input: str, skip_lock: bool = False) -> di
 	doc = frappe.get_doc("Knowledge Input", knowledge_input)
 	source = frappe.get_doc("Knowledge Source", doc.knowledge_source)
 
+	# Acquire the per-source lock FIRST so lock contention is distinguishable
+	# from real failures: a busy lock must return "busy" without touching the
+	# input status or the source status (a busy lock is not an Error).
+	lock_key = f"knowledge_index_{source.name}"
+	if not skip_lock and not frappe.cache().set(lock_key, 1, ex=300, nx=True):
+		return {"status": "busy", "knowledge_input": knowledge_input}
+
 	try:
 		# Update status
 		doc.status = "Processing"
 		doc.save(ignore_permissions=True)
 		frappe.db.commit()
-
-		# Acquire lock for this knowledge source
-		lock_key = f"knowledge_index_{source.name}"
-		if not skip_lock and not frappe.cache().set(lock_key, 1, ex=300, nx=True):
-			frappe.throw(_("Another indexing operation is in progress"))
 
 		try:
 			# Update source status
@@ -188,6 +190,32 @@ def process_knowledge_input(knowledge_input: str, skip_lock: bool = False) -> di
 			"status": "error",
 			"error": str(e),
 		}
+
+
+def process_single_input(knowledge_input: str, wait_seconds: int = 240, poll_seconds: int = 5) -> dict:
+	"""Single-file path: like process_knowledge_input, but waits out a busy
+	per-source lock (a bulk batch or another upload on the same source)
+	instead of leaving the input Pending forever. Gives up with a visible
+	Error so the user can Reprocess."""
+	import time
+
+	deadline = time.monotonic() + wait_seconds
+	while True:
+		result = process_knowledge_input(knowledge_input)
+		if result.get("status") != "busy":
+			return result
+		if time.monotonic() >= deadline:
+			frappe.db.set_value(
+				"Knowledge Input",
+				knowledge_input,
+				{
+					"status": "Error",
+					"error_message": _("Knowledge source is busy indexing other items; please Reprocess later"),
+				},
+			)
+			frappe.db.commit()
+			return {"status": "error", "error": "busy"}
+		time.sleep(poll_seconds)
 
 
 def rebuild_knowledge_index(knowledge_source: str) -> dict:

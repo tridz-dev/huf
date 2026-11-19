@@ -243,7 +243,8 @@ class PineconeBackend(LlamaIndexBackend, KnowledgeBackend):
 			return chunk_count
 		except Exception as exc:
 			frappe.logger().warning(f"Pinecone delete_chunks error for {input_id}: {exc!s}")
-			return 0
+			# Propagate: swallowing would let add_chunks append duplicates on re-index.
+			raise
 
 	def clear(self) -> None:
 		if not self._initialized:
