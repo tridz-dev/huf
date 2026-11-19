@@ -10,6 +10,7 @@ play. See docs/bulk-ingestion-contract.md for the frozen contract.
 
 from __future__ import annotations
 
+import json
 import time
 
 import frappe
@@ -73,6 +74,69 @@ def decide_idempotency(existing_status: str | None, existing_checksum: str | Non
 		return "reset_pending"
 	# Pending / Processing / anything unknown: idempotent replay.
 	return "leave_alone"
+
+
+def should_adopt_row(row_ingestion: str | None, row_ingestion_status: str | None) -> bool:
+	"""Adoption rule for a ``leave_alone`` row being replayed into a new ingestion.
+
+	Adopt when the row is unclaimed (no ``ingestion`` backref) or when the batch
+	it currently belongs to is terminal (Cancelled/Failed/Completed/…): a
+	cancelled batch must not orphan its rows forever. Never adopt from a live
+	(Queued/Running) batch -- that would steal rows from another running slice.
+	"""
+	if not row_ingestion:
+		return True
+	return (row_ingestion_status or "") in TERMINAL_INGESTION_STATUSES
+
+
+def should_finalize(counts: dict) -> bool:
+	"""Never finalize while rows are still Processing.
+
+	Processing rows are crash markers; a finalization while ``processing > 0``
+	strands them forever (the sweeper only resets them while the header is
+	still Running and recoverable). Leave the header Running so the sweeper can
+	reset the rows and re-enqueue the runner.
+	"""
+	return int(counts.get("processing") or 0) == 0
+
+
+def needs_materialization(materialized_total: int, declared_total: int) -> bool:
+	"""Materialize whenever fewer rows exist than were accepted at submit.
+
+	Submits that were interrupted mid-materialize (crash, lost enqueue) leave
+	``counts.total < total_items``; the stored manifest makes that recoverable.
+	"""
+	return int(materialized_total or 0) < int(declared_total or 0)
+
+
+def load_manifest(entries: list | None, manifest_json: str | None) -> list | None:
+	"""Resolve the manifest for a runner slice: an explicit ``entries`` argument
+	wins; otherwise fall back to the manifest persisted on the header."""
+	if entries is not None:
+		return entries
+	if not manifest_json:
+		return None
+	try:
+		loaded = json.loads(manifest_json)
+	except (TypeError, ValueError):
+		return None
+	return loaded if isinstance(loaded, list) else None
+
+
+def serialize_manifest(entries: list, max_bytes: int = 2_000_000) -> str | None:
+	"""Persist the accepted manifest as JSON, capped sanely.
+
+	Returns ``None`` (nothing persisted) when the serialized manifest exceeds
+	``max_bytes``; the first slice still carries ``entries`` in its enqueue
+	args, and finalize reports the shortfall if the crash was unrecoverable.
+	"""
+	try:
+		serialized = json.dumps(entries, separators=(",", ":"))
+	except (TypeError, ValueError):
+		return None
+	if len(serialized.encode("utf-8")) > max_bytes:
+		return None
+	return serialized
 
 
 # --- Runner ----------------------------------------------------------------
@@ -356,9 +420,16 @@ def materialize(ingestion_name: str, entries: list) -> dict:
 				)
 				stats["reused"] += 1
 			else:  # leave_alone: idempotent replay
-				# Only adopt the row into this ingestion if it has no backref;
-				# never steal a row that belongs to another batch.
-				if not frappe.db.get_value("Knowledge Input", existing_name, "ingestion"):
+				# Adopt the row into this ingestion only when it is unclaimed
+				# or its current batch is terminal (Cancelled/Failed/…);
+				# never steal a row from a live (Queued/Running) batch.
+				row_ingestion = frappe.db.get_value("Knowledge Input", existing_name, "ingestion")
+				header_status = None
+				if row_ingestion:
+					header_status = frappe.db.get_value(
+						"Knowledge Ingestion", row_ingestion, "status"
+					)
+				if should_adopt_row(row_ingestion, header_status):
 					frappe.db.set_value(
 						"Knowledge Input",
 						existing_name,

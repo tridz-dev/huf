@@ -13,6 +13,10 @@ controllers -- needs a live bench and is deliberately not covered here.
 from huf.ai.knowledge.bulk_runner import (
 	compute_progress,
 	decide_idempotency,
+	load_manifest,
+	needs_materialization,
+	should_adopt_row,
+	should_finalize,
 	slice_job_id,
 )
 
@@ -102,3 +106,34 @@ class TestIdempotencyDecisions:
 	def test_checksum_comparison_is_exact(self):
 		# 64-hex digests are compared verbatim (lowercased at the API boundary).
 		assert decide_idempotency("Indexed", "A" * 64, "a" * 64) == "reset_pending"
+
+
+class TestRowAdoptionRule:
+	"""B1: a ``leave_alone`` row is adopted when unclaimed or when its current
+	batch is terminal; never from a live (Queued/Running) batch.
+
+	Without this, a cancelled batch leaves rows with ``ingestion=<cancelled
+	header>`` and resubmitting the same external_keys materializes nothing.
+	"""
+
+	def test_unclaimed_row_is_adopted(self):
+		assert should_adopt_row(None, None) is True
+
+	def test_row_from_cancelled_batch_is_adopted(self):
+		assert should_adopt_row("ING-00001", "Cancelled") is True
+
+	def test_row_from_failed_batch_is_adopted(self):
+		assert should_adopt_row("ING-00001", "Failed") is True
+
+	def test_row_from_completed_batch_is_adopted(self):
+		assert should_adopt_row("ING-00001", "Completed") is True
+		assert should_adopt_row("ING-00001", "Completed with Errors") is True
+
+	def test_row_from_live_batch_is_not_adopted(self):
+		assert should_adopt_row("ING-00001", "Queued") is False
+		assert should_adopt_row("ING-00001", "Running") is False
+
+	def test_unknown_header_status_is_not_adopted(self):
+		# Unknown status -> treat as live (conservative: never steal rows).
+		assert should_adopt_row("ING-00001", None) is False
+		assert should_adopt_row("ING-00001", "SomeFutureStatus") is False
