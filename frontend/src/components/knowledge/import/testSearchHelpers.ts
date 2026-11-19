@@ -34,7 +34,7 @@ export function normalizeResults(raw: unknown): TestResult[] {
 export function matchLevels(results: TestResult[]): MatchLevel[] {
   const scores = results.map((r) => (typeof r.score === 'number' ? r.score : 0));
   const top = Math.max(0, ...scores);
-  const bounded = top <= 1;
+  const bounded = top <= 1 \&\& top >= 0.5; // weak-looking bounded scores are keyword scores: use relative
   return scores.map((s) => {
     const v = bounded ? s : top > 0 ? s / top : 0;
     const [hi, good] = bounded ? [0.75, 0.5] : [0.8, 0.5];
