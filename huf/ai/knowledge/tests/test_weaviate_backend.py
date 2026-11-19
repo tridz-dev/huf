@@ -426,13 +426,14 @@ class TestWeaviateBackend(unittest.TestCase):
 		self.assertEqual(self.backend.delete_chunks("input_1"), 0)
 		self.mock_vector_store.delete_nodes.assert_not_called()
 
-	def test_delete_chunks_error_returns_zero(self):
-		"""A Weaviate failure during delete is logged and reported as 0."""
+	def test_delete_chunks_error_propagates(self):
+		"""A Weaviate failure during delete propagates so re-index never appends duplicates."""
 		self._initialize()
 		self.mock_collection.aggregate.over_all.return_value = SimpleNamespace(total_count=3)
 		self.mock_vector_store.delete_nodes.side_effect = RuntimeError("boom")
 
-		self.assertEqual(self.backend.delete_chunks("input_1"), 0)
+		with self.assertRaises(RuntimeError):
+			self.backend.delete_chunks("input_1")
 
 	def test_clear(self):
 		"""Clear deletes all site+source chunks via the adapter, scoped."""
