@@ -61,6 +61,10 @@ class ScanContext:
 		if self.full:
 			self.truncated = True
 			return
+		if not content:
+			# A zero-byte file cannot become a File doc (Frappe rejects it with
+			# "File does not exist"); record it as skipped instead of failing the scan.
+			return self.add_skip(key, "No Text")
 		file_doc = make_private_file(self.knowledge_source, filename, content)
 		self.entries.append(
 			{

@@ -242,6 +242,17 @@ class TestS3Scan:
 		assert len(ctx.entries) == 2 and ctx.truncated
 
 
+class TestEmptyContent:
+	def test_zero_byte_content_is_skipped_not_a_file_doc(self):
+		bulk_sources, ctx = _scan_ctx()
+		with patch.object(bulk_sources, "make_private_file") as make_file:
+			ctx.add_content("empty.txt", "empty.txt", b"")
+		make_file.assert_not_called()
+		assert ctx.entries == [
+			{"file": None, "file_url": None, "external_key": "empty.txt", "checksum": None, "skip_reason": "No Text"}
+		]
+
+
 class _Attr:
 	def __init__(self, filename, mode, size=1):
 		self.filename, self.st_mode, self.st_size = filename, mode, size
