@@ -21,6 +21,9 @@ SLICE_LIMIT = 25
 SLICE_DEADLINE_SECONDS = 600
 LOCK_TTL_SECONDS = 120
 MAX_ATTEMPTS = 5
+RUNNING_STALE_MINUTES = 3
+QUEUED_STALE_MINUTES = 5
+PROCESSING_STALE_MINUTES = 10
 
 INGESTION_LOCK_PREFIX = "huf:ingest_lock:"
 
@@ -489,9 +492,46 @@ def _insert_input(ingestion_name: str, source_name: str, entry: dict, status: st
 
 # --- Recovery --------------------------------------------------------------
 
-def recover_stalled_ingestions() -> dict:
-	"""1-min cron safety net for workers that died mid-slice.
+def _reschedule_first_slice(ingestion_name: str) -> None:
+	"""Re-enqueue the runner for a lost/wedged enqueue on the first slice."""
+	frappe.enqueue(
+		run_ingestion,
+		queue="long",
+		timeout=1500,
+		enqueue_after_commit=True,
+		deduplicate=True,
+		job_id=slice_job_id(ingestion_name, 0),
+		ingestion_name=ingestion_name,
+		entries=None,
+		slice=0,
+	)
 
+
+def _reschedule_next_slice(ingestion_name: str) -> None:
+	"""Re-enqueue the runner for an orphaned Running header (next slice)."""
+	next_slice = (
+		frappe.db.get_value("Knowledge Ingestion", ingestion_name, "slice_seq") or 0
+	) + 1
+	frappe.db.set_value("Knowledge Ingestion", ingestion_name, {"slice_seq": next_slice})
+	frappe.enqueue(
+		run_ingestion,
+		queue="long",
+		timeout=1500,
+		enqueue_after_commit=True,
+		deduplicate=True,
+		job_id=slice_job_id(ingestion_name, next_slice),
+		ingestion_name=ingestion_name,
+		entries=None,
+		slice=next_slice,
+	)
+
+
+def recover_stalled_ingestions() -> dict:
+	"""1-min cron safety net for lost enqueues and workers that died mid-slice.
+
+	- ``Queued`` header older than 5 min with no live lock -> re-enqueue the
+	  first slice (stale Queued otherwise blocks its source forever, because
+	  submit refuses while any Queued|Running ingestion exists).
 	- ``Running`` header with stale ``modified`` (older than 3 min) and no live
 	  lock -> re-enqueue the runner.
 	- ``Processing`` rows older than 10 min -> ``Pending`` (crash markers).
@@ -501,6 +541,21 @@ def recover_stalled_ingestions() -> dict:
 	now = now_datetime()
 	recovered = 0
 	rescheduled = []
+
+	# Orphaned Queued header: lost enqueue or wedged queue. Use the
+	# modified-time heuristic (the Running path's approach); enqueue
+	# deduplication guards against a duplicate when the original job is
+	# merely slow. The manifest persisted on the header makes the first
+	# slice re-materializable.
+	queued = frappe.get_all("Knowledge Ingestion", filters={"status": "Queued"}, pluck="name")
+	for ingestion_name in queued:
+		header_modified = frappe.db.get_value("Knowledge Ingestion", ingestion_name, "modified")
+		if not header_modified or header_modified >= add_to_date(now, minutes=-QUEUED_STALE_MINUTES):
+			continue
+		if frappe.cache().get_value(INGESTION_LOCK_PREFIX + ingestion_name):
+			continue
+		_reschedule_first_slice(ingestion_name)
+		rescheduled.append(ingestion_name)
 
 	running = frappe.get_all(
 		"Knowledge Ingestion", filters={"status": "Running"}, pluck="name"
@@ -512,7 +567,7 @@ def recover_stalled_ingestions() -> dict:
 			filters={
 				"ingestion": ingestion_name,
 				"status": "Processing",
-				"modified": ("<", add_to_date(now, minutes=-10)),
+				"modified": ("<", add_to_date(now, minutes=-PROCESSING_STALE_MINUTES)),
 			},
 			pluck="name",
 		)
@@ -522,24 +577,10 @@ def recover_stalled_ingestions() -> dict:
 
 		# Orphaned Running header: stale modified and no live lock.
 		header_modified = frappe.db.get_value("Knowledge Ingestion", ingestion_name, "modified")
-		if header_modified and header_modified < add_to_date(now, minutes=-3):
+		if header_modified and header_modified < add_to_date(now, minutes=-RUNNING_STALE_MINUTES):
 			lock_live = frappe.cache().get_value(INGESTION_LOCK_PREFIX + ingestion_name)
 			if not lock_live:
-				next_slice = (
-					frappe.db.get_value("Knowledge Ingestion", ingestion_name, "slice_seq") or 0
-				) + 1
-				frappe.db.set_value("Knowledge Ingestion", ingestion_name, {"slice_seq": next_slice})
-				frappe.enqueue(
-					run_ingestion,
-					queue="long",
-					timeout=1500,
-					enqueue_after_commit=True,
-					deduplicate=True,
-					job_id=slice_job_id(ingestion_name, next_slice),
-					ingestion_name=ingestion_name,
-					entries=None,
-					slice=next_slice,
-				)
+				_reschedule_next_slice(ingestion_name)
 				rescheduled.append(ingestion_name)
 
 	if recovered or rescheduled:
