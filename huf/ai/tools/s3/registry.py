@@ -2,7 +2,7 @@
 
 S3_SERVICE = {
 	"service_name": "S3",
-	"category": "Storage",
+	"category": "Cloud",
 	"surface": "Integration",
 	"description": "S3 and S3-compatible object storage (AWS S3, Cloudflare R2, MinIO)",
 	"required_credentials": [
@@ -41,7 +41,7 @@ S3_TOOLS = [
 		"tool_name": "s3_list_objects",
 		"description": "List objects in an S3-compatible bucket (one page). Requires S3 credentials.",
 		"function_path": "huf.ai.tools.s3.handle_list_objects",
-		"category": "Storage",
+		"category": "Cloud",
 		"parameters": [
 			_p("bucket", required=True, description="Bucket name"),
 			_p("prefix", description="Only keys starting with this prefix"),
@@ -53,7 +53,7 @@ S3_TOOLS = [
 		"tool_name": "s3_search_objects",
 		"description": "Find objects whose key contains a text (case-insensitive). Requires S3 credentials.",
 		"function_path": "huf.ai.tools.s3.handle_search_objects",
-		"category": "Storage",
+		"category": "Cloud",
 		"parameters": [
 			_p("bucket", required=True, description="Bucket name"),
 			_p("query", required=True, description="Text to find in object keys"),
@@ -65,7 +65,7 @@ S3_TOOLS = [
 		"tool_name": "s3_get_object_text",
 		"description": "Read a text object (up to 5 MB) and return its text, truncated. Requires S3 credentials.",
 		"function_path": "huf.ai.tools.s3.handle_get_object_text",
-		"category": "Storage",
+		"category": "Cloud",
 		"parameters": [
 			_p("bucket", required=True, description="Bucket name"),
 			_p("key", required=True, description="Object key"),
