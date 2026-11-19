@@ -305,7 +305,7 @@ class TestScanCleanup:
 		boom = MagicMock(side_effect=RuntimeError("boom"))
 		fake_frappe = MagicMock()
 		fake_frappe.db.get_value.return_value = "KS-1"
-		with patch.object(bulk_sources, "frappe", fake_frappe), patch.object(bulk_sources, "load_limits", return_value=ctx.limits), patch.object(
+		with patch.object(bulk_sources, "frappe", fake_frappe), patch.object(bulk_sources, "now_datetime", return_value=__import__("datetime").datetime(2026, 1, 1)), patch.object(bulk_sources, "load_limits", return_value=ctx.limits), patch.object(
 			bulk_sources, "ScanContext", return_value=ctx
 		), patch.dict(bulk_sources.SCANNERS, {"Upload": boom}):
 			result = bulk_sources.run_scan("ING-1", "Upload", {})
@@ -319,7 +319,7 @@ class TestScanCleanup:
 		bulk_sources, _ctx = _scan_ctx()
 		fake_frappe = MagicMock()
 		fake_frappe.db.get_value.return_value = "Cancelled"
-		with patch.object(bulk_sources, "frappe", fake_frappe):
+		with patch.object(bulk_sources, "frappe", fake_frappe), patch.object(bulk_sources, "now_datetime", return_value=__import__("datetime").datetime(2026, 1, 1)):
 			out = bulk_sources.finish_scan("ING-1", [{"file": "F1", "external_key": "k"}], created_files=["F1"])
 		assert out == {"status": "cancelled"}
 		fake_frappe.delete_doc.assert_called_once_with("File", "F1", ignore_permissions=True, force=True)
@@ -332,7 +332,7 @@ class TestStaleScanningRecovery:
 		fake_frappe = MagicMock()
 		fake_frappe.get_all.side_effect = lambda dt, filters=None, pluck=None, **kw: ["ING-1"] if filters == {"status": "Scanning"} else []
 		fake_frappe.db.get_value.return_value = __import__('datetime').datetime(2000, 1, 1)
-		with patch.object(bulk_recovery, "frappe", fake_frappe):
+		with patch.object(bulk_recovery, "frappe", fake_frappe), patch.object(bulk_recovery, "now_datetime", return_value=__import__("datetime").datetime(2026, 1, 1)):
 			try:
 				bulk_recovery.recover_stalled_ingestions()
 			except Exception:  # noqa: BLE001 -- later sections may need a DB; only the SQL matters
