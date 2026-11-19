@@ -156,3 +156,14 @@ Scanners later plug in as "produce manifest entries" and reuse everything above.
 
 One source = one indexing lane (~1 doc / 3–10 s → 1,000 docs ≈ 1–3 h).
 Scale throughput by sharding across multiple Knowledge Sources.
+
+## Sources (Upload / Zip / Directory / S3 / SFTP)
+
+`Knowledge Ingestion` gains `source_kind`, `source_config` (non-secret echo) and status `Scanning`
+(active, like Queued/Running; a stale Scanning header is failed by the sweeper after 20 min without
+a heartbeat). `huf.ai.knowledge.bulk_sources_api.start_import(knowledge_source, source_kind, config)`
+(POST) creates the Scanning header and enqueues `sources.scanners.run_scan` (queue long); the scan
+creates private File docs, writes the manifest, flips Scanning -> Queued and enqueues the same
+`run_ingestion`. Manifest entries with `skip_reason` (`Too Large` / `Unsupported`) have no File and
+materialize as Skipped rows. Limits: `huf_bulk_max_file_mb` (50), `huf_bulk_max_files` (1000),
+`huf_bulk_max_uncompressed_mb` (1024), `huf_bulk_allowed_extensions`, `huf_bulk_directory_roots`.

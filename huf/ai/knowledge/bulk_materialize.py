@@ -15,6 +15,28 @@ from .bulk_runner import (
 	should_adopt_row,
 )
 
+# Source scanners pre-classify files they will not index (no File doc is
+# created for them): the manifest entry carries the skip_reason.
+PRESET_SKIP_REASONS = ("Too Large", "Unsupported")
+
+
+def _materialize_preset_skip(ingestion_name: str, source_name: str, entry: dict, stats: dict) -> None:
+	name = frappe.db.get_value(
+		"Knowledge Input", {"knowledge_source": source_name, "external_key": entry.get("external_key")}
+	)
+	if name:
+		if frappe.db.get_value("Knowledge Input", name, "status") in ("Pending", "Processing"):
+			return
+		frappe.db.set_value(
+			"Knowledge Input",
+			name,
+			{"ingestion": ingestion_name, "status": "Skipped", "skip_reason": entry["skip_reason"]},
+		)
+	else:
+		_insert_input(ingestion_name, source_name, entry, status="Skipped", skip_reason=entry["skip_reason"])
+	stats["skipped_preset"] = stats.get("skipped_preset", 0) + 1
+
+
 # --- Materialization -------------------------------------------------------
 
 def materialize(ingestion_name: str, entries: list) -> dict:
@@ -35,8 +57,13 @@ def materialize(ingestion_name: str, entries: list) -> dict:
 	try:
 		for entry in entries:
 			external_key = entry.get("external_key")
-			checksum = entry.get("checksum") or _file_checksum(entry.get("file"))
+			checksum = entry.get("checksum") or (
+				None if entry.get("skip_reason") else _file_checksum(entry.get("file"))
+			)
 			entry = {**entry, "checksum": checksum}
+			if entry.get("skip_reason") in PRESET_SKIP_REASONS:
+				_materialize_preset_skip(ingestion_name, source_name, entry, stats)
+				continue
 			existing_name = frappe.db.get_value(
 				"Knowledge Input",
 				{"knowledge_source": source_name, "external_key": external_key},
@@ -135,7 +162,7 @@ def _file_checksum(file_name: str | None) -> str | None:
 
 def _insert_input(ingestion_name: str, source_name: str, entry: dict, status: str = "Pending", skip_reason: str | None = None) -> None:
 	"""Create one bulk Knowledge Input row (no auto-enqueue under the flag)."""
-	frappe.get_doc(
+	doc = frappe.get_doc(
 		{
 			"doctype": "Knowledge Input",
 			"knowledge_source": source_name,
@@ -150,4 +177,9 @@ def _insert_input(ingestion_name: str, source_name: str, entry: dict, status: st
 			# missing, which would brand every row "Duplicate".
 			"skip_reason": skip_reason or "",
 		}
-	).insert(ignore_permissions=True)
+	)
+	if status == "Skipped" and not entry.get("file_url"):
+		# Preset-skipped rows have no File doc; the File-type validation
+		# ("File is required") does not apply to a row that is never read.
+		doc.flags.ignore_validate = True
+	doc.insert(ignore_permissions=True)
