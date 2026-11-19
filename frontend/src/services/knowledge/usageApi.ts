@@ -13,3 +13,15 @@ export async function getAgentCountsBySource(): Promise<Record<string, number>> 
   for (const r of res.message ?? []) out[r.knowledge_source] = Number(r.count) || 0;
   return out;
 }
+
+/** Names of the agents that use one knowledge source (deduplicated). */
+export async function getAgentsForSource(knowledgeSource: string): Promise<string[]> {
+  const res = (await call.get('frappe.client.get_list', {
+    doctype: 'Agent Knowledge',
+    parent: 'Agent',
+    fields: JSON.stringify(['parent']),
+    filters: JSON.stringify({ knowledge_source: knowledgeSource }),
+    limit_page_length: 500,
+  })) as { message?: Array<{ parent: string }> };
+  return Array.from(new Set((res.message ?? []).map((r) => r.parent).filter(Boolean)));
+}

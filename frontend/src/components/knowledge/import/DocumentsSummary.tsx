@@ -1,6 +1,7 @@
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
+import type { DocFilter } from './docFilter';
 import type { Health, HealthKey, InputCounts } from './ingestionLabels';
 
 const HEALTH_VARIANT: Record<HealthKey, 'pill-success' | 'pill-info' | 'pill-warning' | 'pill-neutral' | 'pill-danger'> = {
@@ -28,21 +29,23 @@ export function HealthBadge({ health, className }: { health: Health; className?:
 interface DocumentsSummaryProps {
   counts: InputCounts;
   onReviewProblems?: () => void;
+  filter?: DocFilter | null;
+  onFilterChange?: (filter: DocFilter | null) => void;
   className?: string;
 }
 
-export function DocumentsSummary({ counts, onReviewProblems, className }: DocumentsSummaryProps) {
-  const parts: Array<{ label: string; tone: string }> = [
-    { label: `${counts.ready.toLocaleString()} ready`, tone: 'text-good' },
+export function DocumentsSummary({ counts, onReviewProblems, filter = null, onFilterChange, className }: DocumentsSummaryProps) {
+  const parts: Array<{ label: string; tone: string; key?: DocFilter }> = [
+    { label: `${counts.ready.toLocaleString()} ready`, tone: 'text-good', key: 'ready' },
   ];
   if (counts.inProgress > 0) {
     parts.push({ label: `${counts.inProgress.toLocaleString()} in progress`, tone: 'text-signal-ink' });
   }
   if (counts.failed > 0) {
-    parts.push({ label: `${counts.failed.toLocaleString()} need attention`, tone: 'text-destructive' });
+    parts.push({ label: `${counts.failed.toLocaleString()} need attention`, tone: 'text-destructive', key: 'attention' });
   }
   if (counts.skipped > 0) {
-    parts.push({ label: `${counts.skipped.toLocaleString()} skipped`, tone: 'text-steel' });
+    parts.push({ label: `${counts.skipped.toLocaleString()} skipped`, tone: 'text-steel', key: 'skipped' });
   }
   return (
     <div
@@ -52,11 +55,24 @@ export function DocumentsSummary({ counts, onReviewProblems, className }: Docume
       <span className="font-medium text-ink">
         {counts.total.toLocaleString()} {counts.total === 1 ? 'document' : 'documents'}
       </span>
-      {parts.map((p) => (
-        <span key={p.label} className={p.tone}>
-          {p.label}
-        </span>
-      ))}
+      {parts.map((p) =>
+        p.key && onFilterChange ? (
+          <button
+            key={p.label}
+            type="button"
+            aria-pressed={filter === p.key}
+            title={filter === p.key ? 'Show all documents' : 'Show only these'}
+            onClick={() => onFilterChange(filter === p.key ? null : p.key!)}
+            className={cn(p.tone, 'rounded px-1 underline-offset-4 hover:underline', filter === p.key && 'bg-muted font-medium underline')}
+          >
+            {p.label}
+          </button>
+        ) : (
+          <span key={p.label} className={p.tone}>
+            {p.label}
+          </span>
+        ),
+      )}
       {counts.failed + counts.skipped > 0 && onReviewProblems && (
         <button type="button" onClick={onReviewProblems} className="text-signal-ink underline-offset-4 hover:underline">
           Review

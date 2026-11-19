@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { InlineEditName } from '@/components/common/InlineEditName';
 import { ConfirmActionDialog } from './import/ConfirmActionDialog';
+import { AgentUsageLink } from './AgentUsageLink';
 import { HealthBadge } from './import/DocumentsSummary';
 import type { Health } from './import/ingestionLabels';
 import type { KnowledgeSourceFormValues } from './types';
@@ -92,6 +93,7 @@ export function KnowledgeSourceHeader({
           />
         )}
         {health && <HealthBadge health={health} />}
+        {!isNew && id && <AgentUsageLink knowledgeSource={id} />}
       </div>
       <div className="flex items-center gap-2">
         {fromAgent && onCancel && (

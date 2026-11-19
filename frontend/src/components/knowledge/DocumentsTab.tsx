@@ -6,6 +6,7 @@ import { AddContentDialog } from './import/AddContentDialog';
 import { DocumentsSummary } from './import/DocumentsSummary';
 import { IngestionProblemsSheet } from './import/IngestionProblemsSheet';
 import { IngestionProgressCard } from './import/IngestionProgressCard';
+import type { DocFilter } from './import/docFilter';
 import type { InputCounts } from './import/ingestionLabels';
 import { DocumentsTable } from './DocumentsTable';
 
@@ -44,13 +45,17 @@ export function DocumentsTab({
 }: DocumentsTabProps) {
   const [shown, setShown] = useState<string | null>(null);
   const [problemsFor, setProblemsFor] = useState<string | null>(null);
+  const [filter, setFilter] = useState<DocFilter | null>(null);
   const ingestion = shown ?? active;
   const problemIngestion =
     inputs.find((i) => (i.status === 'Error' || i.status === 'Skipped') && i.ingestion)?.ingestion ?? latest;
 
   return (
     <div className="space-y-4" data-testid="documents-tab">
-      <DocumentsSummary counts={counts} onReviewProblems={() => setProblemsFor(problemIngestion)} />
+      <DocumentsSummary counts={counts} onReviewProblems={() => setProblemsFor(problemIngestion)}
+        filter={filter}
+        onFilterChange={setFilter}
+      />
 
       {source.status === 'Error' && (
         <Alert variant="destructive">
@@ -89,7 +94,7 @@ export function DocumentsTab({
           </div>
         </div>
       ) : (
-        <DocumentsTable inputs={inputs} loading={inputsLoading} onReprocess={onReprocess} onRemove={onRemove} />
+        <DocumentsTable inputs={inputs} filter={filter} loading={inputsLoading} onReprocess={onReprocess} onRemove={onRemove} />
       )}
 
       <IngestionProblemsSheet
