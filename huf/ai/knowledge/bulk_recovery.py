@@ -15,6 +15,7 @@ from .bulk_runner import (
 	RUNNING_STALE_MINUTES,
 	QUEUED_STALE_MINUTES,
 	PROCESSING_STALE_MINUTES,
+	SCANNING_STALE_MINUTES,
 	INGESTION_LOCK_PREFIX,
 	slice_job_id,
 	run_ingestion,
@@ -124,6 +125,25 @@ def recover_stalled_ingestions() -> dict:
 			continue
 		_reschedule_first_slice(ingestion_name)
 		rescheduled.append(ingestion_name)
+
+	# Stale Scanning header: the scan job heartbeats ``modified``; a header
+	# silent for SCANNING_STALE_MINUTES lost its worker. The scan's temp files
+	# are gone, so fail it (frees the source) instead of re-enqueuing.
+	for ingestion_name in frappe.get_all(
+		"Knowledge Ingestion", filters={"status": "Scanning"}, pluck="name"
+	):
+		header_modified = frappe.db.get_value("Knowledge Ingestion", ingestion_name, "modified")
+		if header_modified and header_modified < add_to_date(now, minutes=-SCANNING_STALE_MINUTES):
+			frappe.db.set_value(
+				"Knowledge Ingestion",
+				ingestion_name,
+				{
+					"status": "Failed",
+					"finished_at": now,
+					"error_message": _("Source scan was interrupted (worker died or timed out); start the import again"),
+				},
+			)
+			recovered += 1
 
 	running = frappe.get_all(
 		"Knowledge Ingestion", filters={"status": "Running"}, pluck="name"
