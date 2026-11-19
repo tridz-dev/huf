@@ -18,7 +18,7 @@ const KNOWLEDGE_SOURCE_LIST_FIELDS = [
   'status',
   'total_chunks',
   'total_inputs',
-  'last_indexed_at',
+  'last_indexed_at', 'modified',
   'disabled',
 ];
 
@@ -218,7 +218,7 @@ const KNOWLEDGE_INPUT_LIST_FIELDS = [
   'external_key',
   'input_type',
   'file',
-  'file_name',
+  'file_name', 'creation',
   'file_type',
   'text',
   'url',
