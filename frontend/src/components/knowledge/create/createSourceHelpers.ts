@@ -1,6 +1,6 @@
 import { isVectorKnowledgeType } from '@/data/knowledge';
 import type { KnowledgeSourceDoc } from '@/types/knowledge.types';
-import type { KnowledgeSourceFormValues } from './types';
+import type { KnowledgeSourceFormValues } from '../types';
 
 export const CREATE_SOURCE_DEFAULTS: KnowledgeSourceFormValues = {
   source_name: '',
