@@ -195,9 +195,7 @@ export function KnowledgeTestTab({ source }: { source: KnowledgeSourceDoc | null
                         </p>
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <Badge variant={LEVEL_VARIANT[levels[i]]} size="sm">
-                              {MATCH_LABEL[levels[i]]}
-                            </Badge>
+                            <span><Badge variant={LEVEL_VARIANT[levels[i]]} size="sm">{MATCH_LABEL[levels[i]]}</Badge></span>
                           </TooltipTrigger>
                           <TooltipContent>
                             Score {typeof r.score === 'number' ? r.score.toFixed(3) : 'n/a'}
