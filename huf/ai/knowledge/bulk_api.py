@@ -28,7 +28,7 @@ CHECKSUM_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 ACTIVE_INGESTION_STATUSES = ("Queued", "Running")
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def submit_files(knowledge_source: str, files):
 	"""Submit a batch of files for bulk ingestion into a Knowledge Source.
 
@@ -216,7 +216,7 @@ def get_ingestion_status(ingestion: str, include_items: int = 0, item_status=Non
 	}
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def retry_ingestion(ingestion: str, only_failed: int = 1):
 	"""Error rows (and, with only_failed=0, Skipped/No Text rows) -> Pending; re-enqueue."""
 	doc = frappe.get_doc("Knowledge Ingestion", ingestion)
@@ -281,7 +281,7 @@ def retry_ingestion(ingestion: str, only_failed: int = 1):
 	return {"ingestion": ingestion, "status": "Queued", "rescheduled": rescheduled}
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def cancel_ingestion(ingestion: str):
 	"""Header -> Cancelled + finished_at; the runner checks the header at the slice boundary."""
 	doc = frappe.get_doc("Knowledge Ingestion", ingestion)
