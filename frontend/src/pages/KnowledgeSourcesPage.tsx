@@ -1,11 +1,13 @@
-import { useEffect } from 'react';
-import { Calendar, Settings, Database, BookOpen } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Calendar, Settings, Database, BookOpen, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { PageFrame } from '@/layouts/PageFrame';
 import { FilterBar, GridView, ItemCard, LoadMoreButton, EmptyState } from '../components/dashboard';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
-import { getKnowledgeSources } from '../services/knowledgeApi';
+import { deleteKnowledgeSource, getKnowledgeSources } from '../services/knowledgeApi';
+import { getFrappeErrorMessage } from '../lib/frappe-error';
+import { ConfirmActionDialog } from '../components/knowledge/import/ConfirmActionDialog';
 import { formatTimeAgo } from '../utils/time';
 import { knowledgeSourceFilterStatuses, knowledgeTypeLabels } from '../data/knowledge';
 import type { KnowledgeSourceDoc } from '../types/knowledge.types';
@@ -35,6 +37,8 @@ export default KnowledgeSourcesPage;
 
 function KnowledgeSourcesPage() {
   const navigate = useNavigate();
+  const [deleteTarget, setDeleteTarget] = useState<KnowledgeSourceDoc | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const {
     items: sources,
@@ -46,6 +50,7 @@ function KnowledgeSourcesPage() {
     filters,
     setFilter,
     loadMore,
+    reset,
     total,
     error,
   } = useInfiniteScroll<
@@ -163,6 +168,13 @@ function KnowledgeSourcesPage() {
                   onClick: () => navigate(`/knowledge/${source.name}`),
                 },
               ]}
+              menuActions={[
+                {
+                  icon: Trash2,
+                  label: 'Delete',
+                  onClick: () => setDeleteTarget(source),
+                },
+              ]}
               onClick={() => navigate(`/knowledge/${source.name}`)}
             />
           );
@@ -182,6 +194,29 @@ function KnowledgeSourcesPage() {
             : 'No more knowledge sources to load'}
         </div>
       )}
+      <ConfirmActionDialog
+        open={deleteTarget !== null}
+        onOpenChange={(o) => !o && setDeleteTarget(null)}
+        title={`Delete "${deleteTarget?.source_name || deleteTarget?.name}"?`}
+        description="This removes the source and all of its documents. Agents using it will lose access. This cannot be undone."
+        confirmLabel="Delete source"
+        destructive
+        busy={deleting}
+        onConfirm={async () => {
+          if (!deleteTarget) return;
+          setDeleting(true);
+          try {
+            await deleteKnowledgeSource(deleteTarget.name);
+            toast.success('Knowledge source deleted');
+            setDeleteTarget(null);
+            await reset();
+          } catch (e) {
+            toast.error(getFrappeErrorMessage(e) || 'Could not delete this knowledge source');
+          } finally {
+            setDeleting(false);
+          }
+        }}
+      />
     </PageFrame>
   );
 }
