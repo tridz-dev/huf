@@ -9,6 +9,7 @@ from frappe.utils import now_datetime
 
 from .backends import get_backend
 from .chunkers.sentence import chunk_text
+from .pages import chunk_metadata
 from .extractors import ExtractedText, TextExtractor
 
 
@@ -125,7 +126,7 @@ def process_knowledge_input(knowledge_input: str, skip_lock: bool = False) -> di
 						"text": chunk.text,
 						"char_start": chunk.char_start,
 						"char_end": chunk.char_end,
-						"metadata": extracted.metadata or {},
+						"metadata": chunk_metadata(extracted.metadata, chunk.char_start),
 					}
 				)
 
