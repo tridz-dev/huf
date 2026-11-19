@@ -359,6 +359,9 @@ export interface IngestionHeader {
   finished_at?: string | null;
   error_message?: string | null;
   modified?: string;
+  /** Not returned by older backends. */
+  source_kind?: SourceKind | null;
+  source_config?: Partial<{ bucket: string; prefix: string; ssh_connection: string; root_path: string; path: string }> | null;
 }
 
 export interface IngestionCounts {
