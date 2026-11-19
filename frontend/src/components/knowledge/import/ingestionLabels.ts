@@ -133,3 +133,11 @@ export function computeHealth(
   }
   return { key: 'empty', label: 'Empty', hint: 'Add documents to get started.' };
 }
+
+/** Display name for an input/problem row: the file's own name, never a raw `upload://`/`zip://` key. */
+export function displayFileLabel(fileName?: string | null, externalKey?: string | null): string {
+  if (fileName) return fileName;
+  if (!externalKey) return '';
+  const path = externalKey.replace(/#[0-9a-f]{40}$/, '').replace(/^[a-z0-9]+:\/\//i, '');
+  return path.split('/').filter(Boolean).pop() || externalKey;
+}

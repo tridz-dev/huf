@@ -12,7 +12,7 @@ import {
   type IngestionItem,
   type IngestionStatusResult,
 } from '@/services/knowledgeApi';
-import { itemReason, itemStatusLabel } from './ingestionLabels';
+import { displayFileLabel, itemReason, itemStatusLabel } from './ingestionLabels';
 
 type Filter = 'all' | 'Error' | 'Skipped';
 const PAGE = 50;
@@ -119,7 +119,7 @@ export function IngestionProblemsSheet({ ingestion, onOpenChange, onRetried }: I
           {items.map((item) => (
             <li key={item.name} className="rounded-md border p-3" data-testid="problem-item">
               <div className="flex items-start justify-between gap-2">
-                <p className="min-w-0 break-words text-sm font-medium">{item.file_name || item.external_key || item.name}</p>
+                <p className="min-w-0 break-words text-sm font-medium">{displayFileLabel(item.file_name, item.external_key) || item.name}</p>
                 <Badge variant={item.status === 'Error' ? 'pill-danger' : 'pill-neutral'}>
                   {itemStatusLabel(item.status)}
                 </Badge>
