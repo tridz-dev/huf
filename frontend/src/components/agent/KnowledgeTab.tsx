@@ -9,6 +9,7 @@ interface KnowledgeTabProps {
   onAdd: () => void;
   onEdit: (index: number) => void;
   onRemove: (index: number) => void;
+  onCreateNew?: () => void;
 }
 
 export function KnowledgeTab({
@@ -16,6 +17,7 @@ export function KnowledgeTab({
   onAdd,
   onEdit,
   onRemove,
+  onCreateNew,
 }: KnowledgeTabProps) {
   return (
     <Card>
@@ -31,7 +33,7 @@ export function KnowledgeTab({
           <div className="flex items-center gap-2">
             <Button size="sm" variant="outline" onClick={onAdd} type="button">
               <Plus className="w-4 h-4 mr-2" />
-              Add knowledge
+              Add knowledge source
             </Button>
           </div>
         </div>
@@ -39,15 +41,19 @@ export function KnowledgeTab({
       <CardContent>
         {knowledgeSources.length === 0 ? (
           <div className="text-center py-12 border border-dashed rounded-lg bg-paper-deep/20">
-            <p className="font-body text-steel-soft mb-2">No knowledge sources linked yet.</p>
-            <p className="text-xs text-steel-soft mb-4">
-              Link knowledge sources so this agent can retrieve relevant context from indexed documents.
+            <p className="font-body text-steel-soft mb-4">
+              This agent has no knowledge yet. Add a source so it can answer from your documents.
             </p>
             <div className="flex items-center justify-center gap-2 flex-wrap">
               <Button onClick={onAdd} variant="outline" type="button">
                 <Plus className="w-4 h-4 mr-2" />
-                Add knowledge
+                Add knowledge source
               </Button>
+              {onCreateNew && (
+                <Button onClick={onCreateNew} variant="ghost" type="button">
+                  Create a new source
+                </Button>
+              )}
             </div>
           </div>
         ) : (
@@ -82,7 +88,7 @@ export function KnowledgeTab({
                       </p>
                     )}
                     <div className="flex items-center gap-3 text-xs text-steel-soft pt-1">
-                      <span>Max chunks: {ks.max_chunks}</span>
+                      <span>Max results: {ks.max_chunks}</span>
                       <span>Token budget: {ks.token_budget}</span>
                     </div>
                   </div>
