@@ -229,12 +229,28 @@ const KNOWLEDGE_INPUT_LIST_FIELDS = [
   'error_message',
 ];
 
+let inputTitleSupport: Promise<boolean> | null = null;
+
+/** True when the Knowledge Input doctype has the optional `title` field (needs a migrate). */
+export function knowledgeInputHasTitle(): Promise<boolean> {
+  if (!inputTitleSupport) {
+    inputTitleSupport = call
+      .get('frappe.desk.form.load.getdoctype', { doctype: doctype['Knowledge Input'] })
+      .then((r: { docs?: Array<{ fields?: Array<{ fieldname: string }> }> }) =>
+        !!r?.docs?.[0]?.fields?.some((f) => f.fieldname === 'title'),
+      )
+      .catch(() => false);
+  }
+  return inputTitleSupport;
+}
+
 export async function getKnowledgeInputs(
   knowledgeSource: string,
 ): Promise<KnowledgeInputDoc[]> {
   try {
+    const hasTitle = await knowledgeInputHasTitle();
     const inputs = await db.getDocList(doctype['Knowledge Input'], {
-      fields: KNOWLEDGE_INPUT_LIST_FIELDS,
+      fields: hasTitle ? [...KNOWLEDGE_INPUT_LIST_FIELDS, 'title'] : KNOWLEDGE_INPUT_LIST_FIELDS,
       filters: [['knowledge_source', '=', knowledgeSource]],
       limit: 1000,
       orderBy: { field: 'modified', order: 'desc' },
@@ -342,6 +358,7 @@ export interface IngestionItem {
   name: string;
   external_key?: string | null;
   file_name?: string | null;
+  title?: string | null;
   status: 'Pending' | 'Processing' | 'Indexed' | 'Error' | 'Skipped';
   chunks_created?: number;
   attempts?: number;

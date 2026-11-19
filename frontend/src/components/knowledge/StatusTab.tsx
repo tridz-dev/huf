@@ -59,6 +59,7 @@ function formatBytes(bytes: number): string {
 }
 
 function getInputLabel(input: KnowledgeInputDoc): string {
+  if (input.title?.trim()) return input.title.trim();
   switch (input.input_type) {
     case 'File':
       return input.file_name || input.external_key || input.file || 'Untitled file';

@@ -99,6 +99,10 @@ export function KnowledgeContentSection({
         onOpenChange={onAddOpenChange}
         knowledgeSource={knowledgeSource}
         sourceLabel={source.source_name}
+        onInputAdded={() => {
+          setBump((b) => b + 1);
+          onChanged();
+        }}
         onStarted={(name) => {
           setShown(name);
           setBump((b) => b + 1);

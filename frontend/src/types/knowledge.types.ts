@@ -113,6 +113,7 @@ export interface KnowledgeInputDoc {
 	file_name?: string | null;
 	file_type?: string | null;
 	text?: string | null;
+	title?: string | null;
 	url?: string | null;
 
 	// Status (all read-only)

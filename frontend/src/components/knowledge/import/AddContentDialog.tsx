@@ -14,17 +14,21 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { file as frappeFile } from '@/lib/frappe-sdk';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
 import {
+  createKnowledgeInput,
   getImportOptions,
+  knowledgeInputHasTitle,
   startImport,
   type ImportConfig,
   type ImportOptions,
   type SourceKind,
 } from '@/services/knowledgeApi';
+import type { KnowledgeInputDoc } from '@/types/knowledge.types';
 import { UploadPanel } from './UploadPanel';
 import { EMPTY_REMOTE, isZip, type RemoteValues, type StagedFile } from './importHelpers';
+import { EMPTY_DIRECT, TextPanel, WebPagePanel, type DirectValues } from './DirectInputPanels';
 import { DirectoryPanel, S3Panel, SftpPanel } from './RemoteSourcePanels';
 
-type TabKey = 'upload' | 'directory' | 's3' | 'sftp';
+type TabKey = 'upload' | 'directory' | 's3' | 'sftp' | 'text' | 'url';
 
 interface AddContentDialogProps {
   open: boolean;
@@ -32,6 +36,8 @@ interface AddContentDialogProps {
   knowledgeSource: string;
   sourceLabel?: string;
   onStarted: (ingestion: string) => void;
+  /** Called after a Text or Web page input is created directly (no ingestion). */
+  onInputAdded?: () => void;
 }
 
 async function uploadPrivate(file: File, onProgress: (pct: number) => void): Promise<string> {
@@ -54,12 +60,14 @@ export function AddContentDialog({
   knowledgeSource,
   sourceLabel,
   onStarted,
+  onInputAdded,
 }: AddContentDialogProps) {
   const [options, setOptions] = useState<ImportOptions | null>(null);
   const [optionsError, setOptionsError] = useState<string | null>(null);
   const [tab, setTab] = useState<TabKey>('upload');
   const [staged, setStaged] = useState<StagedFile[]>([]);
   const [remote, setRemote] = useState<RemoteValues>(EMPTY_REMOTE);
+  const [direct, setDirect] = useState<DirectValues>(EMPTY_DIRECT);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -76,6 +84,7 @@ export function AddContentDialog({
     if (!open) {
       setStaged([]);
       setRemote(EMPTY_REMOTE);
+      setDirect(EMPTY_DIRECT);
       setTab('upload');
       setBusy(false);
     }
@@ -87,6 +96,8 @@ export function AddContentDialog({
   const canSubmit =
     !busy &&
     ((tab === 'upload' && accepted.length > 0) ||
+      (tab === 'text' && direct.text.trim().length > 0) ||
+      (tab === 'url' && direct.url.trim().length > 0) ||
       (tab === 'directory' && remote.dirPath.trim().length > 0) ||
       (tab === 's3' && !!options?.s3_configured && remote.bucket.trim().length > 0) ||
       (tab === 'sftp' && !!remote.sshConnection && remote.rootPath.trim().length > 0));
@@ -95,6 +106,23 @@ export function AddContentDialog({
     setBusy(true);
     setError(null);
     try {
+      if (tab === 'text' || tab === 'url') {
+        const data: Partial<KnowledgeInputDoc> = { knowledge_source: knowledgeSource };
+        if (tab === 'text') {
+          data.input_type = 'Text';
+          data.text = direct.text;
+          // Only send title once the doctype has the field (needs a migrate).
+          if (direct.title.trim() && (await knowledgeInputHasTitle())) data.title = direct.title.trim();
+        } else {
+          data.input_type = 'URL';
+          data.url = direct.url.trim();
+        }
+        await createKnowledgeInput(data);
+        toast.success(tab === 'text' ? 'Text added. We are indexing it now.' : 'Web page added. We are reading it now.');
+        onOpenChange(false);
+        onInputAdded?.();
+        return;
+      }
       let kind: SourceKind;
       let config: ImportConfig;
       if (tab === 'upload') {
@@ -141,6 +169,8 @@ export function AddContentDialog({
     { key: 'directory', label: 'Folder on server', show: kinds.has('Directory') },
     { key: 's3', label: 'S3', show: kinds.has('S3') },
     { key: 'sftp', label: 'SFTP', show: kinds.has('SFTP') },
+    { key: 'text', label: 'Text', show: true },
+    { key: 'url', label: 'Web page', show: true },
   ];
   const visibleTabs = tabs.filter((t) => t.show);
 
@@ -189,6 +219,12 @@ export function AddContentDialog({
               </TabsContent>
               <TabsContent value="sftp" className="pt-3">
                 <SftpPanel options={options} values={remote} onChange={setRemote} disabled={busy} />
+              </TabsContent>
+              <TabsContent value="text" className="pt-3">
+                <TextPanel values={direct} onChange={setDirect} disabled={busy} />
+              </TabsContent>
+              <TabsContent value="url" className="pt-3">
+                <WebPagePanel values={direct} onChange={setDirect} disabled={busy} />
               </TabsContent>
             </Tabs>
           )}
