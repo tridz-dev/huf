@@ -496,7 +496,10 @@ def _insert_input(ingestion_name: str, source_name: str, entry: dict, status: st
 			"external_key": entry.get("external_key"),
 			"external_checksum": entry.get("checksum") or None,
 			"status": status,
-			"skip_reason": skip_reason,
+			# NOTE: empty string, never None -- Frappe v16 get_default_value()
+			# substitutes the FIRST option of a Select when the value is
+			# missing, which would brand every row "Duplicate".
+			"skip_reason": skip_reason or "",
 		}
 	).insert(ignore_permissions=True)
 
