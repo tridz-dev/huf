@@ -180,6 +180,7 @@ def get_ingestion_status(ingestion: str, include_items: int = 0, item_status=Non
 	doc = frappe.get_doc("Knowledge Ingestion", ingestion)
 	if not frappe.has_permission("Knowledge Ingestion", "read", doc=doc):
 		frappe.throw(_("Not permitted to read Ingestion {0}").format(ingestion), frappe.PermissionError)
+	_check_source_perm(doc.knowledge_source, "read")
 
 	counts = count_ingestion_items(ingestion)
 	chunks_written = counts.pop("chunks_written", 0)
@@ -221,9 +222,22 @@ def retry_ingestion(ingestion: str, only_failed: int = 1):
 	doc = frappe.get_doc("Knowledge Ingestion", ingestion)
 	if not frappe.has_permission("Knowledge Ingestion", "write", doc=doc):
 		frappe.throw(_("Not permitted to retry Ingestion {0}").format(ingestion), frappe.PermissionError)
+	_check_source_perm(doc.knowledge_source, "write")
 
-	if doc.status == "Running":
-		frappe.throw(_("Ingestion {0} is currently running").format(ingestion))
+	if doc.status in ACTIVE_INGESTION_STATUSES:
+		frappe.throw(_("Ingestion {0} is already {1}").format(ingestion, doc.status))
+	other = frappe.db.exists(
+		"Knowledge Ingestion",
+		{
+			"knowledge_source": doc.knowledge_source,
+			"status": ("in", ACTIVE_INGESTION_STATUSES),
+			"name": ("!=", ingestion),
+		},
+	)
+	if other:
+		frappe.throw(
+			_("An ingestion ({0}) is already queued or running for this source").format(other)
+		)
 
 	rescheduled = 0
 	for name in frappe.get_all(
@@ -273,6 +287,7 @@ def cancel_ingestion(ingestion: str):
 	doc = frappe.get_doc("Knowledge Ingestion", ingestion)
 	if not frappe.has_permission("Knowledge Ingestion", "write", doc=doc):
 		frappe.throw(_("Not permitted to cancel Ingestion {0}").format(ingestion), frappe.PermissionError)
+	_check_source_perm(doc.knowledge_source, "write")
 
 	if doc.status not in ACTIVE_INGESTION_STATUSES:
 		frappe.throw(_("Ingestion {0} is already {1}").format(ingestion, doc.status))
@@ -294,7 +309,9 @@ def list_ingestions(knowledge_source=None, limit: int = 20):
 	if knowledge_source:
 		filters["knowledge_source"] = knowledge_source
 
-	rows = frappe.get_all(
+	# get_list (not get_all) so row-level / user permissions apply; then drop
+	# ingestions of sources the caller cannot read.
+	rows = frappe.get_list(
 		"Knowledge Ingestion",
 		filters=filters,
 		fields=[
@@ -312,4 +329,13 @@ def list_ingestions(knowledge_source=None, limit: int = 20):
 		limit_page_length=cint(limit) or 20,
 	)
 
+	rows = [r for r in rows if frappe.has_permission("Knowledge Source", "read", doc=r.knowledge_source)]
 	return {"ingestions": rows}
+
+
+def _check_source_perm(knowledge_source: str, ptype: str) -> None:
+	if not frappe.has_permission("Knowledge Source", ptype, doc=knowledge_source):
+		frappe.throw(
+			_("Not permitted to {0} Knowledge Source {1}").format(ptype, knowledge_source),
+			frappe.PermissionError,
+		)

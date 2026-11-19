@@ -10,6 +10,7 @@ play. See docs/bulk-ingestion-contract.md for the frozen contract.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import time
 
@@ -23,7 +24,9 @@ LOCK_TTL_SECONDS = 120
 MAX_ATTEMPTS = 5
 RUNNING_STALE_MINUTES = 3
 QUEUED_STALE_MINUTES = 5
-PROCESSING_STALE_MINUTES = 10
+# Must exceed the runner job timeout (1500s) so a slow-but-alive item is
+# never reset and processed twice.
+PROCESSING_STALE_MINUTES = 30
 
 INGESTION_LOCK_PREFIX = "huf:ingest_lock:"
 
@@ -201,8 +204,7 @@ def run_ingestion(ingestion_name: str, entries: list | None = None, slice: int =
 			return _finalize_or_self_chain(ingestion_name, slice)
 		except Exception as e:
 			frappe.db.rollback()
-			frappe.db.set_value(
-				"Knowledge Ingestion",
+			_set_if_running(
 				ingestion_name,
 				{
 					"status": "Failed",
@@ -256,7 +258,18 @@ def _processed_slice(ingestion_name: str, lock_key: str) -> int:
 		)
 		frappe.db.commit()
 
-		result = process_knowledge_input(row.name)
+		try:
+			result = process_knowledge_input(row.name)
+		except Exception as e:
+			# One bad item must not fail the whole batch.
+			frappe.db.rollback()
+			frappe.db.set_value(
+				"Knowledge Input", row.name, {"status": "Error", "error_message": str(e)[:500]}
+			)
+			frappe.db.commit()
+			frappe.log_error(frappe.get_traceback(), f"Bulk ingestion item {row.name} failed")
+			processed += 1
+			continue
 
 		if result.get("status") == "busy":
 			# Per-source lock contention: defer, not error. The item counts as
@@ -294,6 +307,10 @@ def _processed_slice(ingestion_name: str, lock_key: str) -> int:
 			frappe.cache().expire(lock_key, LOCK_TTL_SECONDS)
 		except Exception:
 			pass
+		# Heartbeat: the sweeper treats a Running header with stale
+		# ``modified`` as orphaned.
+		frappe.db.set_value("Knowledge Ingestion", ingestion_name, "modified", now_datetime(), update_modified=False)
+		frappe.db.commit()
 
 	return processed
 
@@ -355,8 +372,27 @@ def _finalize(ingestion_name: str) -> None:
 	else:
 		updates["status"] = "Completed"
 
-	frappe.db.set_value("Knowledge Ingestion", ingestion_name, updates)
+	_set_if_running(ingestion_name, updates)
+
+	# process_knowledge_input flips the whole source to Error on any single
+	# item failure; after a batch, per-item errors live on the rows, so a
+	# source with indexed content is Ready.
+	if counts.get("indexed"):
+		source = frappe.db.get_value("Knowledge Ingestion", ingestion_name, "knowledge_source")
+		if frappe.db.get_value("Knowledge Source", source, "status") == "Error":
+			frappe.db.set_value("Knowledge Source", source, {"status": "Ready", "error_message": None})
 	frappe.db.commit()
+
+
+def _set_if_running(ingestion_name: str, updates: dict) -> None:
+	"""Terminal write guarded on an active status so a concurrent cancel is
+	never overwritten by Completed/Failed."""
+	cols = ", ".join(f"`{k}` = %s" for k in updates)
+	frappe.db.sql(
+		f"UPDATE `tabKnowledge Ingestion` SET {cols}, modified = %s "
+		"WHERE name = %s AND status IN ('Queued', 'Running')",
+		(*updates.values(), now_datetime(), ingestion_name),
+	)
 
 
 def count_ingestion_items(ingestion_name: str) -> dict:
@@ -393,6 +429,7 @@ def materialize(ingestion_name: str, entries: list) -> dict:
 	invariant). Permission is enforced at submit time; bookkeeping here runs
 	with ignore_permissions.
 	"""
+	prev_flag = getattr(frappe.flags, "huf_bulk_ingestion", False)
 	frappe.flags.huf_bulk_ingestion = True
 	source_name = frappe.db.get_value("Knowledge Ingestion", ingestion_name, "knowledge_source")
 
@@ -402,7 +439,8 @@ def materialize(ingestion_name: str, entries: list) -> dict:
 	try:
 		for entry in entries:
 			external_key = entry.get("external_key")
-			checksum = entry.get("checksum") or None
+			checksum = entry.get("checksum") or _file_checksum(entry.get("file"))
+			entry = {**entry, "checksum": checksum}
 			existing_name = frappe.db.get_value(
 				"Knowledge Input",
 				{"knowledge_source": source_name, "external_key": external_key},
@@ -481,7 +519,22 @@ def materialize(ingestion_name: str, entries: list) -> dict:
 		frappe.db.commit()
 		return stats
 	finally:
-		frappe.flags.huf_bulk_ingestion = False
+		frappe.flags.huf_bulk_ingestion = prev_flag
+
+
+def _file_checksum(file_name: str | None) -> str | None:
+	"""Server-side SHA-256 of the File content when the caller sent none, so
+	re-submitting unchanged files is skipped instead of re-embedded. Computed
+	here (background) to keep submit_files a fast ack."""
+	if not file_name:
+		return None
+	try:
+		content = frappe.get_doc("File", file_name).get_content()
+	except Exception:
+		return None
+	if isinstance(content, str):
+		content = content.encode()
+	return hashlib.sha256(content).hexdigest() if content else None
 
 
 def _insert_input(ingestion_name: str, source_name: str, entry: dict, status: str = "Pending", skip_reason: str | None = None) -> None:
@@ -505,6 +558,13 @@ def _insert_input(ingestion_name: str, source_name: str, entry: dict, status: st
 
 
 # --- Recovery --------------------------------------------------------------
+
+def _lock_live(ingestion_name: str) -> bool:
+	"""The runner takes its lock with raw redis SET (unprefixed key), so read it
+	with raw GET too -- ``get_value`` looks up a site-prefixed key and would
+	never see the live lock."""
+	return bool(frappe.cache().get(INGESTION_LOCK_PREFIX + ingestion_name))
+
 
 def _reschedule_first_slice(ingestion_name: str) -> None:
 	"""Re-enqueue the runner for a lost/wedged enqueue on the first slice."""
@@ -568,10 +628,23 @@ def recover_stalled_ingestions() -> dict:
 			"status": "Processing",
 			"modified": ("<", add_to_date(now, minutes=-PROCESSING_STALE_MINUTES)),
 		},
-		pluck="name",
+		fields=["name", "attempts"],
 	)
-	for row_name in stale_rows:
-		frappe.db.set_value("Knowledge Input", row_name, {"status": "Pending"})
+	for row in stale_rows:
+		if int(row.attempts or 0) >= MAX_ATTEMPTS:
+			# Poison item (kills the worker every time): stop retrying it.
+			frappe.db.set_value(
+				"Knowledge Input",
+				row.name,
+				{
+					"status": "Error",
+					"error_message": _("Worker died while processing this item {0} times; giving up").format(
+						MAX_ATTEMPTS
+					),
+				},
+			)
+		else:
+			frappe.db.set_value("Knowledge Input", row.name, {"status": "Pending"})
 		recovered += 1
 
 	# Orphaned Queued header: lost enqueue or wedged queue. Use the
@@ -584,7 +657,7 @@ def recover_stalled_ingestions() -> dict:
 		header_modified = frappe.db.get_value("Knowledge Ingestion", ingestion_name, "modified")
 		if not header_modified or header_modified >= add_to_date(now, minutes=-QUEUED_STALE_MINUTES):
 			continue
-		if frappe.cache().get_value(INGESTION_LOCK_PREFIX + ingestion_name):
+		if _lock_live(ingestion_name):
 			continue
 		_reschedule_first_slice(ingestion_name)
 		rescheduled.append(ingestion_name)
@@ -596,7 +669,7 @@ def recover_stalled_ingestions() -> dict:
 		# Orphaned Running header: stale modified and no live lock.
 		header_modified = frappe.db.get_value("Knowledge Ingestion", ingestion_name, "modified")
 		if header_modified and header_modified < add_to_date(now, minutes=-RUNNING_STALE_MINUTES):
-			lock_live = frappe.cache().get_value(INGESTION_LOCK_PREFIX + ingestion_name)
+			lock_live = _lock_live(ingestion_name)
 			if not lock_live:
 				_reschedule_next_slice(ingestion_name)
 				rescheduled.append(ingestion_name)

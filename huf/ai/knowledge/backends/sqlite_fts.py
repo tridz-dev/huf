@@ -286,6 +286,8 @@ class SQLiteFTSBackend(KnowledgeBackend):
 						metadata = json.loads(row["metadata"])
 					except json.JSONDecodeError:
 						pass
+				# Provenance: expose the owning Knowledge Input (stored as a column).
+				metadata.setdefault("input_id", row["input_id"])
 
 				results.append(
 					ChunkResult(

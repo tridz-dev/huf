@@ -109,7 +109,7 @@
    "fieldname": "skip_reason",
    "fieldtype": "Select",
    "label": "Skip Reason",
-   "options": "Duplicate\nUnchanged\nNo Text\nToo Large\nUnsupported"
+   "options": "\nDuplicate\nUnchanged\nNo Text\nToo Large\nUnsupported"
   },
   {
    "fieldname": "source_hash",

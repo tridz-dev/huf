@@ -97,10 +97,10 @@ class KnowledgeInput(Document):
 	
 	def queue_processing(self):
 		"""Queue the input for processing."""
-		from huf.ai.knowledge.indexer import process_knowledge_input
-		
+		from huf.ai.knowledge.indexer import process_single_input
+
 		frappe.enqueue(
-			process_knowledge_input,
+			process_single_input,
 			queue="default",
 			knowledge_input=self.name,
 			job_id=f"process_input_{self.name}",
