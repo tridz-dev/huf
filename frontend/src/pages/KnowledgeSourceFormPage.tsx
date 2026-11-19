@@ -22,6 +22,7 @@ import { KnowledgeSourceHeader } from '../components/knowledge/KnowledgeSourceHe
 import { GeneralTab } from '../components/knowledge/GeneralTab';
 import { StatusTab } from '../components/knowledge/StatusTab';
 import { KnowledgeInputsModal } from '../components/knowledge/KnowledgeInputsModal';
+import { KnowledgeContentSection } from '../components/knowledge/import/KnowledgeContentSection';
 import {
   knowledgeSourceFormSchema,
   type KnowledgeSourceFormValues,
@@ -183,6 +184,7 @@ function KnowledgeSourceFormPage() {
   const [rebuilding, setRebuilding] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [inputsModalOpen, setInputsModalOpen] = useState(false);
+  const [addContentOpen, setAddContentOpen] = useState(false);
   const [sourceDoc, setSourceDoc] = useState<KnowledgeSourceDoc | null>(null);
   const [providers, setProviders] = useState<AIProvider[]>([]);
   const [inputs, setInputs] = useState<KnowledgeInputDoc[]>([]);
@@ -267,8 +269,7 @@ function KnowledgeSourceFormPage() {
     }
   }, [id, isNew, loadSource, loadInputs]);
 
-  // Poll source status + inputs while indexing/rebuilding is in flight, so the
-  // Status tab reflects progress without the user manually refreshing.
+  // Poll source status + inputs while indexing/rebuilding is in flight.
   const IN_PROGRESS_SOURCE_STATUSES = useMemo(() => new Set(['Indexing', 'Rebuilding']), []);
   const IN_PROGRESS_INPUT_STATUSES = useMemo(() => new Set(['Pending', 'Processing']), []);
   const isSourceInProgress = !!sourceDoc && IN_PROGRESS_SOURCE_STATUSES.has(sourceDoc.status);
@@ -286,11 +287,10 @@ function KnowledgeSourceFormPage() {
     return () => clearInterval(intervalId);
   }, [isNew, id, isSourceInProgress, hasInProgressInput, loadSource, loadInputs]);
 
-  // After a freshly-created source redirects here with ?upload=1, jump straight
-  // into the inputs modal so uploading files doesn't need an extra click.
+  // After a freshly-created source redirects here with ?upload=1, open Add content.
   useEffect(() => {
     if (!isNew && id && autoOpenUpload) {
-      setInputsModalOpen(true);
+      setAddContentOpen(true);
       setSearchParams(
         (prev) => {
           const next = new URLSearchParams(prev);
@@ -418,36 +418,24 @@ function KnowledgeSourceFormPage() {
   };
 
   const handleSourceChanged = async () => {
-    if (id && !isNew) {
-      await Promise.all([loadSource(id), loadInputs(id)]);
-    }
+    if (id && !isNew) await Promise.all([loadSource(id), loadInputs(id)]);
   };
 
-  const handleReprocessInput = async (name: string) => {
+  const runInputAction = async (action: () => Promise<void>, ok: string, fail: string) => {
     try {
-      await reprocessInput(name);
-      toast.success('Reprocessing started');
+      await action();
+      toast.success(ok);
       if (id) await Promise.all([loadSource(id), loadInputs(id)]);
     } catch (error) {
-      const msg = getFrappeErrorMessage(error);
-      toast.error(msg || 'Failed to reprocess knowledge input');
+      toast.error(getFrappeErrorMessage(error) || fail);
     }
   };
+  const handleReprocessInput = (name: string) =>
+    runInputAction(() => reprocessInput(name), 'Reprocessing started', 'Failed to reprocess document');
+  const handleDeleteInput = (name: string) =>
+    runInputAction(() => deleteKnowledgeInput(name), 'Document removed', 'Failed to remove document');
 
-  const handleDeleteInput = async (name: string) => {
-    try {
-      await deleteKnowledgeInput(name);
-      toast.success('Knowledge input deleted');
-      if (id) await Promise.all([loadSource(id), loadInputs(id)]);
-    } catch (error) {
-      const msg = getFrappeErrorMessage(error);
-      toast.error(msg || 'Failed to delete knowledge input');
-    }
-  };
-
-  const handleCancel = () => {
-    navigate(-1);
-  };
+  const handleCancel = () => navigate(-1);
 
   if (loading) {
     return (
@@ -476,6 +464,17 @@ function KnowledgeSourceFormPage() {
           onRefresh={handleRefresh}
           onOpenInputs={() => setInputsModalOpen(true)}
         />
+
+        {!isNew && id && (
+          <KnowledgeContentSection
+            knowledgeSource={id}
+            source={sourceDoc}
+            inputs={inputs}
+            addOpen={addContentOpen}
+            onAddOpenChange={setAddContentOpen}
+            onChanged={handleSourceChanged}
+          />
+        )}
 
         <Form {...form}>
           <form onSubmit={handleFormSubmit} className="space-y-6">
