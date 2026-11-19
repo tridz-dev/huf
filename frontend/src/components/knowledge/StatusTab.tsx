@@ -9,7 +9,7 @@ import { AlertCircle, ChevronDown, Loader2, RefreshCw, Search, Trash2 } from 'lu
 import { formatTimeAgo } from '@/utils/time';
 import { cn } from '@/lib/utils';
 import { ConfirmActionDialog } from './import/ConfirmActionDialog';
-import { itemReason, itemStatusLabel } from './import/ingestionLabels';
+import { displayFileLabel, itemReason, itemStatusLabel } from './import/ingestionLabels';
 import { testSearch } from '@/services/knowledgeApi';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
 import type { KnowledgeInputDoc, KnowledgeSourceDoc } from '@/types/knowledge.types';
@@ -62,7 +62,7 @@ function getInputLabel(input: KnowledgeInputDoc): string {
   if (input.title?.trim()) return input.title.trim();
   switch (input.input_type) {
     case 'File':
-      return input.file_name || input.external_key || input.file || 'Untitled file';
+      return displayFileLabel(input.file_name, input.external_key) || input.file || 'Untitled file';
     case 'URL':
       return input.url || 'Untitled URL';
     case 'Text':

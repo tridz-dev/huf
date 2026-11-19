@@ -190,6 +190,7 @@ def _scan_ctx(max_files=1000):
 	from huf.ai.knowledge.sources import scanners as bulk_sources
 
 	ctx = bulk_sources.ScanContext("ING-1", "KS-1", Limits(max_files=max_files, max_file_bytes=1000))
+	ctx.touch = MagicMock()  # heartbeat writes need a DB; tested separately
 	return bulk_sources, ctx
 
 
@@ -251,6 +252,94 @@ class TestEmptyContent:
 		assert ctx.entries == [
 			{"file": None, "file_url": None, "external_key": "empty.txt", "checksum": None, "skip_reason": "No Text"}
 		]
+
+
+class TestExternalKeys:
+	def test_short_key_unchanged_and_long_key_deterministic(self):
+		from huf.ai.knowledge.sources.scanners import make_external_key
+
+		assert make_external_key("a.txt") == "a.txt"
+		long_a, long_b = "s3://b/" + "x" * 400 + "A", "s3://b/" + "x" * 400 + "B"
+		ka, kb = make_external_key(long_a), make_external_key(long_a)
+		assert ka == kb and len(ka) == 190 + 1 + 40 and ka[190] == "#"
+		assert make_external_key(long_b) != ka  # same 190-char prefix, distinct hash
+
+	def test_add_skip_truncates_like_add_content(self):
+		bulk_sources, ctx = _scan_ctx()
+		ctx.add_skip("k" * 400, "Unsupported")
+		assert ctx.entries[0]["external_key"] == bulk_sources.make_external_key("k" * 400)
+		assert len(ctx.entries[0]["external_key"]) <= 255
+
+	def test_same_named_uploads_get_distinct_keys(self):
+		bulk_sources, ctx = _scan_ctx()
+		for docname in ("FILE-1", "FILE-2"):
+			doc = types.SimpleNamespace(
+				name=docname, file_name="notes.pdf", file_size=3, is_private=1, file_url=f"/private/{docname}",
+				get_content=lambda: b"abc",
+			)
+			bulk_sources.scan_file_doc(ctx, doc)
+		keys = [e["external_key"] for e in ctx.entries]
+		assert keys == ["upload://FILE-1", "upload://FILE-2"]
+
+	def test_zip_keys_use_file_docname_and_nest(self, tmp_path):
+		bulk_sources, ctx = _scan_ctx()
+		inner = io.BytesIO()
+		with zipfile.ZipFile(inner, "w") as z:
+			z.writestr("deep.txt", "hi")
+		outer = io.BytesIO()
+		with zipfile.ZipFile(outer, "w") as z:
+			z.writestr("a/b.txt", "yo")
+			z.writestr("in.zip", inner.getvalue())
+		doc = types.SimpleNamespace(name="FILE-9", file_name="bundle.zip", file_size=1, is_private=1, get_content=lambda: outer.getvalue())
+		with patch.object(bulk_sources, "make_private_file", side_effect=lambda *a: _fake_file()):
+			bulk_sources.scan_file_doc(ctx, doc)
+		assert {e["external_key"] for e in ctx.entries} == {"zip://FILE-9/a/b.txt", "zip://FILE-9/in.zip/deep.txt"}
+
+
+class TestScanCleanup:
+	def test_created_files_deleted_on_failure_but_uploads_kept(self):
+		bulk_sources, ctx = _scan_ctx()
+		with patch.object(bulk_sources, "make_private_file", side_effect=lambda *a: _fake_file()):
+			ctx.add_content("k1", "a.txt", b"a")
+		ctx.entries.append({"file": "USER-UPLOAD", "file_url": "/x", "external_key": "upload://USER-UPLOAD", "checksum": "c"})
+		boom = MagicMock(side_effect=RuntimeError("boom"))
+		fake_frappe = MagicMock()
+		fake_frappe.db.get_value.return_value = "KS-1"
+		with patch.object(bulk_sources, "frappe", fake_frappe), patch.object(bulk_sources, "load_limits", return_value=ctx.limits), patch.object(
+			bulk_sources, "ScanContext", return_value=ctx
+		), patch.dict(bulk_sources.SCANNERS, {"Upload": boom}):
+			result = bulk_sources.run_scan("ING-1", "Upload", {})
+		assert result["status"] == "failed"
+		deleted = [c.args[1] for c in fake_frappe.delete_doc.call_args_list]
+		assert deleted == [ctx.entries[0]["file"]] and "USER-UPLOAD" not in deleted
+		fake_frappe.delete_doc.assert_called_with("File", deleted[0], ignore_permissions=True, force=True)
+		fake_frappe.db.commit.assert_called()
+
+	def test_finish_scan_cancelled_deletes_created_files(self):
+		bulk_sources, _ctx = _scan_ctx()
+		fake_frappe = MagicMock()
+		fake_frappe.db.get_value.return_value = "Cancelled"
+		with patch.object(bulk_sources, "frappe", fake_frappe):
+			out = bulk_sources.finish_scan("ING-1", [{"file": "F1", "external_key": "k"}], created_files=["F1"])
+		assert out == {"status": "cancelled"}
+		fake_frappe.delete_doc.assert_called_once_with("File", "F1", ignore_permissions=True, force=True)
+
+
+class TestStaleScanningRecovery:
+	def test_conditional_update(self):
+		from huf.ai.knowledge import bulk_recovery
+
+		fake_frappe = MagicMock()
+		fake_frappe.get_all.side_effect = lambda dt, filters=None, pluck=None, **kw: ["ING-1"] if filters == {"status": "Scanning"} else []
+		fake_frappe.db.get_value.return_value = __import__('datetime').datetime(2000, 1, 1)
+		with patch.object(bulk_recovery, "frappe", fake_frappe):
+			try:
+				bulk_recovery.recover_stalled_ingestions()
+			except Exception:  # noqa: BLE001 -- later sections may need a DB; only the SQL matters
+				pass
+		sqls = [c.args[0] for c in fake_frappe.db.sql.call_args_list]
+		assert any("status = 'Scanning' AND modified < %s" in q and "SET status = 'Failed'" in q for q in sqls)
+		fake_frappe.db.set_value.assert_not_called()
 
 
 class _Attr:

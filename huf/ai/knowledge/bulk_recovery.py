@@ -134,14 +134,16 @@ def recover_stalled_ingestions() -> dict:
 	):
 		header_modified = frappe.db.get_value("Knowledge Ingestion", ingestion_name, "modified")
 		if header_modified and header_modified < add_to_date(now, minutes=-SCANNING_STALE_MINUTES):
-			frappe.db.set_value(
-				"Knowledge Ingestion",
-				ingestion_name,
-				{
-					"status": "Failed",
-					"finished_at": now,
-					"error_message": _("Source scan was interrupted (worker died or timed out); start the import again"),
-				},
+			# Conditional so a heartbeat/finish racing us wins (mirrors _fail_scan).
+			frappe.db.sql(
+				"UPDATE `tabKnowledge Ingestion` SET status = 'Failed', error_message = %s, finished_at = %s "
+				"WHERE name = %s AND status = 'Scanning' AND modified < %s",
+				(
+					_("Source scan was interrupted (worker died or timed out); start the import again"),
+					now,
+					ingestion_name,
+					add_to_date(now, minutes=-SCANNING_STALE_MINUTES),
+				),
 			)
 			recovered += 1
 

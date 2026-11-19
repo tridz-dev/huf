@@ -24,7 +24,7 @@ export function IngestionProgressCard({
   onViewDetails,
   onDismiss,
 }: IngestionProgressCardProps) {
-  const { data, error, refresh } = useIngestionPolling(ingestion, onFinished);
+  const { data, error, refresh, lostMessage } = useIngestionPolling(ingestion, onFinished);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [cancelling, setCancelling] = useState(false);
 
@@ -32,8 +32,8 @@ export function IngestionProgressCard({
     return (
       <Card>
         <CardContent className="flex items-center gap-2 py-4 text-sm text-steel">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          {error ?? 'Loading import progress...'}
+          {!lostMessage && <Loader2 className="h-4 w-4 animate-spin" />}
+          {lostMessage ?? error ?? 'Loading import progress...'}
         </CardContent>
       </Card>
     );
@@ -110,6 +110,7 @@ export function IngestionProgressCard({
         <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-steel">
           <span>
             {counts.indexed} ready, {counts.skipped} skipped, {counts.error} failed
+            {lostMessage ? ` · ${lostMessage}` : ''}
           </span>
           <Button type="button" size="sm" variant="ghost" onClick={() => onViewDetails(ingestion)}>
             View details

@@ -143,7 +143,7 @@ class ZipResult:
 	blocked: list = field(default_factory=list)  # (member, reason) never extracted
 
 
-def expand_zip(zip_path: str, dest_dir: str, limits: Limits, prefix: str = "", depth: int = 0, budget: ZipBudget | None = None) -> ZipResult:
+def expand_zip(zip_path: str, dest_dir: str, limits: Limits, prefix: str = "", depth: int = 0, budget: ZipBudget | None = None, on_progress=None) -> ZipResult:
 	"""Safely expand ``zip_path`` into ``dest_dir``; nested zips are expanded
 	recursively up to ``limits.max_zip_depth``.
 
@@ -165,6 +165,8 @@ def expand_zip(zip_path: str, dest_dir: str, limits: Limits, prefix: str = "", d
 		for info in zf.infolist():
 			if info.is_dir():
 				continue
+			if on_progress:
+				on_progress()
 			budget.members_left -= 1
 			if budget.members_left < 0:
 				raise SourceSafetyError("Zip contains too many entries")
@@ -198,7 +200,7 @@ def expand_zip(zip_path: str, dest_dir: str, limits: Limits, prefix: str = "", d
 			os.makedirs(os.path.dirname(target), exist_ok=True)
 			written = _stream_member(zf, info, target, budget)
 			if is_nested_zip:
-				nested = expand_zip(target, target + ".d", limits, f"{key}/", depth + 1, budget)
+				nested = expand_zip(target, target + ".d", limits, f"{key}/", depth + 1, budget, on_progress)
 				result.files.extend(nested.files)
 				result.blocked.extend(nested.blocked)
 				os.remove(target)
