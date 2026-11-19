@@ -473,6 +473,20 @@ huf_tools = [
     "huf.ai.tools.messaging.whatsapp_broadcast_tools.WHATSAPP_BROADCAST_TOOLS",
 ]
 
+# Huf Skills Hook
+# ----------------
+# App-shipped runtime skills. Each entry declares a skill_name plus the
+# dotted path of a zero-arg function returning a SKILL.md-parsed manifest;
+# huf.ai.skills.hooks.sync_app_skills upserts the manifest into a Skill
+# record (source_type "App Provided") at after_install/after_migrate.
+
+huf_skills = [
+    {
+        "skill_name": "huf_knowledge_skill",
+        "function_path": "huf.ai.skills.builtin_knowledge.get_knowledge_skill_manifest",
+    }
+]
+
 # Knowledge Backends Hook
 # -----------------------
 # Register additional knowledge backends with the hook-based backend
