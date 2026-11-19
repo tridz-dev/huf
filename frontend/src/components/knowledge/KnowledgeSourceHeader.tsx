@@ -1,57 +1,64 @@
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Save, RefreshCw, Database, RotateCcw, Trash2 } from 'lucide-react';
+import { MoreHorizontal, PauseCircle, PlayCircle, Plus, Save, RotateCcw, Search, Trash2 } from 'lucide-react';
+import { UseFormReturn } from 'react-hook-form';
 import { deleteKnowledgeSource } from '@/services/knowledgeApi';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
-import { ConfirmActionDialog } from './import/ConfirmActionDialog';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
-import { UseFormReturn } from 'react-hook-form';
-import type { KnowledgeSourceFormValues } from './types';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { InlineEditName } from '@/components/common/InlineEditName';
+import { ConfirmActionDialog } from './import/ConfirmActionDialog';
+import { HealthBadge } from './import/DocumentsSummary';
+import type { Health } from './import/ingestionLabels';
+import type { KnowledgeSourceFormValues } from './types';
 
 interface KnowledgeSourceHeaderProps {
   form: UseFormReturn<KnowledgeSourceFormValues>;
-  watchDisabled: boolean;
   isNew: boolean;
-  showSaveButton: boolean;
+  health?: Health;
+  disabled: boolean;
   saving: boolean;
   rebuilding: boolean;
-  refreshing: boolean;
   sourceStatus?: string;
   fromAgent?: string;
   onSave: () => void;
   onCancel?: () => void;
   onRebuildIndex: () => void;
-  onRefresh: () => void;
-  onOpenInputs: () => void;
+  onAddContent: () => void;
+  onTest: () => void;
+  onToggleDisabled: () => void;
 }
 
 export function KnowledgeSourceHeader({
   form,
-  watchDisabled,
   isNew,
-  showSaveButton,
+  health,
+  disabled,
   saving,
   rebuilding,
-  refreshing,
   sourceStatus,
   fromAgent,
   onSave,
   onCancel,
   onRebuildIndex,
-  onRefresh,
-  onOpenInputs,
+  onAddContent,
+  onTest,
+  onToggleDisabled,
 }: KnowledgeSourceHeaderProps) {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const [rebuildOpen, setRebuildOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const indexing = rebuilding || sourceStatus === 'Indexing' || sourceStatus === 'Rebuilding';
 
   const confirmDelete = async () => {
     if (!id) return;
@@ -66,99 +73,70 @@ export function KnowledgeSourceHeader({
     }
   };
 
+  const name = form.watch('source_name');
   return (
     <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-      <div className="flex-1 space-y-2">
-        <div className="flex items-center gap-3 flex-wrap">
-          {isNew ? (
-            <Input
-              value={form.watch('source_name')}
-              onChange={(e) => form.setValue('source_name', e.target.value, { shouldDirty: true })}
-              className="text-2xl font-bold h-auto border-0 px-0 focus-visible:ring-0 max-w-md"
-              placeholder="e.g. Product documentation"
-            />
-          ) : (
-            <InlineEditName
-              value={form.watch('source_name')}
-              onChange={(value) => form.setValue('source_name', value, { shouldDirty: true })}
-              placeholder="e.g. Product documentation"
-            />
-          )}
-          <Badge variant={watchDisabled ? 'secondary' : 'default'}>
-            {watchDisabled ? 'Disabled' : 'Active'}
-          </Badge>
-        </div>
+      <div className="flex flex-1 flex-wrap items-center gap-3">
+        {isNew ? (
+          <Input
+            value={name}
+            onChange={(e) => form.setValue('source_name', e.target.value, { shouldDirty: true })}
+            className="h-auto max-w-md border-0 px-0 text-2xl font-bold focus-visible:ring-0"
+            placeholder="e.g. Product documentation"
+          />
+        ) : (
+          <InlineEditName
+            value={name}
+            onChange={(value) => form.setValue('source_name', value, { shouldDirty: true })}
+            placeholder="e.g. Product documentation"
+          />
+        )}
+        {health && <HealthBadge health={health} />}
       </div>
       <div className="flex items-center gap-2">
-        <div className="flex items-center gap-2 mr-2">
-          <Label htmlFor="knowledge-source-disabled" className="text-sm font-normal">
-            Disable
-          </Label>
-          <Switch
-            id="knowledge-source-disabled"
-            checked={watchDisabled}
-            onCheckedChange={(checked) => form.setValue('disabled', checked)}
-          />
-        </div>
         {fromAgent && onCancel && (
           <Button size="sm" variant="outline" onClick={onCancel} type="button" disabled={saving}>
             Cancel
           </Button>
         )}
-        {!isNew && (
-          <Button
-            variant="outline"
-            size="icon-sm"
-            onClick={onRefresh}
-            type="button"
-            disabled={refreshing}
-            title="Refresh status"
-          >
-            <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-          </Button>
-        )}
-        {!isNew && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onOpenInputs}
-            type="button"
-          >
-            <Database className="w-4 h-4 mr-2" />
-            Links and text
-          </Button>
-        )}
-        {!isNew && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setRebuildOpen(true)}
-            type="button"
-            disabled={rebuilding || sourceStatus === 'Indexing' || sourceStatus === 'Rebuilding'}
-          >
-            <RotateCcw className={`w-4 h-4 mr-2 ${rebuilding || sourceStatus === 'Indexing' || sourceStatus === 'Rebuilding' ? 'animate-spin' : ''}`} />
-            {rebuilding || sourceStatus === 'Rebuilding' ? 'Rebuilding...' : sourceStatus === 'Indexing' ? 'Indexing...' : 'Rebuild search index'}
-          </Button>
-        )}
-        {!isNew && (
-          <Button
-            variant="outline"
-            size="icon-sm"
-            type="button"
-            onClick={() => setDeleteOpen(true)}
-            title="Delete knowledge source"
-            aria-label="Delete knowledge source"
-            data-testid="delete-source"
-            className="text-destructive hover:text-destructive"
-          >
-            <Trash2 className="w-4 h-4" />
-          </Button>
-        )}
-        {showSaveButton && (
+        {isNew ? (
           <Button size="sm" onClick={onSave} disabled={saving}>
-            <Save className="w-4 h-4 mr-2" />
-            {saving ? (isNew ? 'Creating...' : 'Saving...') : (isNew ? 'Create' : 'Save')}
+            <Save className="mr-2 h-4 w-4" />
+            {saving ? 'Creating...' : 'Create'}
           </Button>
+        ) : (
+          <>
+            <Button type="button" size="sm" onClick={onAddContent} data-testid="add-content">
+              <Plus className="mr-2 h-4 w-4" />
+              Add content
+            </Button>
+            <Button type="button" size="sm" variant="outline" onClick={onTest}>
+              <Search className="mr-2 h-4 w-4" />
+              Test
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button type="button" variant="outline" size="icon-sm" aria-label="More actions">
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onSelect={onToggleDisabled}>
+                  {disabled ? <PlayCircle className="mr-2 h-4 w-4" /> : <PauseCircle className="mr-2 h-4 w-4" />}
+                  {disabled ? 'Turn on' : 'Turn off'}
+                </DropdownMenuItem>
+                <DropdownMenuItem disabled={indexing} onSelect={() => setRebuildOpen(true)}>
+                  <RotateCcw className="mr-2 h-4 w-4" />
+                  Rebuild search index
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem className="text-destructive" onSelect={() => setDeleteOpen(true)} data-testid="delete-source-menu">
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </>
         )}
       </div>
       <ConfirmActionDialog

@@ -3,7 +3,6 @@ import { useParams, useNavigate, useBlocker, useSearchParams, type Location } fr
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Form } from '../components/ui/form';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { toast } from 'sonner';
 import {
   getKnowledgeSource,
@@ -20,9 +19,8 @@ import type { AIProvider } from '../types/agent.types';
 import { getFrappeErrorMessage } from '../lib/frappe-error';
 import { KnowledgeSourceHeader } from '../components/knowledge/KnowledgeSourceHeader';
 import { GeneralTab } from '../components/knowledge/GeneralTab';
-import { StatusTab } from '../components/knowledge/StatusTab';
-import { KnowledgeInputsModal } from '../components/knowledge/KnowledgeInputsModal';
-import { KnowledgeContentSection } from '../components/knowledge/import/KnowledgeContentSection';
+import { BasicsFields } from '../components/knowledge/BasicsFields';
+import { KnowledgeSourceView } from '../components/knowledge/KnowledgeSourceView';
 import {
   knowledgeSourceFormSchema,
   type KnowledgeSourceFormValues,
@@ -94,96 +92,14 @@ function KnowledgeSourceFormPage() {
   const isNew = id === 'new';
   const skipBlockRef = useRef(false);
 
-  const tabConfig = {
-    general: {
-      label: 'General',
-      fields: [
-        'source_name',
-        'description',
-        'knowledge_type',
-        'scope',
-        'storage_mode',
-        'chunk_size',
-        'chunk_overlap',
-        'embedding_model',
-        'vector_dimension',
-        'embedding_provider',
-        'chroma_mode',
-        'chroma_host',
-        'chroma_port',
-        'chroma_ssl',
-        'pgvector_connection_mode',
-        'pgvector_table_name',
-        'pgvector_distance_metric',
-        'pgvector_index_type',
-        'pgvector_host',
-        'pgvector_port',
-        'pgvector_database',
-        'pgvector_user',
-        'pgvector_password',
-        'pgvector_sslmode',
-        'advanced_config',
-      ],
-      default: true,
-      disabled: false,
-    },
-    status: {
-      label: 'Status',
-      fields: [],
-      default: false,
-      disabled: isNew,
-    },
-  } as const;
-
-  const validTabs = useMemo(() => Object.keys(tabConfig), []);
-  const defaultTab = useMemo(
-    () => Object.entries(tabConfig).find(([, config]) => config.default)?.[0] || validTabs[0],
-    [validTabs],
-  );
-  const tabFieldMapping: TabFieldMapping = useMemo(
-    () =>
-      Object.fromEntries(
-        Object.entries(tabConfig).map(([key, config]) => [key, [...config.fields]]),
-      ),
-    [],
-  );
-  const tabLabels = useMemo(
-    () =>
-      Object.fromEntries(
-        Object.entries(tabConfig).map(([key, config]) => [key, config.label]),
-      ),
-    [],
-  );
-
-  const [activeTab, setActiveTab] = useState<string>(() => {
-    const hashFromUrl = window.location.hash.slice(1);
-    return hashFromUrl && validTabs.includes(hashFromUrl) ? hashFromUrl : defaultTab;
-  });
-
-  useEffect(() => {
-    const handleHashChange = () => {
-      const hashFromUrl = window.location.hash.slice(1);
-      const tab = hashFromUrl && validTabs.includes(hashFromUrl) ? hashFromUrl : defaultTab;
-      setActiveTab(tab);
-    };
-    window.addEventListener('hashchange', handleHashChange);
-    return () => window.removeEventListener('hashchange', handleHashChange);
-  }, [defaultTab, validTabs]);
-
-  const handleTabChange = (value: string) => {
-    setActiveTab(value);
-    if (value === defaultTab) {
-      window.history.replaceState(null, '', window.location.pathname);
-    } else {
-      window.location.hash = value;
-    }
-  };
+  const settingsFields = Object.keys(mapDocToFormValues({}));
+  const tabFieldMapping: TabFieldMapping = { settings: settingsFields };
+  const tabLabels = { settings: 'Settings' };
+  const activeTab = 'settings';
 
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
   const [rebuilding, setRebuilding] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [inputsModalOpen, setInputsModalOpen] = useState(false);
   const [addContentOpen, setAddContentOpen] = useState(false);
   const [sourceDoc, setSourceDoc] = useState<KnowledgeSourceDoc | null>(null);
   const [providers, setProviders] = useState<AIProvider[]>([]);
@@ -196,14 +112,10 @@ function KnowledgeSourceFormPage() {
     defaultValues: mapDocToFormValues({}),
   });
 
-  const watchDisabled = form.watch('disabled');
   const isDirty = form.formState.isDirty;
-  const [initialDisabled, setInitialDisabled] = useState(false);
-  const disabledChanged = watchDisabled !== initialDisabled;
-  const showSaveButton = isNew || isDirty || disabledChanged;
   // Deliberately excludes `isNew` - a blank new-source form has nothing to
   // lose, so it shouldn't block navigation until the user actually changes something.
-  const hasUnsavedChanges = isDirty || disabledChanged;
+  const hasUnsavedChanges = isDirty;
 
   const shouldBlock = useCallback(
     ({ currentLocation, nextLocation }: { currentLocation: Location; nextLocation: Location }) => {
@@ -229,8 +141,7 @@ function KnowledgeSourceFormPage() {
         const data = await getKnowledgeSource(name);
         setSourceDoc(data);
         const formValues = mapDocToFormValues(data);
-        form.reset(formValues);
-        setInitialDisabled(formValues.disabled);
+        if (!form.formState.isDirty) form.reset(formValues);
       } catch (error) {
         console.error('Error loading knowledge source:', error);
         const msg = getFrappeErrorMessage(error);
@@ -338,7 +249,6 @@ function KnowledgeSourceFormPage() {
         const created = await createKnowledgeSource(payload);
         const formValues = mapDocToFormValues(created);
         form.reset(formValues);
-        setInitialDisabled(formValues.disabled);
 
         if (fromAgent) {
           const linkedRow = await linkKnowledgeToAgent(fromAgent, created.name);
@@ -361,7 +271,6 @@ function KnowledgeSourceFormPage() {
         setSourceDoc(updated);
         const formValues = mapDocToFormValues(updated);
         form.reset(formValues);
-        setInitialDisabled(formValues.disabled);
 
         if (updated.name && updated.name !== id) {
           skipBlockRef.current = true;
@@ -385,7 +294,7 @@ function KnowledgeSourceFormPage() {
 
   useSaveShortcut({
     onSave: handleFormSubmit,
-    enabled: showSaveButton,
+    enabled: isNew || isDirty,
     isSubmitting: saving,
   });
 
@@ -404,16 +313,16 @@ function KnowledgeSourceFormPage() {
     }
   };
 
-  const handleRefresh = async () => {
-    if (!id || isNew) return;
-    setRefreshing(true);
+  const handleToggleDisabled = async () => {
+    if (!id || !sourceDoc) return;
+    const next = sourceDoc.disabled === 1 ? 0 : 1;
     try {
-      await Promise.all([loadSource(id), loadInputs(id)]);
-      toast.success('Refreshed');
-    } catch {
-      toast.error('Failed to refresh');
-    } finally {
-      setRefreshing(false);
+      await updateKnowledgeSource(id, { disabled: next });
+      toast.success(next ? 'Turned off. Agents cannot use this source.' : 'Turned on');
+      await loadSource(id);
+      form.setValue('disabled', next === 1);
+    } catch (error) {
+      toast.error(getFrappeErrorMessage(error) || 'Could not update this source');
     }
   };
 
@@ -448,68 +357,49 @@ function KnowledgeSourceFormPage() {
   return (
     <div className="h-full overflow-auto">
       <div className="p-6 space-y-6 max-w-6xl mx-auto">
-        <KnowledgeSourceHeader
-          form={form}
-          watchDisabled={watchDisabled}
-          isNew={isNew}
-          showSaveButton={showSaveButton}
-          saving={saving}
-          rebuilding={rebuilding}
-          refreshing={refreshing}
-          sourceStatus={sourceDoc?.status}
-          fromAgent={fromAgent || undefined}
-          onSave={handleFormSubmit}
-          onCancel={fromAgent ? handleCancel : undefined}
-          onRebuildIndex={handleRebuildIndex}
-          onRefresh={handleRefresh}
-          onOpenInputs={() => setInputsModalOpen(true)}
-        />
-
-        {!isNew && id && (
-          <KnowledgeContentSection
-            knowledgeSource={id}
+        {isNew || !sourceDoc || !id ? (
+          <>
+            <KnowledgeSourceHeader
+              form={form}
+              isNew
+              disabled={false}
+              saving={saving}
+              rebuilding={false}
+              fromAgent={fromAgent || undefined}
+              onSave={handleFormSubmit}
+              onCancel={fromAgent ? handleCancel : undefined}
+              onRebuildIndex={handleRebuildIndex}
+              onAddContent={() => undefined}
+              onTest={() => undefined}
+              onToggleDisabled={() => undefined}
+            />
+            <Form {...form}>
+              <form onSubmit={handleFormSubmit} className="space-y-6">
+                <BasicsFields form={form} showName />
+                <GeneralTab form={form} providers={providers} />
+              </form>
+            </Form>
+          </>
+        ) : (
+          <KnowledgeSourceView
+            form={form}
             source={sourceDoc}
+            providers={providers}
             inputs={inputs}
+            inputsLoading={inputsLoading}
+            dirty={isDirty}
+            saving={saving}
+            rebuilding={rebuilding}
+            fromAgent={fromAgent || undefined}
             addOpen={addContentOpen}
             onAddOpenChange={setAddContentOpen}
+            onSubmit={handleFormSubmit}
+            onCancel={fromAgent ? handleCancel : undefined}
+            onRebuildIndex={handleRebuildIndex}
+            onToggleDisabled={handleToggleDisabled}
             onChanged={handleSourceChanged}
-          />
-        )}
-
-        <Form {...form}>
-          <form onSubmit={handleFormSubmit} className="space-y-6">
-            <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-              <TabsList layout="grid" cols={2}>
-                {Object.entries(tabConfig).map(([tabKey, config]) => (
-                  <TabsTrigger key={tabKey} value={tabKey} disabled={config.disabled}>
-                    {config.label}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-
-              <TabsContent value="general" className="space-y-4">
-                <GeneralTab form={form} isNew={isNew} providers={providers} />
-              </TabsContent>
-
-              <TabsContent value="status" className="space-y-4">
-                <StatusTab
-                  source={sourceDoc}
-                  inputs={inputs}
-                  inputsLoading={inputsLoading}
-                  onReprocessInput={handleReprocessInput}
-                  onDeleteInput={handleDeleteInput}
-                />
-              </TabsContent>
-            </Tabs>
-          </form>
-        </Form>
-
-        {!isNew && id && (
-          <KnowledgeInputsModal
-            open={inputsModalOpen}
-            onOpenChange={setInputsModalOpen}
-            knowledgeSource={id}
-            onSourceChanged={handleSourceChanged}
+            onReprocessInput={handleReprocessInput}
+            onDeleteInput={handleDeleteInput}
           />
         )}
 
