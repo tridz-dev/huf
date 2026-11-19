@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Calendar, Settings, Database, BookOpen, Trash2 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { PageFrame } from '@/layouts/PageFrame';
 import { FilterBar, GridView, ItemCard, LoadMoreButton, EmptyState } from '../components/dashboard';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
 import { deleteKnowledgeSource, getKnowledgeSources } from '../services/knowledgeApi';
 import { getFrappeErrorMessage } from '../lib/frappe-error';
+import { CreateSourceDialog } from '../components/knowledge/CreateSourceDialog';
 import { ConfirmActionDialog } from '../components/knowledge/import/ConfirmActionDialog';
 import { formatTimeAgo } from '../utils/time';
 import { knowledgeSourceFilterStatuses, knowledgeTypeLabels } from '../data/knowledge';
@@ -37,6 +38,23 @@ export default KnowledgeSourcesPage;
 
 function KnowledgeSourcesPage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const createOpen = searchParams.get('new') === '1';
+  const openCreate = () =>
+    setSearchParams((p) => {
+      const n = new URLSearchParams(p);
+      n.set('new', '1');
+      return n;
+    });
+  const setCreateOpen = (o: boolean) => {
+    if (o) return openCreate();
+    setSearchParams((p) => {
+      const n = new URLSearchParams(p);
+      n.delete('new');
+      n.delete('agent');
+      return n;
+    }, { replace: true });
+  };
   const [deleteTarget, setDeleteTarget] = useState<KnowledgeSourceDoc | null>(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -138,7 +156,7 @@ function KnowledgeSourcesPage() {
               icon={BookOpen}
               title="No knowledge sources"
               description="Add a source to let agents retrieve knowledge."
-              action={{ label: 'New knowledge source', onClick: () => navigate('/knowledge/new') }}
+              action={{ label: 'New knowledge source', onClick: openCreate }}
             />
           )
         }
@@ -194,6 +212,7 @@ function KnowledgeSourcesPage() {
             : 'No more knowledge sources to load'}
         </div>
       )}
+      <CreateSourceDialog open={createOpen} onOpenChange={setCreateOpen} agent={searchParams.get('agent')} />
       <ConfirmActionDialog
         open={deleteTarget !== null}
         onOpenChange={(o) => !o && setDeleteTarget(null)}

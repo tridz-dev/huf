@@ -1,12 +1,12 @@
 import { Plus } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from './ui/button';
 
 export function KnowledgeHeaderActions() {
   const navigate = useNavigate();
 
   const handleNew = () => {
-    navigate('/knowledge/new');
+    navigate('/knowledge?new=1');
   };
 
   return (
@@ -15,4 +15,12 @@ export function KnowledgeHeaderActions() {
       New knowledge source
     </Button>
   );
+}
+
+/** /knowledge/new is now a dialog on /knowledge; keep the old URL (and ?agent) working. */
+export function NewKnowledgeRedirect() {
+  const [params] = useSearchParams();
+  const next = new URLSearchParams(params);
+  next.set('new', '1');
+  return <Navigate to={`/knowledge?${next.toString()}`} replace />;
 }
