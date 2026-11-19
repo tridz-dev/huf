@@ -15,6 +15,7 @@ import frappe
 from frappe import _
 from frappe.utils import cint, now_datetime
 
+from .sources.origin import sanitize_source_config
 from .bulk_runner import (
 	ACTIVE_INGESTION_STATUSES,
 	compute_progress,
@@ -330,6 +331,8 @@ def list_ingestions(knowledge_source=None, limit: int = 20):
 
 	# get_list (not get_all) so row-level / user permissions apply; then drop
 	# ingestions of sources the caller cannot read.
+	meta = frappe.get_meta("Knowledge Ingestion")
+	origin_fields = [f for f in ("source_kind", "source_config") if meta.has_field(f)]
 	rows = frappe.get_list(
 		"Knowledge Ingestion",
 		filters=filters,
@@ -343,12 +346,16 @@ def list_ingestions(knowledge_source=None, limit: int = 20):
 			"finished_at",
 			"error_message",
 			"modified",
+			*origin_fields,
 		],
 		order_by="modified desc",
 		limit_page_length=cint(limit) or 20,
 	)
 
 	rows = [r for r in rows if frappe.has_permission("Knowledge Source", "read", doc=r.knowledge_source)]
+	if "source_config" in origin_fields:
+		for r in rows:
+			r["source_config"] = sanitize_source_config(r.get("source_config"))
 	return {"ingestions": rows}
 
 

@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { listIngestions, type IngestionHeader } from '@/services/knowledgeApi';
 import { formatTimeAgo } from '@/utils/time';
 import { IngestionProblemsSheet } from './import/IngestionProblemsSheet';
+import { ingestionOrigin, ingestionSourceLabel } from './import/ingestionOrigin';
 import { ingestionStatusLabel } from './import/ingestionLabels';
 
 function statusVariant(status: string): 'pill-success' | 'pill-info' | 'pill-warning' | 'pill-danger' | 'pill-neutral' {
@@ -52,6 +53,10 @@ export function KnowledgeActivityTab({ knowledgeSource, refreshKey }: { knowledg
             <p className="text-xs text-steel">
               {row.total_items.toLocaleString()} {row.total_items === 1 ? 'item' : 'items'}
               {row.submitted_by ? ` · added by ${row.submitted_by}` : ''}
+            </p>
+            <p className="truncate text-xs text-steel" data-testid="activity-source">
+              Source: {ingestionSourceLabel(row.source_kind)}
+              {ingestionOrigin(row) ? ` · ${ingestionOrigin(row)}` : ''}
             </p>
           </div>
           <div className="flex items-center gap-2">
