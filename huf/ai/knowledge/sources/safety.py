@@ -211,7 +211,12 @@ def _stream_member(zf: zipfile.ZipFile, info: zipfile.ZipInfo, target: str, budg
 	written = 0
 	with zf.open(info) as src, open(target, "wb") as dst:
 		while True:
-			chunk = src.read(COPY_CHUNK)
+			try:
+				chunk = src.read(COPY_CHUNK)
+			except zipfile.BadZipFile as e:
+				# zipfile rejects a member whose data disagrees with its header
+				# (e.g. a lying size): treat as an unsafe archive.
+				raise SourceSafetyError(f"Corrupt or inconsistent zip member {info.filename!r}: {e}") from e
 			if not chunk:
 				break
 			written += len(chunk)
