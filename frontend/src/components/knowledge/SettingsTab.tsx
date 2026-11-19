@@ -55,7 +55,7 @@ export function SettingsTab({ form, source, providers, documentCount, dirty, sav
         </Button>
       </div>
 
-      <BasicsFields form={form} showDisabled />
+      <BasicsFields form={form} showName showDisabled />
 
       <Accordion type="single" collapsible className="rounded-md border px-4">
         <AccordionItem value="advanced" className="border-b-0">

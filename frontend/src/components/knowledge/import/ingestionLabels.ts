@@ -1,5 +1,6 @@
 import type { IngestionItem, IngestionStatus, SourceKind } from '@/services/knowledgeApi';
 import type { KnowledgeInputDoc, KnowledgeSourceDoc } from '@/types/knowledge.types';
+import { HEALTH_HINT, HEALTH_LABEL, evaluateHealth } from '@/components/agent/knowledge/sourceHealth';
 
 export const INGESTION_STATUS_LABELS: Record<string, string> = {
   Scanning: 'Looking for files',
@@ -108,43 +109,30 @@ export function countFromStatusRows(rows: Array<{ status: string; count: number 
   return c;
 }
 
-/** Plain-language health model computed client-side. */
+const HEALTH_HINT_OVERRIDE: Partial<Record<HealthKey, string>> = {
+  broken: 'Search is unavailable. Open Settings or try Rebuild search index.',
+};
+
+/** Plain-language health model; the rules live in evaluateHealth (sourceHealth.ts). */
 export function computeHealth(
   source: Pick<KnowledgeSourceDoc, 'status' | 'disabled' | 'error_message'> | null,
   counts: InputCounts,
   hasActiveIngestion: boolean,
 ): Health {
-  if (source?.disabled === 1) {
-    return { key: 'paused', label: 'Paused', hint: 'Turned off. Agents cannot use it.' };
-  }
-  if (source?.status === 'Error') {
-    return {
-      key: 'broken',
-      label: 'Not working',
-      hint: 'Search is unavailable. Open Settings or try Rebuild search index.',
-    };
-  }
-  if (hasActiveIngestion || counts.inProgress > 0 || source?.status === 'Indexing' || source?.status === 'Rebuilding') {
-    return {
-      key: 'updating',
-      label: 'Updating',
-      hint: 'Adding documents. You can still search what is ready.',
-    };
-  }
-  if (counts.total === 0) {
-    return { key: 'empty', label: 'Empty', hint: 'Add documents to get started.' };
-  }
-  if (counts.failed > 0) {
-    return {
-      key: 'attention',
-      label: 'Needs attention',
-      hint: `${counts.failed} ${counts.failed === 1 ? 'document' : 'documents'} could not be read.`,
-    };
-  }
-  if (counts.ready > 0) {
-    return { key: 'ready', label: 'Ready', hint: 'Agents can search this.' };
-  }
-  return { key: 'empty', label: 'Empty', hint: 'Add documents to get started.' };
+  const key = evaluateHealth({
+    disabled: source?.disabled === 1,
+    status: source?.status,
+    total: counts.total,
+    ready: counts.ready,
+    failed: counts.failed,
+    inProgress: counts.inProgress,
+    activeIngestion: hasActiveIngestion,
+  });
+  const hint =
+    key === 'attention'
+      ? `${counts.failed} ${counts.failed === 1 ? 'document' : 'documents'} could not be read.`
+      : HEALTH_HINT_OVERRIDE[key] ?? HEALTH_HINT[key];
+  return { key, label: HEALTH_LABEL[key], hint };
 }
 
 /** Display name for an input/problem row: the file's own name, never a raw `upload://`/`zip://` key. */

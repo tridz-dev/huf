@@ -8,7 +8,7 @@ import type { KnowledgeSourceFormValues } from './types';
 
 interface BasicsFieldsProps {
   form: UseFormReturn<KnowledgeSourceFormValues>;
-  /** Show the name field (the header already edits it for existing sources). */
+  /** Show the name field (stored as source_name; the document id never changes). */
   showName?: boolean;
   /** Show the on/off switch. */
   showDisabled?: boolean;
@@ -59,11 +59,11 @@ export function BasicsFields({ form, showName, showDisabled }: BasicsFieldsProps
             render={({ field }) => (
               <FormItem className="flex items-center justify-between gap-4 rounded-md border p-3">
                 <div className="space-y-0.5">
-                  <FormLabel>Turned off</FormLabel>
-                  <FormDescription>When on, agents cannot search this source.</FormDescription>
+                  <FormLabel>Available to agents</FormLabel>
+                  <FormDescription>When on, agents you attach this source to can search it. Turn it off to pause it without deleting anything.</FormDescription>
                 </div>
                 <FormControl>
-                  <Switch checked={field.value} onCheckedChange={field.onChange} />
+                  <Switch checked={!field.value} onCheckedChange={(on) => field.onChange(!on)} data-testid="available-to-agents" />
                 </FormControl>
               </FormItem>
             )}
