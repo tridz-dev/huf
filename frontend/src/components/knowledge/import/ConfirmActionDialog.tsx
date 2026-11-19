@@ -18,6 +18,7 @@ interface ConfirmActionDialogProps {
   cancelLabel?: string;
   destructive?: boolean;
   busy?: boolean;
+  confirmDisabled?: boolean;
   onConfirm: () => void | Promise<void>;
   onOpenChange: (open: boolean) => void;
 }
@@ -30,6 +31,7 @@ export function ConfirmActionDialog({
   cancelLabel = 'Cancel',
   destructive,
   busy,
+  confirmDisabled,
   onConfirm,
   onOpenChange,
 }: ConfirmActionDialogProps) {
@@ -43,7 +45,7 @@ export function ConfirmActionDialog({
         <AlertDialogFooter>
           <AlertDialogCancel disabled={busy}>{cancelLabel}</AlertDialogCancel>
           <AlertDialogAction
-            disabled={busy}
+            disabled={busy || confirmDisabled}
             onClick={(e) => {
               e.preventDefault();
               void onConfirm();

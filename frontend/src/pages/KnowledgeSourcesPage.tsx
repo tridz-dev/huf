@@ -1,37 +1,27 @@
-import { useEffect, useState } from 'react';
-import { Calendar, Settings, Database, BookOpen, Trash2 } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { BookOpen } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { PageFrame } from '@/layouts/PageFrame';
-import { FilterBar, GridView, ItemCard, LoadMoreButton, EmptyState } from '../components/dashboard';
+import { FilterBar, GridView, LoadMoreButton, EmptyState } from '../components/dashboard';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
-import { deleteKnowledgeSource, getKnowledgeSources } from '../services/knowledgeApi';
+import { deleteKnowledgeSource, getKnowledgeSources, updateKnowledgeSource } from '../services/knowledgeApi';
 import { getFrappeErrorMessage } from '../lib/frappe-error';
 import { CreateSourceDialog } from '../components/knowledge/CreateSourceDialog';
 import { ConfirmActionDialog } from '../components/knowledge/import/ConfirmActionDialog';
-import { formatTimeAgo } from '../utils/time';
-import { knowledgeSourceFilterStatuses, knowledgeTypeLabels } from '../data/knowledge';
+import { AddContentDialog } from '../components/knowledge/import/AddContentDialog';
+import { SourceCard } from '../components/knowledge/library/SourceCard';
+import { LibraryEmptyState } from '../components/knowledge/library/LibraryEmptyState';
+import { RenameSourceDialog } from '../components/knowledge/library/RenameSourceDialog';
+import { useLibraryStats } from '../components/knowledge/library/useLibraryStats';
+import { Input } from '@/components/ui/input';
+import { HEALTH_LABEL, computeHealth, type SourceHealth } from '../components/agent/knowledge/sourceHealth';
 import type { KnowledgeSourceDoc } from '../types/knowledge.types';
 
-function getStatusVariant(source: KnowledgeSourceDoc): 'default' | 'secondary' | 'destructive' | 'success' | 'outline' {
-  if (source.disabled === 1) return 'secondary';
-  switch (source.status) {
-    case 'Ready':
-      return 'success';
-    case 'Indexing':
-    case 'Rebuilding':
-      return 'outline';
-    case 'Error':
-      return 'destructive';
-    default:
-      return 'secondary';
-  }
-}
-
-function getStatusLabel(source: KnowledgeSourceDoc): string {
-  if (source.disabled === 1) return 'Disabled';
-  return source.status;
-}
+const HEALTH_FILTERS = [
+  { label: 'All status', value: 'all' },
+  ...(Object.keys(HEALTH_LABEL) as SourceHealth[]).map((k) => ({ label: HEALTH_LABEL[k], value: k })),
+];
 
 export { KnowledgeSourcesPage };
 export default KnowledgeSourcesPage;
@@ -57,6 +47,12 @@ function KnowledgeSourcesPage() {
   };
   const [deleteTarget, setDeleteTarget] = useState<KnowledgeSourceDoc | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [typedName, setTypedName] = useState('');
+  const [addTarget, setAddTarget] = useState<KnowledgeSourceDoc | null>(null);
+  const [renameTarget, setRenameTarget] = useState<KnowledgeSourceDoc | null>(null);
+  const [renaming, setRenaming] = useState(false);
+  const [healthFilter, setHealthFilter] = useState('all');
+  const [statsKey, setStatsKey] = useState(0);
 
   const {
     items: sources,
@@ -65,8 +61,6 @@ function KnowledgeSourcesPage() {
     loadingMore,
     search,
     setSearch,
-    filters,
-    setFilter,
     loadMore,
     reset,
     total,
@@ -96,6 +90,24 @@ function KnowledgeSourcesPage() {
     autoLoad: true,
   });
 
+  const { countsFor, agentsFor } = useLibraryStats(`${statsKey}:${sources.length}`);
+  const visible = useMemo(
+    () => (healthFilter === 'all' ? sources : sources.filter((x) => computeHealth(x, countsFor(x.name)) === healthFilter)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [sources, healthFilter, statsKey, countsFor],
+  );
+  const filtered = !!search || healthFilter !== 'all';
+
+  const toggleDisabled = async (src: KnowledgeSourceDoc) => {
+    try {
+      await updateKnowledgeSource(src.name, { disabled: src.disabled ? 0 : 1 });
+      toast.success(src.disabled ? 'Turned on' : 'Turned off');
+      await reset();
+    } catch (e) {
+      toast.error(getFrappeErrorMessage(e) || 'Could not update this knowledge source');
+    }
+  };
+
   useEffect(() => {
     if (error) {
       toast.error('Failed to load knowledge sources', {
@@ -115,9 +127,9 @@ function KnowledgeSourcesPage() {
           filters={[
             {
               label: 'Status',
-              value: filters.status || 'all',
-              options: [...knowledgeSourceFilterStatuses],
-              onChange: (value) => setFilter('status', value),
+              value: healthFilter,
+              options: HEALTH_FILTERS,
+              onChange: (value: string) => setHealthFilter(value),
             },
           ]}
         />
@@ -132,11 +144,11 @@ function KnowledgeSourcesPage() {
         </div>
       )}
       <GridView
-        items={sources}
+        items={visible}
         columns={{ sm: 1, md: 2, lg: 3 }}
         loading={initialLoading}
         emptyState={
-          !!search || (filters.status && filters.status !== 'all') ? (
+          filtered ? (
             <EmptyState
               variant="no-results"
               icon={BookOpen}
@@ -146,57 +158,30 @@ function KnowledgeSourcesPage() {
                 label: 'Clear filters',
                 onClick: () => {
                   setSearch('');
-                  setFilter('status', 'all');
+                  setHealthFilter('all');
                 },
               }}
             />
           ) : (
-            <EmptyState
-              variant="create"
-              icon={BookOpen}
-              title="No knowledge sources"
-              description="Add a source to let agents retrieve knowledge."
-              action={{ label: 'New knowledge source', onClick: openCreate }}
-            />
+            <LibraryEmptyState onUpload={openCreate} onConnect={openCreate} />
           )
         }
-        renderItem={(source) => {
-          const statusLabel = getStatusLabel(source);
-          return (
-            <ItemCard
-              title={source.source_name || source.name}
-              description={source.description?.slice(0, 100) || 'No description'}
-              status={{
-                label: statusLabel,
-                variant: getStatusVariant(source),
-              }}
-              metadata={[
-                { label: 'Type', value: knowledgeTypeLabels[source.knowledge_type] ?? source.knowledge_type, icon: Database },
-                { label: 'Chunks', value: (source.total_chunks ?? 0).toLocaleString() },
-                {
-                  label: 'Last indexed',
-                  value: source.last_indexed_at ? formatTimeAgo(source.last_indexed_at) : 'Never',
-                  icon: Calendar,
-                },
-              ]}
-              actions={[
-                {
-                  icon: Settings,
-                  label: 'Configure',
-                  onClick: () => navigate(`/knowledge/${source.name}`),
-                },
-              ]}
-              menuActions={[
-                {
-                  icon: Trash2,
-                  label: 'Delete',
-                  onClick: () => setDeleteTarget(source),
-                },
-              ]}
-              onClick={() => navigate(`/knowledge/${source.name}`)}
-            />
-          );
-        }}
+        renderItem={(source) => (
+          <SourceCard
+            source={source}
+            counts={countsFor(source.name)}
+            agentCount={agentsFor(source.name)}
+            onOpen={() => navigate(`/knowledge/${source.name}`)}
+            onTest={() => navigate(`/knowledge/${source.name}#test`)}
+            onAddFiles={() => setAddTarget(source)}
+            onRename={() => setRenameTarget(source)}
+            onToggleDisabled={() => void toggleDisabled(source)}
+            onDelete={() => {
+              setTypedName('');
+              setDeleteTarget(source);
+            }}
+          />
+        )}
         keyExtractor={(source) => source.name}
       />
       <LoadMoreButton
@@ -217,7 +202,24 @@ function KnowledgeSourcesPage() {
         open={deleteTarget !== null}
         onOpenChange={(o) => !o && setDeleteTarget(null)}
         title={`Delete "${deleteTarget?.source_name || deleteTarget?.name}"?`}
-        description="This removes the source and all of its documents. Agents using it will lose access. This cannot be undone."
+        description={
+          <>
+            This removes the source and all of its documents. Agents using it will lose access. This cannot be undone.
+            {deleteTarget && countsFor(deleteTarget.name).total > 0 && (
+              <Input
+                className="mt-3"
+                placeholder={`Type "${deleteTarget.source_name || deleteTarget.name}" to confirm`}
+                value={typedName}
+                onChange={(e) => setTypedName(e.target.value)}
+              />
+            )}
+          </>
+        }
+        confirmDisabled={
+          !!deleteTarget &&
+          countsFor(deleteTarget.name).total > 0 &&
+          typedName.trim() !== (deleteTarget.source_name || deleteTarget.name)
+        }
         confirmLabel="Delete source"
         destructive
         busy={deleting}
@@ -233,6 +235,42 @@ function KnowledgeSourcesPage() {
             toast.error(getFrappeErrorMessage(e) || 'Could not delete this knowledge source');
           } finally {
             setDeleting(false);
+          }
+        }}
+      />
+      {addTarget && (
+        <AddContentDialog
+          open
+          onOpenChange={(o) => !o && setAddTarget(null)}
+          knowledgeSource={addTarget.name}
+          sourceLabel={addTarget.source_name || addTarget.name}
+          onStarted={() => {
+            const n = addTarget.name;
+            setAddTarget(null);
+            navigate(`/knowledge/${n}`);
+          }}
+          onInputAdded={() => {
+            setAddTarget(null);
+            setStatsKey((k) => k + 1);
+          }}
+        />
+      )}
+      <RenameSourceDialog
+        open={renameTarget !== null}
+        initial={renameTarget?.source_name || renameTarget?.name || ''}
+        busy={renaming}
+        onOpenChange={(o) => !o && setRenameTarget(null)}
+        onSave={async (name) => {
+          if (!renameTarget) return;
+          setRenaming(true);
+          try {
+            await updateKnowledgeSource(renameTarget.name, { source_name: name });
+            setRenameTarget(null);
+            await reset();
+          } catch (e) {
+            toast.error(getFrappeErrorMessage(e) || 'Could not rename this knowledge source');
+          } finally {
+            setRenaming(false);
           }
         }}
       />
