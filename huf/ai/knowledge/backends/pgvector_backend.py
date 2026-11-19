@@ -268,11 +268,10 @@ class PGVectorBackend(LlamaIndexBackend, KnowledgeBackend):
 				ExactMatchFilter(key="input_id", value=input_id),
 			]
 		)
-		try:
-			self.vector_store.delete_nodes(filters=filters)
-		except Exception as exc:
-			frappe.logger().warning(f"PGVector delete_chunks error for {input_id}: {exc!s}")
-			return 0
+		# delete_chunks must propagate failures: swallowing them here would
+		# silently duplicate chunks on replay (ids are random, add_chunks is
+		# append-only).
+		self.vector_store.delete_nodes(filters=filters)
 		return count_before
 
 	def clear(self) -> None:

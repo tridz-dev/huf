@@ -83,16 +83,18 @@ def process_knowledge_input(knowledge_input: str, skip_lock: bool = False) -> di
 	doc = frappe.get_doc("Knowledge Input", knowledge_input)
 	source = frappe.get_doc("Knowledge Source", doc.knowledge_source)
 
+	# Acquire the per-source lock FIRST so lock contention is distinguishable
+	# from real failures: a busy lock must return "busy" without touching the
+	# input status or the source status (a busy lock is not an Error).
+	lock_key = f"knowledge_index_{source.name}"
+	if not skip_lock and not frappe.cache().set(lock_key, 1, ex=300, nx=True):
+		return {"status": "busy", "knowledge_input": knowledge_input}
+
 	try:
 		# Update status
 		doc.status = "Processing"
 		doc.save(ignore_permissions=True)
 		frappe.db.commit()
-
-		# Acquire lock for this knowledge source
-		lock_key = f"knowledge_index_{source.name}"
-		if not skip_lock and not frappe.cache().set(lock_key, 1, ex=300, nx=True):
-			frappe.throw(_("Another indexing operation is in progress"))
 
 		try:
 			# Update source status
