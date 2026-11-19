@@ -86,11 +86,11 @@ export function computeHealth(
 }
 
 /**
- * Updating sources can be attached: whatever is already indexed is searchable
- * and the rest arrives on its own. Every other non-Ready state is blocked.
+ * Updating and Needs-attention sources can be attached: whatever is indexed is
+ * searchable. Broken, empty and paused sources stay blocked.
  */
 export function isAttachable(health: SourceHealth): boolean {
-  return health === 'ready' || health === 'updating';
+  return health === 'ready' || health === 'updating' || health === 'attention';
 }
 
 export function searchMethodLabel(knowledgeType: string): string {

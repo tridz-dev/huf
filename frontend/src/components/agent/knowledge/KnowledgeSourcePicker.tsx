@@ -40,6 +40,9 @@ export function KnowledgeSourcePicker({ sources, value, onChange, loading }: Pro
                 <p className="text-xs text-steel-soft">
                   {docs} {docs === 1 ? 'document' : 'documents'} · {searchMethodLabel(s.knowledgeType)}
                 </p>
+                {s.health === 'attention' && (
+                  <p className="text-xs text-steel-soft">Some documents could not be read; the rest are searchable</p>
+                )}
                 {!ok && <p className="text-xs text-steel-soft">Cannot be added: {HEALTH_HINT[s.health]}</p>}
               </div>
             </CommandItem>
