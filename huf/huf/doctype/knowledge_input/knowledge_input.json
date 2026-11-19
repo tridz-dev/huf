@@ -11,6 +11,7 @@
   "file",
   "file_name",
   "file_type",
+  "title",
   "text",
   "url",
   "external_key",
@@ -73,6 +74,12 @@
    "fieldname": "text",
    "fieldtype": "Long Text",
    "label": "Text"
+  },
+  {
+   "description": "Optional display name. Used as the source title in answers.",
+   "fieldname": "title",
+   "fieldtype": "Data",
+   "label": "Title"
   },
   {
    "depends_on": "eval:doc.input_type == 'URL'",

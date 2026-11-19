@@ -214,10 +214,13 @@ def get_ingestion_status(ingestion: str, include_items: int = 0, item_status=Non
 		filters = {"ingestion": ingestion}
 		if item_status:
 			filters["status"] = item_status
+		item_fields = ["name", "external_key", "file_name", "status", "chunks_created", "attempts", "error_message", "skip_reason"]
+		if frappe.get_meta("Knowledge Input").has_field("title"):
+			item_fields.append("title")
 		items = frappe.get_all(
 			"Knowledge Input",
 			filters=filters,
-			fields=["name", "external_key", "file_name", "status", "chunks_created", "attempts", "error_message", "skip_reason"],
+			fields=item_fields,
 			order_by="creation asc",
 			limit=cint(limit) or 50,
 			start=cint(start) or 0,

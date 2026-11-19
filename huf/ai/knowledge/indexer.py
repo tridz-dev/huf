@@ -120,7 +120,7 @@ def process_knowledge_input(knowledge_input: str, skip_lock: bool = False) -> di
 					{
 						"input_id": doc.name,
 						"input_type": doc.input_type,
-						"source_title": extracted.title or doc.file_name,
+						"source_title": (doc.get("title") or "").strip() or extracted.title or doc.file_name,
 						"chunk_index": chunk.chunk_index,
 						"text": chunk.text,
 						"char_start": chunk.char_start,
