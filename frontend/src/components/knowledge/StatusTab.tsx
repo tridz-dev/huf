@@ -8,6 +8,8 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { AlertCircle, ChevronDown, Loader2, RefreshCw, Search, Trash2 } from 'lucide-react';
 import { formatTimeAgo } from '@/utils/time';
 import { cn } from '@/lib/utils';
+import { ConfirmActionDialog } from './import/ConfirmActionDialog';
+import { itemReason, itemStatusLabel } from './import/ingestionLabels';
 import { testSearch } from '@/services/knowledgeApi';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
 import type { KnowledgeInputDoc, KnowledgeSourceDoc } from '@/types/knowledge.types';
@@ -39,6 +41,8 @@ function getStatusVariant(status: string): 'default' | 'secondary' | 'destructiv
     case 'Rebuilding':
     case 'Processing':
       return 'outline';
+    case 'Skipped':
+      return 'secondary';
     case 'Error':
       return 'destructive';
     default:
@@ -57,7 +61,7 @@ function formatBytes(bytes: number): string {
 function getInputLabel(input: KnowledgeInputDoc): string {
   switch (input.input_type) {
     case 'File':
-      return input.file_name || input.file || 'Untitled file';
+      return input.file_name || input.external_key || input.file || 'Untitled file';
     case 'URL':
       return input.url || 'Untitled URL';
     case 'Text':
@@ -84,6 +88,7 @@ export function StatusTab({ source, inputs, inputsLoading, onReprocessInput, onD
   const [searchResults, setSearchResults] = useState<TestSearchResultChunk[] | null>(null);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [expandedError, setExpandedError] = useState<string | null>(null);
+  const [removeTarget, setRemoveTarget] = useState<string | null>(null);
 
   const counts = useMemo(() => {
     const result = { indexed: 0, processing: 0, pending: 0, error: 0 };
@@ -186,10 +191,12 @@ export function StatusTab({ source, inputs, inputsLoading, onReprocessInput, onD
               <p className="text-sm">{inputsSummary}</p>
             </div>
 
-            <div className="space-y-1">
-              <p className="text-sm font-medium text-steel">Index Size</p>
-              <p className="text-sm">{formatBytes(source.index_size_bytes)}</p>
-            </div>
+            {source.index_size_bytes > 0 && (
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-steel">Index Size</p>
+                <p className="text-sm">{formatBytes(source.index_size_bytes)}</p>
+              </div>
+            )}
 
             {source.knowledge_type === 'chroma' && (
               <div className="space-y-1">
@@ -256,16 +263,17 @@ export function StatusTab({ source, inputs, inputsLoading, onReprocessInput, onD
                         <p className="text-sm font-medium truncate">{getInputLabel(input)}</p>
                         <div className="flex items-center gap-2 mt-1">
                           <Badge variant={getStatusVariant(input.status)} size="sm">
-                            {input.status}
+                            {itemStatusLabel(input.status)}
                           </Badge>
-                          <span className="text-xs text-steel-soft">
-                            {input.chunks_created.toLocaleString()} chunks
-                          </span>
+                          {(input.status === 'Skipped' || input.status === 'Error') && (
+                            <span className="text-xs text-steel-soft">{itemReason(input)}</span>
+                          )}
                         </div>
                       </div>
                       <div className="flex items-center gap-1 flex-shrink-0">
                         {isErrored && input.error_message && (
                           <Button
+                            type="button"
                             variant="ghost"
                             size="sm"
                             onClick={() => setExpandedError(isExpanded ? null : input.name)}
@@ -274,6 +282,7 @@ export function StatusTab({ source, inputs, inputsLoading, onReprocessInput, onD
                           </Button>
                         )}
                         <Button
+                          type="button"
                           variant="ghost"
                           size="icon-sm"
                           onClick={() => void onReprocessInput(input.name)}
@@ -285,9 +294,10 @@ export function StatusTab({ source, inputs, inputsLoading, onReprocessInput, onD
                           />
                         </Button>
                         <Button
+                          type="button"
                           variant="ghost"
                           size="icon-sm"
-                          onClick={() => void onDeleteInput(input.name)}
+                          onClick={() => setRemoveTarget(input.name)}
                           title="Remove"
                           className="text-destructive hover:text-destructive"
                         >
@@ -326,7 +336,7 @@ export function StatusTab({ source, inputs, inputsLoading, onReprocessInput, onD
                 }
               }}
             />
-            <Button onClick={() => void handleTestSearch()} disabled={searching || !query.trim()}>
+            <Button type="button" onClick={() => void handleTestSearch()} disabled={searching || !query.trim()}>
               {searching ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Search className="w-4 h-4 mr-2" />}
               Search
             </Button>
@@ -371,6 +381,19 @@ export function StatusTab({ source, inputs, inputsLoading, onReprocessInput, onD
           )}
         </CardContent>
       </Card>
+      <ConfirmActionDialog
+        open={removeTarget !== null}
+        onOpenChange={(o) => !o && setRemoveTarget(null)}
+        title="Remove this document?"
+        description="It is removed from this source and agents can no longer use it. This cannot be undone."
+        confirmLabel="Remove"
+        destructive
+        onConfirm={async () => {
+          const target = removeTarget;
+          setRemoveTarget(null);
+          if (target) await onDeleteInput(target);
+        }}
+      />
     </div>
   );
 }

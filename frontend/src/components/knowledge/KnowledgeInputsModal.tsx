@@ -38,6 +38,8 @@ import {
   reprocessInput,
 } from '@/services/knowledgeApi';
 import { file as frappeFile } from '@/lib/frappe-sdk';
+import { getFrappeErrorMessage } from '@/lib/frappe-error';
+import { Field } from '@/components/ui/field';
 
 interface QueuedUpload {
   id: string;
@@ -123,6 +125,7 @@ export function KnowledgeInputsModal({
   const [inputType, setInputType] = useState<KnowledgeInputType>('File');
   const [text, setText] = useState('');
   const [url, setUrl] = useState('');
+  const [fieldError, setFieldError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const loadInputs = useCallback(async () => {
@@ -177,6 +180,7 @@ export function KnowledgeInputsModal({
     setInputType('File');
     setText('');
     setUrl('');
+    setFieldError(null);
     setShowCreate(false);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
@@ -253,17 +257,12 @@ export function KnowledgeInputsModal({
       input_type: inputType,
     };
 
-    if (inputType === 'Text' && !text.trim()) {
-      toast.error('Text content is required');
-      return;
-    }
-    if (inputType === 'URL' && !url.trim()) {
-      toast.error('URL is required');
-      return;
-    }
+    setFieldError(null);
+    if (inputType === 'Text' && !text.trim()) return setFieldError('Paste some text to add.');
+    if (inputType === 'URL' && !url.trim()) return setFieldError('Enter a web address to add.');
 
     if (inputType === 'Text') data.text = text;
-    if (inputType === 'URL') data.url = url;
+    else if (inputType === 'URL') data.url = url;
 
     setCreating(true);
     try {
@@ -272,8 +271,13 @@ export function KnowledgeInputsModal({
       resetForm();
       await loadInputs();
       onSourceChanged();
-    } catch {
-      toast.error('Failed to create knowledge input');
+    } catch (e) {
+      const reason = getFrappeErrorMessage(e);
+      setFieldError(
+        inputType === 'URL'
+          ? `We could not add that address${reason ? `: ${reason}` : '.'}`
+          : reason || 'We could not add this text. Please try again.',
+      );
     } finally {
       setCreating(false);
     }
@@ -360,10 +364,7 @@ export function KnowledgeInputsModal({
           {hasProcessingInput && (
             <div className="flex items-start gap-2 rounded-md border bg-muted/40 p-2.5 text-xs text-steel-soft">
               <Info className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
-              <p>
-                Indexing runs in the background. Once your files finish uploading, it&apos;s safe to close
-                this dialog or navigate away — processing will continue.
-              </p>
+              <p>Indexing runs in the background. It&apos;s safe to close this dialog once uploads finish.</p>
             </div>
           )}
 
@@ -371,7 +372,7 @@ export function KnowledgeInputsModal({
             <div className="rounded-lg border p-4 space-y-4">
               <div className="space-y-2">
                 <Label>Input type</Label>
-                <Select value={inputType} onValueChange={(v) => setInputType(v as KnowledgeInputType)}>
+                <Select value={inputType} onValueChange={(v) => { setInputType(v as KnowledgeInputType); setFieldError(null); }}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -453,26 +454,24 @@ export function KnowledgeInputsModal({
               )}
 
               {inputType === 'Text' && (
-                <div className="space-y-2">
-                  <Label>Text content</Label>
+                <Field label="Text content" error={fieldError}>
                   <Textarea
                     placeholder="Paste text content here..."
                     className="min-h-[120px] resize-y"
                     value={text}
                     onChange={(e) => setText(e.target.value)}
                   />
-                </div>
+                </Field>
               )}
 
               {inputType === 'URL' && (
-                <div className="space-y-2">
-                  <Label>URL</Label>
+                <Field label="Web address" error={fieldError}>
                   <Input
                     placeholder="https://example.com/docs"
                     value={url}
                     onChange={(e) => setUrl(e.target.value)}
                   />
-                </div>
+                </Field>
               )}
 
               <div className="flex justify-end gap-2">
