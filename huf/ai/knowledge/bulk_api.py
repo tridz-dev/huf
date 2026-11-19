@@ -229,7 +229,9 @@ def retry_ingestion(ingestion: str, only_failed: int = 1):
 	for name in frappe.get_all(
 		"Knowledge Input", filters={"ingestion": ingestion, "status": "Error"}, pluck="name"
 	):
-		frappe.db.set_value("Knowledge Input", name, {"status": "Pending", "error_message": None})
+		frappe.db.set_value(
+			"Knowledge Input", name, {"status": "Pending", "error_message": None, "attempts": 0}
+		)
 		rescheduled += 1
 
 	if not cint(only_failed):
@@ -238,7 +240,9 @@ def retry_ingestion(ingestion: str, only_failed: int = 1):
 			filters={"ingestion": ingestion, "status": "Skipped", "skip_reason": "No Text"},
 			pluck="name",
 		):
-			frappe.db.set_value("Knowledge Input", name, {"status": "Pending", "skip_reason": None})
+			frappe.db.set_value(
+				"Knowledge Input", name, {"status": "Pending", "skip_reason": None, "attempts": 0}
+			)
 			rescheduled += 1
 
 	frappe.db.set_value(

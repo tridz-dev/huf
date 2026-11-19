@@ -189,3 +189,19 @@ class TestManifestPersistence:
 
 	def test_serialize_manifest_unserializable_is_none(self):
 		assert serialize_manifest([{"external_key": object()}]) is None
+
+
+class TestFinalizationGuard:
+	"""M3: never finalize while Processing rows are stranded."""
+
+	def test_finalizes_with_zero_processing(self):
+		assert should_finalize({"pending": 0, "processing": 0, "indexed": 5}) is True
+
+	def test_finalizes_all_terminal(self):
+		assert should_finalize({"indexed": 3, "error": 1, "skipped": 1}) is True
+
+	def test_never_finalizes_while_processing(self):
+		assert should_finalize({"pending": 0, "processing": 1, "indexed": 5}) is False
+
+	def test_processing_none_defaults_to_zero(self):
+		assert should_finalize({}) is True

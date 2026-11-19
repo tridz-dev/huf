@@ -300,13 +300,13 @@ def _processed_slice(ingestion_name: str, lock_key: str) -> int:
 
 def _finalize_or_self_chain(ingestion_name: str, slice: int) -> dict:
 	"""Self-chain while Pending rows remain; otherwise finalize terminal status."""
-	remaining = frappe.db.count("Knowledge Input", {"ingestion": ingestion_name, "status": "Pending"})
+	counts = count_ingestion_items(ingestion_name)
 	header_status = frappe.db.get_value("Knowledge Ingestion", ingestion_name, "status")
 
 	if header_status == "Cancelled":
 		return {"status": "cancelled"}
 
-	if remaining > 0:
+	if counts["pending"] > 0:
 		next_slice = (frappe.db.get_value("Knowledge Ingestion", ingestion_name, "slice_seq") or slice or 0) + 1
 		frappe.db.set_value("Knowledge Ingestion", ingestion_name, {"slice_seq": next_slice})
 		frappe.db.commit()
@@ -321,7 +321,18 @@ def _finalize_or_self_chain(ingestion_name: str, slice: int) -> dict:
 			entries=None,
 			slice=next_slice,
 		)
-		return {"status": "chained", "next_slice": next_slice, "remaining": remaining}
+		return {"status": "chained", "next_slice": next_slice, "remaining": counts["pending"]}
+
+	if not should_finalize(counts):
+		# Processing rows are crash markers. Finalizing now (with Pending==0
+		# and processing>0) would strand them forever -- the sweeper resets
+		# Processing rows independent of header status, then re-enqueues this
+		# Running header. Leave the header Running and return without work.
+		return {
+			"status": "waiting",
+			"reason": "Processing rows outstanding",
+			"processing": counts["processing"],
+		}
 
 	_finalize(ingestion_name)
 	return {"status": "completed"}
@@ -534,13 +545,31 @@ def recover_stalled_ingestions() -> dict:
 	  submit refuses while any Queued|Running ingestion exists).
 	- ``Running`` header with stale ``modified`` (older than 3 min) and no live
 	  lock -> re-enqueue the runner.
-	- ``Processing`` rows older than 10 min -> ``Pending`` (crash markers).
+	- ``Processing`` rows older than 10 min -> ``Pending`` (crash markers),
+	  regardless of header status (a finalized header may leave them stranded).
 	"""
 	from frappe.utils import add_to_date
 
 	now = now_datetime()
 	recovered = 0
 	rescheduled = []
+
+	# Crash-marked Processing rows -> Pending (older than 10 minutes),
+	# independent of header status: a header may have finalized (Pending==0)
+	# while rows were stranded Processing, and nothing else would ever
+	# unstick them. Scoped to bulk rows (ingestion is set).
+	stale_rows = frappe.get_all(
+		"Knowledge Input",
+		filters={
+			"ingestion": ("is", "set"),
+			"status": "Processing",
+			"modified": ("<", add_to_date(now, minutes=-PROCESSING_STALE_MINUTES)),
+		},
+		pluck="name",
+	)
+	for row_name in stale_rows:
+		frappe.db.set_value("Knowledge Input", row_name, {"status": "Pending"})
+		recovered += 1
 
 	# Orphaned Queued header: lost enqueue or wedged queue. Use the
 	# modified-time heuristic (the Running path's approach); enqueue
@@ -561,20 +590,6 @@ def recover_stalled_ingestions() -> dict:
 		"Knowledge Ingestion", filters={"status": "Running"}, pluck="name"
 	)
 	for ingestion_name in running:
-		# Crash-marked Processing rows -> Pending (older than 10 minutes).
-		stale_rows = frappe.get_all(
-			"Knowledge Input",
-			filters={
-				"ingestion": ingestion_name,
-				"status": "Processing",
-				"modified": ("<", add_to_date(now, minutes=-PROCESSING_STALE_MINUTES)),
-			},
-			pluck="name",
-		)
-		for row_name in stale_rows:
-			frappe.db.set_value("Knowledge Input", row_name, {"status": "Pending"})
-			recovered += 1
-
 		# Orphaned Running header: stale modified and no live lock.
 		header_modified = frappe.db.get_value("Knowledge Ingestion", ingestion_name, "modified")
 		if header_modified and header_modified < add_to_date(now, minutes=-RUNNING_STALE_MINUTES):
