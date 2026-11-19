@@ -43,7 +43,7 @@ def normalize_root(root_path: str) -> str:
 	return posixpath.normpath(root if root.startswith("/") else "/" + root)
 
 
-def walk_sftp(sftp, root: str, max_files: int):
+def walk_sftp(sftp, root: str, max_files: int, on_dir=None):
 	"""Yield ``(remote_path, rel_path, size)`` for regular files under ``root``.
 
 	Symlinks and special files are skipped. Yields at most ``max_files + 1``
@@ -53,6 +53,8 @@ def walk_sftp(sftp, root: str, max_files: int):
 	stack = [(root, 0)]
 	while stack:
 		current, depth = stack.pop()
+		if on_dir:
+			on_dir()
 		try:
 			entries = sftp.listdir_attr(current)
 		except OSError:

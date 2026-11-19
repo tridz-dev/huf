@@ -17,6 +17,7 @@ import hashlib
 import os
 import shutil
 import tempfile
+import time
 
 import frappe
 from frappe import _
@@ -34,6 +35,19 @@ from .safety import (
 )
 
 HEARTBEAT_EVERY = 25
+HEARTBEAT_MIN_INTERVAL = 30  # seconds, for forced/throttled heartbeats
+MAX_KEY_LEN = 255
+
+
+def make_external_key(raw: str) -> str:
+	"""Fit ``raw`` into the 255-char external_key column deterministically.
+
+	Long keys become first 190 chars + "#" + sha1(full key) so distinct long
+	keys never collide and re-imports map to the same row."""
+	raw = raw or ""
+	if len(raw) <= MAX_KEY_LEN:
+		return raw
+	return raw[:190] + "#" + hashlib.sha1(raw.encode("utf-8")).hexdigest()
 
 
 class ScanContext:
@@ -46,6 +60,8 @@ class ScanContext:
 		self.entries: list = []
 		self.truncated = False
 		self._seen = 0
+		self.created_files: list = []
+		self._last_beat = 0.0
 
 	@property
 	def full(self) -> bool:
@@ -55,7 +71,10 @@ class ScanContext:
 		if self.full:
 			self.truncated = True
 			return
-		self.entries.append({"file": None, "file_url": None, "external_key": key, "checksum": None, "skip_reason": reason})
+		self.entries.append(
+			{"file": None, "file_url": None, "external_key": make_external_key(key), "checksum": None, "skip_reason": reason}
+		)
+		self.touch()
 
 	def add_content(self, key: str, filename: str, content: bytes) -> None:
 		if self.full:
@@ -66,11 +85,12 @@ class ScanContext:
 			# "File does not exist"); record it as skipped instead of failing the scan.
 			return self.add_skip(key, "No Text")
 		file_doc = make_private_file(self.knowledge_source, filename, content)
+		self.created_files.append(file_doc.name)
 		self.entries.append(
 			{
 				"file": file_doc.name,
 				"file_url": file_doc.file_url,
-				"external_key": key[:255],
+				"external_key": make_external_key(key),
 				"checksum": hashlib.sha256(content).hexdigest(),
 			}
 		)
@@ -82,6 +102,28 @@ class ScanContext:
 			return self.add_skip(key, reason)
 		with open(path, "rb") as handle:
 			self.add_content(key, filename, handle.read())
+
+	def touch(self, force: bool = False) -> None:
+		"""Bump the header's ``modified`` (throttled to once per interval unless forced)."""
+		now = time.monotonic()
+		if not force and self._last_beat and now - self._last_beat < HEARTBEAT_MIN_INTERVAL:
+			return
+		self._last_beat = now
+		frappe.db.set_value("Knowledge Ingestion", self.ingestion_name, "modified", now_datetime(), update_modified=False)
+		frappe.db.commit()
+
+	def zip_progress(self) -> None:
+		self.touch()
+
+	def cleanup_created_files(self) -> None:
+		"""Delete File docs this scan created (never user-uploaded ones it only referenced)."""
+		for name in self.created_files:
+			try:
+				frappe.delete_doc("File", name, ignore_permissions=True, force=True)
+			except Exception:  # noqa: BLE001 -- best effort
+				pass
+		self.created_files = []
+		frappe.db.commit()
 
 	def heartbeat(self) -> None:
 		self._seen += 1
@@ -130,6 +172,7 @@ def scan_zip(ctx: ScanContext, config: dict) -> None:
 
 def scan_file_doc(ctx: ScanContext, file_doc, force_zip: bool = False) -> None:
 	name = file_doc.file_name or file_doc.name
+	upload_key = f"upload://{file_doc.name}"
 	if name.lower().endswith(".zip") or force_zip:
 		tmp = tempfile.mkdtemp(prefix="huf_zip_")
 		try:
@@ -137,13 +180,13 @@ def scan_file_doc(ctx: ScanContext, file_doc, force_zip: bool = False) -> None:
 			content = file_doc.get_content()
 			with open(zip_path, "wb") as handle:
 				handle.write(content.encode() if isinstance(content, str) else content)
-			_add_expanded(ctx, expand_zip(zip_path, os.path.join(tmp, "out"), ctx.limits, prefix=f"{name}/"))
+			_add_expanded(ctx, expand_zip(zip_path, os.path.join(tmp, "out"), ctx.limits, prefix=f"zip://{file_doc.name}/", on_progress=ctx.zip_progress))
 		finally:
 			shutil.rmtree(tmp, ignore_errors=True)
 		return
 	reason = classify(name, file_doc.file_size, ctx.limits)
 	if reason:
-		return ctx.add_skip(name, reason)
+		return ctx.add_skip(upload_key, reason)
 	if file_doc.is_private:
 		if ctx.full:
 			ctx.truncated = True
@@ -154,13 +197,13 @@ def scan_file_doc(ctx: ScanContext, file_doc, force_zip: bool = False) -> None:
 			{
 				"file": file_doc.name,
 				"file_url": file_doc.file_url,
-				"external_key": name[:255],
+				"external_key": make_external_key(upload_key),
 				"checksum": hashlib.sha256(content).hexdigest(),
 			}
 		)
 		return
 	content = file_doc.get_content()
-	ctx.add_content(name, name, content.encode() if isinstance(content, str) else content)
+	ctx.add_content(upload_key, name, content.encode() if isinstance(content, str) else content)
 
 
 def scan_directory(ctx: ScanContext, config: dict) -> None:
@@ -178,6 +221,7 @@ def scan_s3(ctx: ScanContext, config: dict) -> None:
 	token = None
 	while True:
 		page = list_objects_page(client, bucket, prefix=prefix, continuation_token=token, page_size=1000)
+		ctx.touch(force=True)
 		for obj in page.get("objects") or []:
 			key, size = obj["key"], int(obj.get("size") or 0)
 			ext_key = f"s3://{bucket}/{key}"
@@ -200,7 +244,7 @@ def scan_sftp(ctx: ScanContext, config: dict) -> None:
 	root = normalize_root(config["root_path"])
 	transport, sftp = open_sftp(conn)
 	try:
-		for remote, rel, size in walk_sftp(sftp, root, ctx.limits.max_files):
+		for remote, rel, size in walk_sftp(sftp, root, ctx.limits.max_files, on_dir=lambda: ctx.touch(force=True)):
 			ext_key = f"sftp://{conn}{remote}"
 			reason = classify(rel, size, ctx.limits)
 			if reason:
@@ -234,9 +278,10 @@ def run_scan(ingestion_name: str, source_kind: str, config: dict) -> dict:
 		SCANNERS[source_kind](ctx, config)
 	except Exception as exc:  # noqa: BLE001 -- any scan failure fails the header, not the worker
 		frappe.db.rollback()
+		ctx.cleanup_created_files()
 		_fail_scan(ingestion_name, str(exc))
 		return {"status": "failed", "error": str(exc)[:500]}
-	return finish_scan(ingestion_name, ctx.entries, ctx.truncated)
+	return finish_scan(ingestion_name, ctx.entries, ctx.truncated, created_files=ctx.created_files)
 
 
 def _fail_scan(ingestion_name: str, message: str) -> None:
@@ -248,9 +293,19 @@ def _fail_scan(ingestion_name: str, message: str) -> None:
 	frappe.db.commit()
 
 
-def finish_scan(ingestion_name: str, entries: list, truncated: bool = False) -> dict:
+def _delete_files(names) -> None:
+	for name in names or []:
+		try:
+			frappe.delete_doc("File", name, ignore_permissions=True, force=True)
+		except Exception:  # noqa: BLE001 -- best effort
+			pass
+	frappe.db.commit()
+
+
+def finish_scan(ingestion_name: str, entries: list, truncated: bool = False, created_files: list | None = None) -> dict:
 	"""Scanning -> Queued with the manifest, then enqueue the shared runner."""
 	if not entries:
+		_delete_files(created_files)
 		_fail_scan(ingestion_name, "No files found at the source")
 		return {"status": "failed", "error": "No files found at the source"}
 	updates = {"total_items": len(entries), "manifest_json": serialize_manifest(entries)}
@@ -264,6 +319,7 @@ def finish_scan(ingestion_name: str, entries: list, truncated: bool = False) -> 
 	)
 	frappe.db.commit()
 	if frappe.db.get_value("Knowledge Ingestion", ingestion_name, "status") != "Queued":
+		_delete_files(created_files)
 		return {"status": "cancelled"}
 	enqueue_first_slice(ingestion_name, entries)
 	return {"status": "queued", "total_items": len(entries)}
