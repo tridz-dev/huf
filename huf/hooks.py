@@ -375,6 +375,8 @@ scheduler_events = {
             "huf.ai.flow.triggers.expire_due_approvals",
             # Flow runs parked on an Execute code step: continue finished ones, give up on lost ones.
             "huf.ai.flow.code_node.sweep_code_waits",
+            # Bulk ingestion: re-enqueue orphaned runners, reset crash-marked rows.
+            "huf.ai.knowledge.bulk_runner.recover_stalled_ingestions",
         ],
         "*/10 * * * *": [
             "huf.ai.gateway_service.reap_stuck_gateway_events",
