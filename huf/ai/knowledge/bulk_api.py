@@ -296,7 +296,12 @@ def retry_ingestion(ingestion: str, only_failed: int = 1):
 	if not cint(only_failed):
 		for name in frappe.get_all(
 			"Knowledge Input",
-			filters={"ingestion": ingestion, "status": "Skipped", "skip_reason": "No Text"},
+			filters={
+				"ingestion": ingestion,
+				"status": "Skipped",
+				"skip_reason": "No Text",
+				"file": ("is", "set"),
+			},
 			pluck="name",
 		):
 			frappe.db.set_value(

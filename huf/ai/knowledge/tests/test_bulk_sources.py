@@ -592,3 +592,96 @@ class TestMaterializeNoTextEntry:
 		assert inserted[0].data["skip_reason"] == "No Text"
 		assert inserted[0].flags.ignore_validate is True
 		assert stats["skipped_preset"] == 1
+
+
+class TestMaterializeReimportUpdatesFile:
+	"""reset_pending must carry the new file_url onto the existing row."""
+
+	def _run(self, first, second):
+		from huf.ai.knowledge import bulk_materialize as bm
+
+		fake, rows, inserted = TestMaterializeUnsafeEntry()._fake_frappe()
+		orig = fake.db.get_value.side_effect
+
+		def get_value(doctype, filters, fieldname=None, *a, **kw):
+			if isinstance(fieldname, list):
+				return tuple(rows[filters].get(f) for f in fieldname)
+			return orig(doctype, filters, fieldname, *a, **kw)
+
+		fake.db.get_value.side_effect = get_value
+		with patch.object(bm, "frappe", fake):
+			bm.materialize("ING-1", [first])
+			row = next(iter(rows.values()))
+			row["status"] = "Indexed"  # runner finished the first ingestion
+			bm.materialize("ING-2", [second])
+		return next(iter(rows.values())), len(rows)
+
+	def test_changed_checksum_updates_file_and_pending(self):
+		first = {"external_key": "s3://B/a.txt", "file_url": "/files/old.txt", "checksum": "c1"}
+		second = {"external_key": "s3://B/a.txt", "file_url": "/files/new.txt", "checksum": "c2"}
+		row, n = self._run(first, second)
+		assert n == 1
+		assert row["file"] == "/files/new.txt" and row["status"] == "Pending"
+		assert row["external_checksum"] == "c2" and row["ingestion"] == "ING-2"
+
+	def test_preset_no_text_row_reimported_with_content_gets_file(self):
+		first = {"external_key": "s3://B/e.txt", "file": None, "checksum": None, "skip_reason": "No Text"}
+		second = {"external_key": "s3://B/e.txt", "file_url": "/files/e.txt", "checksum": "c9"}
+		row, n = self._run(first, second)
+		assert n == 1
+		assert row["file"] == "/files/e.txt" and row["status"] == "Pending"
+		assert row["skip_reason"] is None
+
+
+class TestRetryNoTextRequiresFile:
+	def _call(self, only_failed):
+		import frappe
+
+		stubbed = isinstance(frappe.whitelist, MagicMock)
+		if stubbed:
+			frappe.whitelist = lambda *a, **k: (lambda f: f)
+		import huf.ai.knowledge.bulk_api as mod
+
+		if stubbed or isinstance(mod.retry_ingestion, MagicMock):
+			frappe.whitelist = lambda *a, **k: (lambda f: f)
+			mod = importlib.reload(mod)
+
+		rows = {
+			"KI-1": {"status": "Skipped", "skip_reason": "No Text", "file": None},
+			"KI-2": {"status": "Skipped", "skip_reason": "No Text", "file": "/files/x.pdf"},
+		}
+		fake = MagicMock()
+		fake.get_doc.return_value = types.SimpleNamespace(
+			status="Completed", knowledge_source="KS-1", name="ING-1"
+		)
+		fake.db.exists.return_value = False
+
+		def get_all(doctype, filters=None, pluck=None, **kw):
+			if filters.get("status") == "Error":
+				return []
+			want_file = filters.get("file") == ("is", "set")
+			return [
+				n for n, r in rows.items()
+				if r["skip_reason"] == filters.get("skip_reason") and (r["file"] or not want_file)
+			]
+
+		def set_value(doctype, name, values):
+			if doctype == "Knowledge Input":
+				rows[name].update(values)
+
+		fake.get_all.side_effect = get_all
+		fake.db.set_value.side_effect = set_value
+		with patch.object(mod, "frappe", fake), patch.object(mod, "_check_source_perm"), patch.object(
+			mod, "cint", lambda v: int(v or 0)
+		):
+			mod.retry_ingestion("ING-1", only_failed=only_failed)
+		return rows
+
+	def test_only_failed_zero_skips_fileless_no_text(self):
+		rows = self._call(0)
+		assert rows["KI-1"]["status"] == "Skipped"
+		assert rows["KI-2"]["status"] == "Pending"
+
+	def test_only_failed_one_resets_neither(self):
+		rows = self._call(1)
+		assert rows["KI-1"]["status"] == rows["KI-2"]["status"] == "Skipped"
