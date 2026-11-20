@@ -8,7 +8,10 @@ HUF is a complete, self-hosted AI layer built on open standards. It gives teams 
 
 <br/>
 
-<img width="1440" alt="HUF agents: Support Assistant and Order Tracker in the Northwind Outfitters demo workspace" src="./docs/screenshots/agents/01-list.png" />
+<table>
+<tr><td width="33%" align="center" valign="top"><a href="#knowledge-grounding"><img src="./docs/screenshots/knowledge/05-ask-citations.png" alt="Ask your documents, with page citations" /></a><br/><sub><b>Ask your documents, with page citations</b></sub></td><td width="33%" align="center" valign="top"><a href="#knowledge-grounding"><img src="./docs/screenshots/knowledge/04-import-progress.png" alt="Bulk import from Upload, Zip, Folder, S3/R2, SFTP" /></a><br/><sub><b>Bulk import from Upload, Zip, Folder, S3/R2, SFTP</b></sub></td><td width="33%" align="center" valign="top"><a href="#visual-flow-builder"><img src="./docs/screenshots/flows/03-builder-steps.png" alt="Visual flow builder with agents and approvals" /></a><br/><sub><b>Visual flow builder with agents and approvals</b></sub></td></tr>
+<tr><td width="33%" align="center" valign="top"><a href="#data-tables"><img src="./docs/screenshots/tables/03-builder.png" alt="Data tables your agents can read and write" /></a><br/><sub><b>Data tables your agents can read and write</b></sub></td><td width="33%" align="center" valign="top"><a href="#agent-system--scoped-memory"><img src="./docs/screenshots/agents/04-tools.png" alt="Agents with tools, knowledge and memory" /></a><br/><sub><b>Agents with tools, knowledge and memory</b></sub></td><td width="33%" align="center" valign="top"><a href="#multi-channel-gateways"><img src="./docs/screenshots/whatsapp/01-setup.png" alt="Multi-channel gateways (WhatsApp and more)" /></a><br/><sub><b>Multi-channel gateways (WhatsApp and more)</b></sub></td></tr>
+</table>
 
 <br/>
 
