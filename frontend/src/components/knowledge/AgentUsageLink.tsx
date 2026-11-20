@@ -10,8 +10,12 @@ import { getAgentsForSource } from "@/services/knowledge/usageApi";
 /** "Used by N agents" link; opens a small list of those agents. */
 export function AgentUsageLink({
   knowledgeSource,
+  onConnect,
+  refreshKey = 0,
 }: {
   knowledgeSource: string;
+  onConnect?: () => void;
+  refreshKey?: number;
 }) {
   const [agents, setAgents] = useState<string[] | null>(null);
 
@@ -23,18 +27,19 @@ export function AgentUsageLink({
     return () => {
       cancelled = true;
     };
-  }, [knowledgeSource]);
+  }, [knowledgeSource, refreshKey]);
 
   if (agents === null) return null;
   if (agents.length === 0) {
     return (
-      <Link
-        to="/agents"
+      <button
+        type="button"
+        onClick={onConnect}
         className="text-sm text-signal-ink underline-offset-4 hover:underline"
         data-testid="agent-usage"
       >
         Connect to an agent →
-      </Link>
+      </button>
     );
   }
   return (
@@ -61,6 +66,11 @@ export function AgentUsageLink({
             </li>
           ))}
         </ul>
+        {onConnect && (
+          <button type="button" onClick={onConnect} className="mt-1 w-full rounded px-2 py-1.5 text-left text-sm text-signal-ink hover:bg-muted">
+            Connect another agent →
+          </button>
+        )}
       </PopoverContent>
     </Popover>
   );

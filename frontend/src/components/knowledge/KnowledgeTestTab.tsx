@@ -5,7 +5,6 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { getKnowledgeInputs, testSearch } from '@/services/knowledgeApi';
@@ -13,12 +12,13 @@ import { getFrappeErrorMessage } from '@/lib/frappe-error';
 import type { KnowledgeSourceDoc } from '@/types/knowledge.types';
 import {
   MATCH_LABEL,
-  highlightParts,
   locationOf,
   matchLevels,
   normalizeResults,
+  questionFromTitle,
   type TestResult,
 } from './import/testSearchHelpers';
+import { TestSnippet } from './import/TestSnippet';
 
 const LEVEL_VARIANT = { high: 'default', good: 'secondary', weak: 'outline' } as const;
 
@@ -29,7 +29,6 @@ function openDocuments() {
 /** Test tab: ask a question and see which documents would answer it. */
 export function KnowledgeTestTab({ source }: { source: KnowledgeSourceDoc | null }) {
   const [query, setQuery] = useState('');
-  const [topK, setTopK] = useState(5);
   const [searching, setSearching] = useState(false);
   const [results, setResults] = useState<TestResult[] | null>(null);
   const [asked, setAsked] = useState('');
@@ -45,11 +44,11 @@ export function KnowledgeTestTab({ source }: { source: KnowledgeSourceDoc | null
       .then((rows) => {
         if (!alive) return;
         setDocCount(rows.length);
-        const titles = rows
+        const questions = rows
           .filter((r) => r.status === 'Indexed')
-          .map((r) => (r.title || r.file_name || '').trim())
-          .filter(Boolean);
-        setSuggestions(titles.slice(0, 3));
+          .map((r) => questionFromTitle(r.title || r.file_name || ''))
+          .filter((q): q is string => !!q);
+        setSuggestions(Array.from(new Set(questions)).slice(0, 3));
       })
       .catch(() => alive && setDocCount(null));
     return () => {
@@ -65,12 +64,12 @@ export function KnowledgeTestTab({ source }: { source: KnowledgeSourceDoc | null
         ? 'Add documents first, then you can test a question.'
         : null;
 
-  const run = async (q = query, k = topK) => {
+  const run = async (q = query) => {
     if (!source || !q.trim() || blocked) return;
     setSearching(true);
     setError(null);
     try {
-      setResults(normalizeResults(await testSearch(source.name, q.trim(), k)));
+      setResults(normalizeResults(await testSearch(source.name, q.trim(), 5)));
       setAsked(q.trim());
     } catch (e) {
       setError(getFrappeErrorMessage(e) || 'We could not run that search. Try again.');
@@ -155,25 +154,6 @@ export function KnowledgeTestTab({ source }: { source: KnowledgeSourceDoc | null
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-medium">Best matches ({results.length})</p>
-                <div className="flex items-center gap-2 text-sm text-steel">
-                  Show:
-                  <Select
-                    value={String(topK)}
-                    onValueChange={(v) => {
-                      const k = Number(v);
-                      setTopK(k);
-                      if (asked) void run(asked, k);
-                    }}
-                  >
-                    <SelectTrigger className="w-28">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="5">Top 5</SelectItem>
-                      <SelectItem value="10">Top 10</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
               </div>
               {results.length === 0 ? (
                 <p className="py-4 text-center text-sm text-steel">
@@ -202,17 +182,7 @@ export function KnowledgeTestTab({ source }: { source: KnowledgeSourceDoc | null
                           </TooltipContent>
                         </Tooltip>
                       </div>
-                      <p className="whitespace-pre-wrap text-sm text-steel">
-                        {highlightParts(String(r.text ?? '').slice(0, 400), asked).map((p, j) =>
-                          p.hit ? (
-                            <mark key={j} className="rounded bg-yellow-200 px-0.5 text-foreground dark:bg-yellow-700">
-                              {p.text}
-                            </mark>
-                          ) : (
-                            <span key={j}>{p.text}</span>
-                          ),
-                        )}
-                      </p>
+                      <TestSnippet text={String(r.text ?? '')} query={asked} />
                       <button type="button" className="text-xs underline" onClick={openDocuments}>
                         Open document
                       </button>

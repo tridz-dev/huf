@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type DragEvent } from 'react';
+import { useEffect, useMemo, useState, type DragEvent, type ReactNode } from 'react';
 import { Cloud, FolderOpen, Loader2, Server, ChevronLeft } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
@@ -48,6 +48,8 @@ interface AddContentDialogProps {
   initialTab?: 'upload' | 'storage';
   /** Files to stage as soon as the dialog opens (dropped on the page). */
   initialFiles?: File[];
+  /** Extra header content, e.g. the create-flow stepper. */
+  headerExtra?: ReactNode;
 }
 
 async function uploadPrivate(file: File, onProgress: (pct: number) => void): Promise<string> {
@@ -74,6 +76,7 @@ export function AddContentDialog({
   onSkip,
   initialTab = 'upload',
   initialFiles,
+  headerExtra,
 }: AddContentDialogProps) {
   const [options, setOptions] = useState<ImportOptions | null>(null);
   const [optionsError, setOptionsError] = useState<string | null>(null);
@@ -110,7 +113,8 @@ export function AddContentDialog({
 
   useEffect(() => {
     if (!open) return;
-    setPrimary(initialTab);
+    const hasStorage = (options?.source_kinds ?? []).some((k) => k === 'S3' || k === 'SFTP' || k === 'Directory');
+    setPrimary(initialTab === 'storage' && !hasStorage ? 'upload' : initialTab);
     if (initialFiles && initialFiles.length > 0 && options) {
       setPrimary('upload');
       setStaged((cur) => [...cur, ...stageFiles(initialFiles, options.allowed_extensions, cur)]);
@@ -232,6 +236,7 @@ export function AddContentDialog({
       <DialogScrollContent className="max-w-2xl">
         <DialogScrollHeader>
           <DialogTitle>Add content{sourceLabel ? ` to "${sourceLabel}"` : ''}</DialogTitle>
+          {headerExtra}
           <DialogDescription>
             Add documents so your agents can answer from them. We read and prepare them in the background.
           </DialogDescription>

@@ -2,6 +2,9 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
 import { reprocessInput, retryIngestion } from '@/services/knowledgeApi';
+import { UploadCloud } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { NextStepsCard } from './import/NextStepsCard';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import type { KnowledgeInputDoc, KnowledgeSourceDoc } from '@/types/knowledge.types';
@@ -27,6 +30,8 @@ interface DocumentsTabProps {
   onRefreshOverview: () => void;
   /** Refetch source + inputs (never saves the source). */
   onChanged: () => void;
+  onTryQuestion: () => void;
+  onConnectAgent: () => void;
   onReprocess: (name: string) => Promise<void> | void;
   onRemove: (name: string) => Promise<void> | void;
 }
@@ -42,6 +47,8 @@ export function DocumentsTab({
   onAddOpenChange,
   onRefreshOverview,
   onChanged,
+  onTryQuestion,
+  onConnectAgent,
   onReprocess,
   onRemove,
 }: DocumentsTabProps) {
@@ -49,6 +56,10 @@ export function DocumentsTab({
   const [problemsFor, setProblemsFor] = useState<string | null>(null);
   const [filter, setFilter] = useState<DocFilter | null>(null);
   const [retrying, setRetrying] = useState(false);
+  const [armed, setArmed] = useState(false);
+  const [dropped, setDropped] = useState<File[]>([]);
+  const [addTab, setAddTab] = useState<'upload' | 'storage'>('upload');
+  const [dragOver, setDragOver] = useState(false);
   const ingestion = shown ?? active;
   const retryAll = async () => {
     setRetrying(true);
@@ -103,6 +114,7 @@ export function DocumentsTab({
           ingestion={ingestion}
           onViewDetails={setProblemsFor}
           onFinished={() => {
+            setArmed(true);
             onRefreshOverview();
             onChanged();
           }}
@@ -113,14 +125,54 @@ export function DocumentsTab({
         />
       )}
 
+      {armed && counts.ready > 0 && !ingestion && (
+        <NextStepsCard knowledgeSource={knowledgeSource} ready={counts.ready} onTry={onTryQuestion} onConnect={onConnectAgent} />
+      )}
+
       {counts.total === 0 && !ingestion && !inputsLoading ? (
-        <div className="rounded-md border border-dashed py-10 text-center" data-testid="documents-empty">
-          <p className="text-sm text-steel">No documents yet. Add your first documents to make this source useful.</p>
-          <div className="mt-4 flex justify-center gap-2">
-            <Button type="button" size="sm" onClick={() => onAddOpenChange(true)}>
-              Upload documents
+        <div
+          className={cn(
+            'rounded-md border-2 border-dashed px-6 py-16 text-center transition-colors',
+            dragOver ? 'border-primary bg-primary/5' : 'border-input',
+          )}
+          data-testid="documents-empty"
+          onDragOver={(e) => {
+            e.preventDefault();
+            setDragOver(true);
+          }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragOver(false);
+            if (e.dataTransfer.files.length === 0) return;
+            setDropped(Array.from(e.dataTransfer.files));
+            setAddTab('upload');
+            onAddOpenChange(true);
+          }}
+        >
+          <UploadCloud className="mx-auto mb-3 h-10 w-10 text-steel-soft" />
+          <p className="text-base font-medium">Drop files here to add them</p>
+          <p className="mt-1 text-sm text-steel">No documents yet. Add your first documents to make this source useful.</p>
+          <div className="mt-5 flex justify-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => {
+                setAddTab('upload');
+                onAddOpenChange(true);
+              }}
+            >
+              Add content
             </Button>
-            <Button type="button" size="sm" variant="outline" onClick={() => onAddOpenChange(true)}>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setAddTab('storage');
+                onAddOpenChange(true);
+              }}
+            >
               Connect storage
             </Button>
           </div>
@@ -140,14 +192,21 @@ export function DocumentsTab({
 
       <AddContentDialog
         open={addOpen}
-        onOpenChange={onAddOpenChange}
+        onOpenChange={(o) => {
+          if (!o) setDropped([]);
+          onAddOpenChange(o);
+        }}
         knowledgeSource={knowledgeSource}
         sourceLabel={source.source_name}
+        initialTab={addTab}
+        initialFiles={dropped}
         onInputAdded={() => {
+          setArmed(true);
           onRefreshOverview();
           onChanged();
         }}
         onStarted={(name) => {
+          setDropped([]);
           setShown(name);
           onRefreshOverview();
           onChanged();

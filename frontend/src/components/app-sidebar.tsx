@@ -122,7 +122,7 @@ export const libraryNavItems = [
     capability: "agent.use",
   },
   {
-    title: "Sources",
+    title: "Knowledge",
     url: "/knowledge",
     icon: BookOpen,
     capability: "agent.use",

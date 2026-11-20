@@ -18,6 +18,7 @@ import { getFrappeErrorMessage } from '@/lib/frappe-error';
 import type { KnowledgeSourceDoc } from '@/types/knowledge.types';
 import { knowledgeSourceFormSchema, type KnowledgeSourceFormValues } from '../types';
 import { CreateSourceStepName } from './CreateSourceStepName';
+import { CreateStepper } from './CreateStepper';
 import { AddContentDialog } from '../import/AddContentDialog';
 import { CREATE_SOURCE_DEFAULTS, buildCreatePayload, isSmartSearch } from './createSourceHelpers';
 
@@ -26,9 +27,11 @@ interface CreateSourceDialogProps {
   onOpenChange: (open: boolean) => void;
   /** Agent to link the new source to (from /knowledge/new?agent=<id>). */
   agent?: string | null;
+  /** Which choice the Add content step opens on. */
+  initialAddTab?: 'upload' | 'storage';
 }
 
-export function CreateSourceDialog({ open, onOpenChange, agent }: CreateSourceDialogProps) {
+export function CreateSourceDialog({ open, onOpenChange, agent, initialAddTab }: CreateSourceDialogProps) {
   const navigate = useNavigate();
   const [created, setCreated] = useState<KnowledgeSourceDoc | null>(null);
   const [busy, setBusy] = useState(false);
@@ -98,6 +101,8 @@ export function CreateSourceDialog({ open, onOpenChange, agent }: CreateSourceDi
         onStarted={finish}
         onInputAdded={finish}
         onSkip={finish}
+        initialTab={initialAddTab}
+        headerExtra={<CreateStepper step={2} />}
       />
     );
   }
@@ -107,7 +112,11 @@ export function CreateSourceDialog({ open, onOpenChange, agent }: CreateSourceDi
       <DialogScrollContent className="max-w-xl">
         <DialogScrollHeader>
           <DialogTitle>New knowledge source</DialogTitle>
-          <DialogDescription>Step 1 of 2: name it. You will add content next.</DialogDescription>
+          <DialogDescription asChild>
+            <div>
+              <CreateStepper step={1} />
+            </div>
+          </DialogDescription>
         </DialogScrollHeader>
         <FormProvider {...form}>
           <form onSubmit={submit} className="contents">

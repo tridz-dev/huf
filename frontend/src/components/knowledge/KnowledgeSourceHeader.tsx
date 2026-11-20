@@ -34,6 +34,8 @@ interface KnowledgeSourceHeaderProps {
   onCancel?: () => void;
   onRebuildIndex: () => void;
   onAddContent: () => void;
+  onConnectAgent?: () => void;
+  usageKey?: number;
   onToggleDisabled: () => void;
 }
 
@@ -50,6 +52,8 @@ export function KnowledgeSourceHeader({
   onCancel,
   onRebuildIndex,
   onAddContent,
+  onConnectAgent,
+  usageKey,
   onToggleDisabled,
 }: KnowledgeSourceHeaderProps) {
   const navigate = useNavigate();
@@ -91,7 +95,7 @@ export function KnowledgeSourceHeader({
           />
         )}
         {health && <HealthBadge health={health} />}
-        {!isNew && id && <AgentUsageLink knowledgeSource={id} />}
+        {!isNew && id && <AgentUsageLink knowledgeSource={id} onConnect={onConnectAgent} refreshKey={usageKey} />}
       </div>
       <div className="flex items-center gap-2">
         {fromAgent && onCancel && (

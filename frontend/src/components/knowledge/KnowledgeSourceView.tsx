@@ -4,6 +4,7 @@ import { Form } from '@/components/ui/form';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { AIProvider } from '@/types/agent.types';
 import type { KnowledgeInputDoc, KnowledgeSourceDoc } from '@/types/knowledge.types';
+import { ConnectAgentDialog } from './ConnectAgentDialog';
 import { DocumentsTab } from './DocumentsTab';
 import { KnowledgeActivityTab } from './KnowledgeActivityTab';
 import { KnowledgeSourceHeader } from './KnowledgeSourceHeader';
@@ -46,6 +47,8 @@ interface KnowledgeSourceViewProps {
 export function KnowledgeSourceView(props: KnowledgeSourceViewProps) {
   const { form, source, inputs } = props;
   const [tab, setTab] = useState<TabKey>(tabFromHash);
+  const [connectOpen, setConnectOpen] = useState(false);
+  const [usageKey, setUsageKey] = useState(0);
   const overview = useKnowledgeOverview(source.name, source, inputs);
 
   useEffect(() => {
@@ -75,6 +78,8 @@ export function KnowledgeSourceView(props: KnowledgeSourceViewProps) {
         onCancel={props.onCancel}
         onRebuildIndex={props.onRebuildIndex}
         onAddContent={() => props.onAddOpenChange(true)}
+        onConnectAgent={() => setConnectOpen(true)}
+        usageKey={usageKey}
         onToggleDisabled={props.onToggleDisabled}
       />
       <Form {...form}>
@@ -99,6 +104,8 @@ export function KnowledgeSourceView(props: KnowledgeSourceViewProps) {
                 onAddOpenChange={props.onAddOpenChange}
                 onRefreshOverview={overview.refresh}
                 onChanged={props.onChanged}
+                onTryQuestion={() => changeTab('test')}
+                onConnectAgent={() => setConnectOpen(true)}
                 onReprocess={props.onReprocessInput}
                 onRemove={props.onDeleteInput}
               />
@@ -123,6 +130,12 @@ export function KnowledgeSourceView(props: KnowledgeSourceViewProps) {
           </Tabs>
         </form>
       </Form>
+      <ConnectAgentDialog
+        open={connectOpen}
+        onOpenChange={setConnectOpen}
+        knowledgeSource={source.name}
+        onConnected={() => setUsageKey((k) => k + 1)}
+      />
     </>
   );
 }
