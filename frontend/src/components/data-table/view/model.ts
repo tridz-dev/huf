@@ -95,18 +95,26 @@ const OP_API: Record<Exclude<FilterOp, 'contains' | 'does not contain' | 'is emp
 	'is after': '>',
 };
 
+/** Escape LIKE wildcards so user text matches literally. */
+export function escapeLike(v: string): string {
+	return v.replace(/[\\%_]/g, (m) => `\\${m}`);
+}
+
 export function toApiFilters(conds: FilterCondition[], columns: GridColumn<Row>[]): TableRecordFilter[] {
 	const out: TableRecordFilter[] = [];
 	for (const c of conds) {
 		const col = columns.find((x) => x.key === c.field);
 		if (c.op === 'is empty') out.push([c.field, 'is', 'not set']);
 		else if (c.op === 'is not empty') out.push([c.field, 'is', 'set']);
-		else if (c.op === 'contains') out.push([c.field, 'like', `%${c.value}%`]);
-		else if (c.op === 'does not contain') out.push([c.field, 'not like', `%${c.value}%`]);
+		else if (c.op === 'contains') out.push([c.field, 'like', `%${escapeLike(String(c.value ?? ''))}%`]);
+		else if (c.op === 'does not contain') out.push([c.field, 'not like', `%${escapeLike(String(c.value ?? ''))}%`]);
 		else {
 			let v: unknown = c.value;
 			if (col?.type === 'checkbox') v = c.value === 'Yes' || c.value === 'true' ? 1 : 0;
-			else if (col && (col.type === 'number' || col.type === 'currency')) v = Number(c.value);
+			else if (col && (col.type === 'number' || col.type === 'currency')) {
+				if (c.value === '' || c.value === null || c.value === undefined || Number.isNaN(Number(c.value))) continue;
+				v = Number(c.value);
+			}
 			out.push([c.field, OP_API[c.op], v]);
 		}
 	}
