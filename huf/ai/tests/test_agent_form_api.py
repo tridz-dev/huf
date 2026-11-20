@@ -41,6 +41,8 @@ def _fake_frappe(roles=("System Manager",), user="u@x.com"):
     f.get_doc = MagicMock()
     f.parse_json = lambda s: __import__("json").loads(s)
     f.has_permission = MagicMock(return_value=True)
+    f.cache = MagicMock()
+    f.cache.incrby.return_value = 1
     f.whitelist = lambda *a, **k: (a[0] if a and callable(a[0]) else (lambda fn: fn))
     return f
 
@@ -48,7 +50,9 @@ def _fake_frappe(roles=("System Manager",), user="u@x.com"):
 def _load(frappe_stub):
     perms = types.ModuleType("huf.permissions")
     perms.has_capability = MagicMock(return_value=True)
-    mods = {"frappe": frappe_stub, "huf.permissions": perms}
+    rl = types.ModuleType("frappe.rate_limiter")
+    rl.rate_limit = lambda **kw: (lambda fn: fn)
+    mods = {"frappe": frappe_stub, "huf.permissions": perms, "frappe.rate_limiter": rl}
     with patch.dict(sys.modules, mods):
         spec = importlib.util.spec_from_file_location(
             "agent_form_api_under_test", os.path.join(ROOT, "ai", "agent", "agent_form_api.py")
@@ -203,3 +207,44 @@ class DraftTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DraftTestSecurity(unittest.TestCase):
+    """Track-Item: SEC-6 / SEC-7."""
+
+    def test_tool_override_requires_read_permission(self):
+        f = _fake_frappe()
+        f.has_permission = MagicMock(return_value=False)
+        with self.assertRaises(_ValErr):
+            _load(f)._validate_draft_overrides({"agent_tool": ["secret-tool"]})
+        f.has_permission.assert_called_with("Agent Tool Function", "read", "secret-tool")
+
+    def test_model_must_exist_and_match_provider(self):
+        f = _fake_frappe()
+        f.db.get_value.return_value = None
+        with self.assertRaises(_ValErr):
+            _load(f)._validate_draft_overrides({"model": "nope"})
+        f.db.get_value.return_value = {"provider": "OpenAI", "model_name": "gpt-x", "modalities": "Text"}
+        with self.assertRaises(_ValErr):
+            _load(f)._validate_draft_overrides({"model": "gpt-x", "provider": "Other"})
+        _load(f)._validate_draft_overrides({"model": "gpt-x", "provider": "OpenAI"})
+
+    def test_non_chat_model_rejected(self):
+        f = _fake_frappe()
+        f.db.get_value.return_value = {"provider": "OpenAI", "model_name": "text-embedding-3", "modalities": "Embeddings"}
+        with self.assertRaises(_ValErr):
+            _load(f)._validate_draft_overrides({"model": "text-embedding-3"})
+
+    def test_rate_limit_per_user(self):
+        f = _fake_frappe()
+        f.cache.incrby.return_value = 11
+        with self.assertRaises(_ValErr):
+            _load(f)._check_draft_rate_limit()
+        f.cache.incrby.return_value = 10
+        _load(f)._check_draft_rate_limit()
+
+    def test_discard_removes_run_calls_messages_conversation(self):
+        f = _fake_frappe()
+        _load(f)._discard_draft_records("RUN-1", "CONV-1")
+        doctypes = [c.args[0] for c in f.db.delete.call_args_list]
+        self.assertEqual(doctypes, ["Agent Tool Call", "Agent Run", "Agent Message", "Agent Conversation"])

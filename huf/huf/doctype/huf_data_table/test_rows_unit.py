@@ -90,3 +90,66 @@ def test_count_with_search_uses_aggregate():
 def test_bulk_limit_enforced():
 	with pytest.raises(_Err):
 		rows._check_bulk(list(range(rows.MAX_BULK_ROWS + 1)))
+
+
+# ---- Track-Item: SEC-4 / SEC-5
+
+def test_strip_reserved_keys():
+	d = {k: "x" for k in rows.RESERVED_KEYS}
+	d["title"] = "keep"
+	assert rows.strip_reserved(d) == {"title": "keep"}
+	assert rows.strip_reserved("nope") == {}
+
+
+def test_bulk_insert_strips_reserved_keys():
+	fr.get_doc = mock.Mock(return_value=mock.Mock(name="doc"))
+	rows.bulk_insert_rows("HF T", [{"title": "a", "owner": "evil", "docstatus": 1, "doctype": "User"}])
+	arg = fr.get_doc.call_args.args[0]
+	assert arg == {"title": "a", "doctype": "HF T"}
+
+
+def test_bulk_update_strips_reserved_keys():
+	doc = mock.Mock()
+	fr.get_doc = mock.Mock(return_value=doc)
+	rows.bulk_update_rows("HF T", ["r1"], {"title": "b", "owner": "evil", "name": "x"})
+	doc.update.assert_called_once_with({"title": "b"})
+
+
+def _restore_setup(deleter, *, caller="me@x.com", admin=False, perms=("create", "read")):
+	fr.session = types.SimpleNamespace(user=caller)
+	fr.has_permission = lambda dt, ptype=None, *a, **k: (
+		admin if dt == "Deleted Document" else ptype in perms
+	)
+	fr.db.get_value.return_value = mock.Mock(name="n", owner=deleter) if deleter else None
+	if deleter:
+		fr.db.get_value.return_value.name = "DD-1"
+	deleted = mock.Mock(data='{"doctype": "HF T"}', deleted_name="r1")
+	fr.get_doc = mock.Mock(return_value=deleted)
+	fr.db.set_value = mock.Mock()
+	return deleted
+
+
+def test_restore_skips_rows_deleted_by_someone_else():
+	_restore_setup("other@x.com")
+	assert rows.restore_rows("HF T", ["r1"]) == {"restored": 0}
+
+
+def test_restore_allows_own_deletion():
+	_restore_setup("me@x.com")
+	assert rows.restore_rows("HF T", ["r1"]) == {"restored": 1}
+
+
+def test_restore_allows_deleted_document_admin():
+	_restore_setup("other@x.com", admin=True)
+	assert rows.restore_rows("HF T", ["r1"]) == {"restored": 1}
+
+
+def test_restore_unknown_row_is_silent_not_found():
+	_restore_setup(None)
+	assert rows.restore_rows("HF T", ["ghost"]) == {"restored": 0}
+
+
+def test_restore_requires_create_and_read():
+	_restore_setup("me@x.com", perms=("create",))
+	with pytest.raises(_Err):
+		rows.restore_rows("HF T", ["r1"])

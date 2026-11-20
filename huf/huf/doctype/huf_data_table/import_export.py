@@ -18,6 +18,8 @@ import uuid
 import frappe
 from frappe import _
 
+from .import_security import _import_error, _max_import_bytes, check_xlsx_size, strip_reserved
+
 MAX_ROWS = 50000
 INLINE_ROW_LIMIT = 5000
 SAMPLE_ROWS = 5
@@ -27,7 +29,7 @@ _DATE_FORMATS = ("%Y-%m-%d", "%d-%m-%Y", "%d/%m/%Y", "%Y/%m/%d", "%m/%d/%Y")
 _DATETIME_FORMATS = ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S.%f")
 _TRUE = {"1", "true", "yes", "y", "checked", "on"}
 _FALSE = {"0", "false", "no", "n", "unchecked", "off", ""}
-_FORMULA_PREFIXES = ("=", "+", "-", "@")
+_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
 
 
 # ---------------------------------------------------------------- pure logic
@@ -48,6 +50,7 @@ def parse_xlsx(raw: bytes):
 		import openpyxl
 	except ImportError:
 		frappe.throw(_("XLSX import is not available on this server. Upload a CSV instead."))
+	check_xlsx_size(raw)
 	wb = openpyxl.load_workbook(io.BytesIO(raw), read_only=True, data_only=True)
 	try:
 		ws = wb.worksheets[0]
@@ -283,13 +286,24 @@ def _load(table_id, file_url):
 	doctype_name = frappe.db.get_value("Huf Data Table", table_id, "doctype_name")
 	if not doctype_name:
 		frappe.throw(_("Table not found"), frappe.DoesNotExistError)
-	file_name = frappe.db.get_value("File", {"file_url": file_url}, "name")
-	if not file_name:
-		frappe.throw(_("Import file not found: {0}").format(file_url))
+	url = str(file_url or "")
+	if not url.startswith(("/files/", "/private/files/")) or ".." in url:
+		_import_error()
+	file_name = frappe.db.get_value("File", {"file_url": url}, "name") or _import_error()
 	file_doc = frappe.get_doc("File", file_name)
+	try:
+		file_doc.check_permission("read")
+	except frappe.PermissionError:
+		_import_error()
+	if file_doc.is_private and file_doc.owner != frappe.session.user and not _can("data.tables.manage"):
+		_import_error()
+	limit = _max_import_bytes()
+	if (file_doc.file_size or 0) > limit:
+		frappe.throw(_("The import file is too large."), frappe.ValidationError)
 	raw = file_doc.get_content()
-	if isinstance(raw, str):
-		raw = raw.encode("utf-8")
+	raw = raw.encode("utf-8") if isinstance(raw, str) else raw
+	if len(raw) > limit:
+		frappe.throw(_("The import file is too large."), frappe.ValidationError)
 	fname = (file_doc.file_name or file_url).lower()
 	headers, rows = parse_xlsx(raw) if fname.endswith((".xlsx", ".xlsm")) else parse_csv(raw)
 	if not headers:
@@ -416,13 +430,10 @@ def _do_import(doctype_name, headers, rows, mapping, mode, key_field):
 			rejected.append((idx + 2, "; ".join(errs), row))
 		else:
 			records.append((idx + 2, rec, row))
-	if mode == "replace" and rejected:
-		# Never delete existing data when the new file has invalid rows.
-		return _result(0, 0, rejected, headers, note=str(_("Nothing replaced: fix the rejected rows first.")))
-	inserted = updated = 0
 	if mode == "replace":
-		for name in frappe.get_all(doctype_name, pluck="name", limit_page_length=0):
-			frappe.delete_doc(doctype_name, name, force=True)
+		from .import_replace import do_replace
+		return do_replace(doctype_name, headers, records, rejected, _result)
+	inserted = updated = 0
 	for rownum, rec, raw in records:
 		try:
 			if mode == "update":
@@ -430,11 +441,11 @@ def _do_import(doctype_name, headers, rows, mapping, mode, key_field):
 				if not name:
 					raise frappe.DoesNotExistError(str(_("No record with {0} = {1}").format(key_field, rec[key_field])))
 				doc = frappe.get_doc(doctype_name, name)
-				doc.update({k: v for k, v in rec.items() if k != "name"})
+				doc.update(strip_reserved(rec))
 				doc.save()
 				updated += 1
 			else:
-				frappe.get_doc({"doctype": doctype_name, **rec}).insert()
+				frappe.get_doc({**strip_reserved(rec), "doctype": doctype_name}).insert()
 				inserted += 1
 		except Exception as e:
 			rejected.append((rownum, re.sub(r"<[^>]+>", "", str(e)), raw))
