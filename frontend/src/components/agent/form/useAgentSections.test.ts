@@ -76,4 +76,20 @@ describe('useAgentSections', () => {
     const payload = api.updateAgentSection.mock.calls[1][2] as Record<string, unknown>;
     expect(payload.agent_name).toBe('Renamed');
   });
+
+  it('FEF-C: after a conflict, retry refreshes revisions and reports conflicting fields', async () => {
+    const { result } = await mount();
+    act(() => { result.current.form.setValue('description', 'mine'); result.current.form.setValue('instructions', 'mine-i'); });
+    api.updateAgentSection.mockRejectedValueOnce(new Error('Document has been modified after you have opened it'));
+    await act(async () => { await result.current.sections.saveNow(); });
+    expect(result.current.sections.conflict).toBe(true);
+
+    server = { ...server, description: 'theirs', agent_name: 'Server Name' }; // description conflicts, agent_name does not
+    rev = 'r9';
+    await act(async () => { await result.current.sections.retry(); });
+    expect(result.current.sections.conflictFields).toEqual(['description']);
+    expect(result.current.form.getValues('agent_name')).toBe('Server Name');
+    const last = api.updateAgentSection.mock.calls.at(-1)!;
+    expect(last[3]).toBe('r9');
+  });
 });

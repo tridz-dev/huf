@@ -65,6 +65,7 @@ export function useAgentSections({ id, isNew, form, abilities, canSave, onRename
   const [savedAt, setSavedAt] = useState<Date | null>(null);
   const savingRef = useRef(false);
   const pendingRef = useRef<SaveMode | null>(null);
+  const [conflictFields, setConflictFields] = useState<string[]>([]);
   const abilitiesRef = useRef(abilities);
   abilitiesRef.current = abilities;
   const idRef = useRef(id);
@@ -272,13 +273,63 @@ export function useAgentSections({ id, isNew, form, abilities, canSave, onRename
     return () => window.removeEventListener('beforeunload', handler);
   }, [hasUnsaved]);
 
-  const status: AutosaveState = saving ? 'saving' : saveError || errors.length ? 'error' : explicitDirty.length ? 'dirty' : savedAt ? 'saved' : 'idle';
   const conflict = !!saveError && /modified|timestamp|changed|conflict/i.test(saveError);
+
+  /**
+   * Refetch every loaded section, adopt the fresh revisions and rebase: fields the user did not touch take the
+   * server value, fields only the user changed stay as edited, fields both changed are reported (local edit kept).
+   */
+  const reloadLatest = useCallback(async (): Promise<string[]> => {
+    const target = idRef.current;
+    const base = baselineRef.current;
+    if (!target || isNew || !base) return [];
+    const sections = ALL_SECTIONS.filter((s) => loadedRef.current.has(s));
+    const results = await Promise.allSettled(sections.map((s) => getAgentSection(target, s)));
+    const revisions: Revisions = { ...revisionsRef.current };
+    let merged: Partial<AgentDoc> = {};
+    const fetched = new Set<AgentConfigSection>();
+    results.forEach((r, i) => {
+      if (r.status !== 'fulfilled') return;
+      revisions[sections[i]] = r.value.modified;
+      merged = { ...merged, ...r.value.values };
+      fetched.add(sections[i]);
+    });
+    const server = mapAgentDocToFormValues(merged as AgentDoc) as unknown as Record<string, unknown>;
+    const current = form.getValues() as unknown as Record<string, unknown>;
+    const old = base as unknown as Record<string, unknown>;
+    const nextBase: Record<string, unknown> = { ...old };
+    const conflicts: string[] = [];
+    for (const section of fetched) {
+      for (const f of SECTION_FIELDS[section]) {
+        if (isDesktopField(f)) continue;
+        const key = f as string;
+        nextBase[key] = server[key];
+        const localDirty = sig(current[key]) !== sig(old[key]);
+        const serverChanged = sig(server[key]) !== sig(old[key]);
+        if (!serverChanged) continue;
+        if (localDirty) { if (sig(current[key]) !== sig(server[key])) conflicts.push(key); }
+        else form.setValue(f as never, server[key] as never, { shouldDirty: false });
+      }
+    }
+    revisionsRef.current = revisions;
+    baselineRef.current = nextBase as unknown as AgentFormValues;
+    setBaselineVersion((v) => v + 1);
+    setConflictFields(conflicts);
+    setSaveError(null);
+    return conflicts;
+  }, [form, isNew]);
+
+  const retry = useCallback(async () => {
+    if (conflict) { try { await reloadLatest(); } catch (e) { console.error('Reload before retry failed:', e); } }
+    await saveAll('explicit');
+  }, [conflict, reloadLatest, saveAll]);
+
+  const status: AutosaveState = saving ? 'saving' : saveError || errors.length ? 'error' : explicitDirty.length ? 'dirty' : savedAt ? 'saved' : 'idle';
   const errorText = errors.length ? 'Fix the highlighted fields' : conflict ? 'Someone else changed this' : undefined;
 
   return {
     loading, ...meta, owner: meta.owner, desktopAccessStatus, status, errorText, errors, setErrors, savedAt, hasUnsaved,
-    saveNow: () => saveAll('explicit'), retry: () => saveAll('explicit'),
+    saveNow: () => saveAll('explicit'), retry, conflict, conflictFields, reloadLatest,
     persistedAllowChat: baselineRef.current?.allow_chat ?? false, baselineVersion,
   };
 }
