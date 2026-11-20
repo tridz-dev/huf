@@ -199,6 +199,37 @@ def _fake_file(counter=[0]):
 	return types.SimpleNamespace(name=f"F{counter[0]}", file_url=f"/private/files/f{counter[0]}")
 
 
+class TestBlockedZipMembersVisible:
+	def test_blocked_members_recorded_as_unsafe(self, tmp_path):
+		z = tmp_path / "evil.zip"
+		blob = b"t"
+		for _ in range(4):  # zip nested 4 deep
+			buf = io.BytesIO()
+			with zipfile.ZipFile(buf, "w") as zf:
+				zf.writestr("t.txt" if blob == b"t" else "z.zip", blob)
+			blob = buf.getvalue()
+		_zip(z, {"../evil.txt": "x", "/abs/path.txt": "y", "deep.zip": blob, "ok.txt": "fine"})
+		bulk_sources, ctx = _scan_ctx()
+		ctx.add_local = MagicMock()
+		res = expand_zip(str(z), str(tmp_path / "out"), Limits(max_zip_depth=2))
+		bulk_sources._add_expanded(ctx, res)
+		unsafe = [e for e in ctx.entries if e["skip_reason"] == "Unsafe"]
+		assert len(unsafe) == len(res.blocked) >= 3
+		keys = " ".join(e["external_key"] for e in unsafe)
+		assert "../evil.txt" in keys and "/abs/path.txt" in keys
+		assert all(e["file"] is None and len(e["external_key"]) <= 255 for e in unsafe)
+		ctx.add_local.assert_called_once()
+		assert ctx.add_local.call_args[0][0] == "ok.txt"
+		assert not (tmp_path / "evil.txt").exists()
+
+	def test_long_unsafe_name_truncated(self):
+		bulk_sources, ctx = _scan_ctx()
+		res = types.SimpleNamespace(files=[], blocked=[("../" + "a" * 600, "path escapes destination")])
+		bulk_sources._add_expanded(ctx, res)
+		assert len(ctx.entries[0]["external_key"]) <= 255
+		assert ctx.entries[0]["skip_reason"] == "Unsafe"
+
+
 class TestS3Scan:
 	def _install_s3(self, pages, downloads):
 		mod = types.ModuleType("huf.ai.tools.s3")

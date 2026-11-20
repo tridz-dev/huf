@@ -151,6 +151,11 @@ def _add_expanded(ctx: ScanContext, result) -> None:
 			ctx.add_skip(item.rel, item.skip_reason)
 		else:
 			ctx.add_local(item.rel, item.rel, item.path, item.size)
+	# Blocked members (zip-slip, symlink, encrypted, too deep) are never
+	# extracted; surface them as Skipped/Unsafe. The name is stored only as text
+	# in external_key (truncated by make_external_key), never used as a path.
+	for member, _reason in getattr(result, "blocked", None) or []:
+		ctx.add_skip(member, "Unsafe")
 
 
 # --- Scanners (each fills ctx.entries) -------------------------------------
