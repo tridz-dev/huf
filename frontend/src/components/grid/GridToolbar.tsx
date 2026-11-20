@@ -79,13 +79,27 @@ export function FieldsMenu({ fields, hidden, onHiddenChange }: FieldsMenuProps) 
   );
 }
 
-/** "Showing 1–25 of 1,284 rows" + the keyboard legend. */
-export function GridFooter({ from, to, total, noun = 'rows', pager, className }: {
-  from: number; to: number; total: number; noun?: string; pager?: ReactNode; className?: string;
+/** Footer range text. `total` null = unknown; `approximate` = at least `total` ("25+"). */
+export function footerText({ from, to, total, approximate, noun = 'rows' }: {
+  from: number; to: number; total?: number | null; approximate?: boolean; noun?: string;
+}): string {
+  if (total === 0 || (total == null && to === 0)) return `No ${noun}`;
+  const range = `Showing ${from.toLocaleString()}–${to.toLocaleString()}`;
+  if (total == null) return `${range} ${noun}`;
+  return `${range} of ${total.toLocaleString()}${approximate ? '+' : ''} ${noun}`;
+}
+
+/**
+ * "Showing 1–25 of 1,284 rows" + the keyboard legend. When the true total is
+ * not known pass `total={null}` ("Showing 1–25 rows") or `approximate`
+ * ("Showing 1–25 of 25+ rows").
+ */
+export function GridFooter({ from, to, total, approximate, noun = 'rows', pager, className }: {
+  from: number; to: number; total?: number | null; approximate?: boolean; noun?: string; pager?: ReactNode; className?: string;
 }) {
   return (
     <div className={cn('flex flex-wrap items-center gap-3 py-2 text-micro text-steel', className)}>
-      <span>{total === 0 ? `No ${noun}` : `Showing ${from.toLocaleString()}–${to.toLocaleString()} of ${total.toLocaleString()} ${noun}`}</span>
+      <span data-testid="grid-footer-range">{footerText({ from, to, total, approximate, noun })}</span>
       {pager}
       <span className="ml-auto hidden items-center gap-3 md:flex" aria-hidden="true">
         <span className="inline-flex items-center gap-1"><ShortcutKey size="sm">Tab</ShortcutKey> next</span>

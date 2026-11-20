@@ -7,6 +7,7 @@
  */
 import type { ReactNode } from 'react';
 import { AlertTriangle, Info } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
 
@@ -26,10 +27,19 @@ export interface ChangeImpactNoticeProps {
   /** `error` when the change loses data that can't be restored. */
   severity?: 'attention' | 'error';
   action?: ReactNode;
+  /** Optional footer: confirm applies the change. Destructive styling when data is lost. */
+  onConfirm?: () => void;
+  onCancel?: () => void;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  /** While the change is being applied: confirm shows a spinner, both disabled. */
+  confirming?: boolean;
   className?: string;
 }
 
-export function ChangeImpactNotice({ title, lines = [], checking, severity = 'attention', action, className }: ChangeImpactNoticeProps) {
+export function ChangeImpactNotice({
+  title, lines = [], checking, severity = 'attention', action, onConfirm, onCancel, confirmLabel = 'Apply change', cancelLabel = 'Cancel', confirming, className,
+}: ChangeImpactNoticeProps) {
   const lossy = lines.some((l) => l.kind === 'loss' && l.count > 0);
   const tint = !lossy ? 'border-line bg-paper-deep' : severity === 'error' ? 'border-destructive/30 bg-destructive-tint' : 'border-warning/30 bg-warning-tint';
   const Icon = lossy ? AlertTriangle : Info;
@@ -52,6 +62,17 @@ export function ChangeImpactNotice({ title, lines = [], checking, severity = 'at
         </ul>
       )}
       {action && <div className="mt-2 pl-6">{action}</div>}
+      {(onConfirm || onCancel) && (
+        <div className="mt-3 flex justify-end gap-2" data-testid="change-impact-footer">
+          {onCancel && <Button size="sm" variant="ghost" onClick={onCancel} disabled={confirming}>{cancelLabel}</Button>}
+          {onConfirm && (
+            <Button size="sm" variant={lossy ? 'destructive' : 'default'} onClick={onConfirm} disabled={checking || confirming} className="gap-1.5">
+              {confirming && <Spinner role="presentation" aria-hidden="true" className="h-3 w-3" />}
+              {confirmLabel}
+            </Button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

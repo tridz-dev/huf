@@ -11,7 +11,8 @@ import { ShortcutKey } from '@/components/ui/shortcut-key';
 import { cn } from '@/lib/utils';
 import { CellDisplay, CellEditor } from './GridCell';
 import { useGridNav, type CellPos, type CommitResult } from './useGridNav';
-import { TYPE_ICON, TYPE_LABEL, WIDTH_CLASS, cellValue, isNumeric, type CellValue, type GridColumn } from './types';
+import { SortHeaderButton, ariaSort } from './FilterChip';
+import { TYPE_ICON, TYPE_LABEL, WIDTH_CLASS, cellValue, isNumeric, nextSort, type CellValue, type GridColumn, type GridSort } from './types';
 
 /** Row height in px; matches `h-9` on rows so windowing math stays exact. */
 export const GRID_ROW_H = 36;
@@ -34,6 +35,10 @@ export interface DataGridProps<R> {
   rowNumberOffset?: number;
   /** Window rendering above this many rows. */
   windowFrom?: number;
+  /** Current sort (controlled). Show the same sort as a SortChip in the toolbar. */
+  sort?: GridSort | null;
+  /** Makes headers click-to-sort (asc → desc → none). Columns opt out with `sortable: false`. */
+  onSortChange?: (next: GridSort | null) => void;
   /** Shown in place of the body when there are no rows. */
   empty?: ReactNode;
   className?: string;
@@ -43,7 +48,7 @@ const OVERSCAN = 8;
 
 export function DataGrid<R>({
   columns, rows, getRowId, label, onCellChange, selected, onSelectedChange, onAddRow, onOpenRow, onPaste,
-  rowNumberOffset = 0, windowFrom = 100, empty, className,
+  rowNumberOffset = 0, windowFrom = 100, sort, onSortChange, empty, className,
 }: DataGridProps<R>) {
   const nav = useGridNav<R>({
     columns,
@@ -113,7 +118,7 @@ export function DataGrid<R>({
       className={cn('relative max-h-[70vh] overflow-auto rounded-lg border border-line bg-panel', className)}
     >
       <table role="grid" aria-label={label} aria-rowcount={rows.length + 1} aria-colcount={columns.length + lead}
-        className="w-full border-separate border-spacing-0 text-ui-text" onKeyDown={nav.onGridKeyDown} onPaste={nav.onGridPaste}>
+        className="w-full border-separate border-spacing-0 text-ui-text" onKeyDown={(e) => { if (!(e.target as HTMLElement).closest('thead')) nav.onGridKeyDown(e); }} onPaste={nav.onGridPaste}>
         <thead className="sticky top-0 z-10 bg-paper-deep">
           <tr aria-rowindex={1}>
             {selectable && (
@@ -127,16 +132,28 @@ export function DataGrid<R>({
             </th>
             {columns.map((col) => {
               const Icon = TYPE_ICON[col.type];
+              const sortable = Boolean(onSortChange) && col.sortable !== false;
+              const dir = sort?.key === col.key ? sort.direction : undefined;
+              const inner = (
+                <>
+                  <Icon aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-steel-soft" />
+                  <span className="truncate">{col.label}</span>
+                  <span className="sr-only">, {TYPE_LABEL[col.type]}</span>
+                  {col.required && <span aria-label="required" className="text-destructive">*</span>}
+                  {col.tag && <span className="text-meta font-normal text-steel-soft">{col.tag}</span>}
+                </>
+              );
               return (
-                <th key={col.key} scope="col" title={TYPE_LABEL[col.type]}
+                <th key={col.key} scope="col" title={TYPE_LABEL[col.type]} aria-sort={sortable ? ariaSort(dir) : undefined}
                   className={cn('h-9 border-b border-l border-line px-3 text-left text-micro font-medium text-steel', col.width && WIDTH_CLASS[col.width])}>
-                  <span className={cn('flex items-center gap-1.5', isNumeric(col.type) && 'justify-end')}>
-                    <Icon aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-steel-soft" />
-                    <span className="truncate">{col.label}</span>
-                    <span className="sr-only">, {TYPE_LABEL[col.type]}</span>
-                    {col.required && <span aria-label="required" className="text-destructive">*</span>}
-                    {col.tag && <span className="text-meta font-normal text-steel-soft">{col.tag}</span>}
-                  </span>
+                  {sortable ? (
+                    <SortHeaderButton label={col.label} type={col.type} direction={dir} onClick={() => onSortChange?.(nextSort(sort, col.key))}
+                      className={cn(isNumeric(col.type) && 'justify-end')}>
+                      {inner}
+                    </SortHeaderButton>
+                  ) : (
+                    <span className={cn('flex items-center gap-1.5', isNumeric(col.type) && 'justify-end')}>{inner}</span>
+                  )}
                 </th>
               );
             })}

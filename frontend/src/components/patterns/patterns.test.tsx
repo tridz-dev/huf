@@ -158,3 +158,20 @@ describe('LinkedListPopover', () => {
 		expect(screen.getByTestId('linked-empty')).toHaveTextContent('Nothing uses this yet.');
 	});
 });
+
+describe('ResourceList configurable columns', () => {
+  it('keeps the default ledger and renders custom column cells', async () => {
+    const { ResourceList, ResourceRow } = await import('./ResourceList');
+    const { rerender } = render(<ResourceList label="Docs"><ResourceRow title="A" origin="Upload" /></ResourceList>);
+    expect(screen.getByTestId('resource-list').style.getPropertyValue('--rl-cols')).toBe('');
+    rerender(
+      <ResourceList label="Tables" columns={[{ key: 'name', label: 'Name', width: 'minmax(0,2fr)' }, { key: 'rows', label: 'Rows', width: '6rem', align: 'end' }]}>
+        <ResourceRow title="Customers" cells={{ rows: '1,284' }} />
+      </ResourceList>,
+    );
+    expect(screen.getByTestId('resource-list').style.getPropertyValue('--rl-cols')).toBe('minmax(0,2fr) 6rem 2rem');
+    const cell = document.querySelector('[data-col="rows"]')!;
+    expect(cell).toHaveTextContent('1,284');
+    expect(cell.className).toContain('justify-end');
+  });
+});

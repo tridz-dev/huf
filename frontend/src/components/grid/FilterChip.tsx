@@ -5,9 +5,10 @@
  * also removes it, like a token in a search field.
  */
 import type { KeyboardEvent, ReactNode } from 'react';
-import { ArrowDown, ArrowUp, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, X } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
+import { sortDirectionLabel, type ColumnType, type SortDirection } from './types';
 
 const CHIP = 'inline-flex h-control-sm items-center rounded-full border border-signal/30 bg-signal/5 text-micro text-ink';
 const PART = 'inline-flex h-full items-center gap-1 rounded-full px-3 hover:bg-signal/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
@@ -81,5 +82,30 @@ export function SortChip({ field, direction, onToggle, onRemove, directionLabel,
         <X aria-hidden="true" className="h-3 w-3" />
       </button>
     </span>
+  );
+}
+
+/**
+ * SortHeaderButton: the clickable DataGrid column header. Click / Enter /
+ * Space cycles none → asc → desc → none (nextSort); the owning <th> carries
+ * aria-sort. Same direction words as SortChip (sortDirectionLabel).
+ */
+export function ariaSort(direction: SortDirection | undefined): 'ascending' | 'descending' | 'none' {
+  return direction === 'asc' ? 'ascending' : direction === 'desc' ? 'descending' : 'none';
+}
+
+export function SortHeaderButton({ label, type, direction, onClick, children, className }: {
+  label: string; type: ColumnType; direction?: SortDirection; onClick: () => void; children: ReactNode; className?: string;
+}) {
+  const Icon = direction === 'asc' ? ArrowUp : direction === 'desc' ? ArrowDown : ArrowUpDown;
+  const now = direction ? `sorted ${sortDirectionLabel(type, direction)}` : 'not sorted';
+  const next = !direction ? sortDirectionLabel(type, 'asc') : direction === 'asc' ? sortDirectionLabel(type, 'desc') : 'no sort';
+  return (
+    <button type="button" onClick={onClick} aria-label={`${label}, ${now}. Sort ${next}`}
+      className={cn('group/sort flex w-full min-w-0 items-center gap-1.5 rounded text-left hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring', className)}>
+      {children}
+      <Icon aria-hidden="true" data-testid="sort-icon"
+        className={cn('h-3 w-3 shrink-0', direction ? 'text-signal' : 'text-steel-soft opacity-0 group-hover/sort:opacity-100 group-focus-visible/sort:opacity-100')} />
+    </button>
   );
 }
