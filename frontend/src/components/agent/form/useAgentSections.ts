@@ -51,6 +51,8 @@ export interface UseAgentSectionsArgs {
   onTabWithError: (tab: TabKey) => void;
 }
 
+export interface ReloadResult { conflicts: string[]; partial: boolean }
+
 export function useAgentSections({ id, isNew, form, abilities, canSave, onRenamed, onTabWithError }: UseAgentSectionsArgs) {
   const [loading, setLoading] = useState(!isNew);
   const [meta, setMeta] = useState({ isSystem: false, owner: null as string | null, lastRun: null as string | null, totalRun: null as number | null });
@@ -64,7 +66,11 @@ export function useAgentSections({ id, isNew, form, abilities, canSave, onRename
   const [errors, setErrors] = useState<FormError[]>([]);
   const [savedAt, setSavedAt] = useState<Date | null>(null);
   const savingRef = useRef(false);
-  const pendingRef = useRef(false);
+  const pendingRef = useRef<SaveMode | null>(null);
+  const [conflictFields, setConflictFields] = useState<string[]>([]);
+  const conflictRef = useRef<string[]>([]);
+  const theirsRef = useRef<Record<string, unknown>>({});
+  const [reloadFailed, setReloadFailed] = useState(false);
   const abilitiesRef = useRef(abilities);
   abilitiesRef.current = abilities;
   const idRef = useRef(id);
@@ -178,7 +184,8 @@ export function useAgentSections({ id, isNew, form, abilities, canSave, onRename
   const saveAll = useCallback(async (mode: SaveMode) => {
     const target0 = idRef.current;
     if (!target0 || isNew || !baselineRef.current || !canSave) return;
-    if (savingRef.current) { pendingRef.current = true; return; }
+    if (conflictRef.current.length > 0) return; // unresolved conflicts: never overwrite the other user's change
+    if (savingRef.current) { if (mode === 'explicit' || !pendingRef.current) pendingRef.current = mode; return; }
     if (Object.keys(form.formState.errors).length > 0) await form.trigger();
     const dirty = dirtySections(mode);
     if (dirty.length === 0) {
@@ -251,7 +258,7 @@ export function useAgentSections({ id, isNew, form, abilities, canSave, onRename
     } finally {
       savingRef.current = false;
       setSaving(false);
-      if (pendingRef.current) { pendingRef.current = false; window.setTimeout(() => void saveRef.current('auto'), 0); }
+      if (pendingRef.current) { const next = pendingRef.current; pendingRef.current = null; window.setTimeout(() => void saveRef.current(next), 0); }
     }
   }, [ab.tools, ab.mcp, ab.knowledge, ab.skills, canSave, desktopAccessStatus, dirtySections, fieldsFor, form, isNew, onRenamed, onTabWithError]);
   const saveRef = useRef(saveAll);
@@ -272,13 +279,87 @@ export function useAgentSections({ id, isNew, form, abilities, canSave, onRename
     return () => window.removeEventListener('beforeunload', handler);
   }, [hasUnsaved]);
 
-  const status: AutosaveState = saving ? 'saving' : saveError || errors.length ? 'error' : explicitDirty.length ? 'dirty' : savedAt ? 'saved' : 'idle';
   const conflict = !!saveError && /modified|timestamp|changed|conflict/i.test(saveError);
-  const errorText = errors.length ? 'Fix the highlighted fields' : conflict ? 'Someone else changed this' : undefined;
+
+  /**
+   * Refetch every loaded section, adopt the fresh revisions and rebase: fields the user did not touch take the
+   * server value, fields only the user changed stay as edited, fields both changed are reported (local edit kept).
+   */
+  const reloadLatest = useCallback(async (): Promise<ReloadResult> => {
+    const target = idRef.current;
+    const base = baselineRef.current;
+    if (!target || isNew || !base) return { conflicts: [], partial: false };
+    const sections = ALL_SECTIONS.filter((s) => loadedRef.current.has(s));
+    const results = await Promise.allSettled(sections.map((s) => getAgentSection(target, s)));
+    const revisions: Revisions = { ...revisionsRef.current };
+    let merged: Partial<AgentDoc> = {};
+    const fetched = new Set<AgentConfigSection>();
+    results.forEach((r, i) => {
+      if (r.status !== 'fulfilled') return;
+      revisions[sections[i]] = r.value.modified;
+      merged = { ...merged, ...r.value.values };
+      fetched.add(sections[i]);
+    });
+    const partial = fetched.size < sections.length;
+    const server = mapAgentDocToFormValues(merged as AgentDoc) as unknown as Record<string, unknown>;
+    const current = form.getValues() as unknown as Record<string, unknown>;
+    const old = base as unknown as Record<string, unknown>;
+    const nextBase: Record<string, unknown> = { ...old };
+    const conflicts: string[] = [];
+    const theirs: Record<string, unknown> = {};
+    for (const section of fetched) {
+      for (const f of SECTION_FIELDS[section]) {
+        if (isDesktopField(f)) continue;
+        const key = f as string;
+        nextBase[key] = server[key];
+        const localDirty = sig(current[key]) !== sig(old[key]);
+        const serverChanged = sig(server[key]) !== sig(old[key]);
+        if (!serverChanged) continue;
+        if (localDirty) { if (sig(current[key]) !== sig(server[key])) { conflicts.push(key); theirs[key] = server[key]; } }
+        else form.setValue(f as never, server[key] as never, { shouldDirty: false });
+      }
+    }
+    revisionsRef.current = revisions;
+    baselineRef.current = nextBase as unknown as AgentFormValues;
+    setBaselineVersion((v) => v + 1);
+    if (partial) {
+      // Some sections failed: keep the existing error/conflicts visible and do not let the caller save.
+      setReloadFailed(true);
+      const merged2 = Array.from(new Set([...conflictRef.current, ...conflicts]));
+      conflictRef.current = merged2; theirsRef.current = { ...theirsRef.current, ...theirs }; setConflictFields(merged2);
+      return { conflicts: merged2, partial };
+    }
+    setReloadFailed(false);
+    conflictRef.current = conflicts; theirsRef.current = theirs; setConflictFields(conflicts);
+    setSaveError(null);
+    return { conflicts, partial };
+  }, [form, isNew]);
+
+  const resolveConflict = useCallback((field: string, choice: 'mine' | 'theirs') => {
+    if (choice === 'theirs') form.setValue(field as never, theirsRef.current[field] as never, { shouldDirty: false });
+    const left = conflictRef.current.filter((f) => f !== field);
+    conflictRef.current = left; setConflictFields(left);
+  }, [form]);
+  const resolveAllConflicts = useCallback((choice: 'mine' | 'theirs') => {
+    for (const f of conflictRef.current) resolveConflict(f, choice);
+  }, [resolveConflict]);
+
+  const retry = useCallback(async () => {
+    if (conflict || conflictRef.current.length) {
+      try {
+        const r = await reloadLatest();
+        if (r.partial || r.conflicts.length) return; // wait for the user to resolve; never auto-save
+      } catch (e) { console.error('Reload before retry failed:', e); return; }
+    }
+    await saveAll('explicit');
+  }, [conflict, reloadLatest, saveAll]);
+
+  const status: AutosaveState = saving ? 'saving' : saveError || errors.length || conflictFields.length || reloadFailed ? 'error' : explicitDirty.length ? 'dirty' : savedAt ? 'saved' : 'idle';
+  const errorText = errors.length ? 'Fix the highlighted fields' : conflictFields.length ? 'Resolve the conflicts to save' : reloadFailed ? "Couldn't reload the latest version" : conflict ? 'Someone else changed this' : undefined;
 
   return {
     loading, ...meta, owner: meta.owner, desktopAccessStatus, status, errorText, errors, setErrors, savedAt, hasUnsaved,
-    saveNow: () => saveAll('explicit'), retry: () => saveAll('explicit'),
+    saveNow: () => saveAll('explicit'), retry, conflict, conflictFields, reloadLatest, reloadFailed, resolveConflict, resolveAllConflicts,
     persistedAllowChat: baselineRef.current?.allow_chat ?? false, baselineVersion,
   };
 }
