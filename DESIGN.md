@@ -292,6 +292,11 @@ Reading order, top to bottom: **head → status sentence → toolbar (ask + filt
 #### 6.10.10 Next-steps checklist (`Checklist`)
 - Shown once a resource first becomes usable; 2–4 items, done items checked and quiet, open items are actions. Dismissible; the caller persists dismissal. It is the continuation of the empty-state `StepHint` — the same steps, now with progress.
 
+#### 6.10.12 Linked-items popover (`LinkedListPopover`)
+- For a count of things linked to this resource that people want to see without leaving the page (*Used by 2 agents ▾*). The trigger is a link-weight `Button` with a chevron, usually inside the status sentence or a row.
+- Popover (`w-72`): optional heading (*Agents using this*), up to ~8 visible rows (scrolls after), each = optional icon + label + optional mono meta (*3 calls today*); a row with `href` navigates, with `onSelect` acts, with neither is static. Empty state says what linking would do (*No agent uses this yet.*). Optional footer action after a separator (*Manage access*), `--signal-ink`.
+- Built from `Popover`, `Button` (ghost / link, `asChild` for anchors) and `Separator` — no raw buttons. Esc and outside click close; focus returns to the trigger.
+
 #### 6.10.11 Motion and states summary
 | Pattern | Motion | Live region |
 |---|---|---|
@@ -539,6 +544,7 @@ The source is `frontend/src/index.css` (`:root` light, `[data-theme="midnight"]`
 - [ ] Problems: one attention banner with one fix + a reason line on each affected row.
 - [ ] Search results show match words, not scores; highlighting is on plain text.
 - [ ] "/" focuses the ask field; filter pills work with arrow keys; progress text is a polite live region.
+- [ ] "Used by N …" counts open a `LinkedListPopover`, not a custom popover or a tab.
 
 **Data grids (§6.11)**
 - [ ] The grid is a `DataGrid`; toolbar, chips, bulk bar, drawer, import, matrix and confirms come from `@/components/grid`.
