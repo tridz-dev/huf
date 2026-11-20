@@ -119,11 +119,11 @@ export function SourceDocuments({
           actions={
             <>
               <Button type="button" size="sm" onClick={() => onAddContent('upload')}>
-                <Plus className="h-4 w-4" />
+                <Plus className="mr-2 h-4 w-4" />
                 Add content
               </Button>
               <Button type="button" size="sm" variant="outline" onClick={() => onAddContent('storage')}>
-                <Cloud className="h-4 w-4" />
+                <Cloud className="mr-2 h-4 w-4" />
                 Connect storage
               </Button>
             </>
