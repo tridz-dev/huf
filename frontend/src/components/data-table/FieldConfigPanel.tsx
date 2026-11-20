@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Settings, Trash2 } from 'lucide-react';
-import { ChangeImpactNotice } from '@/components/grid';
+import { ChangeImpactNotice, ColumnTypePicker } from '@/components/grid';
 import { Field } from '@/components/ui/field';
-import { FieldTypeSelector } from './FieldTypeSelector';
 import { deriveFieldname, type FieldErrors } from './builder/fieldRules';
-import { friendlyTypeName, typeGlyph } from '@/data/fieldTypeLabels';
+import { fieldTypeOptions, friendlyTypeName, typeGlyph } from '@/data/fieldTypeLabels';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -112,8 +111,8 @@ export function FieldConfigPanel({
 			{!isLayout && (
 				<div className="space-y-2">
 					<p className="text-xs font-medium text-ink">Type</p>
-					<FieldTypeSelector
-						dataOnly
+					<ColumnTypePicker
+						options={fieldTypeOptions(true)}
 						value={field.fieldtype}
 						onSelect={handleTypePick}
 						trigger={
@@ -132,26 +131,14 @@ export function FieldConfigPanel({
 						// generic and no endpoint is called.
 						<ChangeImpactNotice
 							title={`Change ${friendlyTypeName(field.fieldtype)} to ${friendlyTypeName(pendingType)}?`}
-							action={
-								<div className="space-y-2">
-									<p className="text-micro text-steel">Existing values may be converted or cleared. This applies when you save changes.</p>
-									<div className="flex gap-2">
-										<Button
-											size="sm"
-											variant="destructive"
-											onClick={() => {
-												onUpdate({ fieldtype: pendingType });
-												setPendingType(null);
-											}}
-										>
-											Change type
-										</Button>
-										<Button size="sm" variant="ghost" onClick={() => setPendingType(null)}>
-											Keep {friendlyTypeName(field.fieldtype)}
-										</Button>
-									</div>
-								</div>
-							}
+							action={<p className="text-micro text-steel">Existing values may be converted or cleared. This applies when you save changes.</p>}
+							confirmLabel="Change type"
+							cancelLabel={`Keep ${friendlyTypeName(field.fieldtype)}`}
+							onConfirm={() => {
+								onUpdate({ fieldtype: pendingType });
+								setPendingType(null);
+							}}
+							onCancel={() => setPendingType(null)}
 						/>
 					)}
 				</div>
