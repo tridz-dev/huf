@@ -85,8 +85,26 @@ def test_persistently_busy_beyond_cap(env):
 	proc.return_value = {"status": "busy"}
 	mod._processed_slice("ING", "lk")  # first busy: starts the clock only
 	assert all(r["status"] == "Pending" for r in db.rows.values())
-	store["huf:ingest_busy_since:ING"] -= mod.BUSY_CAP_SECONDS + 1
+	import time as _t
+	now = _t.time()
+	# Busy started over the cap ago, last busy hit just now (continuous episode).
+	store["huf:ingest_busy_since:ING"] = f"{now - mod.BUSY_CAP_SECONDS - 1}|{now}"
 	mod._processed_slice("ING", "lk")
 	assert all(r["status"] == "Error" for r in db.rows.values())
 	assert all("held this source for too long" in r["error"] for r in db.rows.values())
 	assert all(r["attempts"] == 0 for r in db.rows.values())
+
+
+def test_stale_busy_episode_restarts_clock(env):
+	"""A leftover marker from an earlier, ended busy episode must not
+	instantly fail a new one (gap since last busy > 3x backoff)."""
+	import time as _t
+	db, proc, sleep, store = env
+	proc.return_value = {"status": "busy"}
+	now = _t.time()
+	old = now - mod.BUSY_CAP_SECONDS - 100
+	store["huf:ingest_busy_since:ING"] = f"{old}|{old + 5}"
+	mod._processed_slice("ING", "lk")
+	assert all(r["status"] == "Pending" for r in db.rows.values())
+	since = float(str(store["huf:ingest_busy_since:ING"]).split("|")[0])
+	assert since > now - 5

@@ -338,14 +338,19 @@ def _handle_source_busy(ingestion_name: str, lock_key: str) -> None:
 	"""
 	key = BUSY_SINCE_PREFIX + ingestion_name
 	now = time.time()
-	since = frappe.cache().get(key)
+	raw = frappe.cache().get(key)
+	since = last = None
 	try:
-		since = float(since) if since is not None else None
+		if raw is not None:
+			raw = raw.decode() if isinstance(raw, bytes) else str(raw)
+			since, last = (float(x) for x in raw.split("|", 1))
 	except (TypeError, ValueError):
-		since = None
-	if since is None:
-		frappe.cache().set(key, now, ex=BUSY_CAP_SECONDS * 4)
+		since = last = None
+	# A gap since the last busy hit means a new busy episode (e.g. after a
+	# cancel/re-run): restart the clock instead of inheriting a stale start.
+	if since is None or now - last > BUSY_BACKOFF_SECONDS * 3:
 		since = now
+	frappe.cache().set(key, f"{since}|{now}", ex=BUSY_CAP_SECONDS + 60)
 
 	if now - since > BUSY_CAP_SECONDS:
 		frappe.db.sql(
