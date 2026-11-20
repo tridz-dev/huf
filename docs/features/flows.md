@@ -14,6 +14,10 @@ The canvas has a header with Save, Runs (history), Settings, Run (one real run w
 
 ![Flow builder](../screenshots/flows/02-builder.png)
 
+Click a step to set it up in the panel on the right. A step with everything it needs shows a green dot; one that still needs something is marked. This flow checks the order status, asks the Order Tracker agent for an update, waits for a human approval and saves the result:
+
+![Flow builder with a step open](../screenshots/flows/03-builder-steps.png)
+
 **Triggers:** Webhook (secret sent in the `X-Huf-Secret` header, limited to 60 calls a minute), Schedule, When a document changes (created, changed, deleted, submitted, cancelled), and A chat message (WhatsApp, Telegram or another connected channel).
 
 **Steps:** Run agent, Do something in an app, Web request, Send email, Slack, Google Sheets, Google Drive files, If / else, Choose with AI, Repeat for each item, Wait for approval (human-in-the-loop with Approved, Rejected and Timed out paths), Change data, Run Python code, Save/Look up/Forget saved data, Create a record, and Finish.
