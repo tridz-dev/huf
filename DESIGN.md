@@ -345,7 +345,7 @@ One vocabulary, user words, one glyph each: **Text, Long text, Number, Currency,
 | Active cell | 2px inset `--signal` ring | one per grid; roving `tabIndex=0` |
 | Editing | editor fills the cell, borderless | the cell keeps the ring |
 | Invalid | `--destructive-tint` cell, red ring, one-line fix hint under the cell + "Esc to undo" | editor stays open; `aria-invalid`, hint is `role=alert` |
-| Selected row | `--signal/5` tint, `aria-selected` | Shift-click selects a range |
+| Selected row | `--signal/5` tint, `aria-selected` | Shift-click selects a range from the last clicked row; the anchor resets when the row set changes (page, sort, filter) |
 | Read-only column | no edit on type/Enter | `aria-readonly` |
 | Empty | `empty` slot in place of rows (an §6.10.8-style start) | |
 | Large | > `windowFrom` (100) rows render a window + spacer rows | keyboard scrolls the active row into view |
