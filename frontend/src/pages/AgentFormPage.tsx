@@ -2534,8 +2534,7 @@ export function AgentFormPage() {
                 <KnowledgeTab
                   knowledgeSources={knowledgeSources}
                   onAdd={handleAddKnowledge}
-                  onEdit={handleEditKnowledge}
-                  onRemove={handleRemoveKnowledge}
+                  onEdit={handleEditKnowledge} onRemove={handleRemoveKnowledge} onCreateNew={handleCreateKnowledge}
                 />
               </TabsContent>
 

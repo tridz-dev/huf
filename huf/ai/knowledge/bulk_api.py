@@ -15,7 +15,9 @@ import frappe
 from frappe import _
 from frappe.utils import cint, now_datetime
 
+from .sources.origin import sanitize_source_config
 from .bulk_runner import (
+	ACTIVE_INGESTION_STATUSES,
 	compute_progress,
 	count_ingestion_items,
 	run_ingestion,
@@ -24,8 +26,6 @@ from .bulk_runner import (
 )
 
 CHECKSUM_PATTERN = re.compile(r"^[0-9a-f]{64}$")
-
-ACTIVE_INGESTION_STATUSES = ("Queued", "Running")
 
 
 @frappe.whitelist(methods=["POST"])
@@ -102,29 +102,8 @@ def submit_files(knowledge_source: str, files):
 	if not accepted:
 		frappe.throw(_("No valid file entries were accepted"))
 
-	ingestion = frappe.get_doc(
-		{
-			"doctype": "Knowledge Ingestion",
-			"knowledge_source": knowledge_source,
-			"status": "Queued",
-			"total_items": len(accepted),
-			# Persist the accepted manifest so recovery/retry slices can
-			# re-materialize without the enqueue args (M1 recovery contract).
-			"manifest_json": serialize_manifest(accepted),
-		}
-	).insert()
-
-	frappe.enqueue(
-		run_ingestion,
-		queue="long",
-		timeout=1500,
-		enqueue_after_commit=True,
-		deduplicate=True,
-		job_id=slice_job_id(ingestion.name, 0),
-		ingestion_name=ingestion.name,
-		entries=accepted,
-		slice=0,
-	)
+	ingestion = create_ingestion_header(knowledge_source, accepted)
+	enqueue_first_slice(ingestion.name, accepted)
 
 	return {
 		"ingestion": ingestion.name,
@@ -133,6 +112,44 @@ def submit_files(knowledge_source: str, files):
 		"duplicates_in_request": duplicates_in_request,
 		"rejected": rejected,
 	}
+
+
+def create_ingestion_header(
+	knowledge_source: str,
+	accepted: list | None = None,
+	status: str = "Queued",
+	source_kind: str = "Upload",
+	source_config: dict | None = None,
+):
+	"""Insert the Knowledge Ingestion header (shared by submit_files and the
+	bulk_sources scan jobs). Persists the manifest so recovery/retry slices can
+	re-materialize without the enqueue args (M1 recovery contract)."""
+	values = {
+		"doctype": "Knowledge Ingestion",
+		"knowledge_source": knowledge_source,
+		"status": status,
+		"source_kind": source_kind,
+		"source_config": json.dumps(source_config, sort_keys=True) if source_config else None,
+		"total_items": len(accepted or []),
+	}
+	if accepted:
+		values["manifest_json"] = serialize_manifest(accepted)
+	return frappe.get_doc(values).insert()
+
+
+def enqueue_first_slice(ingestion_name: str, accepted: list) -> None:
+	"""Enqueue slice 0 of the runner (the only way any source reaches it)."""
+	frappe.enqueue(
+		run_ingestion,
+		queue="long",
+		timeout=1500,
+		enqueue_after_commit=True,
+		deduplicate=True,
+		job_id=slice_job_id(ingestion_name, 0),
+		ingestion_name=ingestion_name,
+		entries=accepted,
+		slice=0,
+	)
 
 
 def _validate_entry(raw) -> tuple[dict, str | None]:
@@ -198,10 +215,13 @@ def get_ingestion_status(ingestion: str, include_items: int = 0, item_status=Non
 		filters = {"ingestion": ingestion}
 		if item_status:
 			filters["status"] = item_status
+		item_fields = ["name", "external_key", "file_name", "status", "chunks_created", "attempts", "error_message", "skip_reason"]
+		if frappe.get_meta("Knowledge Input").has_field("title"):
+			item_fields.append("title")
 		items = frappe.get_all(
 			"Knowledge Input",
 			filters=filters,
-			fields=["name", "external_key", "file_name", "status", "chunks_created", "attempts", "error_message", "skip_reason"],
+			fields=item_fields,
 			order_by="creation asc",
 			limit=cint(limit) or 50,
 			start=cint(start) or 0,
@@ -311,6 +331,8 @@ def list_ingestions(knowledge_source=None, limit: int = 20):
 
 	# get_list (not get_all) so row-level / user permissions apply; then drop
 	# ingestions of sources the caller cannot read.
+	meta = frappe.get_meta("Knowledge Ingestion")
+	origin_fields = [f for f in ("source_kind", "source_config") if meta.has_field(f)]
 	rows = frappe.get_list(
 		"Knowledge Ingestion",
 		filters=filters,
@@ -324,12 +346,16 @@ def list_ingestions(knowledge_source=None, limit: int = 20):
 			"finished_at",
 			"error_message",
 			"modified",
+			*origin_fields,
 		],
 		order_by="modified desc",
 		limit_page_length=cint(limit) or 20,
 	)
 
 	rows = [r for r in rows if frappe.has_permission("Knowledge Source", "read", doc=r.knowledge_source)]
+	if "source_config" in origin_fields:
+		for r in rows:
+			r["source_config"] = sanitize_source_config(r.get("source_config"))
 	return {"ingestions": rows}
 
 

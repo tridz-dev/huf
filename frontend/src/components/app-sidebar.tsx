@@ -128,6 +128,12 @@ export const libraryNavItems = [
     capability: "agent.use",
   },
   {
+    title: "Providers",
+    url: "/providers",
+    icon: Layers,
+    capability: "system.providers.manage",
+  },
+  {
     title: "Tables",
     url: "/data",
     icon: Database,

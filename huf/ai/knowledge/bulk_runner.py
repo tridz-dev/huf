@@ -23,11 +23,17 @@ LOCK_TTL_SECONDS = 120
 MAX_ATTEMPTS = 5
 RUNNING_STALE_MINUTES = 3
 QUEUED_STALE_MINUTES = 5
+# Scan jobs heartbeat the header; silence this long means the worker is gone.
+SCANNING_STALE_MINUTES = 20
 # Must exceed the runner job timeout (1500s) so a slow-but-alive item is
 # never reset and processed twice.
 PROCESSING_STALE_MINUTES = 30
 
 INGESTION_LOCK_PREFIX = "huf:ingest_lock:"
+
+# Scanning = a source scan job is still building the manifest (File docs);
+# it blocks new submits and cancels like Queued/Running.
+ACTIVE_INGESTION_STATUSES = ("Scanning", "Queued", "Running")
 
 TERMINAL_INGESTION_STATUSES = (
 	"Cancelled",
@@ -391,7 +397,7 @@ def _set_if_running(ingestion_name: str, updates: dict) -> None:
 	cols = ", ".join(f"`{k}` = %s" for k in updates)
 	frappe.db.sql(
 		f"UPDATE `tabKnowledge Ingestion` SET {cols}, modified = %s "
-		"WHERE name = %s AND status IN ('Queued', 'Running')",
+		"WHERE name = %s AND status IN ('Scanning', 'Queued', 'Running')",
 		(*updates.values(), now_datetime(), ingestion_name),
 	)
 

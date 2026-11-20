@@ -7,6 +7,8 @@
  "field_order": [
   "knowledge_source",
   "status",
+  "source_kind",
+  "source_config",
   "total_items",
   "submitted_by",
   "started_at",
@@ -29,8 +31,24 @@
    "fieldtype": "Select",
    "in_list_view": 1,
    "label": "Status",
-   "options": "Queued\nRunning\nCompleted\nCompleted with Errors\nFailed\nCancelled",
+   "options": "Queued\nScanning\nRunning\nCompleted\nCompleted with Errors\nFailed\nCancelled",
    "read_only": 1
+  },
+  {
+   "default": "Upload",
+   "fieldname": "source_kind",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Source Kind",
+   "options": "Upload\nZip\nDirectory\nS3\nSFTP",
+   "read_only": 1
+  },
+  {
+   "fieldname": "source_config",
+   "fieldtype": "Small Text",
+   "label": "Source Config",
+   "read_only": 1,
+   "description": "Non-secret echo of the import config (e.g. bucket and prefix)"
   },
   {
    "default": "0",

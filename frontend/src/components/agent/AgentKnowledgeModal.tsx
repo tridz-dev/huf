@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -21,12 +20,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Combobox } from '@/components/ui/combobox';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { toast } from 'sonner';
+import { KnowledgeSourcePicker } from './knowledge/KnowledgeSourcePicker';
+import { KnowledgeAdvancedFields } from './knowledge/KnowledgeAdvancedFields';
+import { useAttachableSources } from './knowledge/useAttachableSources';
 import { knowledgeModes } from '@/data/knowledge';
-import { getKnowledgeSources } from '@/services/knowledgeApi';
 import type { AgentKnowledgeRow } from '@/types/agent.types';
-import type { ComboboxOption } from '@/components/ui/combobox';
-import { linkRoutes } from '@/lib/link-routes';
 
 interface AgentKnowledgeModalProps {
   open: boolean;
@@ -49,19 +49,7 @@ export function AgentKnowledgeModal({
   const [maxChunks, setMaxChunks] = useState(5);
   const [tokenBudget, setTokenBudget] = useState(2000);
   const [description, setDescription] = useState('');
-  const [sourceOptions, setSourceOptions] = useState<ComboboxOption[]>([]);
-
-  useEffect(() => {
-    if (!open) return;
-
-    getKnowledgeSources({ limit: 500 }).then((res) => {
-      const opts = res.items.map((s) => ({
-        value: s.name,
-        label: s.source_name || s.name,
-      }));
-      setSourceOptions(opts);
-    });
-  }, [open]);
+  const { sources, loading } = useAttachableSources(open);
 
   useEffect(() => {
     if (open && initialData) {
@@ -94,48 +82,38 @@ export function AgentKnowledgeModal({
       token_budget: tokenBudget,
       description: description || undefined,
     });
+    toast.success(initialData ? 'Knowledge link updated. Click Save on the agent to keep it.' : 'Knowledge source added. Click Save on the agent to link it permanently.');
     onOpenChange(false);
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogScrollContent className="sm:max-w-md">
+      <DialogScrollContent className="sm:max-w-lg">
         <DialogScrollHeader>
           <DialogTitle>{initialData ? 'Edit Knowledge Link' : 'Add Knowledge Source'}</DialogTitle>
           <DialogDescription>
-            Link a knowledge source to this agent for RAG-based retrieval.
+            Choose a source this agent can answer from.
           </DialogDescription>
         </DialogScrollHeader>
 
         <DialogScrollBody className="space-y-4 py-2">
           <div className="space-y-2">
             <Label>Knowledge source *</Label>
-            {sourceOptions.length === 0 && onCreateNew ? (
+            {!loading && sources.length === 0 ? (
               <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed py-6 text-center">
-                <p className="text-sm text-steel">No knowledge sources registered yet</p>
-                <Button type="button" variant="default" size="sm" onClick={onCreateNew}>
-                  Register your first knowledge source →
-                </Button>
+                <p className="text-sm text-steel">No knowledge sources yet</p>
+                {onCreateNew && (
+                  <Button type="button" size="sm" onClick={onCreateNew}>
+                    Create a new source
+                  </Button>
+                )}
               </div>
             ) : (
-              <Combobox
-                options={sourceOptions}
-                value={knowledgeSource}
-                onValueChange={setKnowledgeSource}
-                placeholder="Select knowledge source..."
-                searchPlaceholder="Search knowledge sources..."
-                emptyText="No knowledge sources found."
-                linkTo={linkRoutes.knowledgeSource}
-              />
+              <KnowledgeSourcePicker sources={sources} value={knowledgeSource} onChange={setKnowledgeSource} loading={loading} />
             )}
-            {sourceOptions.length > 0 && onCreateNew && (
-              <Button
-                type="button"
-                variant="link"
-                className="h-auto p-0 text-xs"
-                onClick={onCreateNew}
-              >
-                Don't see it? Create a new knowledge source →
+            {sources.length > 0 && onCreateNew && (
+              <Button type="button" variant="link" className="h-auto p-0 text-xs" onClick={onCreateNew}>
+                Don't see it? Create a new source
               </Button>
             )}
           </div>
@@ -159,35 +137,21 @@ export function AgentKnowledgeModal({
             </p>
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
-            <div className="space-y-2">
-              <Label>Priority</Label>
-              <Input
-                type="number"
-                value={priority}
-                onChange={(e) => setPriority(Number(e.target.value))}
-                min={0}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Max chunks</Label>
-              <Input
-                type="number"
-                value={maxChunks}
-                onChange={(e) => setMaxChunks(Number(e.target.value))}
-                min={1}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Token budget</Label>
-              <Input
-                type="number"
-                value={tokenBudget}
-                onChange={(e) => setTokenBudget(Number(e.target.value))}
-                min={0}
-              />
-            </div>
-          </div>
+          <Accordion type="single" collapsible>
+            <AccordionItem value="advanced" className="border-b-0">
+              <AccordionTrigger className="text-sm">Advanced</AccordionTrigger>
+              <AccordionContent>
+                <KnowledgeAdvancedFields
+                  priority={priority}
+                  maxChunks={maxChunks}
+                  tokenBudget={tokenBudget}
+                  onPriority={setPriority}
+                  onMaxChunks={setMaxChunks}
+                  onTokenBudget={setTokenBudget}
+                />
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
 
           <div className="space-y-2">
             <Label>Description</Label>

@@ -1294,7 +1294,10 @@ def register_integration_services():
 			]
 		},
 	]
-	
+	from huf.ai.tools.s3.registry import S3_SERVICE
+
+	services.append(S3_SERVICE)
+
 	# Create or update each service
 	for service_data in services:
 		try:

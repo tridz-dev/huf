@@ -10,6 +10,7 @@ Each entry is a dict with:
 """
 from huf.ai.tools import telegram_admin_spec, telegram_tool_spec
 from huf.ai.tools.integration.registry_entries import with_service as _with_service
+from huf.ai.tools.s3.registry import S3_TOOLS
 from huf.ai.tools.messaging.outbound_actions import flag_outbound as _flag_outbound
 from huf.ai.tools.channel_specs import CHANNEL_TOOLS, COMMERCE_TOOLS, HANDOFF_TOOLS, LMS_TOOLS  # noqa: F401 (re-exported)
 
@@ -2832,6 +2833,7 @@ ALL_INTEGRATION_TOOLS = (
 	+ _with_service(GOOGLE_PLACES_TOOLS, "google_maps")
 	+ _with_service(GOOGLE_DRIVE_TOOLS, "google_drive")
 	+ _with_service(GOOGLE_MEET_TOOLS, "google_meet")
+	+ _with_service(S3_TOOLS, "S3")
 	+ _with_service(SERP_HOTEL_TOOLS, "serpapi")
 	+ _with_service(SERP_REVIEW_TOOLS, "serpapi")
 	+ _with_service(SERP_YOUTUBE_TOOLS, "serpapi")

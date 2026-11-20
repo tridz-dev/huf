@@ -1,6 +1,5 @@
 import { FormField, FormItem, FormLabel, FormControl, FormDescription, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Combobox } from '@/components/ui/combobox';
@@ -24,7 +23,6 @@ interface ProviderOption {
 
 interface GeneralTabProps {
   form: UseFormReturn<KnowledgeSourceFormValues>;
-  isNew: boolean;
   providers?: ProviderOption[];
 }
 
@@ -40,7 +38,7 @@ function presetIdForKnowledgeType(knowledgeType: string | undefined): KnowledgeT
   return preset ? preset.id : 'custom';
 }
 
-export function GeneralTab({ form, isNew, providers = [] }: GeneralTabProps) {
+export function GeneralTab({ form, providers = [] }: GeneralTabProps) {
   const watchKnowledgeType = form.watch('knowledge_type');
   const watchChromaMode = form.watch('chroma_mode');
   const watchPGVectorConnectionMode = form.watch('pgvector_connection_mode');
@@ -73,46 +71,10 @@ export function GeneralTab({ form, isNew, providers = [] }: GeneralTabProps) {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>Details</CardTitle>
-          <CardDescription>Name and description for this knowledge source</CardDescription>
+          <CardTitle>Who can use it</CardTitle>
+          <CardDescription>Choose which agents can search this source</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-6">
-          {isNew && (
-            <FormField
-              control={form.control}
-              name="source_name"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Name</FormLabel>
-                  <FormControl>
-                    <Input placeholder="e.g. Product documentation" {...field} />
-                  </FormControl>
-                  <FormDescription>A friendly title for this knowledge source, shown throughout the app</FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          )}
-
-          <FormField
-            control={form.control}
-            name="description"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Description</FormLabel>
-                <FormControl>
-                  <Textarea
-                    placeholder="What this knowledge source contains"
-                    className="min-h-[80px] resize-y"
-                    {...field}
-                  />
-                </FormControl>
-                <FormDescription>Human-readable description of the knowledge source</FormDescription>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
           <FormField
             control={form.control}
             name="scope"

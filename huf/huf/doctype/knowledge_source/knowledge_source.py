@@ -177,6 +177,39 @@ def test_search(knowledge_source: str, query: str, top_k: int = 5):
 
 	results = knowledge_search(query=query, knowledge_source=knowledge_source, top_k=int(top_k))
 
+	return _add_input_info(results, knowledge_source)
+
+
+def _add_input_info(results, knowledge_source: str):
+	"""Additively tag each result with input_id / input_title (Knowledge Input)."""
+	results = list(results or [])
+	for r in results:
+		meta = r.get("metadata") or {}
+		r["input_id"] = meta.get("input_id") or None
+		r["input_title"] = None
+
+	ids = {r["input_id"] for r in results if r["input_id"]}
+	by_id, by_label = {}, {}
+	if results:
+		rows = frappe.get_all(
+			"Knowledge Input",
+			filters={"knowledge_source": knowledge_source},
+			fields=["name", "title", "file_name"],
+			limit_page_length=0,
+		)
+		for row in rows:
+			label = (row.get("title") or "").strip() or row.get("file_name")
+			if row["name"] in ids:
+				by_id[row["name"]] = label
+			for key in (row.get("title"), row.get("file_name")):
+				if key:
+					by_label.setdefault(key.strip(), row["name"])
+
+	for r in results:
+		meta = r.get("metadata") or {}
+		if r["input_id"] is None:
+			r["input_id"] = by_label.get((r.get("title") or meta.get("source_title") or "").strip())
+		r["input_title"] = by_id.get(r["input_id"]) or meta.get("source_title") or r.get("title")
 	return results
 
 
