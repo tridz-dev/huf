@@ -356,6 +356,50 @@ class TestScanCleanup:
 		fake_frappe.delete_doc.assert_called_once_with("File", "F1", ignore_permissions=True, force=True)
 
 
+class TestCancelledScan:
+	def test_cancelled_header_stops_scan_and_no_more_writes(self):
+		bulk_sources, ctx = _scan_ctx()
+		fake_frappe = MagicMock()
+		fake_frappe.db.get_value.return_value = "KS-1"
+		fake_frappe.db._cursor.rowcount = 0  # header no longer Scanning
+		visited = []
+
+		def walker(c, _cfg):
+			with patch.object(bulk_sources, "make_private_file", side_effect=lambda *a: _fake_file()):
+				for i in range(100):
+					visited.append(i)
+					c.add_content(f"k{i}", f"a{i}.txt", b"a")
+
+		with patch.object(bulk_sources, "frappe", fake_frappe), patch.object(bulk_sources, "load_limits", return_value=ctx.limits), patch.object(
+			bulk_sources, "ScanContext", return_value=ctx
+		), patch.dict(bulk_sources.SCANNERS, {"Upload": walker}):
+			out = bulk_sources.run_scan("ING-1", "Upload", {})
+		assert out == {"status": "cancelled"}
+		assert len(visited) == 10  # stopped at the first heartbeat
+		beats = [c for c in fake_frappe.db.sql.call_args_list if "total_items = %s" in c.args[0]]
+		assert len(beats) == 1
+		assert not any("Queued" in c.args[0] for c in fake_frappe.db.sql.call_args_list)
+		assert fake_frappe.delete_doc.call_count == 10
+
+
+class TestRunningCount:
+	def test_total_items_tracks_running_count_before_finish_scan(self):
+		bulk_sources, ctx = _scan_ctx()
+		fake_frappe = MagicMock()
+		with patch.object(bulk_sources, "frappe", fake_frappe), patch.object(bulk_sources, "make_private_file", side_effect=lambda *a: _fake_file()):
+			for i in range(30):
+				ctx.add_content(f"k{i}", f"a{i}.txt", b"a")
+		beats = [c for c in fake_frappe.db.sql.call_args_list if "total_items = %s" in c.args[0]]
+		assert [c.args[1][0] for c in beats] == [10, 20, 30]
+		assert all("status = 'Scanning'" in c.args[0] for c in beats)
+
+		fake_frappe = MagicMock()
+		fake_frappe.db.get_value.return_value = "Scanning"
+		with patch.object(bulk_sources, "frappe", fake_frappe), patch.object(bulk_sources, "now_datetime", return_value=__import__("datetime").datetime(2026, 1, 1)):
+			bulk_sources.finish_scan("ING-1", ctx.entries)
+		assert fake_frappe.db.sql.call_args.args[1][0] == 30
+
+
 class TestStaleScanningRecovery:
 	def test_conditional_update(self):
 		from huf.ai.knowledge import bulk_recovery

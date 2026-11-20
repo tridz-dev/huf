@@ -4,7 +4,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '
 import { formatTimeAgo } from '@/utils/time';
 import type { KnowledgeInputDoc } from '@/types/knowledge.types';
 import { itemReason, itemStatusLabel } from './import/ingestionLabels';
-import { inputOrigin, inputTitle } from './DocumentsTable';
+import { inputOrigin, inputTitle } from './inputDisplay';
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (

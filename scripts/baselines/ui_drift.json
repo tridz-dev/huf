@@ -542,9 +542,6 @@
     "components/whatsapp/TemplateWizard/TypeStep.tsx": {
       "raw_element": 1
     },
-    "components/whatsapp/TemplateWizard/WriteStep.tsx": {
-      "text_px": 2
-    },
     "components/whatsapp/TemplatesTab.tsx": {
       "text_px": 1
     },
@@ -662,7 +659,7 @@
     "hex_colour": 98,
     "inline_style": 44,
     "raw_element": 74,
-    "text_px": 349
+    "text_px": 347
   },
   "version": 1
 }

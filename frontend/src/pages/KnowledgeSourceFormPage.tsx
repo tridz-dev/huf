@@ -344,6 +344,23 @@ function KnowledgeSourceFormPage() {
   const handleDeleteInput = (name: string) =>
     runInputAction(() => deleteKnowledgeInput(name), 'Document removed', 'Failed to remove document');
 
+  const handleRenameCommit = async (name: string) => {
+    if (!id || isNew) return;
+    const trimmed = name.trim();
+    try {
+      const updated = await updateKnowledgeSource(id, { source_name: trimmed });
+      setSourceDoc(updated);
+      form.reset({ ...form.getValues(), source_name: updated.source_name ?? trimmed }, { keepDirtyValues: true });
+      toast.success('Name updated');
+    } catch (error) {
+      toast.error(getFrappeErrorMessage(error) || 'Could not rename this source');
+      form.setValue('source_name', sourceDoc?.source_name ?? '', { shouldDirty: false });
+    }
+  };
+  const handleRenameCancel = () => {
+    form.setValue('source_name', sourceDoc?.source_name ?? '', { shouldDirty: false });
+  };
+
   const handleCancel = () => navigate(-1);
 
   if (loading) {
@@ -397,6 +414,8 @@ function KnowledgeSourceFormPage() {
             onRebuildIndex={handleRebuildIndex}
             onToggleDisabled={handleToggleDisabled}
             onChanged={handleSourceChanged}
+            onRenameCommit={handleRenameCommit}
+            onRenameCancel={handleRenameCancel}
             onReprocessInput={handleReprocessInput}
             onDeleteInput={handleDeleteInput}
           />

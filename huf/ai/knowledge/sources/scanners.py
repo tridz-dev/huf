@@ -34,7 +34,8 @@ from .safety import (
 	walk_directory,
 )
 
-HEARTBEAT_EVERY = 25
+HEARTBEAT_EVERY = 10
+HEARTBEAT_WRITE_INTERVAL = 2  # seconds: also write at least this often, besides every N files
 HEARTBEAT_MIN_INTERVAL = 30  # seconds, for forced/throttled heartbeats
 MAX_KEY_LEN = 255
 
@@ -50,6 +51,10 @@ def make_external_key(raw: str) -> str:
 	return raw[:190] + "#" + hashlib.sha1(raw.encode("utf-8")).hexdigest()
 
 
+class ScanCancelled(Exception):
+	"""Raised from a heartbeat when the header is no longer Scanning (cancelled)."""
+
+
 class ScanContext:
 	"""Per-scan state: limits, manifest accumulation, header heartbeat."""
 
@@ -62,6 +67,7 @@ class ScanContext:
 		self._seen = 0
 		self.created_files: list = []
 		self._last_beat = 0.0
+		self._last_write = time.monotonic()
 
 	@property
 	def full(self) -> bool:
@@ -109,8 +115,22 @@ class ScanContext:
 		if not force and self._last_beat and now - self._last_beat < HEARTBEAT_MIN_INTERVAL:
 			return
 		self._last_beat = now
-		frappe.db.set_value("Knowledge Ingestion", self.ingestion_name, "modified", now_datetime(), update_modified=False)
+		self._beat()
+
+	def _beat(self) -> None:
+		"""Publish the running count + bump ``modified`` while the header is still Scanning.
+
+		Conditional on ``status = 'Scanning'`` so a cancel is never overwritten; if no row
+		matches the header was cancelled, so stop the walk (``run_scan`` cleans up)."""
+		frappe.db.sql(
+			"UPDATE `tabKnowledge Ingestion` SET total_items = %s, modified = %s WHERE name = %s AND status = 'Scanning'",
+			(len(self.entries), now_datetime(), self.ingestion_name),
+		)
+		affected = frappe.db._cursor.rowcount
 		frappe.db.commit()
+		self._last_write = time.monotonic()
+		if affected == 0:
+			raise ScanCancelled(self.ingestion_name)
 
 	def zip_progress(self) -> None:
 		self.touch()
@@ -127,9 +147,9 @@ class ScanContext:
 
 	def heartbeat(self) -> None:
 		self._seen += 1
-		if self._seen % HEARTBEAT_EVERY == 0:
-			frappe.db.set_value("Knowledge Ingestion", self.ingestion_name, "modified", now_datetime(), update_modified=False)
-			frappe.db.commit()
+		due = time.monotonic() - self._last_write >= HEARTBEAT_WRITE_INTERVAL
+		if self._seen % HEARTBEAT_EVERY == 0 or due:
+			self._beat()
 
 
 def make_private_file(knowledge_source: str, filename: str, content: bytes):
@@ -281,6 +301,10 @@ def run_scan(ingestion_name: str, source_kind: str, config: dict) -> dict:
 	ctx = ScanContext(ingestion_name, source, load_limits(frappe.conf))
 	try:
 		SCANNERS[source_kind](ctx, config)
+	except ScanCancelled:
+		frappe.db.rollback()
+		ctx.cleanup_created_files()
+		return {"status": "cancelled"}
 	except Exception as exc:  # noqa: BLE001 -- any scan failure fails the header, not the worker
 		frappe.db.rollback()
 		ctx.cleanup_created_files()
