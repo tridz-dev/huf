@@ -84,6 +84,10 @@ export function AgentCreateCard({ onCreate, busy, onCancel, error }: Props) {
     if (!name.trim()) setName(t.label);
   };
 
+  // A non-featured pick from the gallery joins the chips so the choice stays visible.
+  const picked = AGENT_EXAMPLES.find((e) => e.id === template && !e.featured);
+  const chips = picked ? [...AGENT_TEMPLATES, picked] : AGENT_TEMPLATES;
+
   const submit = () => {
     const found: FormError[] = [];
     if (!name.trim()) found.push({ fieldId: 'agent-name', message: 'Give your agent a name' });
@@ -112,7 +116,7 @@ export function AgentCreateCard({ onCreate, busy, onCancel, error }: Props) {
           <Textarea id="agent-instructions" aria-describedby="agent-instructions-note" aria-invalid={errFor('agent-instructions') ? true : undefined} rows={6} value={instructions} onChange={(e) => setInstructions(e.target.value)}
             placeholder="Describe what this agent should do — e.g. answer order questions from our Orders table and escalate refunds over $200 to a person." />
         </Field>
-        <TemplateChips lead="Or start from an example:" label="Example agents" items={AGENT_TEMPLATES.map(toChip)}
+        <TemplateChips lead="Or start from an example:" label="Example agents" items={chips.map(toChip)}
           onPick={pick} activeId={template} onMore={() => setGallery(true)} />
         <TemplateGallery open={gallery} onOpenChange={setGallery} items={AGENT_EXAMPLES.map(toChip)} onPick={pick}
           activeId={template} title="Example agents" description="Each one fills in a name and instructions. Edit them, then connect knowledge, tables and channels after you create it." />
