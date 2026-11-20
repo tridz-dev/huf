@@ -115,3 +115,124 @@ export interface FieldTypeInfo {
 	supportsUnique: boolean;
 	supportsNonNegative: boolean;
 }
+
+// ─── Rows, summary, import/export (Tables redesign) ───
+
+export type TableRecordFilter = [string, string, unknown];
+
+export interface TableRecordsParams {
+	fields?: string[];
+	filters?: TableRecordFilter[];
+	search?: string;
+	limit?: number;
+	start?: number;
+	orderBy?: { field: string; order: 'asc' | 'desc' };
+}
+
+/** `total` is undefined when talking to an older backend. */
+export interface TableRecordsResult {
+	items: Record<string, unknown>[];
+	hasMore: boolean;
+	total?: number;
+}
+
+export interface BulkInsertResult {
+	inserted: string[];
+	errors: Array<{ index: number; message: string }>;
+}
+
+export interface TableSummaryAgent {
+	agent: string;
+	agent_name: string;
+	actions: TableAgentAction[];
+}
+
+export interface TableSummary {
+	name: string;
+	table_name: string;
+	description: string;
+	table_group?: string;
+	icon: string;
+	field_count: number;
+	record_count: number;
+	modified: string;
+	agents: TableSummaryAgent[];
+}
+
+export interface TableDependencies {
+	record_count: number;
+	agents: Array<{ agent: string; agent_name: string }>;
+	flows: Array<{ name: string; title: string }>;
+}
+
+export interface TableToolParam {
+	name: string;
+	type: string;
+	required: boolean;
+	description: string;
+	options?: string;
+}
+
+export interface TableToolSignature {
+	tools: Array<{
+		action: TableAgentAction | string;
+		tool_name: string;
+		description: string;
+		params: TableToolParam[];
+	}>;
+}
+
+export interface TableAgentActivityItem {
+	agent: string;
+	tool: string;
+	status: string;
+	timestamp: string;
+}
+
+export type ImportMode = 'insert' | 'update' | 'replace';
+
+export interface ImportPreviewColumn {
+	header: string;
+	detected_type: string;
+	mapped_field: string | null;
+	issues: number;
+}
+
+export interface ImportRowIssue {
+	row: number;
+	message: string;
+}
+
+export interface ImportPreview {
+	columns: ImportPreviewColumn[];
+	sample_rows: unknown[][];
+	total_rows: number;
+	valid_rows: number;
+	invalid_rows: ImportRowIssue[];
+}
+
+export interface RunImportParams {
+	mapping: Record<string, string | null>;
+	mode: ImportMode;
+	keyField?: string;
+}
+
+export interface RunImportResult {
+	inserted: number;
+	updated: number;
+	rejected: number;
+	rejected_rows: ImportRowIssue[];
+	rejected_csv: string;
+}
+
+export interface ExportRowsParams {
+	filters?: TableRecordFilter[];
+	fields?: string[];
+	names?: string[];
+}
+
+export interface ExportRowsResult {
+	filename: string;
+	content: string;
+	count: number;
+}
