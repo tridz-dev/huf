@@ -512,3 +512,65 @@ class TestStartImportValidation:
 		assert hdr.call_args.kwargs["status"] == "Scanning" and hdr.call_args.kwargs["source_kind"] == "S3"
 		kwargs = fake.enqueue.call_args.kwargs
 		assert kwargs["queue"] == "long" and kwargs["config"] == {"bucket": "b", "prefix": "p/"}
+
+
+class TestMaterializeUnsafeEntry:
+	"""materialize() routes Unsafe zip members (no File) through the preset-skip path."""
+
+	ENTRY = {"external_key": "zip://F/../evil.txt", "file": None, "checksum": None, "skip_reason": "Unsafe"}
+
+	def _fake_frappe(self):
+		rows = {}  # name -> row dict
+		inserted = []
+
+		def get_value(doctype, filters, fieldname=None, *a, **kw):
+			if doctype == "Knowledge Ingestion":
+				return "KS-1"
+			assert doctype == "Knowledge Input"
+			if isinstance(filters, dict):
+				for name, row in rows.items():
+					if row["external_key"] == filters.get("external_key"):
+						return name
+				return None
+			return rows[filters][fieldname]
+
+		def set_value(doctype, name, values):
+			rows[name].update(values)
+
+		def get_doc(data):
+			doc = MagicMock()
+			doc.flags = types.SimpleNamespace()
+			doc.data = data
+
+			def insert(**kw):
+				rows[f"KI-{len(rows) + 1}"] = dict(data)
+				inserted.append(doc)
+
+			doc.insert.side_effect = insert
+			return doc
+
+		fake = MagicMock()
+		fake.flags = types.SimpleNamespace()
+		fake.db.get_value.side_effect = get_value
+		fake.db.set_value.side_effect = set_value
+		fake.get_doc.side_effect = get_doc
+		return fake, rows, inserted
+
+	def test_unsafe_inserted_skipped_then_updated_not_duplicated(self):
+		from huf.ai.knowledge import bulk_materialize as bm
+
+		fake, rows, inserted = self._fake_frappe()
+		with patch.object(bm, "frappe", fake):
+			stats = bm.materialize("ING-1", [dict(self.ENTRY)])
+			assert len(inserted) == 1 and len(rows) == 1
+			doc = inserted[0]
+			assert doc.data["status"] == "Skipped"
+			assert doc.data["skip_reason"] == "Unsafe"
+			assert doc.flags.ignore_validate is True
+			assert stats["skipped_preset"] == 1
+
+			bm.materialize("ING-2", [dict(self.ENTRY)])
+		assert len(inserted) == 1 and len(rows) == 1
+		row = next(iter(rows.values()))
+		assert row["status"] == "Skipped" and row["skip_reason"] == "Unsafe"
+		assert row["ingestion"] == "ING-2"

@@ -38,7 +38,7 @@ full; Huf User read only).
 | `ingestion` | Link → Knowledge Ingestion, search_index | batch back-reference; the queue key |
 | `external_key` | Data(255), search_index | caller's stable id; idempotency key = (knowledge_source, external_key) |
 | `external_checksum` | Data(64) | optional sha256 hex; change detection + in-batch dedup |
-| `skip_reason` | Select | `Duplicate\nUnchanged\nNo Text\nToo Large\nUnsupported` |
+| `skip_reason` | Select | `Duplicate\nUnchanged\nNo Text\nToo Large\nUnsupported\nUnsafe` |
 | `attempts` | Int, default 0 | retry evidence; cap 5 |
 | `status` | Select | adds `Skipped` to `Pending\nProcessing\nIndexed\nError` |
 
@@ -164,6 +164,6 @@ Scale throughput by sharding across multiple Knowledge Sources.
 a heartbeat). `huf.ai.knowledge.bulk_sources_api.start_import(knowledge_source, source_kind, config)`
 (POST) creates the Scanning header and enqueues `sources.scanners.run_scan` (queue long); the scan
 creates private File docs, writes the manifest, flips Scanning -> Queued and enqueues the same
-`run_ingestion`. Manifest entries with `skip_reason` (`Too Large` / `Unsupported`) have no File and
+`run_ingestion`. Manifest entries with `skip_reason` (`Too Large` / `Unsupported` / `Unsafe`) have no File and
 materialize as Skipped rows. Limits: `huf_bulk_max_file_mb` (50), `huf_bulk_max_files` (1000),
 `huf_bulk_max_uncompressed_mb` (1024), `huf_bulk_allowed_extensions`, `huf_bulk_directory_roots`.
