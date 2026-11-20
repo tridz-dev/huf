@@ -153,8 +153,14 @@ export function DataTableViewPage() {
 				onOpenChange={(o) => !o && update({ import: null })}
 				schema={schema}
 				onSchemaChanged={loadSchema}
-				onImported={() => {
-					update({ import: null, tab: null });
+				existingRows={rowCount ?? 0}
+				onImported={(r) => {
+					// Keep the dialog open so the result summary stays visible until the user closes it.
+					const parts = [`${r.inserted} added`, `${r.updated} updated`];
+					if (r.skipped) parts.push(`${r.skipped} skipped`);
+					parts.push(`${r.rejected} rejected`);
+					if (r.rejected > 0 || r.skipped) toast.warning(`Import finished: ${parts.join(', ')}`);
+					else toast.success(`Import finished: ${parts.join(', ')}`);
 					void loadSchema();
 					setDataKey((k) => k + 1);
 				}}

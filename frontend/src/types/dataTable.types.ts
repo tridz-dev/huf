@@ -225,6 +225,9 @@ export interface RunImportResult {
 	rejected: number;
 	rejected_rows: ImportRowIssue[];
 	rejected_csv: string;
+	note?: string;
+	skipped?: number;
+	skipped_rows?: ImportRowIssue[];
 }
 
 export interface QueuedImport {

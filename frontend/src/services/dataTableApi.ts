@@ -371,7 +371,7 @@ export async function getTableRecords(
 			search: params?.search,
 			limit: params?.limit || 20,
 			start: params?.start || 0,
-			order_by: params?.orderBy ? `${params.orderBy.field} ${params.orderBy.order}` : 'modified desc',
+			order_by: params?.orderBy ? `${params.orderBy.field} ${params.orderBy.order}` : 'creation asc',
 		});
 		const m = (result.message ?? {}) as Partial<TableRecordsResult>;
 		return {

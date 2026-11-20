@@ -15,14 +15,16 @@ import { toColumnType } from '@/data/fieldTypeLabels';
 import { LAYOUT_FIELD_TYPES } from '@/data/fieldTypes';
 import { updateDataTable } from '@/services/dataTableApi';
 import { deriveFieldname } from '../builder/fieldRules';
-import type { DataTableFieldType, DataTableSchema, ImportMode } from '@/types/dataTable.types';
+import type { DataTableFieldType, DataTableSchema, ImportMode, RunImportResult } from '@/types/dataTable.types';
 import { useImportFlow } from './useImportFlow';
 
 export interface ImportDialogProps {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
 	schema: DataTableSchema;
-	onImported?: () => void;
+	onImported?: (r: RunImportResult) => void;
+	/** Rows currently in the table; shown in the Replace warning. */
+	existingRows?: number;
 	/** Reload the schema after a field is created from the mapper. */
 	onSchemaChanged?: () => Promise<void> | void;
 }
@@ -48,7 +50,7 @@ const FIELDTYPE_FOR: Record<string, DataTableFieldType> = {
 	text: 'Data', longtext: 'Text', number: 'Float', currency: 'Currency', date: 'Date', checkbox: 'Check', select: 'Data', link: 'Data',
 };
 
-export function ImportDialog({ open, onOpenChange, schema, onImported, onSchemaChanged }: ImportDialogProps) {
+export function ImportDialog({ open, onOpenChange, schema, onImported, onSchemaChanged, existingRows = 0 }: ImportDialogProps) {
 	const flow = useImportFlow(schema.name, onImported);
 	const [sheetUrl, setSheetUrl] = useState('');
 	const { reset } = flow;
@@ -138,7 +140,7 @@ export function ImportDialog({ open, onOpenChange, schema, onImported, onSchemaC
 						severity="error"
 						lines={[
 							{ count: validRows, label: 'rows from the file become the whole table', kind: 'safe' },
-							{ count: 1, label: 'existing rows are deleted first', kind: 'loss' },
+							{ count: existingRows, label: 'existing rows are deleted first', kind: 'loss' },
 						]}
 					/>
 					<div className="flex items-center gap-2">
@@ -208,8 +210,19 @@ export function ImportDialog({ open, onOpenChange, schema, onImported, onSchemaC
 				{phase === 'done' && r && (
 					<div className="space-y-2 py-4 text-ui-text" data-testid="import-summary">
 						<p>
-							{r.inserted} added, {r.updated} updated, {r.rejected} rejected.
+							{r.inserted} added, {r.updated} updated, {r.skipped ?? 0} skipped, {r.rejected} rejected.
 						</p>
+						{r.note && <p className={r.rejected > 0 ? 'text-destructive' : 'text-steel'}>{r.note}</p>}
+						{flow.mode === 'replace' && r.rejected > 0 && r.inserted === 0 && !r.note && (
+							<p className="text-destructive">Nothing was replaced: fix the rejected rows and try again.</p>
+						)}
+						{!!r.skipped && (
+							<ul className="max-h-32 overflow-auto text-steel">
+								{(r.skipped_rows ?? []).slice(0, 20).map((s) => (
+									<li key={s.row}>Row {s.row}: skipped, {s.message}</li>
+								))}
+							</ul>
+						)}
 						{r.rejected > 0 && r.rejected_csv && (
 							<Button variant="outline" size="sm" onClick={() => downloadRejected(r.rejected_csv)}>
 								Download rejected rows

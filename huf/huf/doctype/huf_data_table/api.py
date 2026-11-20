@@ -540,7 +540,7 @@ def get_table_records(
 	search: str | None = None,
 	limit: int = 20,
 	start: int = 0,
-	order_by: str = 'modified desc',
+	order_by: str = 'creation asc',
 ) -> dict:
 	"""Get records for a table with optional search across configured fields."""
 	_require_read()
