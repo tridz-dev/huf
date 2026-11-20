@@ -175,7 +175,7 @@ Connect your agents to inbound and outbound communication channels:
 
 [![Knowledge source](./docs/screenshots/knowledge/02-source-ready.png)](./docs/features/knowledge.md)
 
-*A ready source with 16 documents.* [Read more](./docs/features/knowledge.md)
+*A ready source with 18 documents in mixed formats (PDF, Word, Excel, PowerPoint, HTML, text and Markdown).* [Read more](./docs/features/knowledge.md)
 
 Ground AI responses in real business knowledge and structured databases:
 
@@ -185,9 +185,9 @@ Ground AI responses in real business knowledge and structured databases:
 
 ### Data Tables
 
-[![Data table](./docs/screenshots/tables/02-records.png)](./docs/features/tables.md)
+[![Data table builder](./docs/screenshots/tables/03-builder.png)](./docs/features/tables.md)
 
-*An Orders table with sortable columns and filters.* [Read more](./docs/features/tables.md)
+*The table builder: typed fields, a selected Status field with its options, and required, read-only and list-view settings.* [Read more](./docs/features/tables.md)
 
 Create and manage custom structured datasets directly inside HUF:
 
@@ -206,9 +206,9 @@ Run agents automatically based on real-time events:
 
 ### Visual Flow Builder
 
-[![Flow builder](./docs/screenshots/flows/02-builder.png)](./docs/features/flows.md)
+[![Flow builder](./docs/screenshots/flows/03-builder-steps.png)](./docs/features/flows.md)
 
-*A webhook flow with a condition and an agent step.* [Read more](./docs/features/flows.md)
+*A webhook flow with a condition, an agent step, a human approval and a saved result, with the agent step's settings open.* [Read more](./docs/features/flows.md)
 
 Design complex workflows through a modern React Flow / XYFlow visual canvas:
 

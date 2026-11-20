@@ -10,7 +10,9 @@ The list shows your tables, with description, group, icon, field count and recor
 
 ## Create and edit a table
 
-**New table** (`/data/new`) opens the table builder. Set a name, description, group and icon, a naming method (Autoincrement, Hash or By Field, with an optional title field), then add fields. Field types available: Data, Small Text, Text, Long Text, Int, Float, Currency, Percent, Check, Date, Datetime, Time, Duration, Select, Link, Rating, Color, Phone, Attach and Attach Image, plus Tab Break and Section Break for layout. Reorder fields by dragging. Editing an existing table uses the same builder (`/data/:tableId/edit`).
+**New table** (`/data/new`) opens the table builder. Set a name, description, group and icon, a naming method (Autoincrement, Hash or By Field, with an optional title field), then add fields. Field types available: Data, Small Text, Text, Long Text, Int, Float, Currency, Percent, Check, Date, Datetime, Time, Duration, Select, Link, Rating, Color, Phone, Attach and Attach Image, plus Tab Break and Section Break for layout. Reorder fields by dragging. Editing an existing table uses the same builder (`/data/:tableId/edit`). Select a field to see its properties: label, options for a Select (one per line), default value, help text, and the Required, Read only and Show in list view switches.
+
+![Table builder](../screenshots/tables/03-builder.png)
 
 ## Records
 
@@ -21,6 +23,8 @@ Open a table (`/data/:tableId`) to browse, add, edit and delete records (`/data/
 ## Agent access
 
 Per table you choose which agents may use it and what they may do: View, Create, Edit or Delete (Delete is marked destructive). Huf creates the matching tools for the agent from this setting. If no agents exist yet, create one first.
+
+![Agent access for Orders](../screenshots/tables/04-agent-access.png)
 
 ## Limits and notes
 

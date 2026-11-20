@@ -34,6 +34,12 @@ The Knowledge tab lists the knowledge sources attached to the agent. Add an exis
 
 ![Agent knowledge tab](../screenshots/agents/03-knowledge-tab.png)
 
+### Tools tab
+
+The Tools & MCP tab lists the tools the agent may use. Here the Order Tracker has the View and Edit tools for the Orders data table (Get Document, Get List and Update Document), created from the table's **Agent access** setting. See [tables.md](tables.md).
+
+![Agent tools tab](../screenshots/agents/04-tools.png)
+
 ## Limits and notes
 
 - Which tabs and actions you see depends on your Huf permissions; read-only users cannot edit agents.
