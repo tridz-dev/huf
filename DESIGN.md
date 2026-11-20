@@ -443,7 +443,8 @@ Reading order: **head (title + status pill + `AutosaveStatus` + one primary acti
 #### 6.12.7 Try panel (`TryPanel`, `Inspector`)
 - Head: title (*Try it*), a neutral pill for what is being tried (*Draft · not published*), Reset. Optional **coaching banner** slot under the head (an `AttentionBanner` that names the fix and links to it).
 - Log (`role=log`, polite): user messages right on `--ink`, replies left on `--paper-deep`; a pending reply shows its current step with a spinner (*Looking up order 1042…*). Each reply may carry **inspector** chips: `call` (an action it ran), `source` (*Read: Returns policy.pdf*, signal tint), `metric` (*1.8s*, *412 tokens*, mono); failed items are red.
-- Empty: suggestions (`TemplateChips`). Composer: Enter sends, Shift+Enter new line. Footer slot: model line, *View run details*.
+- Screen readers: the log is not live and is `aria-busy` while a reply runs; each finished reply is announced once through a visually hidden polite region; messages carry sr-only *You:* / *Agent:* labels.
+- Empty: suggestions (`TemplateChips`), rendered outside the log. Composer: Enter sends, Shift+Enter new line. Footer slot: model line, *View run details*.
 - It renders state; the caller runs the conversation against the **current draft**.
 
 #### 6.12.8 Create (`OneCardCreate`, `StepCard`)

@@ -106,3 +106,28 @@ describe('TryPanel', () => {
     expect(onSend).toHaveBeenCalledOnce();
   });
 });
+
+describe('TryPanel announcements (DSF-3)', () => {
+  const base = { draft: '', onDraftChange: () => {}, onSend: () => {} };
+  it('keeps suggestions out of the log, labels senders, and announces the final reply once', () => {
+    const { rerender } = render(<TryPanel {...base} messages={[]} empty={<button>Try: refund</button>} />);
+    const log = screen.getByRole('log');
+    expect(log).toHaveAttribute('aria-live', 'off');
+    expect(log).not.toContainElement(screen.getByRole('button', { name: 'Try: refund' }));
+
+    rerender(<TryPanel {...base} messages={[{ id: 'u', from: 'user', content: 'Hi' }, { id: 'r', from: 'reply', content: 'Looking up…', pending: true }]} />);
+    expect(log).toHaveAttribute('aria-busy', 'true');
+    expect(log).toHaveTextContent('You: Hi');
+    expect(screen.getByTestId('try-announce')).toHaveTextContent('');
+
+    rerender(<TryPanel {...base} messages={[{ id: 'u', from: 'user', content: 'Hi' }, { id: 'r', from: 'reply', content: 'Done, refunded.' }]} />);
+    expect(log).not.toHaveAttribute('aria-busy');
+    expect(log).toHaveTextContent('Agent: Done, refunded.');
+    const live = screen.getByTestId('try-announce');
+    expect(live).toHaveAttribute('aria-live', 'polite');
+    expect(live).toHaveTextContent('Agent: Done, refunded.');
+
+    rerender(<TryPanel {...base} messages={[{ id: 'u', from: 'user', content: 'Hi' }, { id: 'r', from: 'reply', content: 'Done, refunded.' }, { id: 'u2', from: 'user', content: 'Thanks' }]} />);
+    expect(live).toHaveTextContent('Agent: Done, refunded.');
+  });
+});
