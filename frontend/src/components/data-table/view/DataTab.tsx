@@ -188,7 +188,9 @@ export const DataTab = forwardRef<DataTabHandle, DataTabProps>(function DataTab(
 			const restorable = await track(() => deleteMany(doctype, gone));
 			setUndoAvailable(restorable);
 			setSelected(new Set());
-			await reload();
+			// Deleting every row on the last page would leave an empty page; step back.
+			if (page > 0 && gone.length >= rows.length) setPage(page - 1);
+			else await reload();
 			toast(`Deleted ${gone.length.toLocaleString()} ${gone.length === 1 ? 'row' : 'rows'}`, {
 				duration: 10000,
 				action: restorable
@@ -230,7 +232,7 @@ export const DataTab = forwardRef<DataTabHandle, DataTabProps>(function DataTab(
 	const hasNext = total !== undefined ? to < total : hasMore;
 	const drawerIdx = drawerId ? allRows.findIndex((r) => r.name === drawerId) : -1;
 
-	if (!loading && !error && !filtered && rows.length === 0 && drafts.length === 0) {
+	if (!loading && !error && !filtered && page === 0 && (total ?? 0) === 0 && rows.length === 0 && drafts.length === 0) {
 		return (
 			<DropZone
 				icon={Database}
