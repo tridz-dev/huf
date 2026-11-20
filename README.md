@@ -8,11 +8,19 @@ HUF is a complete, self-hosted AI layer built on open standards. It gives teams 
 
 <br/>
 
-<img width="1905" height="928" alt="HUF Dashboard" src="./huf/public/Images/HUF Agent Home.png" />
+<img width="1440" alt="HUF agents: Support Assistant and Order Tracker in the Northwind Outfitters demo workspace" src="./docs/screenshots/agents/01-list.png" />
 
 <br/>
 
-> **Note:** HUF is under active development.  
+> **Note:** HUF is under active development.
+
+## What's new in beta.7
+
+- **Bulk knowledge ingestion** from Upload, Zip, Folder, S3 (including Cloudflare R2) and SFTP, with live progress, retry and cancel, and zip-bomb / zip-slip / unsafe-file protection.
+- **New tabless Knowledge page** built on the new design-system resource-page pattern, with an ask box that shows the passages your agents would read.
+- **Reliability fixes** from live real-infrastructure testing, pgvector HNSW for embeddings above 2000 dimensions, and PDF page citations.
+
+Upgrade with `bench migrate`. Full notes: [v1.0.0-beta.7](./docs/releases/v1.0.0-beta.7.md).
 
 ---
 
@@ -108,6 +116,10 @@ Use HUF to **embed AI capabilities directly into products** without building cus
 
 ### Agent System & Scoped Memory
 
+[![Agent editor](./docs/screenshots/agents/02-editor.png)](./docs/features/agents.md)
+
+*Configure instructions, model, tools and knowledge per agent.* [Read more](./docs/features/agents.md)
+
 Create AI agents with tailored instructions, tool access, execution profiles, and memory retention policies:
 
 - **CRUD Operations** — Read, create, update, delete any Frappe document out of the box
@@ -136,6 +148,10 @@ Organize AI capabilities into modular, reusable packages:
 
 ### Multi-Channel Gateways
 
+[![WhatsApp setup (not connected)](./docs/screenshots/whatsapp/01-setup.png)](./docs/features/whatsapp.md)
+
+*WhatsApp setup, shown without a connected Meta account.* [Read more](./docs/features/whatsapp.md)
+
 Connect your agents to inbound and outbound communication channels:
 
 - **Supported Channels** — Gmail / Email, Telegram, Slack, WhatsApp, and custom HTTP Webhooks
@@ -157,6 +173,10 @@ Connect your agents to inbound and outbound communication channels:
 
 ### Knowledge Grounding
 
+[![Knowledge source](./docs/screenshots/knowledge/02-source-ready.png)](./docs/features/knowledge.md)
+
+*A ready source with 16 documents.* [Read more](./docs/features/knowledge.md)
+
 Ground AI responses in real business knowledge and structured databases:
 
 - **Multi-Backend Search** — Full-text search (SQLite FTS5 / BM25), semantic vector search (ChromaDB), and PostgreSQL vector search (pgvector)
@@ -164,6 +184,10 @@ Ground AI responses in real business knowledge and structured databases:
 - **Automatic Chunking** — Intelligent document segmentation with configurable chunk sizes and overlap
 
 ### Data Tables
+
+[![Data table](./docs/screenshots/tables/02-records.png)](./docs/features/tables.md)
+
+*An Orders table with sortable columns and filters.* [Read more](./docs/features/tables.md)
 
 Create and manage custom structured datasets directly inside HUF:
 
@@ -182,6 +206,10 @@ Run agents automatically based on real-time events:
 
 ### Visual Flow Builder
 
+[![Flow builder](./docs/screenshots/flows/02-builder.png)](./docs/features/flows.md)
+
+*A webhook flow with a condition and an agent step.* [Read more](./docs/features/flows.md)
+
 Design complex workflows through a modern React Flow / XYFlow visual canvas:
 
 - **Drag-and-Drop Canvas** — Connect triggers, agents, router/orchestrator nodes, conditions, and HTTP actions
@@ -197,6 +225,10 @@ Connect agents to external software and services:
 - **Integration Services & Recipients** — Map integration tools and notifications to specific users or teams
 
 ### Models & Providers
+
+[![AI providers](./docs/screenshots/settings/01-providers.png)](./docs/features/README.md)
+
+*Provider cards with configured models.* [Read more](./docs/features/README.md)
 
 Connect to any AI provider or run local models on private hardware:
 
@@ -342,6 +374,9 @@ Upstream incident thread: https://github.com/BerriAI/litellm/issues/24518
 ## Documentation
 
 - [**Full Documentation**](https://docs.huf.ai/) — Guides, tutorials, and API reference
+- [**Feature guides**](./docs/features/README.md) — Knowledge, Agents, Tables, Flows, WhatsApp, with screenshots
+- [**Release notes: v1.0.0-beta.7**](./docs/releases/v1.0.0-beta.7.md)
+- [**Bulk ingestion contract**](./docs/bulk-ingestion-contract.md), [**Flow docs**](./docs/flow/USER_GUIDE.md), [**WhatsApp docs**](./docs/whatsapp/README.md)
 - [**Bruno API Collection**](./api-docs/bruno/) — Ready-to-use API collection for testing and exploration
 - [**AGENTS.md**](./AGENTS.md) — Technical context for AI agents. Adopts the [agents.md](https://agents.md) standard.
 - [**CLAUDE.md**](./CLAUDE.md) — Defines coding standards, review criteria, and project-specific rules.
