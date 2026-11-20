@@ -356,6 +356,24 @@ class TestScanCleanup:
 		fake_frappe.delete_doc.assert_called_once_with("File", "F1", ignore_permissions=True, force=True)
 
 
+class TestRunningCount:
+	def test_total_items_tracks_running_count_before_finish_scan(self):
+		bulk_sources, ctx = _scan_ctx()
+		fake_frappe = MagicMock()
+		with patch.object(bulk_sources, "frappe", fake_frappe), patch.object(bulk_sources, "make_private_file", side_effect=lambda *a: _fake_file()):
+			for i in range(30):
+				ctx.add_content(f"k{i}", f"a{i}.txt", b"a")
+		counts = [c.args[2]["total_items"] for c in fake_frappe.db.set_value.call_args_list]
+		assert counts == [10, 20, 30]
+		assert all(c.kwargs["update_modified"] is False for c in fake_frappe.db.set_value.call_args_list)
+
+		fake_frappe = MagicMock()
+		fake_frappe.db.get_value.return_value = "Scanning"
+		with patch.object(bulk_sources, "frappe", fake_frappe), patch.object(bulk_sources, "now_datetime", return_value=__import__("datetime").datetime(2026, 1, 1)):
+			bulk_sources.finish_scan("ING-1", ctx.entries)
+		assert fake_frappe.db.sql.call_args.args[1][0] == 30
+
+
 class TestStaleScanningRecovery:
 	def test_conditional_update(self):
 		from huf.ai.knowledge import bulk_recovery
