@@ -168,5 +168,6 @@ def get_import_options(knowledge_source: str):
 		"ssh_connections": ssh,
 		"s3_configured": s3_configured,
 		"max_files": limits.max_files,
+		"max_file_mb": limits.max_file_bytes // (1024 * 1024),
 		"allowed_extensions": list(limits.extensions),
 	}

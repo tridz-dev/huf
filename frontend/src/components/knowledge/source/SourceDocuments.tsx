@@ -14,11 +14,11 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
-import { reprocessInput, retryIngestion } from '@/services/knowledgeApi';
+import { reprocessInput, retryIngestion, type ImportOptions } from '@/services/knowledgeApi';
 import { formatTimeAgo } from '@/utils/time';
 import type { KnowledgeInputDoc } from '@/types/knowledge.types';
 import { DocumentDetailSheet } from '../DocumentDetailSheet';
-import { inputOrigin, inputTitle } from '../DocumentsTable';
+import { inputOrigin, inputTitle } from '../inputDisplay';
 import { ConfirmActionDialog } from '../import/ConfirmActionDialog';
 import { DOC_FILTER_STATUS, type SourceFilter } from '../import/docFilter';
 import { itemReason, itemStatusLabel, type InputCounts } from '../import/ingestionLabels';
@@ -28,7 +28,14 @@ const STEPS = [
   { title: 'Try a question', description: 'See what your agents would find' },
   { title: 'Connect to an agent', description: 'Let an agent use it' },
 ];
-const ACCEPT = '.pdf,.docx,.md,.txt,.csv,.zip';
+
+/** Accept list and plain-words hint from the backend's import options (no hardcoded types). */
+export function dropZoneCopy(options?: ImportOptions | null): { accept?: string; hint?: string } {
+  const exts = (options?.allowed_extensions ?? []).map((e) => e.replace(/^\./, '').toLowerCase()).filter(Boolean);
+  if (exts.length === 0) return {};
+  const size = options?.max_file_mb ? ` Up to ${options.max_file_mb} MB each.` : '';
+  return { accept: exts.map((e) => `.${e}`).join(','), hint: `${exts.map((e) => e.toUpperCase()).join(', ')}.${size}` };
+}
 
 export interface SourceDocumentsProps {
   knowledgeSource: string;
@@ -41,6 +48,7 @@ export interface SourceDocumentsProps {
   slot?: ReactNode;
   onAddContent: (tab: 'upload' | 'storage') => void;
   onFiles: (files: File[]) => void;
+  importOptions?: ImportOptions | null;
   onRetried: (ingestion?: string) => void;
   onReprocess: (name: string) => Promise<void> | void;
   onRemove: (name: string) => Promise<void> | void;
@@ -75,6 +83,7 @@ export function SourceDocuments({
   slot,
   onAddContent,
   onFiles,
+  importOptions,
   onRetried,
   onReprocess,
   onRemove,
@@ -113,8 +122,7 @@ export function SourceDocuments({
         <StepHint current={0} steps={STEPS} />
         <DropZone
           title="Drop files here to add them"
-          hint="PDF, Word, Markdown, text and CSV. Up to 50 MB each."
-          accept={ACCEPT}
+          {...dropZoneCopy(importOptions)}
           onFiles={onFiles}
           actions={
             <>

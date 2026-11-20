@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { SourceFrame, type SourceFrameProps } from './SourceFrame';
@@ -25,6 +25,7 @@ function Host(p: Partial<SourceFrameProps>) {
         onRebuildIndex={vi.fn()}
         onToggleDisabled={vi.fn()}
         onReview={vi.fn()}
+        onConnectAgent={vi.fn()}
         {...p}
       >
         <div>body</div>
@@ -36,11 +37,17 @@ const text = () => screen.getByTestId('status-sentence').textContent;
 
 describe('SourceFrame status sentence', () => {
   it('shows ready with agents', () => {
-    render(<Host agentCount={2} />);
+    render(<Host agents={['A', 'B']} />);
     expect(text()).toContain('Ready');
     expect(text()).toContain('5 documents');
     expect(text()).toContain('used by 2 agents');
     expect(screen.getByTestId('add-content')).toBeTruthy();
+  });
+  it('offers Connect to an agent when ready with no agents', () => {
+    const onConnectAgent = vi.fn();
+    render(<Host onConnectAgent={onConnectAgent} />);
+    fireEvent.click(screen.getByText('Connect to an agent'));
+    expect(onConnectAgent).toHaveBeenCalled();
   });
   it('attention beats importing and disabled', () => {
     render(<Host counts={counts({ failed: 3 })} disabled importing={{ label: 'Importing', done: 1, total: 4 }} />);
