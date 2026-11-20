@@ -1,284 +1,179 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { useState } from 'react';
-import { Database, Settings, Table2, Trash2, Pencil, Layers, List } from 'lucide-react';
-import { TABLE_ICON_MAP } from '@/data/tableIcons';
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { Upload } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { PageFrame } from '@/layouts/PageFrame';
-import {
-	FilterBar,
-	GridView,
-	ItemCard,
-	LoadMoreButton,
-	EmptyState,
-} from '../components/dashboard';
-import { DeleteTableDialog } from '../components/data-table/DeleteTableDialog';
-import { TableAgentAccessModal } from '../components/data-table/TableAgentAccessModal';
+import { AskField, FilterPills, StatusSentence } from '@/components/patterns';
+import { ConfirmDestructive, type Dependent } from '@/components/grid';
 import { AppTablesSection } from '../components/data-table/AppTablesSection';
-import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
-import { getDataTables, deleteDataTable, getTableAgentAccessCounts } from '../services/dataTableApi';
-import { formatTimeAgo } from '../utils/time';
-import type { HufDataTable } from '../types/dataTable.types';
-
-/** Below this table count, default to the flat view so grouping doesn't add clutter for a
- * handful of tables. Users can still toggle either way explicitly. */
-const AUTO_FLAT_THRESHOLD = 3;
+import { CreateTableDialog, type TableStart } from '../components/data-table/list/CreateTableDialog';
+import { EmptyTables } from '../components/data-table/list/EmptyTables';
+import { TablesLedger } from '../components/data-table/list/TablesLedger';
+import { useTablesList } from '../components/data-table/list/useTablesList';
+import {
+	ALL_GROUPS,
+	NO_AGENT,
+	UNGROUPED,
+	filterRows,
+	type TableRowModel,
+} from '../components/data-table/list/tableListModel';
+import { createDataTable, deleteDataTable } from '../services/dataTableApi';
+import { getTableDependencies } from '../services/dataTables/rowsApi';
 
 export { DataPage };
 export default DataPage;
 
 function DataPage() {
 	const navigate = useNavigate();
-	const [deleteTable, setDeleteTable] = useState<HufDataTable | null>(null);
-	const [deleting, setDeleting] = useState(false);
-	const [viewModeOverride, setViewModeOverride] = useState<'flat' | 'grouped' | null>(null);
-	const [accessTable, setAccessTable] = useState<HufDataTable | null>(null);
-	const [agentAccessCounts, setAgentAccessCounts] = useState<Record<string, number>>({});
-
-	const {
-		items: tables,
-		hasMore,
-		initialLoading,
-		loadingMore,
-		search,
-		setSearch,
-		loadMore,
-		total,
-		error,
-	} = useInfiniteScroll<{ page?: number; limit?: number; start?: number; search?: string }, HufDataTable>({
-		fetchFn: async (params) => {
-			const response = await getDataTables({
-				page: params.page,
-				limit: params.limit,
-				start: params.start,
-				search: params.search,
-			});
-
-			return {
-				data: response.items,
-				hasMore: response.hasMore,
-				total: response.total,
-			};
-		},
-		initialParams: {},
-		pageSize: 20,
-		debounceMs: 300,
-		autoLoad: true,
-	});
+	const { rows, loading, error, legacy, reload } = useTablesList();
+	const [search, setSearch] = useState('');
+	const [group, setGroup] = useState(ALL_GROUPS);
+	const [createOpen, setCreateOpen] = useState(false);
+	const [createStart, setCreateStart] = useState<TableStart>('blank');
+	const [toDelete, setToDelete] = useState<TableRowModel | null>(null);
+	const [dependents, setDependents] = useState<Dependent[]>([]);
 
 	useEffect(() => {
-		if (error) {
-			toast.error('Failed to load data tables', {
-				description: error.message || 'An error occurred.',
-				duration: 5000,
-			});
-		}
+		if (error) toast.error('Could not load tables', { description: error });
 	}, [error]);
 
-	const loadAgentCounts = async () => {
-		setAgentAccessCounts(await getTableAgentAccessCounts());
+	const pills = useMemo(() => {
+		const groups = Array.from(new Set(rows.map((r) => r.group))).sort((a, b) =>
+			a === UNGROUPED ? 1 : b === UNGROUPED ? -1 : a.localeCompare(b)
+		);
+		const showGroups = groups.length > 1 || (groups.length === 1 && groups[0] !== UNGROUPED);
+		return [
+			{ value: ALL_GROUPS, label: 'All', count: rows.length },
+			...(showGroups ? groups.map((g) => ({ value: g, label: g, count: rows.filter((r) => r.group === g).length })) : []),
+			{ value: NO_AGENT, label: 'Used by no agent', count: rows.filter((r) => r.agents.length === 0).length },
+		];
+	}, [rows]);
+
+	const visible = useMemo(() => filterRows(rows, group, search), [rows, group, search]);
+	const usedByAgents = rows.filter((r) => r.agents.length > 0).length;
+
+	const openCreate = (start: TableStart = 'blank') => {
+		setCreateStart(start);
+		setCreateOpen(true);
 	};
 
-	useEffect(() => {
-		void loadAgentCounts();
-	}, []);
+	const handleCreate = async ({ name, description, start }: { name: string; description: string; start: TableStart }) => {
+		const created = await createDataTable({
+			table_name: name,
+			description: description || undefined,
+			fields: [{ fieldname: 'name_text', fieldtype: 'Data', label: 'Name', in_list_view: 1 }],
+		});
+		setCreateOpen(false);
+		const suffix = start === 'csv' ? '?import=1' : start === 'paste' ? '?paste=1' : '';
+		navigate(`/data/${created.name}${suffix}`);
+	};
 
-	const handleDeleteConfirm = async () => {
-		if (!deleteTable) return;
-		setDeleting(true);
+	const askDelete = async (row: TableRowModel) => {
+		setToDelete(row);
+		setDependents(row.agents.map((a) => ({ kind: 'Agent', label: a.agent_name })));
 		try {
-			const result = await deleteDataTable(deleteTable.name);
-			toast.success(
-				`Table deleted (${result.deleted_records} record${result.deleted_records !== 1 ? 's' : ''} removed)`
-			);
-			setDeleteTable(null);
-			// Reload the page to refresh the list since we removed a table
-			window.location.reload();
-		} catch (err) {
-			toast.error('Failed to delete table', { description: err instanceof Error ? err.message : 'An error occurred.' });
-		} finally {
-			setDeleting(false);
+			const deps = await getTableDependencies(row.id);
+			setDependents([
+				...deps.agents.map((a) => ({ kind: 'Agent', label: a.agent_name })),
+				...deps.flows.map((f) => ({ kind: 'Flow', label: f.title })),
+			]);
+		} catch {
+			// Older backend: keep the agent list we already have from the summary.
 		}
 	};
 
-	const groupedTables = tables.reduce((acc, table) => {
-		const groupName = table.table_group || 'Ungrouped';
-		if (!acc[groupName]) acc[groupName] = [];
-		acc[groupName].push(table);
-		return acc;
-	}, {} as Record<string, HufDataTable[]>);
+	const confirmDelete = async () => {
+		if (!toDelete) return;
+		try {
+			await deleteDataTable(toDelete.id);
+			toast.success(`Deleted ${toDelete.name}`);
+			await reload();
+		} catch (err) {
+			toast.error('Could not delete the table', { description: err instanceof Error ? err.message : undefined });
+			throw err;
+		}
+	};
 
-	const groupNames = Object.keys(groupedTables).sort((a, b) => {
-		if (a === 'Ungrouped') return 1;
-		if (b === 'Ungrouped') return -1;
-		return a.localeCompare(b);
-	});
-
-	const hasAnyGroups = groupNames.some((name) => name !== 'Ungrouped');
-	const viewMode =
-		viewModeOverride ?? (tables.length <= AUTO_FLAT_THRESHOLD ? 'flat' : 'grouped');
-
-	const renderCard = useMemo(
-		() => (table: HufDataTable) => (
-			<ItemCard
-				title={table.table_name}
-				description={table.description || 'No description'}
-				icon={table.icon ? TABLE_ICON_MAP[table.icon] ?? Table2 : Table2}
-				status={
-					table.is_active
-						? { label: 'Active', variant: 'success' }
-						: { label: 'Inactive', variant: 'secondary' }
-				}
-				metadata={[
-					{ label: 'Fields', value: table.field_count?.toString() || '0', icon: Table2 },
-					{
-						label: 'Records',
-						value: table.record_count?.toString() || '0',
-						icon: Database,
-					},
-					{
-						label: 'Agents',
-						value: (agentAccessCounts[table.name] ?? 0).toString(),
-						icon: Settings,
-					},
-					{ label: 'Modified', value: formatTimeAgo(table.modified) },
-				]}
-				menuIcon={Settings}
-				menuActions={[
-					{
-						icon: Settings,
-						label: 'Agent access',
-						onClick: () => setAccessTable(table),
-					},
-					{
-						icon: Pencil,
-						label: 'Edit table',
-						onClick: () => navigate(`/data/${table.name}/edit`),
-					},
-					{
-						icon: Trash2,
-						label: 'Delete table',
-						variant: 'destructive',
-						onClick: () => setDeleteTable(table),
-					},
-				]}
-				onClick={() => navigate(`/data/${table.name}`)}
-			/>
-		),
-		[navigate, agentAccessCounts]
-	);
+	const empty = !loading && rows.length === 0 && !error;
 
 	return (
 		<PageFrame
-			title="Data"
-			filters={
+			title="Tables"
+			actions={
 				<div className="flex items-center gap-2">
-					<FilterBar
-						searchPlaceholder="Search tables..."
-						searchValue={search}
-						onSearchChange={setSearch}
-					/>
-					{hasAnyGroups && (
-						<ToggleGroup
-							type="single"
-							value={viewMode}
-							onValueChange={(value) => value && setViewModeOverride(value as 'flat' | 'grouped')}
-							className="rounded border border-line"
-						>
-							<ToggleGroupItem value="flat" aria-label="Simple view" className="rounded" title="Simple view">
-								<List className="w-4 h-4" />
-							</ToggleGroupItem>
-							<ToggleGroupItem value="grouped" aria-label="Grouped view" className="rounded" title="Grouped view">
-								<Layers className="w-4 h-4" />
-							</ToggleGroupItem>
-						</ToggleGroup>
-					)}
+					<Button variant="outline" onClick={() => openCreate('csv')}>
+						<Upload className="h-4 w-4" />
+						Import
+					</Button>
+					<Button onClick={() => openCreate('blank')}>New table</Button>
 				</div>
 			}
 		>
-			{groupNames.length === 0 ? (
-				<GridView
-					items={[]}
-					columns={{ sm: 1, md: 2, lg: 3 }}
-					loading={initialLoading}
-					emptyState={
-						search ? (
-							<EmptyState
-								variant="no-results"
-								icon={Database}
-								title="No data tables found"
-								filterTerm={search}
-								secondaryAction={{ label: 'Clear search', onClick: () => setSearch('') }}
-							/>
+			<div className="space-y-4 px-6 pb-6">
+				{empty ? (
+					<EmptyTables onStart={openCreate} onNew={() => openCreate('blank')} />
+				) : (
+					<>
+						<AskField value={search} onChange={setSearch} placeholder="Search tables" />
+						<FilterPills label="Filter tables" pills={pills} value={group} onChange={setGroup} />
+						<StatusSentence
+							tone={usedByAgents > 0 ? 'ready' : 'off'}
+							parts={[
+								loading ? 'Loading tables' : `${rows.length} ${rows.length === 1 ? 'table' : 'tables'}`,
+								!loading && `used by agents: ${usedByAgents}`,
+							]}
+						/>
+						{!loading && visible.length === 0 ? (
+							<p className="py-8 text-center text-ui-text text-steel">
+								No tables match.{' '}
+								<button
+									type="button"
+									className="text-signal-ink underline-offset-4 hover:underline"
+									onClick={() => {
+										setSearch('');
+										setGroup(ALL_GROUPS);
+									}}
+								>
+									Clear filters
+								</button>
+							</p>
 						) : (
-							<EmptyState
-								variant="create"
-								icon={Database}
-								title="No data tables"
-								description="Create your first table to start managing structured data."
-								action={{ label: 'New table', onClick: () => navigate('/data/new') }}
+							<TablesLedger
+								rows={visible}
+								legacy={legacy}
+								onOpen={(r) => navigate(`/data/${r.id}`)}
+								onAgentAccess={(r) => navigate(`/data/${r.id}?tab=agents`)}
+								onDelete={(r) => void askDelete(r)}
 							/>
-						)
-					}
-					renderItem={() => <></>}
-					keyExtractor={() => ''}
-				/>
-			) : viewMode === 'flat' ? (
-				<GridView
-					items={tables}
-					columns={{ sm: 1, md: 2, lg: 3 }}
-					loading={initialLoading}
-					renderItem={renderCard}
-					keyExtractor={(table) => table.name}
-				/>
-			) : (
-				<div className="space-y-4">
-					{groupNames.map((groupName) => (
-						<div key={groupName}>
-							<h2 className="text-lg font-medium text-ink mb-4 mt-8 first:mt-0">
-								{groupName}
-							</h2>
-							<GridView
-								items={groupedTables[groupName]}
-								columns={{ sm: 1, md: 2, lg: 3 }}
-								loading={initialLoading}
-								renderItem={renderCard}
-								keyExtractor={(table) => table.name}
-							/>
-						</div>
-					))}
-				</div>
-			)}
-			<LoadMoreButton
-				hasMore={hasMore}
-				loading={loadingMore}
-				onLoadMore={loadMore}
-				disabled={!!search || initialLoading}
-			/>
-			{!hasMore && tables.length > 0 && (
-				<div className="text-center py-4 text-sm font-body text-steel">
-					{total !== undefined
-						? `Showing all ${total} tables`
-						: 'No more tables to load'}
-				</div>
-			)}
+						)}
+					</>
+				)}
+				<AppTablesSection />
+			</div>
 
-			<AppTablesSection />
-
-			<DeleteTableDialog
-				open={!!deleteTable}
-				onOpenChange={(open) => !open && setDeleteTable(null)}
-				tableName={deleteTable?.table_name || ''}
-				recordCount={deleteTable?.record_count || 0}
-				onConfirm={handleDeleteConfirm}
-				loading={deleting}
+			<CreateTableDialog
+				key={`${createOpen}-${createStart}`}
+				open={createOpen}
+				onOpenChange={setCreateOpen}
+				existingNames={rows.map((r) => r.name)}
+				initialStart={createStart}
+				onCreate={handleCreate}
 			/>
-			<TableAgentAccessModal
-				open={!!accessTable}
-				onOpenChange={(open) => !open && setAccessTable(null)}
-				table={accessTable}
-				onSaved={loadAgentCounts}
+			<ConfirmDestructive
+				open={!!toDelete}
+				onOpenChange={(o) => !o && setToDelete(null)}
+				title={`Delete ${toDelete?.name ?? 'table'}?`}
+				consequence={
+					toDelete
+						? `Removes all ${toDelete.rows.toLocaleString()} rows and ${toDelete.fields} fields.`
+						: ''
+				}
+				recovery="This can't be undone."
+				dependents={dependents}
+				confirmText={toDelete?.name}
+				actionLabel="Delete table"
+				onConfirm={confirmDelete}
 			/>
 		</PageFrame>
 	);
