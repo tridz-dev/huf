@@ -21,6 +21,7 @@ from huf.ai.tools.functions import (
     cancel_document,
 	delete_document,
 )
+from huf.ai.agent.agent_form_api import apply_draft_overrides
 from huf.ai.conversation_manager import ConversationManager, safe_history_slice, safe_history_split
 from huf.ai.run import RunProvider
 from huf.ai.knowledge.context_builder import build_knowledge_context, inject_knowledge_context
@@ -108,8 +109,8 @@ class AgentManager:
     # Class-level default so instances built without __init__ (tests) still work.
     desktop_ctx = None
 
-    def __init__(self, agent_name, file_handler=None, provider_override=None, model_override=None, conversation_id=None, desktop_ctx=None):
-        self.agent_doc = frappe.get_cached_doc("Agent", agent_name)
+    def __init__(self, agent_name, file_handler=None, provider_override=None, model_override=None, conversation_id=None, desktop_ctx=None, draft_overrides=None):
+        self.agent_doc = apply_draft_overrides(frappe.get_doc("Agent", agent_name), draft_overrides) if draft_overrides else frappe.get_cached_doc("Agent", agent_name)
         self.conversation_id = conversation_id
         # Pinned Huf Desktop executor context (None for every non-desktop run).
         self.desktop_ctx = desktop_ctx
@@ -1612,7 +1613,6 @@ def run_agent_sync(
 
     frappe.db.set_value("Agent Conversation", conversation.name, "model", resolved_model)
 
-
     resolved_prompt_template = prompt_template
     if not resolved_prompt_template:
         if agent_doc.prompt_mode == "Local":
@@ -2020,7 +2020,7 @@ def _execute_agent_run(
     prompt_cache_options=None,
     files=None,
     skip_user_message=False,
-    desktop_ctx=None,
+    desktop_ctx=None, draft_overrides=None,
 ):
     """Execute an agent against an existing Agent Run and conversation.
 
@@ -2030,7 +2030,7 @@ def _execute_agent_run(
     holding the conversation lock. This function never creates another run
     or user message.
     """
-    agent_doc = frappe.get_doc("Agent", agent_name)
+    agent_doc = apply_draft_overrides(frappe.get_doc("Agent", agent_name), draft_overrides)
     resolved_provider, resolved_model, resolved_model_name = _resolve_effective_model(
         agent_doc,
         model=model,
@@ -2127,7 +2127,7 @@ def _execute_agent_run(
             provider_override=resolved_provider,
             model_override=resolved_model,
             conversation_id=conversation_id,
-            desktop_ctx=desktop_ctx,
+            desktop_ctx=desktop_ctx, draft_overrides=draft_overrides,
         )
 
         if manager.tool_setup_warnings:

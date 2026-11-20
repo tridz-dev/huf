@@ -1,183 +1,85 @@
-import { Clock, Play, Save, MessageSquare, MoreVertical, FileText, Lock, Copy, Trash2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
+import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { UseFormReturn } from 'react-hook-form';
-import type { AIModel } from '@/types/agent.types';
-import type { AgentFormValues } from './types';
+import { Copy, FileText, Lock, MessageSquare, MoreVertical, Save, Trash2 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { formatTimeAgo } from '@/utils/time';
-import { InlineEditName } from '@/components/common/InlineEditName';
 
 interface AgentHeaderProps {
-  form: UseFormReturn<AgentFormValues>;
-  watchDisabled: boolean;
-  models: AIModel[];
-  activeTriggerCount: number;
-  isNew: boolean;
+  title: string;
+  disabled: boolean;
+  /** Model label chip; omitted for voice-only agents. */
+  modelLabel?: string;
   /** True when the agent is a protected system agent (is_system=1). */
   isSystem?: boolean;
   /** True when protected fields must be read-only (system agent + non-admin). */
   locked?: boolean;
-  showSaveButton: boolean;
+  /** AutosaveStatus element. */
+  autosave: ReactNode;
+  showSave: boolean;
   saving: boolean;
-  runningTest?: boolean;
   onSave: () => void;
-  onRunTest: () => void;
+  /** Publish (enable) or disable the agent. */
+  onTogglePublish: () => void;
   onDuplicate: () => void;
   onViewLogs: () => void;
   onDelete: () => void;
   duplicating?: boolean;
-  agentId?: string;
+  agentId: string;
   allowChat: boolean;
   lastRun?: string | null;
   totalRun?: number | null;
 }
 
 export function AgentHeader({
-  form,
-  watchDisabled,
-  models,
-  activeTriggerCount,
-  isNew,
-  isSystem = false,
-  locked = false,
-  showSaveButton,
-  saving,
-  runningTest = false,
-  onSave,
-  onRunTest,
-  onDuplicate,
-  onViewLogs,
-  onDelete,
-  duplicating = false,
-  agentId,
-  allowChat,
-  lastRun,
-  totalRun,
+  title, disabled, modelLabel, isSystem = false, locked = false, autosave, showSave, saving, onSave, onTogglePublish,
+  onDuplicate, onViewLogs, onDelete, duplicating = false, agentId, allowChat, lastRun, totalRun,
 }: AgentHeaderProps) {
-  const watchModel = form.watch('model');
-  const isVoiceOnly = form.watch('agent_modality') === 'Voice';
   const navigate = useNavigate();
-
-  const handleOpenChat = () => {
-    if (agentId) {
-      const params = new URLSearchParams({ agent: agentId });
-      navigate(`/chat?${params.toString()}`);
-      return;
-    }
-    navigate('/chat');
-  };
-
   return (
-    <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-      <div className="flex-1 space-y-2">
-        <div className="flex items-center gap-3 flex-wrap">
-          {isNew ? (
-            <Input
-              value={form.watch('agent_name')}
-              onChange={(e) => form.setValue('agent_name', e.target.value, { shouldDirty: true })}
-              className="text-2xl font-bold h-auto border-0 px-0 focus-visible:ring-0 max-w-md"
-              placeholder="e.g. Customer support agent"
-            />
-          ) : (
-            <InlineEditName
-              value={form.watch('agent_name')}
-              onChange={(value) => form.setValue('agent_name', value, { shouldDirty: true })}
-              placeholder="e.g. Customer support agent"
-            />
-          )}
-          <Badge variant={watchDisabled ? 'pill-neutral' : 'pill-success'}>
-            <span className={`w-1.5 h-1.5 rounded-full mr-1 ${watchDisabled ? 'bg-steel-soft' : 'bg-good'}`} />
-            {watchDisabled ? 'Disabled' : 'Active'}
+    <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+      <div className="min-w-0 flex-1 space-y-1">
+        <div className="flex flex-wrap items-center gap-3">
+          <h1 className="truncate text-title font-semibold text-ink">{title}</h1>
+          <Badge variant={disabled ? 'pill-neutral' : 'pill-success'}>
+            <span className={`mr-1 h-1.5 w-1.5 rounded-full ${disabled ? 'bg-steel-soft' : 'bg-good'}`} />
+            {disabled ? 'Disabled' : 'Active'}
           </Badge>
-          {isSystem && (
-            <Badge variant="pill-neutral" className="gap-1">
-              <Lock className="w-3 h-3" />
-              System
-            </Badge>
-          )}
-          {!isVoiceOnly && (
-          <Badge variant="chip">
-            {models.find(m => m.name === watchModel)?.model_name || watchModel || 'Model'}
-          </Badge>
-          )}
-          {activeTriggerCount > 0 && (
-            <span className="text-xs text-steel-soft flex items-center gap-1">
-              <Clock className="w-3 h-3 shrink-0" />
-              {activeTriggerCount} active {activeTriggerCount === 1 ? 'trigger' : 'triggers'}
-            </span>
-          )}
-          {!isNew && (lastRun !== undefined || totalRun !== undefined) && (
-            <span className="text-xs text-steel-soft ml-1">
-              Last run {lastRun ? formatTimeAgo(lastRun) : 'never'} &middot; {totalRun ?? 0} runs
-            </span>
-          )}
+          {isSystem && <Badge variant="pill-neutral" className="gap-1"><Lock className="h-3 w-3" />System</Badge>}
+          {modelLabel && <Badge variant="chip">{modelLabel}</Badge>}
+          {autosave}
         </div>
+        {(lastRun !== undefined || totalRun !== undefined) && (
+          <p className="text-xs text-steel-soft">Last run {lastRun ? formatTimeAgo(lastRun) : 'never'} &middot; {totalRun ?? 0} runs</p>
+        )}
       </div>
-      <div className="flex items-center gap-2">
-        <div className="flex items-center gap-2 mr-2">
-          <Label htmlFor="agent-disabled" className="text-sm font-normal">
-            Disable
-          </Label>
-          <Switch
-            id="agent-disabled"
-            checked={watchDisabled}
-            disabled={locked}
-            onCheckedChange={(checked) => form.setValue('disabled', checked)}
-          />
-        </div>
-        {!isNew && !isVoiceOnly && (<Button
-          variant="outline"
-          size="icon-sm"
-          onClick={onRunTest}
-          type="button"
-          disabled={runningTest || isNew}
-          title={isNew ? 'Save agent first to run test' : runningTest ? 'Running...' : 'Run test'}
-        >
-          <Play className="w-4 h-4" />
-        </Button>)}
-        {(!isNew && allowChat) && (<Button variant="outline" size="sm" type="button" onClick={handleOpenChat}>
-          <MessageSquare className="w-4 h-4 mr-2" />
-          Chat
-        </Button>)}
-        {showSaveButton && (
-          <Button size="sm" onClick={onSave} disabled={saving}>
-            <Save className="w-4 h-4 mr-2" />
-            {saving ? (isNew ? 'Creating...' : 'Saving...') : (isNew ? 'Create' : 'Save')}
+      <div className="flex flex-wrap items-center gap-2">
+        {allowChat && (
+          <Button variant="outline" size="sm" type="button" onClick={() => navigate(`/chat?${new URLSearchParams({ agent: agentId }).toString()}`)}>
+            <MessageSquare className="mr-2 h-4 w-4" />Chat
           </Button>
         )}
-        {!isNew && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm">
-                <MoreVertical className="w-4 h-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={onDuplicate} disabled={duplicating || locked}>
-                <Copy className="w-4 h-4 mr-2" />
-                {duplicating ? 'Duplicating...' : 'Duplicate'}
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={onViewLogs}>
-                <FileText className="w-4 h-4 mr-2" />
-                View logs
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={onDelete} disabled={locked} className="text-destructive">
-                <Trash2 className="w-4 h-4 mr-2" />
-                Delete
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+        <Button variant="outline" size="sm" type="button" onClick={onDuplicate} disabled={duplicating || locked}>
+          <Copy className="mr-2 h-4 w-4" />{duplicating ? 'Duplicating...' : 'Duplicate'}
+        </Button>
+        {showSave && (
+          <Button variant="outline" size="sm" type="button" onClick={onSave} disabled={saving}>
+            <Save className="mr-2 h-4 w-4" />{saving ? 'Saving...' : 'Save now'}
+          </Button>
         )}
+        <Button size="sm" type="button" variant={disabled ? 'default' : 'outline'} onClick={onTogglePublish} disabled={locked}>
+          {disabled ? 'Publish' : 'Disable'}
+        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm" aria-label="More actions"><MoreVertical className="h-4 w-4" /></Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={onViewLogs}><FileText className="mr-2 h-4 w-4" />View logs</DropdownMenuItem>
+            <DropdownMenuItem onClick={onDelete} disabled={locked} className="text-destructive"><Trash2 className="mr-2 h-4 w-4" />Delete</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </div>
   );
