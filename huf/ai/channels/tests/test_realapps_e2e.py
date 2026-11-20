@@ -18,7 +18,28 @@ from huf.ai.channels import conversation as conv_mod
 from huf.ai.channels import handoff, reply_api, run_as
 from huf.ai.channels.tests._support import make_gateway_conversation
 
-_APPS = frappe.get_installed_apps()
+
+
+def _installed(app: str) -> bool:
+	# Evaluated lazily: frappe is not initialised at import/discovery time.
+	return app in frappe.get_installed_apps()
+
+
+def _requires_app(app: str, reason: str):
+	"""Class decorator: skip at setUpClass time (site is initialised by then)."""
+
+	def deco(cls):
+		orig = cls.setUpClass.__func__
+
+		def setUpClass(klass):
+			if not _installed(app):
+				raise unittest.SkipTest(reason)
+			orig(klass)
+
+		cls.setUpClass = classmethod(setUpClass)
+		return cls
+
+	return deco
 
 
 def _staff_user(prefix: str = "e2e-staff") -> str:
@@ -31,7 +52,7 @@ def _staff_user(prefix: str = "e2e-staff") -> str:
 	return email
 
 
-@unittest.skipUnless("helpdesk" in _APPS, "Helpdesk not installed")
+@_requires_app("helpdesk", "Helpdesk not installed")
 class TestHelpdeskRealFlow(IntegrationTestCase):
 	def setUp(self):
 		frappe.set_user("Administrator")
@@ -114,7 +135,7 @@ class TestHelpdeskRealFlow(IntegrationTestCase):
 		send.assert_not_called()
 
 
-@unittest.skipUnless("crm" in _APPS, "Frappe CRM not installed")
+@_requires_app("crm", "Frappe CRM not installed")
 class TestCrmRealFlow(IntegrationTestCase):
 	def test_handoff_creates_lead_and_note(self):
 		frappe.set_user("Administrator")
@@ -130,7 +151,7 @@ class TestCrmRealFlow(IntegrationTestCase):
 		self.assertIn("Wants a demo", notes[0].content)
 
 
-@unittest.skipUnless("erpnext" in _APPS, "ERPNext not installed")
+@_requires_app("erpnext", "ERPNext not installed")
 class TestErpRealFlow(IntegrationTestCase):
 	def setUp(self):
 		frappe.set_user("Administrator")
@@ -191,7 +212,7 @@ class TestErpRealFlow(IntegrationTestCase):
 			self.assertEqual(so.huf_channel_conversation, self.conv.name)
 
 
-@unittest.skipUnless("lms" in _APPS, "LMS not installed")
+@_requires_app("lms", "LMS not installed")
 class TestLmsRealFlow(IntegrationTestCase):
 	def setUp(self):
 		frappe.set_user("Administrator")
@@ -248,7 +269,7 @@ class TestLmsRealFlow(IntegrationTestCase):
 		self.assertFalse(frappe.db.exists("LMS Enrollment", {"course": paid, "member": self.member}))
 
 
-@unittest.skipUnless("frappe_whatsapp" in _APPS, "frappe_whatsapp not installed")
+@_requires_app("frappe_whatsapp", "frappe_whatsapp not installed")
 class TestRealWhatsAppDoctypes(IntegrationTestCase):
 	def test_standins_never_shadow_real_doctypes(self):
 		"""test_broadcast_s1_s12 creates custom stand-ins only for missing doctypes; with frappe_whatsapp they stay real."""
