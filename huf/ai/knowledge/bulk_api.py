@@ -9,7 +9,9 @@ bookkeeping belong to bulk_runner.
 """
 
 import json
+import random
 import re
+import time
 
 import frappe
 from frappe import _
@@ -24,6 +26,9 @@ from .bulk_runner import (
 	serialize_manifest,
 	slice_job_id,
 )
+
+SERIES_RETRY_ATTEMPTS = 5
+SERIES_BACKOFF_MS = (50, 400)
 
 CHECKSUM_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 
@@ -134,7 +139,27 @@ def create_ingestion_header(
 	}
 	if accepted:
 		values["manifest_json"] = serialize_manifest(accepted)
-	return frappe.get_doc(values).insert()
+	for attempt in range(1, SERIES_RETRY_ATTEMPTS + 1):
+		# Re-checked on every attempt: after a rollback another request may have
+		# created the active ingestion, so the earlier caller check is stale.
+		existing = frappe.db.exists(
+			"Knowledge Ingestion",
+			{"knowledge_source": knowledge_source, "status": ("in", ACTIVE_INGESTION_STATUSES)},
+		)
+		if existing:
+			frappe.throw(
+				_("An ingestion ({0}) is already queued or running for this source").format(existing)
+			)
+		try:
+			# The ING-{#####} autoname takes a FOR UPDATE on tabSeries, which can
+			# raise a snapshot-isolation deadlock (1020) under concurrent starts.
+			return frappe.get_doc(values).insert()
+		except frappe.QueryDeadlockError:
+			frappe.db.rollback()
+			if attempt == SERIES_RETRY_ATTEMPTS:
+				break
+			time.sleep(random.uniform(*SERIES_BACKOFF_MS) / 1000)
+	frappe.throw(_("Another import is starting right now; please try again."))
 
 
 def enqueue_first_slice(ingestion_name: str, accepted: list) -> None:
