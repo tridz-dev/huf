@@ -4,7 +4,7 @@
  * with Shift-click ranges, an add-row line, and windowed rendering for
  * large row counts. Domain-free: rows are opaque, columns describe types.
  */
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { Plus } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ShortcutKey } from '@/components/ui/shortcut-key';
@@ -63,7 +63,7 @@ export function DataGrid<R>({
   const [viewH, setViewH] = useState(600);
   const anchor = useRef<string | null>(null);
   const wasEditing = useRef(false);
-  const uid = useRef(`grid-${Math.random().toString(36).slice(2, 8)}`).current;
+  const uid = `grid-${useId().replace(/:/g, "")}`;
 
   const windowed = rows.length > windowFrom;
   const first = windowed ? Math.max(0, Math.floor(scrollTop / GRID_ROW_H) - OVERSCAN) : 0;
