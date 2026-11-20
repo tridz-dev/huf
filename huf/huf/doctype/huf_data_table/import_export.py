@@ -18,6 +18,7 @@ import uuid
 import frappe
 from frappe import _
 
+from .file_limits import check_import_file_size
 from .import_security import _import_error, _max_import_bytes, check_xlsx_size, strip_reserved
 
 MAX_ROWS = 50000
@@ -298,8 +299,7 @@ def _load(table_id, file_url):
 	if file_doc.is_private and file_doc.owner != frappe.session.user and not _can("data.tables.manage"):
 		_import_error()
 	limit = _max_import_bytes()
-	if (file_doc.file_size or 0) > limit:
-		frappe.throw(_("The import file is too large."), frappe.ValidationError)
+	check_import_file_size(file_doc, limit)
 	raw = file_doc.get_content()
 	raw = raw.encode("utf-8") if isinstance(raw, str) else raw
 	if len(raw) > limit:

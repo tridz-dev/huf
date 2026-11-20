@@ -245,6 +245,25 @@ class DraftTestSecurity(unittest.TestCase):
 
     def test_discard_removes_run_calls_messages_conversation(self):
         f = _fake_frappe()
+        f.db.get_value.return_value = "draft_test"
+        f.get_all.return_value = []
         _load(f)._discard_draft_records("RUN-1", "CONV-1")
         doctypes = [c.args[0] for c in f.db.delete.call_args_list]
-        self.assertEqual(doctypes, ["Agent Tool Call", "Agent Run", "Agent Message", "Agent Conversation"])
+        self.assertIn("Agent Tool Call", doctypes)
+        self.assertEqual(doctypes.count("Agent Run"), 2)
+        self.assertEqual(doctypes[-1], "Agent Conversation")
+
+    def test_discard_spares_non_draft_conversation(self):
+        f = _fake_frappe()
+        f.db.get_value.return_value = "Chat"
+        _load(f)._discard_draft_records("RUN-1", "CONV-1")
+        doctypes = [c.args[0] for c in f.db.delete.call_args_list]
+        self.assertIn("Agent Run", doctypes)
+        self.assertNotIn("Agent Conversation", doctypes)
+
+    def test_discard_tolerates_missing_run(self):
+        f = _fake_frappe()
+        f.db.get_value.return_value = "draft_test"
+        f.get_all.return_value = []
+        _load(f)._discard_draft_records(None, "CONV-1")
+        self.assertEqual(f.db.delete.call_args_list[-1].args[0], "Agent Conversation")

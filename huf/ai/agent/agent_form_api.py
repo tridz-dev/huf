@@ -176,13 +176,40 @@ def _validate_draft_overrides(overrides: dict):
         frappe.throw(_("AI Provider '{0}' was not found.").format(provider), frappe.ValidationError)
 
 
-def _discard_draft_records(run_name, conversation_name):
+DRAFT_CHANNEL = "draft_test"
+
+
+def _discard_draft_records(run_name=None, conversation_name=None):
     """Draft tests are throwaway: remove their run, tool calls, messages and conversation so they
-    never show in conversation lists, analytics or run budgets."""
-    frappe.db.delete("Agent Tool Call", {"agent_run": run_name})
-    frappe.db.delete("Agent Run", {"name": run_name})
-    frappe.db.delete("Agent Message", {"conversation": conversation_name})
-    frappe.db.delete("Agent Conversation", {"name": conversation_name})
+    never show in conversation lists, analytics or run budgets.
+
+    Tolerates a missing run (crash before insert). The conversation and its messages are only
+    deleted when the conversation's channel is "draft_test", so a bad run->conversation link can
+    never take a real conversation with it.
+
+    Rows keyed by the run/conversation are removed explicitly (db.delete skips link cleanup):
+    tool calls, messages, context artifacts, memory records, pins, chat rows, rollup archive
+    rows, and Comment/Version entries. Analytics rollups are keyed by dimension buckets, not by
+    run, and draft runs are excluded from them (run_kind != draft_test), so none remain.
+    """
+    if run_name:
+        frappe.db.delete("Agent Tool Call", {"agent_run": run_name})
+        frappe.db.delete("Agent Message", {"agent_run": run_name})
+        frappe.db.delete("Agent Context Artifact", {"agent_run": run_name})
+        frappe.db.delete("Memory Record", {"run": run_name})
+        frappe.db.delete("Comment", {"reference_doctype": "Agent Run", "reference_name": run_name})
+        frappe.db.delete("Version", {"ref_doctype": "Agent Run", "docname": run_name})
+        frappe.db.delete("Agent Run", {"name": run_name})
+    if conversation_name and frappe.db.get_value("Agent Conversation", conversation_name, "channel") == DRAFT_CHANNEL:
+        for dt in ("Agent Message", "Agent Context Artifact", "Memory Record", "Conversation Pin",
+                   "Agent Chat", "Agent Run Analytics Rollup Archive"):
+            frappe.db.delete(dt, {"conversation": conversation_name})
+        frappe.db.delete("Agent Tool Call", {"agent_run": ["in", frappe.get_all(
+            "Agent Run", filters={"conversation": conversation_name}, pluck="name")]})
+        frappe.db.delete("Agent Run", {"conversation": conversation_name})
+        frappe.db.delete("Comment", {"reference_doctype": "Agent Conversation", "reference_name": conversation_name})
+        frappe.db.delete("Version", {"ref_doctype": "Agent Conversation", "docname": conversation_name})
+        frappe.db.delete("Agent Conversation", {"name": conversation_name})
 
 
 def purge_draft_test_records():
@@ -198,6 +225,14 @@ def purge_draft_test_records():
     )
     for r in runs:
         _discard_draft_records(r["name"], r["conversation"])
+    # Orphaned draft conversations (crash before the run was inserted).
+    for name in frappe.get_all(
+        "Agent Conversation",
+        filters={"channel": DRAFT_CHANNEL, "creation": ["<", cutoff]},
+        pluck="name",
+        limit_page_length=0,
+    ):
+        _discard_draft_records(None, name)
 
 
 @frappe.whitelist(methods=["POST"])
@@ -232,23 +267,22 @@ def run_agent_draft_test(agent_name: str, prompt: str, draft_overrides=None) -> 
     channel = "draft_test"
     conv_manager = ConversationManager(agent_name=agent_name, channel=channel, external_id=None)
     conversation = conv_manager.create_new_conversation(title=f"Draft test of {agent_name}")
-    conv_manager.add_message(conversation, "user", prompt, provider, model, agent_name, None)
-
-    run_doc = frappe.get_doc({
-        "doctype": "Agent Run",
-        "agent": agent_name,
-        "status": "Started",
-        "conversation": conversation.name,
-        "prompt": prompt,
-        "model": model,
-        "provider": provider,
-        "sequence": _next_run_sequence(conversation.name),
-        "run_kind": "draft_test",
-    })
-    run_doc.insert()
-
+    run_doc = None
     started = time.monotonic()
     try:
+        conv_manager.add_message(conversation, "user", prompt, provider, model, agent_name, None)
+        run_doc = frappe.get_doc({
+            "doctype": "Agent Run",
+            "agent": agent_name,
+            "status": "Started",
+            "conversation": conversation.name,
+            "prompt": prompt,
+            "model": model,
+            "provider": provider,
+            "sequence": _next_run_sequence(conversation.name),
+            "run_kind": "draft_test",
+        })
+        run_doc.insert()
         result = _execute_agent_run(
             agent_name=agent_name,
             run_id=run_doc.name,
@@ -275,7 +309,7 @@ def run_agent_draft_test(agent_name: str, prompt: str, draft_overrides=None) -> 
             order_by="creation asc",
         )
     finally:
-        _discard_draft_records(run_doc.name, conversation.name)
+        _discard_draft_records(run_doc.name if run_doc else None, conversation.name)
     return {
         "success": run.get("status") == "Success",
         "response": run.get("response") or result.get("response"),
