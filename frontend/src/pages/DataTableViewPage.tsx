@@ -143,6 +143,7 @@ export function DataTableViewPage() {
 				open={deleteOpen}
 				onOpenChange={setDeleteOpen}
 				tableName={schema.table_name}
+				tableId={schema.name}
 				recordCount={rowCount ?? 0}
 				onConfirm={handleDelete}
 				loading={deleting}
