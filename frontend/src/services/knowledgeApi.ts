@@ -333,6 +333,7 @@ export interface ImportOptions {
   ssh_connections: Array<{ name: string; label: string }>;
   s3_configured: boolean;
   max_files: number;
+  max_file_mb?: number;
   allowed_extensions: string[];
 }
 

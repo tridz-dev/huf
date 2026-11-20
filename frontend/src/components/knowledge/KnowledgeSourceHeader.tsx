@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { MoreHorizontal, PauseCircle, PlayCircle, Plus, Save, RotateCcw, Search, Trash2 } from 'lucide-react';
+import { MoreHorizontal, PauseCircle, PlayCircle, Plus, Save, RotateCcw, Trash2 } from 'lucide-react';
 import { UseFormReturn } from 'react-hook-form';
 import { deleteKnowledgeSource } from '@/services/knowledgeApi';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
@@ -34,7 +34,6 @@ interface KnowledgeSourceHeaderProps {
   onCancel?: () => void;
   onRebuildIndex: () => void;
   onAddContent: () => void;
-  onTest: () => void;
   onToggleDisabled: () => void;
 }
 
@@ -51,7 +50,6 @@ export function KnowledgeSourceHeader({
   onCancel,
   onRebuildIndex,
   onAddContent,
-  onTest,
   onToggleDisabled,
 }: KnowledgeSourceHeaderProps) {
   const navigate = useNavigate();
@@ -111,10 +109,6 @@ export function KnowledgeSourceHeader({
             <Button type="button" size="sm" onClick={onAddContent} data-testid="add-content">
               <Plus className="mr-2 h-4 w-4" />
               Add content
-            </Button>
-            <Button type="button" size="sm" variant="outline" onClick={onTest}>
-              <Search className="mr-2 h-4 w-4" />
-              Test
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

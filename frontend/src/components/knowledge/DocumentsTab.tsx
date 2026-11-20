@@ -1,4 +1,7 @@
 import { useState } from 'react';
+import { toast } from 'sonner';
+import { getFrappeErrorMessage } from '@/lib/frappe-error';
+import { reprocessInput, retryIngestion } from '@/services/knowledgeApi';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import type { KnowledgeInputDoc, KnowledgeSourceDoc } from '@/types/knowledge.types';
@@ -35,7 +38,6 @@ export function DocumentsTab({
   inputsLoading,
   counts,
   active,
-  latest,
   addOpen,
   onAddOpenChange,
   onRefreshOverview,
@@ -46,16 +48,46 @@ export function DocumentsTab({
   const [shown, setShown] = useState<string | null>(null);
   const [problemsFor, setProblemsFor] = useState<string | null>(null);
   const [filter, setFilter] = useState<DocFilter | null>(null);
+  const [retrying, setRetrying] = useState(false);
   const ingestion = shown ?? active;
-  const problemIngestion =
-    inputs.find((i) => (i.status === 'Error' || i.status === 'Skipped') && i.ingestion)?.ingestion ?? latest;
+  const retryAll = async () => {
+    setRetrying(true);
+    try {
+      const failed = inputs.filter((i) => i.status === 'Error');
+      const ing = failed.find((i) => i.ingestion)?.ingestion;
+      if (ing) {
+        await retryIngestion(ing, true);
+        setShown(ing);
+      } else {
+        for (const i of failed) await reprocessInput(i.name);
+      }
+      toast.success('Retrying failed documents.');
+      onRefreshOverview();
+      onChanged();
+    } catch (e) {
+      toast.error(getFrappeErrorMessage(e) || 'Could not retry');
+    } finally {
+      setRetrying(false);
+    }
+  };
 
   return (
     <div className="space-y-4" data-testid="documents-tab">
-      <DocumentsSummary counts={counts} onReviewProblems={() => setProblemsFor(problemIngestion)}
-        filter={filter}
-        onFilterChange={setFilter}
-      />
+      <DocumentsSummary counts={counts} filter={filter} onFilterChange={setFilter} />
+
+      {counts.failed > 0 && (
+        <div className="flex flex-wrap items-center gap-3 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm" data-testid="attention-bar">
+          <span>
+            {counts.failed.toLocaleString()} {counts.failed === 1 ? 'document needs' : 'documents need'} attention
+          </span>
+          <Button type="button" size="sm" variant="link" className="h-auto p-0" disabled={retrying} onClick={() => void retryAll()}>
+            {retrying ? 'Retrying...' : 'Retry all'}
+          </Button>
+          <Button type="button" size="sm" variant="link" className="h-auto p-0" onClick={() => setFilter('attention')}>
+            Show them
+          </Button>
+        </div>
+      )}
 
       {source.status === 'Error' && (
         <Alert variant="destructive">

@@ -28,9 +28,13 @@ export function AgentUsageLink({
   if (agents === null) return null;
   if (agents.length === 0) {
     return (
-      <span className="text-sm text-steel" data-testid="agent-usage">
-        Not used by any agent
-      </span>
+      <Link
+        to="/agents"
+        className="text-sm text-signal-ink underline-offset-4 hover:underline"
+        data-testid="agent-usage"
+      >
+        Connect to an agent →
+      </Link>
     );
   }
   return (

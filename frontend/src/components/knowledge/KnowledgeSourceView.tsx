@@ -75,7 +75,6 @@ export function KnowledgeSourceView(props: KnowledgeSourceViewProps) {
         onCancel={props.onCancel}
         onRebuildIndex={props.onRebuildIndex}
         onAddContent={() => props.onAddOpenChange(true)}
-        onTest={() => changeTab('test')}
         onToggleDisabled={props.onToggleDisabled}
       />
       <Form {...form}>
