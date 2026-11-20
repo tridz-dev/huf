@@ -1,7 +1,9 @@
 import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { FieldError } from '@/components/builder';
 import { FieldCard } from './FieldCard';
-import { FieldTypeSelector } from './FieldTypeSelector';
+import { ColumnTypePicker } from '@/components/grid';
+import { fieldTypeOptions } from '@/data/fieldTypeLabels';
 import type { DataTableFieldDef, DataTableFieldType } from '@/types/dataTable.types';
 
 interface TableBuilderCanvasProps {
@@ -11,6 +13,10 @@ interface TableBuilderCanvasProps {
 	onAddField: (type: DataTableFieldType) => void;
 	onRemoveField: (index: number) => void;
 	onReorderFields: (from: number, to: number) => void;
+	/** Indexes of fields with a problem to fix. */
+	errorIndexes?: ReadonlySet<number>;
+	/** Inline message when there are no data fields yet. */
+	emptyError?: string;
 }
 
 export function TableBuilderCanvas({
@@ -20,6 +26,8 @@ export function TableBuilderCanvas({
 	onAddField,
 	onRemoveField,
 	onReorderFields,
+	errorIndexes,
+	emptyError,
 }: TableBuilderCanvasProps) {
 	const handleDragStart = (e: React.DragEvent, index: number) => {
 		e.dataTransfer.setData('text/plain', index.toString());
@@ -46,7 +54,9 @@ export function TableBuilderCanvas({
 					<p className="text-sm text-steel mb-4">
 						No fields yet. Add your first field to get started.
 					</p>
-					<FieldTypeSelector
+					{emptyError && <FieldError>{emptyError}</FieldError>}
+					<ColumnTypePicker
+						options={fieldTypeOptions()}
 						onSelect={onAddField}
 						trigger={
 							<Button variant="outline" size="sm">
@@ -65,6 +75,7 @@ export function TableBuilderCanvas({
 								field={field}
 								index={index}
 								isSelected={selectedFieldIndex === index}
+								hasError={errorIndexes?.has(index)}
 								onSelect={() =>
 									onSelectField(selectedFieldIndex === index ? null : index)
 								}
@@ -75,7 +86,9 @@ export function TableBuilderCanvas({
 							/>
 						))}
 					</div>
-					<FieldTypeSelector
+					{emptyError && <FieldError>{emptyError}</FieldError>}
+					<ColumnTypePicker
+						options={fieldTypeOptions()}
 						onSelect={onAddField}
 						trigger={
 							<Button variant="outline" size="sm" className="w-full">

@@ -3,12 +3,15 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { LAYOUT_FIELD_TYPES } from '@/data/fieldTypes';
+import { friendlyTypeName, typeGlyph } from '@/data/fieldTypeLabels';
 import type { DataTableFieldDef } from '@/types/dataTable.types';
 
 interface FieldCardProps {
 	field: DataTableFieldDef;
 	index: number;
 	isSelected: boolean;
+	/** The field has a problem to fix before saving. */
+	hasError?: boolean;
 	onSelect: () => void;
 	onRemove: () => void;
 	onDragStart: (e: React.DragEvent, index: number) => void;
@@ -20,6 +23,7 @@ export function FieldCard({
 	field,
 	index,
 	isSelected,
+	hasError,
 	onSelect,
 	onRemove,
 	onDragStart,
@@ -27,6 +31,7 @@ export function FieldCard({
 	onDrop,
 }: FieldCardProps) {
 	const isLayout = LAYOUT_FIELD_TYPES.includes(field.fieldtype);
+	const TypeIcon = typeGlyph(field.fieldtype);
 
 	if (isLayout) {
 		return (
@@ -72,7 +77,7 @@ export function FieldCard({
 				<Button
 					variant="ghost"
 					size="icon"
-					className="h-6 w-6 opacity-0 group-hover:opacity-100"
+					className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100" aria-label="Remove field"
 					onClick={(e) => {
 						e.stopPropagation();
 						onRemove();
@@ -101,22 +106,23 @@ export function FieldCard({
 			<GripVertical className="w-4 h-4 text-steel cursor-grab shrink-0" />
 			<div className="flex-1 min-w-0">
 				<div className="flex items-center gap-2">
-					<span className="text-sm font-medium truncate">{field.label || 'Untitled'}</span>
+					<span className={cn('text-sm font-medium truncate', hasError && 'text-destructive')}>{field.label || 'Untitled'}</span>
 					{field.reqd === 1 && (
 						<span className="text-destructive text-xs">*</span>
 					)}
 				</div>
 				<div className="flex items-center gap-2 mt-0.5">
-					<Badge variant="secondary" size="sm" className="px-1.5 py-0 h-4">
-						{field.fieldtype}
+					<Badge variant="secondary" size="sm" className="gap-1">
+						<TypeIcon aria-hidden="true" className="w-3 h-3" />
+						{friendlyTypeName(field.fieldtype)}
 					</Badge>
-					<span className="text-[10px] text-steel">{field.fieldname}</span>
+					{hasError && <span className="text-micro text-destructive">Needs attention</span>}
 				</div>
 			</div>
 			<Button
 				variant="ghost"
 				size="icon"
-				className="h-6 w-6 opacity-0 group-hover:opacity-100 shrink-0"
+				className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 shrink-0" aria-label="Remove field"
 				onClick={(e) => {
 					e.stopPropagation();
 					onRemove();

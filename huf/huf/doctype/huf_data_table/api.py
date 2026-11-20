@@ -267,6 +267,10 @@ def update_data_table(
 		registry.icon = icon
 
 	registry.save()
+	if fields is not None:
+		from .rows import resync_table_tools
+
+		resync_table_tools(registry.doctype_name)
 
 	return {"success": True, "data": {"name": registry.name}}
 
@@ -288,6 +292,9 @@ def delete_data_table(name: str) -> dict:
 	except (frappe.DoesNotExistError, frappe.DataError):
 		record_count = 0
 
+	from .rows import remove_table_tools
+
+	remove_table_tools(doctype_name)
 	if frappe.db.exists("DocType", doctype_name):
 		frappe.delete_doc("DocType", doctype_name, force=True)
 
@@ -538,38 +545,21 @@ def get_table_records(
 	"""Get records for a table with optional search across configured fields."""
 	_require_read()
 
-	if isinstance(fields, str):
-		try:
-			fields = json.loads(fields)
-		except ValueError:
-			fields = [fields]
-	if isinstance(filters, str) and filters:
-		filters = json.loads(filters)
+	from .rows import build_record_query, count_records
 
-	or_filters = []
-	if search and search.strip():
-		search_text = search.strip()
-		meta = frappe.get_meta(doctype_name)
-		if meta.search_fields:
-			for fieldname in meta.search_fields.split(','):
-				or_filters.append([fieldname.strip(), 'like', f'%{search_text}%'])
-		name_field = meta.title_field or 'name'
-		if name_field not in (meta.search_fields or ''):
-			or_filters.append([name_field, 'like', f'%{search_text}%'])
-
+	query = build_record_query(doctype_name, fields, filters, search)
 	records = frappe.get_list(
 		doctype_name,
-		fields=fields,
-		filters=filters,
-		or_filters=or_filters,
 		limit_page_length=limit + 1,
 		limit_start=start,
 		order_by=order_by,
+		**query,
 	)
 	has_more = len(records) > limit
 	if has_more:
 		records = records[:limit]
-	return {'items': records, 'hasMore': has_more}
+	total = count_records(doctype_name, query)
+	return {'items': records, 'hasMore': has_more, 'total': total}
 
 
 # Agent access scaffolding: one deterministic tool set per Huf Data Table.

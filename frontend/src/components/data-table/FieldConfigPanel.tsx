@@ -1,5 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Settings, Trash2 } from 'lucide-react';
+import { ChangeImpactNotice, ColumnTypePicker } from '@/components/grid';
+import { Field } from '@/components/ui/field';
+import { deriveFieldname, type FieldErrors } from './builder/fieldRules';
+import { fieldTypeOptions, friendlyTypeName, typeGlyph } from '@/data/fieldTypeLabels';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -15,13 +19,18 @@ import {
 } from '@/components/ui/select';
 import { FIELD_PROPERTIES, LAYOUT_FIELD_TYPES } from '@/data/fieldTypes';
 import { getHufTableNames } from '@/services/dataTableApi';
-import type { DataTableFieldDef } from '@/types/dataTable.types';
+import type { DataTableFieldDef, DataTableFieldType } from '@/types/dataTable.types';
 
 interface FieldConfigPanelProps {
 	field: DataTableFieldDef;
 	onUpdate: (updates: Partial<DataTableFieldDef>) => void;
 	onDelete: () => void;
 	onOpenTableSettings: () => void;
+	/** The field already exists in the saved table: fieldname is locked, type change needs confirm. */
+	isExisting?: boolean;
+	/** Fieldnames of the other fields, so new names stay unique. */
+	otherFieldnames?: string[];
+	errors?: FieldErrors;
 }
 
 export function FieldConfigPanel({
@@ -29,7 +38,11 @@ export function FieldConfigPanel({
 	onUpdate,
 	onDelete,
 	onOpenTableSettings,
+	isExisting = false,
+	otherFieldnames = [],
+	errors,
 }: FieldConfigPanelProps) {
+	const [pendingType, setPendingType] = useState<DataTableFieldType | null>(null);
 	const [hufTables, setHufTables] = useState<Array<{ table_name: string; doctype_name: string }>>(
 		[]
 	);
@@ -45,22 +58,19 @@ export function FieldConfigPanel({
 		}
 	}, [field.fieldtype]);
 
-	const reservedFieldnames = new Set([
-		'name', 'doctype', 'owner', 'creation', 'modified',
-		'modified_by', 'docstatus', 'idx', 'parent', 'parentfield', 'parenttype',
-	]);
-
 	const handleLabelChange = (label: string) => {
-		let fieldname = label
-			.toLowerCase()
-			.replace(/[^a-z0-9\s]/g, '')
-			.replace(/\s+/g, '_')
-			.replace(/_+/g, '_')
-			.replace(/^_|_$/g, '');
-		if (reservedFieldnames.has(fieldname)) {
-			fieldname = `${fieldname}_field`;
+		// DATA-LOSS GUARD: an existing field's fieldname is its column. Only the label changes.
+		if (isExisting) {
+			onUpdate({ label });
+			return;
 		}
-		onUpdate({ label, fieldname: fieldname || field.fieldname });
+		onUpdate({ label, fieldname: deriveFieldname(label, new Set(otherFieldnames), field.fieldname) });
+	};
+
+	const handleTypePick = (type: DataTableFieldType) => {
+		if (type === field.fieldtype) return;
+		if (isExisting) setPendingType(type);
+		else onUpdate({ fieldtype: type });
 	};
 
 	return (
@@ -68,16 +78,16 @@ export function FieldConfigPanel({
 			<div className="sticky top-0 z-10 bg-panel border-b border-line pb-3 -mx-1 px-1 mb-4 flex items-center justify-between">
 				<div>
 					<h3 className="font-medium text-sm">
-						{isLayout ? field.fieldtype : 'Field properties'}
+						{isLayout ? friendlyTypeName(field.fieldtype) : 'Field properties'}
 					</h3>
 					<p className="text-xs text-steel mt-1">
-						{isLayout ? 'Layout element settings' : field.fieldtype}
+						{isLayout ? 'Layout element settings' : friendlyTypeName(field.fieldtype)}
 					</p>
 				</div>
 				<Button
 					variant="ghost"
 					size="icon"
-					className="h-7 w-7 text-steel"
+					className="text-steel" aria-label="Open table settings"
 					onClick={onOpenTableSettings}
 					title="Open table settings"
 				>
@@ -86,39 +96,66 @@ export function FieldConfigPanel({
 			</div>
 
 			{properties.includes('label') && (
-				<div className="space-y-1.5">
-					<Label htmlFor="field-label" size="sm">
-						Label
-					</Label>
-					<Input
-						id="field-label"
-						value={field.label || ''}
-						onChange={(e) => handleLabelChange(e.target.value)}
-						placeholder="Field label"
-						className="h-8 text-sm"
+				<Field label="Label" required={!isLayout} error={errors?.label} id="field-label">
+					{(c) => (
+						<Input
+							{...c}
+							value={field.label || ''}
+							onChange={(e) => handleLabelChange(e.target.value)}
+							placeholder="Field label"
+						/>
+					)}
+				</Field>
+			)}
+
+			{!isLayout && (
+				<div className="space-y-2">
+					<p className="text-xs font-medium text-ink">Type</p>
+					<ColumnTypePicker
+						options={fieldTypeOptions(true)}
+						value={field.fieldtype}
+						onSelect={handleTypePick}
+						trigger={
+							<Button variant="outline" size="sm" className="w-full justify-start gap-2">
+								{(() => {
+									const Icon = typeGlyph(field.fieldtype);
+									return <Icon aria-hidden="true" className="w-4 h-4 text-steel" />;
+								})()}
+								{friendlyTypeName(field.fieldtype)}
+							</Button>
+						}
 					/>
-					{!isLayout && (
-						<p className="text-[10px] text-steel">
-							Name: {field.fieldname}
-						</p>
+					{pendingType && (
+						// TODO(P3): once a type-change preview endpoint exists, pass real counts as `lines`
+						// (e.g. "1,180 values convert", "104 will be cleared"). Until then the wording is
+						// generic and no endpoint is called.
+						<ChangeImpactNotice
+							title={`Change ${friendlyTypeName(field.fieldtype)} to ${friendlyTypeName(pendingType)}?`}
+							action={<p className="text-micro text-steel">Existing values may be converted or cleared. This applies when you save changes.</p>}
+							confirmLabel="Change type"
+							cancelLabel={`Keep ${friendlyTypeName(field.fieldtype)}`}
+							onConfirm={() => {
+								onUpdate({ fieldtype: pendingType });
+								setPendingType(null);
+							}}
+							onCancel={() => setPendingType(null)}
+						/>
 					)}
 				</div>
 			)}
 
 			{properties.includes('options') && field.fieldtype === 'Select' && (
-				<div className="space-y-1.5">
-					<Label htmlFor="field-options" size="sm">
-						Options (one per line)
-					</Label>
-					<Textarea
-						id="field-options"
-						value={field.options || ''}
-						onChange={(e) => onUpdate({ options: e.target.value })}
-						placeholder={"Option 1\nOption 2\nOption 3"}
-						rows={4}
-						className="text-sm"
-					/>
-				</div>
+				<Field label="Options (one per line)" required error={errors?.options} id="field-options">
+					{(c) => (
+						<Textarea
+							{...c}
+							value={field.options || ''}
+							onChange={(e) => onUpdate({ options: e.target.value })}
+							placeholder={"Option 1\nOption 2\nOption 3"}
+							rows={4}
+						/>
+					)}
+				</Field>
 			)}
 
 			{properties.includes('options') && field.fieldtype === 'Link' && (
@@ -160,7 +197,7 @@ export function FieldConfigPanel({
 								value={field.default || ''}
 								onChange={(e) => onUpdate({ default: e.target.value })}
 								placeholder="Default value"
-								className="h-7 text-xs"
+								
 							/>
 						</div>
 					)}
@@ -175,7 +212,7 @@ export function FieldConfigPanel({
 								value={field.description || ''}
 								onChange={(e) => onUpdate({ description: e.target.value })}
 								placeholder="Help text shown below field"
-								className="h-7 text-xs"
+								
 							/>
 						</div>
 					)}
@@ -265,7 +302,7 @@ export function FieldConfigPanel({
 			)}
 
 			<div className="pt-4 border-t border-line mt-4 flex items-center justify-between gap-2">
-				<p className="text-[10px] text-steel">
+				<p className="text-micro text-steel">
 					Changes save with the table.
 				</p>
 				<Button
