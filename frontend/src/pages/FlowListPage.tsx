@@ -81,8 +81,8 @@ function FlowListPage() {
           limit: PAGE_SIZE,
         });
         if (mine !== requestId.current) return;
-        setItems(result.items);
-        setTotal(result.total);
+        setItems(result.items ?? []);
+        setTotal(result.total ?? 0);
         setFailed(false);
       } catch {
         if (mine === requestId.current) setFailed(true);
@@ -121,8 +121,8 @@ function FlowListPage() {
         limit: PAGE_SIZE,
         start: items.length,
       });
-      setItems((prev) => [...prev, ...more.items.filter((m) => !prev.some((p) => p.flow_id === m.flow_id))]);
-      setTotal(more.total);
+      setItems((prev) => [...prev, ...(more.items ?? []).filter((m) => !prev.some((p) => p.flow_id === m.flow_id))]);
+      setTotal(more.total ?? 0);
     } catch (err) {
       toast.error('Could not load more flows', { description: humanizeFlowError(err) });
     } finally {

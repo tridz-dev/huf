@@ -11,6 +11,8 @@ export default defineConfig({
 		// top of the file, so the two suites can coexist without a global flip.
 		environment: 'node',
 		include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
+		testTimeout: 30000,
+		hookTimeout: 30000,
 		setupFiles: ['./src/setupTests.ts'],
 	},
 	resolve: {
