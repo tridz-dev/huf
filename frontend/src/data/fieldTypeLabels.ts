@@ -15,10 +15,13 @@ import {
 	Phone,
 	Star,
 	Timer,
+	Columns,
+	Folder,
+	Minus,
 	Type,
 	type LucideIcon,
 } from 'lucide-react';
-import { TYPE_ICON, TYPE_LABEL, type ColumnType } from '@/components/grid';
+import { TYPE_ICON, TYPE_LABEL, type ColumnTypeOption, type ColumnType } from '@/components/grid';
 import type { DataTableFieldType } from '@/types/dataTable.types';
 
 interface TypeInfo {
@@ -75,3 +78,27 @@ export const FRIENDLY_TYPES: Array<{ frappeType: DataTableFieldType; label: stri
 		'Time', 'Duration', 'Select', 'Link', 'Rating', 'Color', 'Phone', 'Attach', 'Attach Image',
 	] as DataTableFieldType[]
 ).map((t) => ({ frappeType: t, label: INFO[t]!.label, icon: INFO[t]!.icon }));
+
+const OPTION_GROUPS: Array<{ group: string; types: Array<[DataTableFieldType, string]> }> = [
+	{ group: 'Text', types: [['Data', 'A short line of text'], ['Text', 'Longer notes over several lines']] },
+	{ group: 'Numbers', types: [['Int', 'Counts, no decimals'], ['Float', 'Numbers with decimals'], ['Currency', 'An amount of money'], ['Percent', 'A share out of 100']] },
+	{ group: 'Date & time', types: [['Date', 'A calendar day'], ['Datetime', 'A day and a time'], ['Time', 'A time of day'], ['Duration', 'A length of time']] },
+	{ group: 'Choice', types: [['Select', 'Pick one from a list you set'], ['Check', 'Yes or no'], ['Rating', 'Stars out of five']] },
+	{ group: 'Reference', types: [['Link', 'Points to a row in another table']] },
+	{ group: 'Other', types: [['Color', 'A color swatch'], ['Phone', 'A phone number']] },
+	{ group: 'Media', types: [['Attach', 'Any file'], ['Attach Image', 'A picture']] },
+];
+
+const LAYOUT_OPTIONS: Array<ColumnTypeOption<DataTableFieldType>> = [
+	{ value: 'Tab Break', label: 'Tab', icon: Folder, group: 'Layout', description: 'Starts a new tab in the form' },
+	{ value: 'Section Break', label: 'Section', icon: Minus, group: 'Layout', description: 'Groups fields under a heading' },
+	{ value: 'Column Break', label: 'Column', icon: Columns, group: 'Layout', description: 'Splits a section into columns' },
+];
+
+/** Options for ColumnTypePicker: plain words from this file; layout types only when not `dataOnly`. */
+export function fieldTypeOptions(dataOnly = false): Array<ColumnTypeOption<DataTableFieldType>> {
+	const data = OPTION_GROUPS.flatMap(({ group, types }) =>
+		types.map(([value, description]) => ({ value, label: friendlyTypeName(value), icon: typeGlyph(value), group, description })),
+	);
+	return dataOnly ? data : [...data, ...LAYOUT_OPTIONS];
+}

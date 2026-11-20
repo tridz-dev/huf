@@ -2,7 +2,8 @@ import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { FieldError } from '@/components/builder';
 import { FieldCard } from './FieldCard';
-import { FieldTypeSelector } from './FieldTypeSelector';
+import { ColumnTypePicker } from '@/components/grid';
+import { fieldTypeOptions } from '@/data/fieldTypeLabels';
 import type { DataTableFieldDef, DataTableFieldType } from '@/types/dataTable.types';
 
 interface TableBuilderCanvasProps {
@@ -54,7 +55,8 @@ export function TableBuilderCanvas({
 						No fields yet. Add your first field to get started.
 					</p>
 					{emptyError && <FieldError>{emptyError}</FieldError>}
-					<FieldTypeSelector
+					<ColumnTypePicker
+						options={fieldTypeOptions()}
 						onSelect={onAddField}
 						trigger={
 							<Button variant="outline" size="sm">
@@ -85,7 +87,8 @@ export function TableBuilderCanvas({
 						))}
 					</div>
 					{emptyError && <FieldError>{emptyError}</FieldError>}
-					<FieldTypeSelector
+					<ColumnTypePicker
+						options={fieldTypeOptions()}
 						onSelect={onAddField}
 						trigger={
 							<Button variant="outline" size="sm" className="w-full">
