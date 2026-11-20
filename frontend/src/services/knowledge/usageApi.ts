@@ -1,0 +1,27 @@
+import { call } from '@/lib/frappe-sdk';
+
+/** How many agents use each source (rows in the Agent Knowledge child table, grouped). */
+export async function getAgentCountsBySource(): Promise<Record<string, number>> {
+  const res = (await call.get('frappe.client.get_list', {
+    doctype: 'Agent Knowledge',
+    parent: 'Agent',
+    fields: JSON.stringify(['knowledge_source', { COUNT: '*', as: 'count' }]),
+    group_by: 'knowledge_source',
+    limit_page_length: 5000,
+  })) as { message?: Array<{ knowledge_source: string; count: number | string }> };
+  const out: Record<string, number> = {};
+  for (const r of res.message ?? []) out[r.knowledge_source] = Number(r.count) || 0;
+  return out;
+}
+
+/** Names of the agents that use one knowledge source (deduplicated). */
+export async function getAgentsForSource(knowledgeSource: string): Promise<string[]> {
+  const res = (await call.get('frappe.client.get_list', {
+    doctype: 'Agent Knowledge',
+    parent: 'Agent',
+    fields: JSON.stringify(['parent']),
+    filters: JSON.stringify({ knowledge_source: knowledgeSource }),
+    limit_page_length: 500,
+  })) as { message?: Array<{ parent: string }> };
+  return Array.from(new Set((res.message ?? []).map((r) => r.parent).filter(Boolean)));
+}

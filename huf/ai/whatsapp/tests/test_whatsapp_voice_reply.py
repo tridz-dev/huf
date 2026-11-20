@@ -47,7 +47,7 @@ class FakeAdapter:
 	def __init__(self):
 		self.uploads, self.sends = [], []
 
-	def upload_media(self, content, mime, filename="", kind=None, voice=False):
+	def upload_media(self, content, mime, filename="", kind=None, voice=False, to=None):
 		self.uploads.append({"content": content, "mime": mime, "filename": filename, "kind": kind, "voice": voice})
 		return "media-1"
 

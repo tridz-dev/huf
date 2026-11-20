@@ -25,6 +25,7 @@ from frappe.utils import get_datetime, now_datetime
 
 from huf.ai.gateway_adapters import whatsapp_errors as errors
 from huf.ai.whatsapp.broadcast import limits as broadcast_limits, policy, runner
+from huf.ai.whatsapp.broadcast.support import fallback_config
 from huf.ai.whatsapp.broadcast.api import (
 	_bridge_guard,
 	_broadcast_audit,
@@ -140,7 +141,7 @@ def retry_failed(broadcast: str) -> dict:
 		raise start_gate.StartRefused("not_finished", _("Retry is available once the broadcast has stopped."))
 	failed = frappe.get_all(
 		RECIPIENT, filters={"broadcast": broadcast, "status": "failed"},
-		fields=["recipient", "params", "error_code", "status", "consent_source", "consent_at", "audience"],
+		fields=["recipient", "params", "error_code", "status", "consent_source", "consent_at", "audience", "fallback_email", *fallback_config.CONFIG_FIELDS],
 	)
 	rows = []
 	for r in failed:
@@ -154,7 +155,8 @@ def retry_failed(broadcast: str) -> dict:
 				params = None
 		rows.append({
 			"recipient": r.recipient, "params": params if isinstance(params, dict) else None,
-			"consent_source": r.consent_source, "consent_at": r.consent_at,
+			"consent_source": r.consent_source, "consent_at": r.consent_at, "fallback_email": r.fallback_email,
+			**{k: r.get(k) for k in fallback_config.CONFIG_FIELDS},
 		})
 	if not rows:
 		raise start_gate.StartRefused("nothing_to_retry", _("No retryable failed recipients."))
@@ -167,7 +169,8 @@ def retry_failed(broadcast: str) -> dict:
 			"language_code": src.language_code, "category": src.category, "send_via": src.send_via,
 			"body_params": src.body_params, "header_params": src.header_params, "button_params": src.button_params,
 			"consent_source": src.consent_source, "consent_attested": 0,
-			"max_recipients": src.max_recipients, "mps": src.mps,
+			"max_recipients": src.max_recipients, "mps": src.mps, "carousel_params": src.carousel_params,
+			**fallback_config.snapshot(src),
 		}).insert(ignore_permissions=True, ignore_links=True)
 		result = br.prepare(new.name, rows)  # re-applies opt-out / allow-list / marketing policy
 	finally:

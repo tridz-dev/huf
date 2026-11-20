@@ -651,7 +651,7 @@ class TestScenario4Audiences(G2Case):
 		with as_user(READER):
 			out = aapi.list_members(audience=a)
 		self.assertTrue(out["masked"])
-		self.assertEqual([m["recipient"] for m in out["members"]], ["********" + num(460)[-4:], "********" + num(461)[-4:]])
+		self.assertEqual([m["recipient"] for m in out["members"]], ["****" + num(460)[-4:], "****" + num(461)[-4:]])
 		with as_user(WRITER):
 			full = aapi.list_members(audience=a)
 		self.assertFalse(full["masked"])

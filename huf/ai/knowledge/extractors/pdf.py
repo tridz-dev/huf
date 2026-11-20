@@ -32,6 +32,10 @@ class PDFExtractor(TextExtractor):
 				)
 		
 		text = "\n\n".join(text_parts)
+		page_offsets, pos = [], 0
+		for i, part in enumerate(text_parts):
+			page_offsets.append([pos, i + 1])
+			pos += len(part or "") + 2
 		
 		import os
 		title = os.path.basename(file_path)
@@ -39,5 +43,5 @@ class PDFExtractor(TextExtractor):
 		return ExtractedText(
 			text=text,
 			title=title,
-			metadata={"file_type": "pdf", "pages": len(text_parts)},
+			metadata={"file_type": "pdf", "pages": len(text_parts), "page_offsets": page_offsets},
 		)

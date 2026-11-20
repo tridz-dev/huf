@@ -122,10 +122,16 @@ export const libraryNavItems = [
     capability: "agent.use",
   },
   {
-    title: "Sources",
+    title: "Knowledge",
     url: "/knowledge",
     icon: BookOpen,
     capability: "agent.use",
+  },
+  {
+    title: "Providers",
+    url: "/providers",
+    icon: Layers,
+    capability: "system.providers.manage",
   },
   {
     title: "Tables",

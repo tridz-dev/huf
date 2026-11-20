@@ -63,6 +63,13 @@ export type OpenArtifactPaneEvent = {
     artifact_id: string;
 };
 
+export type ApprovalEvent = {
+    type: 'approval-requested' | 'approval-resolved';
+    conversation_id?: string;
+    agent_run_id?: string;
+    confirmation: Record<string, unknown>;
+};
+
 type ChatSocketProps = {
     conversationId: string | null;
     onToolUpdate?: (event: ToolCallEvent) => void;
@@ -71,9 +78,10 @@ type ChatSocketProps = {
     onConversationTitleUpdated?: (event: ConversationTitleUpdatedEvent) => void;
     onFrontendToolCall?: (event: FrontendToolCallEvent) => void;
     onOpenArtifactPane?: (event: OpenArtifactPaneEvent) => void;
+    onApproval?: (event: ApprovalEvent) => void;
 }
 
-export function useChatSocket({ conversationId, onToolUpdate, onNewMessage, onAgentRunStatus, onConversationTitleUpdated, onFrontendToolCall, onOpenArtifactPane }: ChatSocketProps) {
+export function useChatSocket({ conversationId, onToolUpdate, onNewMessage, onAgentRunStatus, onConversationTitleUpdated, onFrontendToolCall, onOpenArtifactPane, onApproval }: ChatSocketProps) {
     const socket = useSocket();
 
     useEffect(() => {
@@ -82,7 +90,7 @@ export function useChatSocket({ conversationId, onToolUpdate, onNewMessage, onAg
         }
 
         // Listen for conversation-specific events on the shared socket
-        const handler = (data: NewAgentMessageEvent | ToolCallEvent | AgentRunStatusEvent | ConversationTitleUpdatedEvent | FrontendToolCallEvent | OpenArtifactPaneEvent) => {
+        const handler = (data: NewAgentMessageEvent | ToolCallEvent | AgentRunStatusEvent | ConversationTitleUpdatedEvent | FrontendToolCallEvent | OpenArtifactPaneEvent | ApprovalEvent) => {
             console.log("Conversation event received:", data);
 
             // Route to appropriate handler based on event type
@@ -100,6 +108,8 @@ export function useChatSocket({ conversationId, onToolUpdate, onNewMessage, onAg
                 onConversationTitleUpdated?.(data as ConversationTitleUpdatedEvent);
             } else if (data.type === 'frontend_tool_call_initiated') {
                 onFrontendToolCall?.(data as FrontendToolCallEvent);
+            } else if (data.type === 'approval-requested' || data.type === 'approval-resolved') {
+                onApproval?.(data as ApprovalEvent);
             } else if (data.type === 'open_artifact_pane') {
                 onOpenArtifactPane?.(data as OpenArtifactPaneEvent);
             }
@@ -112,5 +122,5 @@ export function useChatSocket({ conversationId, onToolUpdate, onNewMessage, onAg
             // itself is owned by SocketProvider and stays connected.
             socket.off(`conversation:${conversationId}`, handler);
         };
-    }, [socket, conversationId, onToolUpdate, onNewMessage, onAgentRunStatus, onConversationTitleUpdated, onFrontendToolCall, onOpenArtifactPane]);
+    }, [socket, conversationId, onToolUpdate, onNewMessage, onAgentRunStatus, onConversationTitleUpdated, onFrontendToolCall, onOpenArtifactPane, onApproval]);
 }

@@ -43,6 +43,10 @@ class KnowledgeInput(Document):
 	
 	def check_duplicate(self):
 		"""Check if this content already exists in the knowledge source."""
+		# Bulk ingestion bypasses the hard throw: dedup there is the bulk
+		# runner's job (see huf/ai/knowledge/bulk_runner.py).
+		if getattr(frappe.flags, "huf_bulk_ingestion", False):
+			return
 		if self.source_hash and not self.is_new():
 			return
 			
@@ -86,14 +90,17 @@ class KnowledgeInput(Document):
 	
 	def after_insert(self):
 		"""Queue processing after insert."""
+		# Bulk ingestion rows are processed by the bulk runner; no auto-enqueue.
+		if getattr(frappe.flags, "huf_bulk_ingestion", False):
+			return
 		self.queue_processing()
 	
 	def queue_processing(self):
 		"""Queue the input for processing."""
-		from huf.ai.knowledge.indexer import process_knowledge_input
-		
+		from huf.ai.knowledge.indexer import process_single_input
+
 		frappe.enqueue(
-			process_knowledge_input,
+			process_single_input,
 			queue="default",
 			knowledge_input=self.name,
 			job_id=f"process_input_{self.name}",

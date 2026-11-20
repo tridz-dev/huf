@@ -8,7 +8,7 @@ Behaviour is taken from code; file references name the source of truth. Setup gu
 - Meta error 190 means the token is invalid or expired (`huf/ai/gateway_adapters/whatsapp_errors.py`).
 - Rotate the token in BOTH places: the gateway's integration credential `access_token` (used for agent replies) and the linked WhatsApp Account `token` (used by the bridge: confirmations, templates, management). If only one is refreshed, some sends work and others fail with 131005/190.
 - Token check: `check_token(gateway_name, force)` in `huf/ai/whatsapp/management.py` (POST, whitelisted).
-  It calls Meta `debug_token` and `subscribed_apps` (`huf/ai/whatsapp/token_check.py`). The result
+  It calls Meta `debug_token` and `subscribed_apps` (`huf/ai/whatsapp/setup/token_check.py`). The result
   is cached for 600 s and live checks are limited to one per 10 s. `force` bypasses the cache.
 - Health reads only the cached result. A rejected token raises `access_token_invalid` (error),
   blocks the `credentials` step and sets next step "Replace access token".
@@ -27,7 +27,7 @@ Behaviour is taken from code; file references name the source of truth. Setup gu
 - Gateway Events are created only for inbound messages, so the `messages` field must be subscribed.
   `no_events_yet` (warning) means Meta has not sent anything: check the callback URL and subscription.
 - `webhook` and `subscribed` checklist steps are inferred from Huf data (no Meta read API).
-- `subscribed_apps` and `debug_token` response shapes are marked UNVERIFIED in `whatsapp/token_check.py`.
+- `subscribed_apps` and `debug_token` response shapes are marked UNVERIFIED in `whatsapp/setup/token_check.py`.
   If the app entry is missing, the check reports only that some app is subscribed.
 
 ## 3. Health states
@@ -151,5 +151,99 @@ Full design, API and limits: [WhatsApp Broadcast](../whatsapp/BROADCAST.md). Man
 - Kill switch: `pause_all_broadcasts(gateway)` (the "Stop all broadcasts" button) pauses every running broadcast on the gateway with reason `kill_switch`. Use it first when a template or number is in trouble.
 - Counters self-correct (after each chunk, at completion, every 5 minutes for Running broadcasts). To force a recount: `frappe.get_doc("WhatsApp Broadcast", name).recount(commit=True)` in a bench console.
 - Messaging limit: the preview reads `whatsapp_business_manager_messaging_limit`. If it is unknown the preview warns (`tier_unknown`) and the recipient cap is the only ceiling.
-- Costs: the preview shows cost as unavailable (`cost.total` null) until rates are filled in `huf/ai/whatsapp/broadcast/rates.json` from Meta's official rate card. Check Meta billing for real charges.
+- Costs: the preview shows cost as unavailable (`cost.total` null) until rates are filled in `huf/ai/whatsapp/broadcast/support/rates.json` from Meta's official rate card. Check Meta billing for real charges.
 - Live verification is described in [broadcast-live-verification.md](../whatsapp/broadcast-live-verification.md). Run it only against allow-listed test recipients.
+
+## 11. External app hooks
+
+Huf fires three hooks for external apps (for example a CRM app). Register them in the external app's `hooks.py`. Each value is a dotted path or a list of dotted paths; handlers run in registration order.
+
+```python
+# external_app/hooks.py
+huf_gateway_pre_send = ["external_app.whatsapp_guard.check_send"]
+huf_gateway_opt_out = ["external_app.whatsapp_guard.on_opt_change"]
+huf_gateway_delivery_status = ["external_app.whatsapp_guard.on_delivery_status"]
+```
+
+With a `huf_gateway_pre_send` hook registered, any send that lacks a gateway name is refused (`blocked_by_hook`, fail closed); without one, such sends are unchanged.
+
+Helpers are in `huf/ai/whatsapp/gateway_hooks.py`:
+
+- `fire_hook(name, **payload)` notifies. A handler that raises, or a bad dotted path, is written to the Error Log and skipped. The other handlers still run.
+- `gate_hook(name, **payload)` gates. It fails closed (see `huf_gateway_pre_send`).
+
+All handlers are called with keyword arguments only. Only the pre-send GATE (`huf_gateway_pre_send`) must be side-effect-free: no database writes, no messages, no network calls. Notification hooks (`huf_gateway_delivery_status`, `huf_gateway_opt_out`) are expected to write. Hooks can fire inside a webhook or send transaction.
+
+### huf_gateway_pre_send (gate)
+
+Called by `outbound_policy.check_pre_send(gateway, to, kind, context)` right before a Graph POST or a `WhatsApp Message` insert.
+
+- Kwargs: `gateway` (Gateway name), `to` (recipient; normalized on bridge paths, raw on adapter, tool and management paths), `kind` (`text`, `template`, `media` or `other`), `context` (dict).
+- `context` keys: `source` (for example `bridge.send_text`, `bridge.send_template`, `bridge.send_media`, `bridge._send_payload`, `bridge.send_sticker`, `adapter`, `agent_tool`, `management`), `subtype` (for example the media kind, `interactive`, `location`, `call_permission_request`), and `consent_confirmation` (bool, only on bridge and adapter paths). Use `context.get(...)`: tool and management calls omit the key.
+- Verdict (fail closed): return `None` to allow. ANY other return value blocks, including `False`, `True`, `''`, `0`, `{}`, a reason string and `{"allowed": False}`. An exception, a bad dotted path or a failing hook lookup also blocks. No handlers means allow.
+- Refusal: `OutboundRefused(message, code="blocked_by_hook")`. The message is always `Blocked by gateway hook`; a handler's returned string is not passed through. The code is non-retryable. Bridge calls raise `BridgeError` with `error == "blocked_by_hook"`, and `reply_api` and `broadcast` map it to a refusal or skip.
+- Idempotency key: none. The payload has no message id, and the hook runs once per send call, so a retried send calls it again. Keep the decision a pure function of the payload.
+- Consent: `consent_confirmation` is True only for the STOP/START confirmation reply, so a guard can let it through to an opted-out contact.
+- Kinds: `text`, `template`, `media` (image, audio, video, document, sticker), `other` (interactive, location, contacts, reaction, call permission request).
+- Known residual gaps:
+  - A call with no gateway (`gateway` is None) skips the hook with a debug log. This includes any caller that does not pass `gateway_name`.
+  - Each part of a multi-part text fires the hook separately.
+  - A closed-window fallback fires as `template`, not `text`.
+  - `consent_confirmation` is not set on tool or management calls. Honour it only for `kind == 'text'`.
+  - File sends fire the hook twice (pre-upload and in the bridge), so handlers must be idempotent and must not count calls.
+  - A refused voice note falls back to a gated text send, so a guard that blocks only `kind='media'` still lets the text through.
+  - Multi-part replies are gated per part: part 2 can be blocked after part 1 went out.
+  - Callers that pass no gateway name skip the hook. None are known in production paths; the agent tool binds the gateway from the run context and fails closed (`blocked_by_hook`) if it is missing.
+- Tests: `huf/ai/whatsapp/tests/test_pre_send_hook.py`, `huf/ai/whatsapp/tests/test_pre_send_bridge.py`.
+
+### huf_gateway_opt_out (notify)
+
+Fired by `_record_opt_out` and `_record_opt_in` in `huf/ai/gateway_service.py`, after the database write, and only on a real transition.
+
+- Kwargs: `gateway` (Gateway name), `sender_id` (str), `kind` (`opt_out` or `opt_in`), `keyword` (str, may be empty).
+- `opt_out` fires only when the sender was not already opted out. `opt_in` fires only when the sender was opted out.
+- For linked identities, one event fires: `opt_out` for the primary sender id, and `opt_in` always for the FIRST linked id (`ids[0]`, passed by `gateway_service`), whether or not other linked ids changed.
+- Idempotency key: `(gateway, sender_id, kind)`.
+- Handler failures are logged and NOT retried; consumers should reconcile from Gateway Access Entry state.
+- Residual gap: the hook covers only changes made through the consent handling paths (STOP/START keywords). Other changes to a sender's opt-out state do not fire it.
+
+### huf_gateway_delivery_status (notify)
+
+Fired from the statuses loop in `huf/ai/gateway_webhook.py`. Two sources: (1) `_update_reply_status`, after the Gateway Event status is written, for replies recorded on a Gateway Event (matched by `reply_message_id`; `event_name` set); (2) `untracked_status_hook` (`gateway_core/webhook_helpers.py`) for a wamid that matches neither a Gateway Event nor a broadcast recipient, i.e. agent-tool `send_template` / bridge sends (`event_name` is None; no Gateway Event is created). Broadcast recipients are handled by `broadcast/status.py` and never fire this hook. Untracked statuses are deduped per `(gateway, wamid)` in `frappe.cache()` (highest status, 7-day TTL) with the same ordering rules as replies.
+- Delivery is AT-LEAST-ONCE for untracked sends: a cache flush or eviction can refire a status. Consumers must be idempotent (key below).
+
+- Kwargs: `gateway`, `provider_message_id` (the wamid), `status` (`sent`, `delivered`, `read`, `played` or `failed`), `error_code` (the first Meta error's code, or None), `error_title` (the first error's title or message, or None), `event_name` (Gateway Event name).
+- Fires only when the status advances, or when a `failed` is newly recorded. Replays, out-of-order statuses and an identical repeated `failed` fire nothing.
+- Idempotency key: `(provider_message_id, status)`.
+- Handler failures are logged and NOT retried; consumers should reconcile from Gateway Event state.
+- Residual gaps:
+  - Only the first Meta error is passed as `error_code` and `error_title`. All errors are kept in the Gateway Event's `delivery_error` text, which is redacted and capped.
+  - The status is written with `db.set_value`, which triggers no doc events, so this hook is the only signal.
+  - The hook runs inside the webhook request. A later rollback does not unsend the message.
+
+### huf_audience_refresh (refresh before a broadcast starts)
+
+Source: `huf/ai/whatsapp/broadcast/audiences/external.py`. An app built on Huf can manage an audience's members itself (an "externally managed" audience, see the `upsert_audience_members` API below). Register the refresh in the app's `hooks.py`:
+
+```python
+huf_audience_refresh = ["external_app.huf_hooks.refresh_audience"]
+```
+
+- Called as `fn(audience=<audience name>, managed_by=<source label>)`; the return value is ignored. A hook that does not manage that audience should simply return.
+- Runs before a broadcast that includes an externally managed audience starts, once per registered hook per such audience. Each call runs in its own background job (its own site and database connection, queue `short`); the start waits for it.
+- The hook normally calls `upsert_audience_members` itself. Its writes are committed in the job's connection, so keep them to the audience it was called for.
+- Hooks MUST be idempotent. If the wait times out, the start is refused but a hook that was already running keeps going and its writes stand.
+- Wait limit: the `audience_refresh_timeout_seconds` limit (policy default 30 s).
+- Fail closed: no registered hook, a hook error, or a timeout refuses the start with `audience_refresh_failed`, naming the audience. Hook errors are logged as "Audience refresh hook failed".
+
+### upsert_audience_members (whitelisted, POST)
+
+`huf.ai.whatsapp.broadcast.audiences.external.upsert_audience_members` is the only write path for an externally managed audience; the UI, CSV and manual member endpoints refuse such audiences.
+
+- Args: `audience` (name; empty to create), `members` (list of `{recipient, display_name, params, tags, consent_source, consent_at}`), `mode` (`replace` default, or `merge`), `source` (required label of the managing app, at most 60 characters), `idempotency_key` (optional, at most 140 characters), `create` (for a new audience: `{gateway, title, consent_source, consent_basis, consent_purposes, consent_attested, description, default_consent_at}`, as for `create_audience`).
+- `replace` makes the audience exactly the given members (stale members are removed after the new set is written, in one transaction); `merge` only adds or updates. Each member keeps its own consent source and date; the broadcast's consent attestation is unchanged.
+- Ownership: the audience records `managed_by` (the `source`) and `managed_by_user` (the creating user). Only that user (or a System Manager) with the same `source` may change it, and the caller needs write on the audience's Gateway.
+- Size cap: more than `audience_external_max_members` contacts (policy default 50000) in one call is refused (`too_many`).
+- Idempotency: a repeated `idempotency_key` for the audience is a no-op (`{"success": true, "noop": true}`). The last 20 keys are kept per audience, so an A, B, A replay is also caught; a failed refresh releases its key.
+- Error codes (`{"success": false, "error": ..., "message": ...}`): `source_required`, `invalid` (bad `mode` or over-long key), `too_many`, `empty_replace` (`replace` with no members), `no_valid_members` (`replace` where no contact was usable; includes up to 50 `invalid` rows), `not_externally_managed`, `owner_mismatch`, `source_mismatch`. In each case the audience is left as it was.
+- Success returns `audience`, `created`, `added`, `updated`, `removed`, `invalid_total`, `invalid` (first 50) and `skipped_total`, plus the refreshed counts.

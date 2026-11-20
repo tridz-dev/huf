@@ -38,7 +38,7 @@ PER_USER_LIMIT_REASON = "per_user_marketing_limit"
 
 OUTCOMES = ("sent", "failed", "deferred", "unknown", "skipped", "lost_claim")
 # pre-POST refusals (policy / validation) from the bridge that mean "do not message this contact"
-_SKIP_CODES = {"opted_out", "marketing_opted_out", "bsuid_recipient", "recipient_not_allowlisted"}
+_SKIP_CODES = {"opted_out", "marketing_opted_out", "bsuid_recipient", "recipient_not_allowlisted", "blocked_by_hook"}
 _STARTED = ("sending", "sent", "delivered", "read", "unknown", "failed")
 
 
@@ -169,6 +169,14 @@ def _merge_params(broadcast: dict[str, Any], row: dict[str, Any]) -> tuple[Any, 
 	return tuple(out)
 
 
+def _merge_carousel(broadcast: dict[str, Any], params: Any) -> Any:
+	"""Card values: the broadcast's ``carousel_params`` default under the recipient's ``params.carousel``."""
+	own = _json(params)
+	return broadcast_params.merge_carousel(
+		_json(broadcast.get("carousel_params")), own.get("carousel") if isinstance(own, dict) else None
+	)
+
+
 def _classify(payload: dict[str, Any]) -> dict[str, Any]:
 	"""Classification of a BridgeError payload that carries a Graph code."""
 	return errors.classify(
@@ -233,6 +241,7 @@ def send_one(recipient_name: str) -> str:
 		return "skipped"
 
 	body, header, button = _merge_params(bc, row)
+	carousel = _merge_carousel(bc, row.get("params"))
 	opaque = row.get("opaque_ref") or recipient_name
 	use_mm = (bc.get("send_via") or "messages") == "marketing_messages"
 	# fail closed: the template row must still exist with a readable status and category (bridge policy is a
@@ -266,6 +275,7 @@ def send_one(recipient_name: str) -> str:
 			force_graph=True,
 			opaque_ref=opaque,
 			marketing_api=use_mm,
+			carousel_params=carousel or None,
 		)
 	except bridge.BridgeError as exc:
 		return _after_bridge_error(recipient_name, int(row.get("attempts") or 0), exc.payload or {}, bc.get("gateway"), to)

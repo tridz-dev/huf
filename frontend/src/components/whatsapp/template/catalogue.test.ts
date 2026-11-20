@@ -5,14 +5,13 @@ import { emptyDraft } from './draft';
 import { buildWizardPreview } from './preview';
 
 describe('catalogue', () => {
-  it('offers Marketing and Utility, disables Authentication, and flags the rest as coming soon', () => {
+  it('offers Marketing, Utility and Authentication, and flags the rest as coming soon', () => {
     const byId = (id: string) => kindById(id)!;
     expect(byId('marketing_default')).toMatchObject({ category: 'MARKETING', availability: 'available' });
     expect(byId('utility_default')).toMatchObject({ category: 'UTILITY', availability: 'available' });
-    expect(byId('authentication').availability).toBe('disabled');
-    expect(byId('authentication').disabledReason).toBeTruthy();
+    expect(byId('authentication_default')).toMatchObject({ category: 'AUTHENTICATION', availability: 'available' });
     for (const id of ['catalogue', 'flows', 'calling']) expect(byId(id).availability).toBe('comingSoon');
-    expect(TEMPLATE_KINDS.filter(isSelectableKind).map((k) => k.id)).toEqual(['marketing_default', 'utility_default']);
+    expect(TEMPLATE_KINDS.filter(isSelectableKind).map((k) => k.id)).toEqual(['marketing_default', 'marketing_carousel', 'utility_default', 'authentication_default']);
   });
 
   it('describes every kind', () => {

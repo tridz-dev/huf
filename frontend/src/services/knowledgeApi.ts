@@ -18,7 +18,7 @@ const KNOWLEDGE_SOURCE_LIST_FIELDS = [
   'status',
   'total_chunks',
   'total_inputs',
-  'last_indexed_at',
+  'last_indexed_at', 'modified',
   'disabled',
 ];
 
@@ -213,9 +213,12 @@ export async function getAdvancedConfigSchema(
 const KNOWLEDGE_INPUT_LIST_FIELDS = [
   'name',
   'knowledge_source',
+  'ingestion',
+  'skip_reason',
+  'external_key',
   'input_type',
   'file',
-  'file_name',
+  'file_name', 'creation',
   'file_type',
   'text',
   'url',
@@ -226,12 +229,28 @@ const KNOWLEDGE_INPUT_LIST_FIELDS = [
   'error_message',
 ];
 
+let inputTitleSupport: Promise<boolean> | null = null;
+
+/** True when the Knowledge Input doctype has the optional `title` field (needs a migrate). */
+export function knowledgeInputHasTitle(): Promise<boolean> {
+  if (!inputTitleSupport) {
+    inputTitleSupport = call
+      .get('frappe.desk.form.load.getdoctype', { doctype: doctype['Knowledge Input'] })
+      .then((r: { docs?: Array<{ fields?: Array<{ fieldname: string }> }> }) =>
+        !!r?.docs?.[0]?.fields?.some((f) => f.fieldname === 'title'),
+      )
+      .catch(() => false);
+  }
+  return inputTitleSupport;
+}
+
 export async function getKnowledgeInputs(
   knowledgeSource: string,
 ): Promise<KnowledgeInputDoc[]> {
   try {
+    const hasTitle = await knowledgeInputHasTitle();
     const inputs = await db.getDocList(doctype['Knowledge Input'], {
-      fields: KNOWLEDGE_INPUT_LIST_FIELDS,
+      fields: hasTitle ? [...KNOWLEDGE_INPUT_LIST_FIELDS, 'title'] : KNOWLEDGE_INPUT_LIST_FIELDS,
       filters: [['knowledge_source', '=', knowledgeSource]],
       limit: 1000,
       orderBy: { field: 'modified', order: 'desc' },
@@ -240,6 +259,22 @@ export async function getKnowledgeInputs(
   } catch (error) {
     handleFrappeError(error, 'Error fetching knowledge inputs');
   }
+}
+
+/** Per-status input counts for a source, computed server-side (no row cap). */
+export async function getKnowledgeInputStatusCounts(
+  knowledgeSource: string,
+): Promise<Array<{ status: string; count: number }>> {
+  const rows = await db.getDocList(doctype['Knowledge Input'], {
+    fields: ['status', { COUNT: '*', as: 'count' }] as never,
+    filters: [['knowledge_source', '=', knowledgeSource]],
+    groupBy: 'status',
+    limit: 50,
+  } as never);
+  return (rows as unknown as Array<{ status: string; count: number | string }>).map((r) => ({
+    status: r.status,
+    count: Number(r.count) || 0,
+  }));
 }
 
 export async function createKnowledgeInput(
@@ -269,5 +304,193 @@ export async function reprocessInput(knowledgeInput: string): Promise<void> {
     );
   } catch (error) {
     handleFrappeError(error, 'Error reprocessing knowledge input');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Bulk import (huf.ai.knowledge.bulk_sources_api and bulk_api)
+// ---------------------------------------------------------------------------
+
+const SOURCES_API = 'huf.ai.knowledge.bulk_sources_api';
+const BULK_API = 'huf.ai.knowledge.bulk_api';
+
+export type SourceKind = 'Upload' | 'Zip' | 'Directory' | 'S3' | 'SFTP';
+
+export type IngestionStatus =
+  | 'Scanning'
+  | 'Queued'
+  | 'Running'
+  | 'Completed'
+  | 'Completed with Errors'
+  | 'Failed'
+  | 'Cancelled';
+
+export const ACTIVE_INGESTION_STATUSES: readonly string[] = ['Scanning', 'Queued', 'Running'];
+
+export interface ImportOptions {
+  source_kinds: SourceKind[];
+  directory_roots: string[];
+  ssh_connections: Array<{ name: string; label: string }>;
+  s3_configured: boolean;
+  max_files: number;
+  max_file_mb?: number;
+  allowed_extensions: string[];
+}
+
+export type ImportConfig =
+  | { files: string[] }
+  | { file: string }
+  | { path: string }
+  | { bucket: string; prefix: string }
+  | { ssh_connection: string; root_path: string };
+
+export interface StartImportResult {
+  ingestion: string;
+  status: string;
+  source_kind: SourceKind;
+}
+
+export interface IngestionHeader {
+  name: string;
+  knowledge_source: string;
+  status: IngestionStatus;
+  total_items: number;
+  submitted_by?: string | null;
+  started_at?: string | null;
+  finished_at?: string | null;
+  error_message?: string | null;
+  modified?: string;
+  /** Not returned by older backends. */
+  source_kind?: SourceKind | null;
+  source_config?: Partial<{ bucket: string; prefix: string; ssh_connection: string; root_path: string; path: string }> | null;
+}
+
+export interface IngestionCounts {
+  pending: number;
+  processing: number;
+  indexed: number;
+  error: number;
+  skipped: number;
+  total: number;
+}
+
+export interface IngestionItem {
+  name: string;
+  external_key?: string | null;
+  file_name?: string | null;
+  title?: string | null;
+  status: 'Pending' | 'Processing' | 'Indexed' | 'Error' | 'Skipped';
+  chunks_created?: number;
+  attempts?: number;
+  error_message?: string | null;
+  skip_reason?: string | null;
+}
+
+export interface IngestionStatusResult {
+  ingestion: IngestionHeader;
+  counts: IngestionCounts;
+  /** Fraction between 0 and 1. */
+  progress: number;
+  chunks_written: number;
+  items: IngestionItem[];
+}
+
+export interface GetIngestionStatusParams {
+  includeItems?: boolean;
+  itemStatus?: string;
+  limit?: number;
+  start?: number;
+}
+
+function messageOf<T>(result: unknown): T {
+  const r = result as { message?: T } | undefined;
+  return (r?.message ?? (result as T)) as T;
+}
+
+export async function getImportOptions(knowledgeSource: string): Promise<ImportOptions> {
+  try {
+    const result = await call.get(`${SOURCES_API}.get_import_options`, {
+      knowledge_source: knowledgeSource,
+    });
+    return messageOf<ImportOptions>(result);
+  } catch (error) {
+    handleFrappeError(error, 'Error loading import options');
+  }
+}
+
+export async function startImport(
+  knowledgeSource: string,
+  sourceKind: SourceKind,
+  config: ImportConfig,
+): Promise<StartImportResult> {
+  try {
+    const result = await call.post(`${SOURCES_API}.start_import`, {
+      knowledge_source: knowledgeSource,
+      source_kind: sourceKind,
+      config,
+    });
+    return messageOf<StartImportResult>(result);
+  } catch (error) {
+    handleFrappeError(error, 'Error starting import');
+  }
+}
+
+export async function getIngestionStatus(
+  ingestion: string,
+  params: GetIngestionStatusParams = {},
+): Promise<IngestionStatusResult> {
+  try {
+    const { includeItems = false, itemStatus, limit = 50, start = 0 } = params;
+    const result = await call.get(`${BULK_API}.get_ingestion_status`, {
+      ingestion,
+      include_items: includeItems ? 1 : 0,
+      ...(itemStatus ? { item_status: itemStatus } : {}),
+      limit,
+      start,
+    });
+    return messageOf<IngestionStatusResult>(result);
+  } catch (error) {
+    handleFrappeError(error, 'Error loading import progress');
+  }
+}
+
+export async function listIngestions(
+  knowledgeSource: string,
+  limit: number = 20,
+): Promise<IngestionHeader[]> {
+  try {
+    const result = await call.get(`${BULK_API}.list_ingestions`, {
+      knowledge_source: knowledgeSource,
+      limit,
+    });
+    return messageOf<{ ingestions: IngestionHeader[] }>(result).ingestions ?? [];
+  } catch (error) {
+    handleFrappeError(error, 'Error loading imports');
+  }
+}
+
+export async function retryIngestion(
+  ingestion: string,
+  onlyFailed: boolean = true,
+): Promise<{ ingestion: string; status: string; rescheduled?: number }> {
+  try {
+    const result = await call.post(`${BULK_API}.retry_ingestion`, {
+      ingestion,
+      only_failed: onlyFailed ? 1 : 0,
+    });
+    return messageOf(result);
+  } catch (error) {
+    handleFrappeError(error, 'Error retrying import');
+  }
+}
+
+export async function cancelIngestion(
+  ingestion: string,
+): Promise<{ ingestion: string; status: string }> {
+  try {
+    const result = await call.post(`${BULK_API}.cancel_ingestion`, { ingestion });
+    return messageOf(result);
+  } catch (error) {
+    handleFrappeError(error, 'Error stopping import');
   }
 }

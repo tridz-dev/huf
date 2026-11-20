@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2, Loader2, Database, RefreshCcw, MoreVertical, Upload, Bot } from 'lucide-react';
+import { Plus, Pencil, Trash2, Loader2, Database, RefreshCcw, MoreVertical, Upload, SquareAsterisk } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { FilterBar } from '@/components/dashboard/filters/FilterBar';
+import { DropZone } from '@/components/patterns';
 import { DataRecordList } from '@/components/data-table/DataRecordList';
 import { DeleteTableDialog } from '@/components/data-table/DeleteTableDialog';
 import { BulkImportModal } from '@/components/data-table/BulkImportModal';
@@ -129,7 +130,7 @@ export function DataTableViewPage({ onHeaderActionsChange }: DataTableViewPagePr
 							Edit table
 						</DropdownMenuItem>
 						<DropdownMenuItem onClick={() => setAgentAccessOpen(true)}>
-							<Bot className="w-3.5 h-3.5 mr-2" />
+							<SquareAsterisk className="w-3.5 h-3.5 mr-2" />
 							Add to agent…
 						</DropdownMenuItem>
 						<DropdownMenuItem
@@ -216,16 +217,23 @@ export function DataTableViewPage({ onHeaderActionsChange }: DataTableViewPagePr
 
 				{/* Records table */}
 				{records.length === 0 && !recordsLoading ? (
-					<div className="flex flex-col items-center justify-center py-16 border border-dashed border-line bg-panel rounded-lg">
-						<Database className="w-10 h-10 text-steel-soft mb-3" />
-						<p className="text-sm text-steel mb-3">
-							No records in this table yet
-						</p>
-						<Button size="sm" onClick={handleAddRecord}>
-							<Plus className="w-3.5 h-3.5 mr-1.5" />
-							Add first record
-						</Button>
-					</div>
+					<DropZone
+						icon={Database}
+						title="No records in this table yet"
+						hint="Add records one by one, or import many at once from a file."
+						actions={
+							<>
+								<Button size="sm" onClick={handleAddRecord}>
+									<Plus className="w-3.5 h-3.5 mr-1.5" />
+									Add first record
+								</Button>
+								<Button size="sm" variant="outline" onClick={() => setImportModalOpen(true)}>
+									<Upload className="w-3.5 h-3.5 mr-1.5" />
+									Import
+								</Button>
+							</>
+						}
+					/>
 				) : (
 					<DataRecordList
 						records={records}

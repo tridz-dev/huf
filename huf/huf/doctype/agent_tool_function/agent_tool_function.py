@@ -13,33 +13,12 @@ from frappe.model.document import Document
 from huf.ai.tools.registry import get_hook_declared_function_paths
 
 
-# Identifier parameters the built-in document operations use (see huf/ai/tools/functions.py and
-# prepare_function_params). They are arguments to the operation, not fields of the
-# reference DocType, so they must not be checked against the DocType meta.
-RESERVED_IDENTIFIER_PARAMS = {
-	"Get Document": {"document_id"},
-	"Get Multiple Documents": {"document_ids"},
-	"Update Document": {"document_id"},
-	"Update Multiple Documents": {"document_id"},
-	"Delete Document": {"document_id"},
-	"Delete Multiple Documents": {"document_ids"},
-	"Submit Document": {"document_id"},
-	"Cancel Document": {"document_id"},
-	"Get Amended Document": {"document_id"},
-	"Attach File to Document": {"document_id"},
-}
-
-
-def _json_schema_type(param_type):
-	"""Map a stored Agent Function Params `type` value to a valid JSON Schema type.
-
-	"float" is offered in the doctype's Select field for UX familiarity but is not a
-	valid JSON Schema type (json-schema.org only defines number/integer/string/boolean/
-	object/array/null); LLM providers reject or mishandle tool schemas containing it.
-	"""
-	if param_type == "float":
-		return "number"
-	return param_type
+from huf.huf.doctype.agent_tool_function.tool_function_helpers import (  # noqa: F401
+	OTP_TOOL_DENYLIST,
+	RESERVED_IDENTIFIER_PARAMS,
+	_json_schema_type,
+	is_otp_tool_path,
+)
 
 
 def _annotation_to_param_type(annotation):
@@ -819,6 +798,8 @@ class AgentToolFunction(Document):
 			self.params = json.dumps(json.loads(self.params), indent=4)
 
 	def validate(self):
+		if is_otp_tool_path(self.function_path):
+			frappe.throw(_("OTP functions cannot be exposed as agent tools."))
 
 		INVALID_FUNCTION_NAMES = [
 			"get_document",

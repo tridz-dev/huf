@@ -64,6 +64,15 @@ class _Base(unittest.TestCase):
 	def setUp(self):
 		p = patch("huf.ai.whatsapp.management.frappe")
 		self.frappe = p.start()
+		_extra = patch("huf.ai.whatsapp.setup.credential_view.frappe", self.frappe)
+		_extra.start()
+		self.addCleanup(_extra.stop)
+		_extra = patch("huf.ai.whatsapp.broadcast.support.api_controls.frappe", self.frappe)
+		_extra.start()
+		self.addCleanup(_extra.stop)
+		_extra = patch("huf.ai.whatsapp.broadcast.support.api_helpers.frappe", self.frappe)
+		_extra.start()
+		self.addCleanup(_extra.stop)
 		patch("huf.ai.whatsapp.broadcast.api.frappe", self.frappe).start()
 		patch("huf.ai.whatsapp.broadcast.api_read.frappe", self.frappe).start()
 		self.addCleanup(patch.stopall)
@@ -132,8 +141,8 @@ class TestStartAndPreview(_Base):
 		limits = MagicMock()
 		limits.preview.return_value = {}
 		self.frappe.db.count.return_value = int(token)
-		with patch.dict(sys.modules, {"huf.ai.whatsapp.broadcast.cost": cost, "huf.ai.whatsapp.broadcast.limits": limits}), \
-			patch("huf.ai.whatsapp.broadcast.cost", cost, create=True), patch("huf.ai.whatsapp.broadcast.limits", limits, create=True):
+		with patch.dict(sys.modules, {"huf.ai.whatsapp.broadcast.support.cost": cost, "huf.ai.whatsapp.broadcast.limits": limits}), \
+			patch("huf.ai.whatsapp.broadcast.support.cost", cost, create=True), patch("huf.ai.whatsapp.broadcast.limits", limits, create=True):
 			return mgmt.preview_broadcast(BC)
 
 	def test_confirm_required_reflects_count_and_persists_estimate(self):
@@ -158,7 +167,7 @@ class TestMasking(_Base):
 
 	def test_read_only_user_gets_masked_numbers(self):
 		r = self._list(False)
-		self.assertEqual(r["recipient"], "*******1111")
+		self.assertEqual(r["recipient"], "****1111")
 		self.assertNotIn("15550001111", json.dumps(r))
 
 	def test_writer_gets_full_numbers(self):

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Bot, Loader2, Search } from 'lucide-react';
+import { SquareAsterisk, Loader2, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import {
@@ -110,7 +110,7 @@ export function ConnectChannelAgentModal({
       <DialogScrollContent className="sm:max-w-lg">
         <DialogScrollHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Bot className="h-5 w-5" />
+            <SquareAsterisk className="h-5 w-5" />
             Use in agent
           </DialogTitle>
           <DialogDescription>

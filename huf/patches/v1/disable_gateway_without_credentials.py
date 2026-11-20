@@ -5,7 +5,7 @@ disables any Gateway whose required credentials are not configured, logs remedia
 steps, and marks it disabled in the description field.
 
 Affected credentials per provider (see WP-04 credential-discovery mapping):
-- SMS: auth_token (when using Twilio, not frappe_sms)
+- SMS: explicit `mode` (twilio | send_only | frappe_sms); twilio/send_only need account_sid + auth_token
 - Email: webhook_secret
 - Telegram: webhook_secret
 - WhatsApp: app_secret
@@ -62,8 +62,7 @@ def _check_required_credentials(gateway) -> list[str]:
     credentials = _load_integration_credentials(gateway.integration_settings)
 
     # Per credential-discovery mapping (WP-04 before ST-04.4)
-    # SMS is handled separately below (its requirement is conditional on
-    # account_sid != "frappe_sms"), so it is intentionally not listed here.
+    # SMS is handled separately below (its requirement depends on `mode`).
     required_by_provider = {
         "email": [("webhook_secret", "Email Webhook Secret")],
         "telegram": [("webhook_secret", "Telegram Webhook Secret")],
@@ -74,13 +73,15 @@ def _check_required_credentials(gateway) -> list[str]:
         "slack": [("signing_secret", "Slack Signing Secret")],
     }
 
-    # Check SMS: special case for frappe_sms mode (doesn't need auth_token)
+    # Check SMS: explicit mode credential (twilio | send_only | frappe_sms)
     if gateway.provider == "SMS":
-        account_sid = credentials.get("account_sid", "").strip()
-        if account_sid != "frappe_sms":
-            # Twilio mode: auth_token is required
-            if not credentials.get("auth_token"):
-                missing.append("auth_token (Twilio Auth Token, required when using Twilio mode)")
+        mode = (credentials.get("mode") or "").strip().lower()
+        if mode not in ("twilio", "send_only", "frappe_sms"):
+            missing.append("mode (SMS mode: twilio, send_only or frappe_sms)")
+        elif mode in ("twilio", "send_only"):
+            for key in ("account_sid", "auth_token"):
+                if not credentials.get(key):
+                    missing.append(f"{key} (Twilio credential, required in {mode} mode)")
 
     # Check other providers
     provider_lower = gateway.provider.lower().replace(" ", "_")

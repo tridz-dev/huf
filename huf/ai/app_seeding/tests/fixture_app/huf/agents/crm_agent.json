@@ -1,0 +1,1 @@
+{"agent_name": "n05_fixture_agent", "description": "Fixture CRM agent", "prompt_mode": "Local", "instructions": "Fixture instructions for seeding test.", "agent_icon": "SquareAsterisk", "allowed_roles": [{"role": "N05 Manager"}], "tools": ["n05_fixture_lookup", "n05_fixture_send", "n05_fixture_open"]}

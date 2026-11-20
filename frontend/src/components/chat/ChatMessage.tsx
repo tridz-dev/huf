@@ -19,6 +19,8 @@ import { Image } from '@/components/ai-elements/image';
 import { Video } from '@/components/ai-elements/video';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { MessageType } from './types';
+import { ToolConfirmationCard } from './confirmation/ToolConfirmationCard';
+import { parseConfirmationRequest, type ToolConfirmation } from '@/services/toolConfirmation/toolConfirmationApi';
 import { MessageContentWithArtifacts } from './MessageContentWithArtifacts';
 import { ChatAttachmentCard } from './ChatAttachmentCard';
 import {
@@ -62,6 +64,10 @@ interface ChatMessageProps {
     onRegenerate?: (userContent: string) => void;
     /** Sends text as a new user message — wired to the ask-user "answer" buttons. */
     onSendText?: (text: string) => void;
+    /** Latest known confirmation states (realtime / decide results) keyed by confirmation id. */
+    confirmationOverrides?: Record<string, ToolConfirmation>;
+    onConfirmationUpdated?: (confirmation: ToolConfirmation) => void;
+    onConfirmationDecided?: (confirmation: ToolConfirmation) => void;
 }
 
 export function ChatMessage({
@@ -74,6 +80,9 @@ export function ChatMessage({
     precedingUserMessage,
     onRegenerate,
     onSendText,
+    confirmationOverrides,
+    onConfirmationUpdated,
+    onConfirmationDecided,
 }: ChatMessageProps) {
     const isUser = message.from === 'user';
     const isAssistant = message.from === 'assistant';
@@ -87,11 +96,9 @@ export function ChatMessage({
         ? () => onRegenerate(precedingUserMessage)
         : undefined;
 
-    // TODO(tool-call-approval-api): there is no backend/socket endpoint yet to
-    // approve or deny a pending tool call (only flow-run-level approvals exist,
-    // see ApprovalsBell.tsx / flowApi.ts). These are UI-only stubs so the
-    // "approval-requested" state is visually complete; wire them to a real
-    // call/agent-run approve-deny endpoint once one exists.
+    // N06 confirm-before-send approvals are handled by ToolConfirmationCard
+    // (huf.ai.tool_confirmation.decide). Generic tool-call Allow/Deny below has
+    // no backend endpoint; it stays a UI-only stub for non-N06 tool states.
     const handleToolCallApprove = (toolCallId: string) => {
         console.warn('tool-call approval API not yet implemented', { toolCallId });
         toast.info("Approving tool calls isn't wired up yet.");
@@ -165,6 +172,24 @@ export function ChatMessage({
             navigate(`/flows/${encodeURIComponent(procedureRunId)}`);
         }
     };
+
+    // N06: a persisted `confirmation_request` Tool Result renders as an inline
+    // approval card, regardless of the tool-details toggle (approvals must be seen).
+    if (message.kind === 'Tool Result') {
+        const parsed = parseConfirmationRequest(message.versions[0]?.content)
+            ?? parseConfirmationRequest(message.tools?.[0]?.result);
+        if (parsed) {
+            return (
+                <div className="flex w-full flex-col">
+                    <ToolConfirmationCard
+                        confirmation={confirmationOverrides?.[parsed.id] ?? parsed}
+                        onUpdated={onConfirmationUpdated}
+                        onDecided={onConfirmationDecided}
+                    />
+                </div>
+            );
+        }
+    }
 
     // Skip rendering ALL tool-related messages when tool execution details are hidden
     if (!showToolExecutionDetails) {

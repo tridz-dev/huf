@@ -333,13 +333,14 @@ class TestZvecBackend(unittest.TestCase):
 		self.assertEqual(filter_expr, "input_id = 'x\\' OR \\'1\\'=\\'1'")
 		self.mock_collection.delete_by_filter.assert_not_called()
 
-	def test_delete_chunks_error_returns_zero(self):
-		"""A zvec failure during delete is logged and reported as 0."""
+	def test_delete_chunks_error_propagates(self):
+		"""A zvec failure during delete propagates so re-index never appends duplicates."""
 		self._initialize()
 		self.mock_collection.stats = SimpleNamespace(doc_count=5)
 		self.mock_collection.query.side_effect = RuntimeError("boom")
 
-		self.assertEqual(self.backend.delete_chunks("input_1"), 0)
+		with self.assertRaises(RuntimeError):
+			self.backend.delete_chunks("input_1")
 
 	def test_clear(self):
 		"""Clear destroys the on-disk collection and recreates it empty."""

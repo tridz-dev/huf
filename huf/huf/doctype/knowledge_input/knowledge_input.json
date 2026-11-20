@@ -6,14 +6,20 @@
  "engine": "InnoDB",
  "field_order": [
   "knowledge_source",
+  "ingestion",
   "input_type",
   "file",
   "file_name",
   "file_type",
+  "title",
   "text",
   "url",
+  "external_key",
+  "external_checksum",
   "status_section",
   "status",
+  "skip_reason",
+  "attempts",
   "source_hash",
   "chunks_created",
   "character_count",
@@ -28,6 +34,13 @@
    "label": "Knowledge Source",
    "options": "Knowledge Source",
    "reqd": 1
+  },
+  {
+   "fieldname": "ingestion",
+   "fieldtype": "Link",
+   "label": "Ingestion",
+   "options": "Knowledge Ingestion",
+   "search_index": 1
   },
   {
    "fieldname": "input_type",
@@ -63,15 +76,47 @@
    "label": "Text"
   },
   {
+   "description": "Optional display name. Used as the source title in answers.",
+   "fieldname": "title",
+   "fieldtype": "Data",
+   "label": "Title"
+  },
+  {
    "depends_on": "eval:doc.input_type == 'URL'",
    "fieldname": "url",
    "fieldtype": "Data",
    "label": "URL"
   },
   {
+   "fieldname": "external_key",
+   "fieldtype": "Data",
+   "label": "External Key",
+   "length": "255",
+   "search_index": 1
+  },
+  {
+   "fieldname": "external_checksum",
+   "fieldtype": "Data",
+   "label": "External Checksum",
+   "length": "64"
+  },
+  {
    "fieldname": "status_section",
    "fieldtype": "Section Break",
    "label": "Status"
+  },
+  {
+   "default": "0",
+   "fieldname": "attempts",
+   "fieldtype": "Int",
+   "label": "Attempts",
+   "read_only": 1
+  },
+  {
+   "fieldname": "skip_reason",
+   "fieldtype": "Select",
+   "label": "Skip Reason",
+   "options": "\nDuplicate\nUnchanged\nNo Text\nToo Large\nUnsupported\nUnsafe"
   },
   {
    "fieldname": "source_hash",
@@ -109,13 +154,13 @@
    "fieldname": "status",
    "fieldtype": "Select",
    "label": "Status",
-   "options": "Pending\nProcessing\nIndexed\nError",
+   "options": "Pending\nProcessing\nIndexed\nError\nSkipped",
    "read_only": 1
   }
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-03-03 04:06:33.576387",
+ "modified": "2026-11-19 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Knowledge Input",

@@ -13,41 +13,8 @@ from huf.ai.conversation.history import (  # noqa: F401
     safe_history_slice,
     safe_history_split,
 )
+from huf.ai.conversation.tool_results import _synthesize_assistant_tool_call, supersede_duplicate_tool_results
 from huf.permissions import has_capability
-
-
-def _synthesize_assistant_tool_call(tool_call_id: str, conversation_name: str | None) -> dict | None:
-    """
-    Try to rebuild an assistant tool_calls message from the persisted
-    Agent Tool Call document. Returns None if no matching record exists.
-    """
-    if not tool_call_id or not conversation_name:
-        return None
-    try:
-        doc = frappe.db.get_value(
-            "Agent Tool Call",
-            {"conversation": conversation_name, "call_id": tool_call_id},
-            ["tool", "tool_args"],
-            as_dict=True,
-        )
-        if not doc:
-            return None
-        return {
-            "role": "assistant",
-            "content": None,
-            "tool_calls": [
-                {
-                    "id": tool_call_id,
-                    "type": "function",
-                    "function": {
-                        "name": doc.tool or "",
-                        "arguments": doc.tool_args or "{}",
-                    },
-                }
-            ],
-        }
-    except (frappe.DoesNotExistError, frappe.DataError):
-        return None
 
 
 def update_tool_call_message(
@@ -154,6 +121,8 @@ def repair_message_sequence(messages: list, conversation_name: str | None = None
     """
     if not messages:
         return messages
+
+    messages = supersede_duplicate_tool_results(messages)
 
     # First pass: identify assistant declarations and tool results.
     assistant_declarations = []  # (index, message, call_ids)
@@ -518,7 +487,7 @@ class ConversationManager:
                     result.extend(ctx)
                 else:
                     result.append(ctx)
-        return result
+        return supersede_duplicate_tool_results(result)
 
     def _resolve_tool_call_details(self, tool_call_id: str, tool_call_link: str):
         """Return (call_id, tool_name, tool_args) for a tool call, preferring the

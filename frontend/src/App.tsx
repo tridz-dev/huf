@@ -12,7 +12,7 @@ import { HomeHeaderActions } from './components/HomeHeaderActions';
 import { AgentsHeaderActions } from './components/AgentsHeaderActions';
 import { McpHeaderActions } from './components/McpHeaderActions';
 import { FlowsListHeaderActions } from './components/FlowsListHeaderActions';
-import { KnowledgeHeaderActions } from './components/KnowledgeHeaderActions';
+import { KnowledgeHeaderActions, NewKnowledgeRedirect } from './components/KnowledgeHeaderActions';
 import { SkillsHeaderActions } from './components/skills/SkillsHeaderActions';
 import { AgentPromptsHeaderActions } from './components/AgentPromptsHeaderActions';
 import { AgentSummaryPromptsHeaderActions } from './components/AgentSummaryPromptsHeaderActions';
@@ -118,10 +118,7 @@ import { useEffect } from 'react';
 import { RouteErrorBoundary, clearChunkReloadFlag } from './components/RouteErrorBoundary';
 import { initTheme } from './lib/personalization';
 import { SocketProvider } from './contexts/SocketContext';
-import {
-  checkStreamingAvailable,
-  setStreamingAvailable,
-} from './services/streamChatApi';
+import { checkStreamingAvailable, setStreamingAvailable } from './services/streamChatApi';
 const TelegramAppPage = lazy(() => import('./pages/TelegramAppPage'));
 const MembersPage = lazy(() => import('./pages/MembersPage'));
 const HufRoleFormPage = lazy(() => import('./pages/HufRoleFormPage'));
@@ -723,6 +720,7 @@ function AppShell() {
               </ProtectedRoute>
             }
           />
+          <Route path="/knowledge/new" element={<ProtectedRoute><NewKnowledgeRedirect /></ProtectedRoute>} />
           <Route
             path="/knowledge/:id"
             element={

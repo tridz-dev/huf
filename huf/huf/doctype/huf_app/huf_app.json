@@ -12,6 +12,10 @@
     "route",
     "alias",
     "www_template",
+    "theme_color",
+    "pwa_scope",
+    "manifest_url",
+    "static_routes",
     "delivery",
     "icon",
     "icon_source",
@@ -97,6 +101,30 @@
       "fieldname": "www_template",
       "fieldtype": "Data",
       "label": "WWW Template"
+    },
+    {
+      "description": "PWA theme color from the manifest.",
+      "fieldname": "theme_color",
+      "fieldtype": "Data",
+      "label": "Theme Color"
+    },
+    {
+      "description": "PWA scope from the manifest (manifest field: scope).",
+      "fieldname": "pwa_scope",
+      "fieldtype": "Data",
+      "label": "PWA Scope"
+    },
+    {
+      "description": "PWA web manifest URL from the manifest.",
+      "fieldname": "manifest_url",
+      "fieldtype": "Data",
+      "label": "Manifest URL"
+    },
+    {
+      "description": "Allowlist of files (one per line, relative to the www template directory) served at <route>/<file> by HufAppPortalRenderer.",
+      "fieldname": "static_routes",
+      "fieldtype": "Small Text",
+      "label": "Static Routes"
     },
     {
       "default": "Other",

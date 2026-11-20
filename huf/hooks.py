@@ -107,7 +107,6 @@ page_renderer = [
     "huf.ai.app_portal_renderer.HufAppPortalRenderer",
 ]
 
-
 # application home page (will override Website Settings)
 # home_page = "login"
 
@@ -143,6 +142,7 @@ after_app_install = [
 ]
 after_migrate = [
     "huf.install.after_migrate",
+    "huf.ai.app_seeding.seeder.on_migrate",
     "huf.ai.skills.hooks.sync_app_skills",
     "huf.install.seed_voice_engines",
     "huf.ai.channels.run_as.ensure_all_audit_fields",
@@ -374,6 +374,7 @@ scheduler_events = {
             "huf.ai.flow.triggers.expire_due_approvals",
             # Flow runs parked on an Execute code step: continue finished ones, give up on lost ones.
             "huf.ai.flow.code_node.sweep_code_waits",
+            "huf.ai.knowledge.bulk_recovery.recover_stalled_ingestions",  # bulk ingestion safety net
         ],
         "*/10 * * * *": [
             "huf.ai.gateway_service.reap_stuck_gateway_events",
@@ -397,6 +398,7 @@ scheduler_events = {
         ]
     },
     "hourly": [
+        "huf.ai.tool_confirmation.sweep_expired",
         "huf.ai.channels.commerce.cart_recovery.run_cart_recovery",
         "huf.ai.mcp_client.auto_sync_mcp_server_tools",
         "huf.ai.mcp_oauth.auto_refresh_oauth_tokens",
@@ -404,7 +406,6 @@ scheduler_events = {
         "huf.ai.meetings.meeting_recording.recover_stuck_uploaded_chunks"
     ]
 }
-
 
 # Testing
 # -------
@@ -467,14 +468,15 @@ huf_tools = [
     "huf.ai.tools.gateways.reply.GATEWAY_REPLY_TOOLS",
     "huf.ai.tools.gateways.send.GATEWAY_SEND_TOOLS",
     "huf.ai.tools.gateways.handoff.GATEWAY_HANDOFF_TOOLS",
+    "huf.ai.tools.messaging.whatsapp_broadcast_tools.WHATSAPP_BROADCAST_TOOLS",
 ]
 
-# Knowledge Backends Hook
-# -----------------------
-# Register additional knowledge backends with the hook-based backend
-# registry (see huf.ai.knowledge.backends). Built-in backends
-# (sqlite_fts, sqlite_vec, chroma, pgvector, zvec, weaviate, faiss, pinecone) cannot be overridden.
+# App-shipped runtime skills: {skill_name, function_path -> SKILL.md manifest},
+# upserted as "App Provided" Skills by huf.ai.skills.hooks.sync_app_skills.
+huf_skills = [{"skill_name": "huf_knowledge_skill", "function_path": "huf.ai.skills.builtin_knowledge.get_knowledge_skill_manifest"}]
 
+# Extra knowledge backends for the registry in huf.ai.knowledge.backends (built-ins
+# sqlite_fts/sqlite_vec/chroma/pgvector/zvec/weaviate/faiss/pinecone cannot be overridden).
 huf_knowledge_backends = {
     "redis": "huf.ai.knowledge.backends.redis_backend.RedisBackend",
 }

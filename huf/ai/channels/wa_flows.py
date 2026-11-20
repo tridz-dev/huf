@@ -13,7 +13,7 @@ from huf.ai.channels import run_as
 from huf.ai.channels.pipeline import Decision
 from huf.ai.gateway_adapters import whatsapp_bridge as bridge
 from huf.ai.gateway_adapters import whatsapp_inbound as inbound
-from huf.ai.whatsapp import token_check
+from huf.ai.whatsapp.setup import token_check
 
 ADMIN_ROLES = ("System Manager", "Huf Admin")
 TOKEN_PREFIX = "huf:"
@@ -124,7 +124,10 @@ def send_flow(gateway: str, to: str, flow_name: str, cta: str, body: str = "", s
 	if isinstance(account, dict):
 		return account
 	try:
-		res = (send or bridge.send_interactive)(account, to, "flow", spec)
+		res = (
+			send(account, to, "flow", spec) if send
+			else bridge.send_interactive(account, to, "flow", spec, gateway_name=gateway)
+		)
 	except bridge.BridgeError as exc:
 		return dict(exc.payload, success=False)
 	return {"success": True, "flow_token": spec["flow_token"], "message_id": (res or {}).get("message_id")}

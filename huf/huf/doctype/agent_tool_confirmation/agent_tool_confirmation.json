@@ -1,0 +1,170 @@
+{
+ "actions": [],
+ "autoname": "ATC-.YYYY.-.#####",
+ "creation": "2026-11-17 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "user",
+  "tool",
+  "state",
+  "conversation",
+  "agent_run",
+  "agent",
+  "tool_call_id",
+  "expires_at",
+  "args_hash",
+  "summary",
+  "redacted_args",
+  "raw_args",
+  "decision",
+  "decided_by",
+  "decided_at",
+  "result",
+  "error"
+ ],
+ "fields": [
+  {
+   "fieldname": "user",
+   "fieldtype": "Link",
+   "label": "Requesting User",
+   "options": "User",
+   "reqd": 1,
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "tool",
+   "fieldtype": "Data",
+   "label": "Tool",
+   "reqd": 1,
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "state",
+   "fieldtype": "Select",
+   "label": "State",
+   "options": "pending\napproved\ndenied\nexpired\nexecuted\nfailed",
+   "default": "pending",
+   "read_only": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "conversation",
+   "fieldtype": "Data",
+   "label": "Conversation",
+   "read_only": 1
+  },
+  {
+   "fieldname": "agent_run",
+   "fieldtype": "Data",
+   "label": "Agent Run",
+   "read_only": 1
+  },
+  {
+   "fieldname": "agent",
+   "fieldtype": "Data",
+   "label": "Agent",
+   "read_only": 1
+  },
+  {
+   "fieldname": "tool_call_id",
+   "fieldtype": "Data",
+   "label": "Tool Call ID",
+   "read_only": 1
+  },
+  {
+   "fieldname": "expires_at",
+   "fieldtype": "Datetime",
+   "label": "Expires At",
+   "reqd": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "args_hash",
+   "fieldtype": "Data",
+   "label": "Canonical Args Hash",
+   "reqd": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "summary",
+   "fieldtype": "Code",
+   "label": "Summary",
+   "options": "JSON",
+   "read_only": 1
+  },
+  {
+   "fieldname": "redacted_args",
+   "fieldtype": "Code",
+   "label": "Redacted Args",
+   "options": "JSON",
+   "read_only": 1
+  },
+  {
+   "fieldname": "raw_args",
+   "fieldtype": "Long Text",
+   "label": "Raw Args (cleared after decision)",
+   "read_only": 1,
+   "hidden": 1,
+   "permlevel": 1
+  },
+  {
+   "fieldname": "decision",
+   "fieldtype": "Select",
+   "label": "Decision",
+   "options": "\nApproved\nDenied",
+   "read_only": 1
+  },
+  {
+   "fieldname": "decided_by",
+   "fieldtype": "Link",
+   "label": "Decided By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "decided_at",
+   "fieldtype": "Datetime",
+   "label": "Decided At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "result",
+   "fieldtype": "Long Text",
+   "label": "Result",
+   "read_only": 1
+  },
+  {
+   "fieldname": "error",
+   "fieldtype": "Small Text",
+   "label": "Error",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-11-17 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Huf",
+ "name": "Agent Tool Confirmation",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "read": 1,
+   "role": "System Manager",
+   "report": 1,
+   "export": 1
+  },
+  {
+   "read": 1,
+   "role": "System Manager",
+   "permlevel": 1
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

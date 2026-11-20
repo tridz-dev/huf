@@ -25,7 +25,16 @@
   "sent_at",
   "delivered_at",
   "read_at",
-  "failed_at"
+  "failed_at",
+  "section_failover",
+  "fallback_channels",
+  "fallback_body",
+  "fallback_body_kind",
+  "fallback_sms_gateway",
+  "fallback_email_gateway",
+  "fallback_email",
+  "channel_delivered",
+  "fallback_attempts"
  ],
  "fields": [
   {
@@ -180,6 +189,68 @@
    "fieldname": "failed_at",
    "fieldtype": "Datetime",
    "label": "Failed at",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_failover",
+   "fieldtype": "Section Break",
+   "label": "Failover",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "fallback_channels",
+   "fieldtype": "Small Text",
+   "label": "Fallback channels",
+   "description": "Ordered JSON list, e.g. [\"sms\",\"email\"]. Needs fallback_body.",
+   "read_only": 1
+  },
+  {
+   "fieldname": "fallback_body",
+   "fieldtype": "Text",
+   "label": "Fallback body",
+   "description": "Plain text sent on fallback legs (required; never derived from the template).",
+   "read_only": 1
+  },
+  {
+   "fieldname": "fallback_body_kind",
+   "fieldtype": "Select",
+   "label": "Fallback body kind",
+   "description": "marketing needs an explicit marketing opt-in on each channel; transactional does not. Never otp/utility.",
+   "read_only": 1,
+   "options": "\nmarketing\ntransactional"
+  },
+  {
+   "fieldname": "fallback_sms_gateway",
+   "fieldtype": "Link",
+   "options": "Gateway",
+   "label": "Fallback SMS gateway",
+   "read_only": 1
+  },
+  {
+   "fieldname": "fallback_email_gateway",
+   "fieldtype": "Link",
+   "options": "Gateway",
+   "label": "Fallback email gateway",
+   "read_only": 1
+  },
+  {
+   "fieldname": "fallback_email",
+   "fieldtype": "Data",
+   "label": "Fallback email",
+   "options": "Email",
+   "read_only": 1
+  },
+  {
+   "fieldname": "channel_delivered",
+   "fieldtype": "Data",
+   "label": "Channel delivered",
+   "read_only": 1
+  },
+  {
+   "fieldname": "fallback_attempts",
+   "fieldtype": "Code",
+   "options": "JSON",
+   "label": "Fallback attempts",
    "read_only": 1
   }
  ],

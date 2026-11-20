@@ -394,7 +394,8 @@ class FaissBackend(LlamaIndexBackend, KnowledgeBackend):
 			return len(doomed)
 		except Exception as exc:
 			frappe.logger().warning(f"FAISS delete_chunks error for {input_id}: {exc!s}")
-			return 0
+			# Propagate: swallowing would let add_chunks append duplicates on re-index.
+			raise
 
 	def clear(self) -> None:
 		"""Reset the index and sidecar to empty and persist them."""

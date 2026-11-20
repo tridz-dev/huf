@@ -134,7 +134,7 @@ class Gateway(Document):
         if not (self.get("whatsapp_account") or "").strip() and self.phone_number_id:
             # Saving the credential created (or found) the account for this number: link it here too,
             # so a gateway connected to an existing credential never needs a manual link.
-            from huf.ai.whatsapp.credential_sync import account_for_phone
+            from huf.ai.whatsapp.setup.credential_sync import account_for_phone
 
             self.whatsapp_account = account_for_phone(self.phone_number_id)
         if not self.is_enabled:

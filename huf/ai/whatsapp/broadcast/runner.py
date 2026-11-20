@@ -34,9 +34,7 @@ RECIPIENT = "WhatsApp Broadcast Recipient"
 QUEUE = "long"
 HELD_STATUS = "held_for_quality_assessment"
 
-
 # --------------------------------------------------------------------------- helpers
-
 
 def _lock_key(broadcast: str) -> str:
 	return f"huf:{frappe.local.site}:wa_broadcast_tick:{broadcast}"
@@ -131,6 +129,20 @@ def _log_event(event: str, broadcast: str, **extra) -> None:
 # --------------------------------------------------------------------------- lifecycle
 
 
+def _refresh_external_audiences(broadcast: str) -> None:
+	"""Before a first start: let apps that manage an included audience refresh it, then rebuild the recipient rows.
+	Fails closed with a StartRefused when a refresh fails."""
+	from huf.ai.whatsapp.broadcast.audiences import external, wiring
+
+	try:
+		refreshed = external.run_refresh_hooks(broadcast)
+	except external.RefreshFailed as exc:
+		raise StartRefused("audience_refresh_failed", str(exc)) from exc
+	if refreshed:
+		wiring.resnapshot(broadcast)
+		frappe.db.commit()  # the start below refuses to run over uncommitted writes
+
+
 def _begin(
 	broadcast, user, *, allowed_from, resuming=False, override_warnings=None, expected_count=None
 ) -> dict:
@@ -142,6 +154,8 @@ def _begin(
 		frappe.throw(_("Broadcast has no Gateway"))
 	if not _user_can_write(user, doc.gateway):
 		frappe.throw(_("Not permitted to send from this Gateway"), frappe.PermissionError)
+	if not resuming:
+		_refresh_external_audiences(broadcast)
 
 	preview = broadcast_limits.preview(broadcast) or {}
 	deferred = int(frappe.db.count(RECIPIENT, {"broadcast": broadcast, "status": "deferred"}) or 0)

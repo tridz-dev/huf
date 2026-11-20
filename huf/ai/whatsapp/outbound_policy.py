@@ -90,6 +90,34 @@ def check_recipient(gateway: str | None, recipient: Any) -> None:
 			)
 
 
+PRE_SEND_KINDS = ("text", "template", "media", "other")
+
+
+def check_pre_send(gateway: str | None, to: Any, kind: str, context: dict[str, Any] | None = None) -> None:
+	"""Run the external ``huf_gateway_pre_send`` hook right before a Graph POST (fail closed).
+
+	``kind`` is one of ``text`` / ``template`` / ``media`` / ``other``. ``context`` is a small dict, e.g.
+	``{"source": "<caller>", "consent_confirmation": bool, "subtype": "..."}``; ``consent_confirmation`` is True
+	only for the STOP/START confirmation reply so a guard can let it through to an opted-out contact.
+
+	Hook handlers (registered under ``huf_gateway_pre_send`` in an external app's ``hooks.py``) are called as
+	``handler(gateway=, to=, kind=, context=)`` and MUST be side-effect-free (this gate only): observe and decide only, no
+	database writes, no messages, no network. Return ``None`` to allow; ANY other return value (including
+	``False``) or an exception refuses with
+	:class:`OutboundRefused` code ``blocked_by_hook`` (non-retryable). No hooks registered means allow.
+
+	``gateway`` None: a no-op without a registered hook, else refused (fail closed, ``blocked_by_hook``).
+	"""
+	if not gateway:
+		if not frappe.get_hooks("huf_gateway_pre_send"):
+			return
+		frappe.logger("huf").warning(f"huf_gateway_pre_send refused: no gateway, kind={kind}")
+		raise OutboundRefused("Blocked by gateway hook", "blocked_by_hook")
+	from huf.ai.whatsapp.gateway_hooks import gate_hook
+
+	gate_hook("huf_gateway_pre_send", gateway=gateway, to=to, kind=kind, context=dict(context or {}))
+
+
 def check_template(gateway: str | None, recipient: Any, row: dict[str, Any] | None) -> None:
 	"""Refuse a known template that is not APPROVED, and MARKETING to a contact who stopped marketing."""
 	if not row:

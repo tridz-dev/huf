@@ -1,4 +1,123 @@
+import json
+
 import frappe
+
+# Seed-owned fields = every key in the seed payload except provenance/meta.
+# `seed_snapshot` (hidden JSON on the doc) records the values last written by
+# the seeder; a field whose current value differs from its snapshot was edited
+# by an admin and is not overwritten on re-seed. Docs without a snapshot
+# (first adoption) take the seed values.
+_SEED_META_KEYS = {"source_app", "source_file", "doctype", "name", "seed_snapshot"}
+
+
+def _norm(value):
+    if isinstance(value, list):
+        return [dict(r) if isinstance(r, dict) else r for r in value]
+    return value
+
+
+def _seed_values(data: dict) -> dict:
+    return {k: _norm(v) for k, v in data.items() if k not in _SEED_META_KEYS}
+
+
+def _current(doc, key, seeded):
+    cur = doc.get(key)
+    if isinstance(seeded, list):
+        rows = []
+        for i, srow in enumerate(seeded):
+            row = cur[i] if i < len(cur or []) else None
+            if row is None:
+                return None
+            rows.append({k: row.get(k) for k in srow})
+        return rows if len(cur or []) == len(seeded) else None
+    return cur
+
+
+# Only-tighten security fields: a re-seed (or first adoption of an existing doc) may never
+# loosen them. value = the tight value for Check fields.
+_TIGHT_CHECKS = {"requires_confirmation": 1, "is_outbound": 1, "allowed_for_guest": 0}
+_ROLE_TEXT_FIELDS = ("required_roles",)
+_ROLE_TABLE_FIELDS = ("allowed_roles",)
+
+
+def _split_roles(raw) -> list:
+    return [r.strip() for r in str(raw or "").replace("\n", ",").split(",") if r.strip()]
+
+
+def _table_roles(rows) -> list:
+    out = []
+    for r in rows or []:
+        name = r.get("role") if hasattr(r, "get") else r
+        if name and name not in out:
+            out.append(name)
+    return out
+
+
+def _snapshot_security(doc) -> dict:
+    snap = {}
+    for k in _TIGHT_CHECKS:
+        if doc.meta.has_field(k):
+            snap[k] = int(doc.get(k) or 0)
+    for k in _ROLE_TEXT_FIELDS:
+        if doc.meta.has_field(k):
+            snap[k] = _split_roles(doc.get(k))
+    for k in _ROLE_TABLE_FIELDS:
+        if doc.meta.has_field(k):
+            snap[k] = _table_roles(doc.get(k))
+    return snap
+
+
+def _enforce_only_tighten(doc, before: dict, data: dict) -> list:
+    """Restore the stricter of existing/seed for security fields. Returns warning strings."""
+    warnings = []
+    label = f"{doc.doctype} {doc.name}"
+    for k, tight in _TIGHT_CHECKS.items():
+        if k not in before or k not in data:
+            continue
+        old, new = before[k], int(doc.get(k) or 0)
+        if old == tight and new != tight:
+            doc.set(k, old)
+            warnings.append(f"{label}: ignored seed loosening of {k} ({old} -> {new})")
+    for k in _ROLE_TEXT_FIELDS + _ROLE_TABLE_FIELDS:
+        if k not in before or k not in data:
+            continue
+        existing = before[k]
+        if not existing:
+            continue  # unrestricted so far: the seed list applies as-is (it tightens)
+        is_table = k in _ROLE_TABLE_FIELDS
+        seeded = _table_roles(doc.get(k)) if is_table else _split_roles(doc.get(k))
+        final = [r for r in existing if r in seeded]
+        if not final:
+            final = list(existing)
+            warnings.append(f"{label}: ignored seed {k} {seeded} (no overlap with existing {existing}); kept existing")
+        elif set(seeded) - set(existing):
+            warnings.append(f"{label}: ignored seed additions to {k} {sorted(set(seeded) - set(existing))}")
+        if final != seeded:
+            doc.set(k, [{"role": r} for r in final] if is_table else ", ".join(final))
+    for w in warnings:
+        frappe.logger("huf").warning("[app_seeding] %s", w)
+    return warnings
+
+
+def _apply_seed_preserving_edits(doc, data: dict) -> list:
+    """Apply seed values; returns warnings about ignored security-loosening changes."""
+    before = _snapshot_security(doc)
+    new = _seed_values(data)
+    try:
+        old = json.loads(doc.get("seed_snapshot") or "null")
+    except ValueError:
+        old = None
+    for key, value in new.items():
+        if old is not None and key in old:
+            cur = _current(doc, key, old[key])
+            if cur != old[key]:
+                continue  # admin edited this field since last seed: keep it
+        doc.set(key, data[key])
+    doc.source_app = data.get("source_app")
+    doc.source_file = data.get("source_file")
+    warnings = _enforce_only_tighten(doc, before, data)
+    doc.seed_snapshot = json.dumps(new)
+    return warnings
 
 
 def _validate_row_link_refs(child_doctype: str, row: dict, row_index: int) -> list:
@@ -114,15 +233,23 @@ def _upsert_doc(doctype: str, key_field: str, data: dict, source_app: str, sourc
     data["source_app"] = source_app
     data["source_file"] = source_file
 
+    warnings = []
     try:
+        tracks = bool(frappe.get_meta(doctype).get_field("seed_snapshot"))
         if docname:
             doc = frappe.get_doc(doctype, docname)
-            doc.update(data)
+            if tracks:
+                warnings = _apply_seed_preserving_edits(doc, data)
+            else:
+                doc.update(data)
             doc.save(ignore_permissions=True)
         else:
             data["doctype"] = doctype
-            frappe.get_doc(data).insert(ignore_permissions=True)
-        return True, None
+            doc = frappe.get_doc(data)
+            if tracks:
+                doc.seed_snapshot = json.dumps(_seed_values(data))
+            doc.insert(ignore_permissions=True)
+        return True, ({"warnings": warnings} if warnings else None)
     except Exception as e:
         return False, str(e)
 
@@ -150,11 +277,17 @@ VALID_TYPES = [
 
 def upsert_tool(data: dict, source_app: str, source_file: str) -> tuple:
     data = data.copy()
+    from huf.huf.doctype.agent_tool_function.agent_tool_function import is_otp_tool_path
+
+    if is_otp_tool_path(data.get("function_path")):
+        return False, "OTP functions cannot be seeded as agent tools"
     if data.get("types") not in VALID_TYPES:
         data["types"] = "App Provided"
         
-    tool_type = data.get("tool_type")
-    if tool_type and not frappe.db.exists("Agent Tool Type", tool_type):
+    # Agent Tool Function.tool_type is mandatory; external apps rarely know the category taxonomy.
+    tool_type = data.get("tool_type") or "Miscellaneous"
+    data["tool_type"] = tool_type
+    if not frappe.db.exists("Agent Tool Type", tool_type):
         try:
             frappe.get_doc({
                 "doctype": "Agent Tool Type",

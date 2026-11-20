@@ -105,7 +105,7 @@ def deliver(kwargs: dict, deliver_typed) -> str:
 	reply_to = (kwargs.get("reply_to") or "").strip() or None
 	built = build_products_payload(recipient, catalog_id, codes if isinstance(codes, list) else [], kwargs.get("header"), kwargs.get("body"), kwargs.get("footer"), reply_to)
 
-	return deliver_typed(kwargs, recipient, built, lambda account: bridge._send_payload(account, built[0], False), "a product message")
+	return deliver_typed(kwargs, recipient, built, lambda account: bridge._send_payload(account, built[0], False, None, kwargs.get("gateway_name") or None), "a product message")
 
 
 def send_products(item_codes=None, header: str | None = None, body: str | None = None, to: str | None = None) -> str:

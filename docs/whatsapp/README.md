@@ -45,3 +45,13 @@ Notes:
 ## Broadcasts
 
 See [WhatsApp Broadcast](BROADCAST.md) for one-template bounded sends to opted-in recipients: state machine, limits and pacing, error handling, costs, and the runbook for the kill switch.
+
+## External app hooks
+
+See [External app hooks](../gateways/whatsapp-runbook.md#11-external-app-hooks) for the `huf_gateway_pre_send`, `huf_gateway_opt_out` and `huf_gateway_delivery_status` hooks that external apps register.
+
+## Media uploads and carousel templates (verified live 2026-11-18, Cloud API v21.0)
+
+- Private PDF headers are uploaded once and sent by media id. If a send that carried an uploaded media id fails with HTTP 500 / code 131000 ("Something went wrong", unknown id) or HTTP 400 / code 100 whose message names `document.id` (also `image.id`, `video.id`, `audio.id`), or the older 131009 / "media not found" shapes, Huf re-uploads and retries exactly once. Link-based headers are never retried this way. A genuinely expired id was not reproducible live.
+- Carousel templates: 2 to 10 cards (Meta accepted 1 at create; 2 is a Huf product rule), card body at most 160 characters (`card_body_too_long`), at most 2 buttons per card (`card_too_many_buttons`), no header, footer or top-level buttons on the main bubble (`carousel_top_level_not_allowed`).
+- Template variables cannot be at the start or end of the carousel body or any card body (Meta 100/2388299). Huf rejects this at validation with `variable_at_edge`, naming the component (`body` or `cards[i].body`); the template wizard checks the same client-side.

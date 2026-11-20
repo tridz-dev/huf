@@ -23,6 +23,7 @@
   "body_params",
   "header_params",
   "button_params",
+  "carousel_params",
   "section_consent",
   "consent_source",
   "consent_attested",
@@ -48,7 +49,13 @@
   "failed",
   "deferred",
   "unknown",
-  "skipped"
+  "skipped",
+  "section_failover",
+  "fallback_channels",
+  "fallback_body",
+  "fallback_body_kind",
+  "fallback_sms_gateway",
+  "fallback_email_gateway"
  ],
  "fields": [
   {
@@ -176,6 +183,12 @@
    "fieldname": "button_params",
    "fieldtype": "JSON",
    "label": "Default button params"
+  },
+  {
+   "fieldname": "carousel_params",
+   "fieldtype": "Long Text",
+   "label": "Default carousel params",
+   "description": "JSON: {cards:[...]}; merged under each recipient's params.carousel. Carousel templates only."
   },
   {
    "fieldname": "section_consent",
@@ -342,6 +355,48 @@
    "label": "Skipped",
    "read_only": 1,
    "default": "0"
+  },
+  {
+   "fieldname": "section_failover",
+   "fieldtype": "Section Break",
+   "label": "Failover",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "fallback_channels",
+   "fieldtype": "Small Text",
+   "label": "Fallback channels",
+   "description": "Ordered JSON list, e.g. [\"sms\",\"email\"]. Needs fallback_body.",
+   "read_only": 0
+  },
+  {
+   "fieldname": "fallback_body",
+   "fieldtype": "Text",
+   "label": "Fallback body",
+   "description": "Plain text sent on fallback legs (required; never derived from the template).",
+   "read_only": 0
+  },
+  {
+   "fieldname": "fallback_body_kind",
+   "fieldtype": "Select",
+   "label": "Fallback body kind",
+   "description": "marketing needs an explicit marketing opt-in on each channel; transactional does not. Never otp/utility.",
+   "read_only": 0,
+   "options": "\nmarketing\ntransactional"
+  },
+  {
+   "fieldname": "fallback_sms_gateway",
+   "fieldtype": "Link",
+   "options": "Gateway",
+   "label": "Fallback SMS gateway",
+   "read_only": 0
+  },
+  {
+   "fieldname": "fallback_email_gateway",
+   "fieldtype": "Link",
+   "options": "Gateway",
+   "label": "Fallback email gateway",
+   "read_only": 0
   }
  ],
  "grid_page_length": 50,

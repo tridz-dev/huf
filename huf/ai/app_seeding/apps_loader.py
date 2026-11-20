@@ -15,6 +15,7 @@ from pathlib import Path
 
 import frappe
 
+from .app_capabilities import collect_app_capability_warnings, validate_app_capabilities
 from .scanner import find_seed_dirs, find_www_template_dir, get_seed_files
 
 APPS_FOLDER = "apps"
@@ -76,6 +77,10 @@ ALLOWED_FIELDS = {
 	"agent",
 	"www_template",
 	"delivery",
+	"theme_color",
+	"scope",
+	"manifest_url",
+	"static_routes",
 }
 
 STRING_FIELDS = (
@@ -92,7 +97,15 @@ STRING_FIELDS = (
 	"agent",
 	"www_template",
 	"delivery",
+	"theme_color",
+	"scope",
+	"manifest_url",
 )
+
+# static_routes: allowlist of file paths (relative to the app's www template
+# directory) that huf.ai.app_portal_renderer may serve at <route>/<path>
+# (PWA assets such as sw.js, manifest.webmanifest, icons).
+STATIC_ROUTE_PATTERN = re.compile(r"^[a-z0-9._/-]+$")
 
 # Declares how a HUF App is delivered to users; see doc/features/apps/manifest.md
 # and doc/features/apps/delivery-portal-vs-desk.md. Default preserves today's
@@ -116,6 +129,32 @@ def _validate_route(route) -> str | None:
 	for prefix in RESERVED_ROUTE_PREFIXES:
 		if route == prefix or route.startswith(prefix + "/"):
 			return f"route must not start with reserved prefix '{prefix}' (reserved for HUF's own routes)"
+	return None
+
+
+def _validate_scope(scope) -> str | None:
+	"""Return an error message if the PWA scope is not a safe site-local path."""
+	if not isinstance(scope, str) or not scope.startswith("/"):
+		return "scope must be an absolute site-local path beginning with '/'"
+	if "://" in scope:
+		return "scope must not contain a URL scheme (external URLs are not allowed)"
+	if ".." in scope:
+		return "scope must not contain '..'"
+	if re.search(r"\s", scope):
+		return "scope must not contain whitespace"
+	return None
+
+
+def _validate_manifest_url(manifest_url) -> str | None:
+	"""Return an error message if manifest_url is not a same-site path."""
+	if not isinstance(manifest_url, str) or not manifest_url.startswith("/"):
+		return "manifest_url must be a site-local path beginning with '/'"
+	if manifest_url.startswith("//"):
+		return "manifest_url must begin with exactly one '/' (protocol-relative URLs are not allowed)"
+	if "://" in manifest_url:
+		return "manifest_url must not contain a URL scheme (external URLs are not allowed)"
+	if re.search(r"\s", manifest_url):
+		return "manifest_url must not contain whitespace"
 	return None
 
 
@@ -159,6 +198,22 @@ def _validate_alias(alias) -> str | None:
 	"""
 	if not ALIAS_PATTERN.match(alias):
 		return "alias must match ^[a-z][a-z0-9_\\-]*$"
+	return None
+
+
+def _validate_static_routes(static_routes) -> str | None:
+	"""Return an error message unless static_routes is a list of safe relative
+	file paths (``^[a-z0-9._/-]+$``, no ``..``, not starting with ``/``).
+	"""
+	if not isinstance(static_routes, list):
+		return "static_routes must be a list of strings"
+	for entry in static_routes:
+		if not isinstance(entry, str):
+			return "static_routes must be a list of strings"
+		if not STATIC_ROUTE_PATTERN.match(entry):
+			return f"static_routes entry '{entry}' must match ^[a-z0-9._/-]+$"
+		if ".." in entry or entry.startswith("/"):
+			return f"static_routes entry '{entry}' must not contain '..' or start with '/'"
 	return None
 
 
@@ -296,6 +351,16 @@ def validate_manifest(data) -> tuple:
 	if error := _validate_route(route):
 		return None, error
 
+	scope = data.get("scope")
+	if scope is not None and (not isinstance(scope, str) or scope.strip()):
+		if error := _validate_scope(scope.strip() if isinstance(scope, str) else scope):
+			return None, error
+
+	manifest_url = data.get("manifest_url")
+	if manifest_url is not None and (not isinstance(manifest_url, str) or manifest_url.strip()):
+		if error := _validate_manifest_url(manifest_url.strip() if isinstance(manifest_url, str) else manifest_url):
+			return None, error
+
 	icon = (data.get("icon") or "").strip()
 	if icon:
 		if error := _validate_icon(icon):
@@ -343,6 +408,10 @@ def validate_manifest(data) -> tuple:
 		if error := _validate_www_template_shape(www_template):
 			return None, error
 
+	static_routes = data.get("static_routes", [])
+	if error := _validate_static_routes(static_routes):
+		return None, error
+
 	delivery = (data.get("delivery") or "").strip() or DEFAULT_DELIVERY
 	if delivery not in DELIVERY_MODES:
 		return None, f"delivery must be one of {', '.join(DELIVERY_MODES)}"
@@ -365,6 +434,11 @@ def validate_manifest(data) -> tuple:
 		"agent": agent,
 		"www_template": www_template,
 		"delivery": delivery,
+		"theme_color": (data.get("theme_color") or "").strip(),
+		"pwa_scope": (data.get("scope") or "").strip(),
+		"manifest_url": (data.get("manifest_url") or "").strip(),
+		# Stored newline-separated (Small Text).
+		"static_routes": "\n".join(r.strip() for r in static_routes),
 		# Stored on the DocType as a comma-joined string.
 		"exposed_tables": ",".join(t.strip() for t in exposed_tables),
 	}
@@ -737,124 +811,6 @@ def create_app_from_agent(
 		frappe.db.set_value("HUF App", app_id, "agent", agent_name, update_modified=False)
 		doc.reload()
 	return doc.as_dict()
-
-
-def validate_app_capabilities(capabilities: dict, agent_doc) -> list:
-	"""
-	Check that ``capabilities`` (the proposed ``HUF App.capabilities`` JSON
-	blob) is a subset of what the linked ``agent_doc`` (Agent doc) actually
-	supports.
-
-	Covers file_upload / ocr / audio_input / audio_output / live_voice /
-	video_output. 'live_voice' is validated for basic Agent config only
-	(voice_enabled + voice_engine present) -- known upstream gaps in the
-	voice engines themselves (send_to_session unimplemented, no user-speech
-	persistence on litellm_realtime, no memory injection on either engine;
-	see huf/ai/voice/README.md's "Known gaps") are informational and
-	surfaced separately via ``collect_app_capability_warnings``, not treated
-	as hard errors here.
-
-	Returns a list of human-readable error strings; an empty list means the
-	capabilities payload is valid.
-	"""
-	errors = []
-	if not capabilities:
-		return errors
-
-	if capabilities.get("file_upload") and not agent_doc.get("allow_file_upload"):
-		errors.append(
-			"App capability 'file_upload' requires the linked Agent to have "
-			"'allow_file_upload' enabled."
-		)
-
-	if capabilities.get("ocr") and not agent_doc.get("enable_ocr"):
-		errors.append(
-			"App capability 'ocr' requires the linked Agent to have "
-			"'enable_ocr' enabled."
-		)
-
-	if capabilities.get("audio_input") and not agent_doc.get("stt_model"):
-		errors.append(
-			"App capability 'audio_input' requires the linked Agent to have "
-			"an 'stt_model' configured."
-		)
-
-	if capabilities.get("audio_output") and not agent_doc.get("tts_model"):
-		errors.append(
-			"App capability 'audio_output' requires the linked Agent to have "
-			"a 'tts_model' configured."
-		)
-
-	if capabilities.get("live_voice"):
-		if not agent_doc.get("voice_enabled"):
-			errors.append(
-				"App capability 'live_voice' requires the linked Agent to have "
-				"'voice_enabled' turned on."
-			)
-		if not agent_doc.get("voice_engine"):
-			errors.append(
-				"App capability 'live_voice' requires the linked Agent to have "
-				"a 'voice_engine' configured."
-			)
-
-	if capabilities.get("video_output"):
-		# GAP (documented, not silently skipped): Agent DocType has no
-		# dedicated video-generation-model field yet (no analogue to
-		# `image_generation_model` / `tts_model` — confirmed by inspecting
-		# huf/huf/doctype/agent/agent.json). Until such a field exists, this
-		# capability can never be meaningfully validated, so we fail closed
-		# rather than pretend it passed. See
-		# the hub-orchestrator unified builder plan (archived in the workspace) Phase 10 and
-		# the hub-orchestrator-app-builder-todo note (workspace).
-		errors.append(
-			"App capability 'video_output' cannot be validated yet: the "
-			"Agent DocType has no video-generation-model field (analogous "
-			"to 'image_generation_model'/'tts_model'). Add that field "
-			"before enabling this capability; until then 'video_output' is "
-			"rejected rather than silently accepted."
-		)
-
-	return errors
-
-
-def collect_app_capability_warnings(capabilities: dict, agent_doc) -> list:
-	"""
-	Return non-blocking, informational warnings about ``capabilities`` that are
-	otherwise valid (see ``validate_app_capabilities``) but have known platform
-	limitations the caller should be told about rather than silently hitting
-	at runtime.
-
-	Currently: 'live_voice' when the Agent's configured voice engine reports
-	``memory: False`` from its ``capabilities()`` (see
-	huf/ai/voice/engines/base.py and huf/ai/voice/README.md's "Known gaps" --
-	no shipped voice engine currently injects Agent memory into a live voice
-	session). This does not block saving; it is surfaced so the caller can
-	set expectations.
-	"""
-	warnings = []
-	if not capabilities:
-		return warnings
-
-	if capabilities.get("live_voice") and agent_doc.get("voice_engine"):
-		try:
-			from huf.ai.voice import get_engine_class
-
-			engine_class = get_engine_class(agent_doc.get("voice_engine"))
-			engine_capabilities = engine_class.capabilities()
-		except Exception:
-			# Engine key not resolvable (e.g. unregistered/misconfigured) --
-			# validate_app_capabilities already covers the "not set at all"
-			# case as a hard error; here we simply skip the informational
-			# warning rather than blocking the save on a lookup failure.
-			engine_capabilities = None
-
-		if engine_capabilities is not None and not engine_capabilities.get("memory", True):
-			warnings.append(
-				"Live voice for this App will not have access to Agent memory "
-				"(known platform limitation, see huf/ai/voice/README.md)."
-			)
-
-	return warnings
 
 
 def update_app(app_id: str, **fields) -> dict:

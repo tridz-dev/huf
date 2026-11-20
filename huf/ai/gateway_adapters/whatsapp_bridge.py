@@ -21,7 +21,6 @@ import hashlib
 import importlib
 import json
 import mimetypes
-import os
 import re
 from collections.abc import Callable
 from contextlib import contextmanager
@@ -32,9 +31,12 @@ from urllib.parse import quote, urljoin, urlparse
 import frappe
 import frappe.utils
 
-from huf.ai.whatsapp import outbound_policy as policy, template_plain
+from huf.ai.whatsapp import outbound_policy as policy, pre_send, template_plain
+from huf.ai.gateway_adapters.whatsapp_parts.bridge_utils import _button_sig, _clean_reason, _parse_ts
 from huf.ai.gateway_adapters import whatsapp_messages as wm
 from huf.ai.gateway_adapters import whatsapp_templates as wt
+from huf.ai.gateway_adapters.whatsapp_template_parts import carousel as wt_carousel, send_params as wt_send_params
+from huf.ai.gateway_adapters.whatsapp_parts import header_upload
 
 GRAPH_HOST = "https://graph.facebook.com"
 # Newest Graph version that is >= ~3 months old (v25.0 released 2026-02-18; v26.0 is too new).
@@ -64,7 +66,7 @@ DEFAULT_MIME_PREFIXES = (
 # Never allowed even though a prefix above would match (active content).
 _BLOCKED_MIME_PREFIXES = ("image/svg", "text/html", "application/xhtml")
 # AUTHENTICATION is intentionally unsupported: Meta requires OTP button components.
-TEMPLATE_CATEGORIES = ("MARKETING", "UTILITY")
+TEMPLATE_CATEGORIES = ("MARKETING", "UTILITY", "AUTHENTICATION")
 FORWARD_RETRY_DELAY_SECONDS = 5
 _TEMPLATE_NAME_RE = re.compile(r"^[a-z0-9_]+$")
 _HTTP_TIMEOUT = 15
@@ -123,6 +125,14 @@ class BridgeError(Exception):
 
 def _err(code: str, **extra: Any) -> dict[str, Any]:
 	return {"success": False, "error": code, **extra}
+
+
+def _pre_send(gateway_name: str | None, to: Any, kind: str, source: str, subtype: str = "") -> None:
+	"""``huf_gateway_pre_send`` (fail closed) before any Graph POST / ``WhatsApp Message`` insert; a refusal is a ``BridgeError``."""
+	try:
+		pre_send.check(gateway_name, normalize_phone(to), kind, source, subtype or kind, to)
+	except policy.OutboundRefused as exc:
+		raise BridgeError(_err(exc.code, message=str(exc))) from exc
 
 
 def _gateway_required() -> dict[str, Any]:
@@ -451,7 +461,7 @@ def send_text(
 	reply_to: str | None = None,
 	trusted: bool = False,
 	preview_url: bool | None = None,
-	http_post: Callable[..., Any] | None = None,
+	http_post: Callable[..., Any] | None = None, gateway_name: str | None = None,
 ) -> dict[str, Any]:
 	"""Send a free-form text via ``WhatsApp Message`` (it performs the one send, A1).
 
@@ -465,6 +475,7 @@ def send_text(
 	"""
 	acct = _account_or_error(account_name)
 	_refuse_if_disconnected(acct)
+	_pre_send(gateway_name, to, "text", "bridge.send_text")
 	if preview_url is not None and trusted:
 		return _send_text_direct(acct, to, text, reply_to, bool(preview_url), http_post)
 	values = {
@@ -786,6 +797,7 @@ def _template_row(docname: str) -> dict[str, Any] | None:
 	extra = _get_extra(row.get("whatsapp_account"), docname) or {}
 	row["parameter_format"] = extra.get("parameter_format") or ""
 	row["header_format"] = extra.get("header_format") or ""
+	row["carousel_cards"] = wt_carousel.carousel_cards(extra.get("components_json"))
 	return row
 
 
@@ -824,6 +836,7 @@ def _mirror_template_send(acct: dict[str, Any], docname: str, to: str, wamid: st
 		return {"success": True, "name": doc.name, "message_id": wamid, "status": doc.get("status")}
 	except Exception:
 		# The template is already delivered; a failed audit row must not fail the send.
+		frappe.log_error(title="WhatsApp mirror failed", message=frappe.get_traceback())
 		return {"success": True, "name": None, "message_id": wamid, "status": "Success", "mirrored": False}
 
 
@@ -927,6 +940,8 @@ def _send_view(tpl: dict[str, Any]) -> dict[str, Any]:
 		"header_type": htype,
 		"header_text": (tpl.get("header") or "") if htype == "TEXT" else "",
 		"parameter_format": tpl.get("parameter_format") or "",
+		"carousel_cards": tpl.get("carousel_cards"),
+		"category": tpl.get("category") or "",
 	}
 
 
@@ -946,8 +961,12 @@ def send_template(
 	force_graph: bool = False,
 	opaque_ref: str | None = None,
 	marketing_api: bool = False,
+	redact_params: bool = False,
+	carousel_params: Any = None,
 ) -> dict[str, Any]:
-	"""Send an approved template. ``force_graph`` always posts to Graph (returns ``wamid`` and ``message_status``),
+	"""Send an approved template. ``redact_params`` stores no parameter values in the mirrored ``WhatsApp Message``
+	(OTP sends; needs ``force_graph``). ``carousel_params``: per-card ``[{"header": {"id"|"link"}, "body": [...],
+	"buttons": [...]}]`` for a media-carousel template. ``force_graph`` always posts to Graph (returns ``wamid`` and ``message_status``),
 	``opaque_ref`` is echoed on status webhooks, ``marketing_api`` uses the Marketing Messages endpoint.
 
 	``run_id`` / ``solution`` (optional) attribute the send to a Solution for template usage tracking.
@@ -986,11 +1005,12 @@ def send_template(
 		policy.enforce_template(account_name, to, tpl, gateway_name)
 	except policy.OutboundRefused as exc:
 		raise BridgeError(_err(exc.code, message=str(exc))) from exc
+	_pre_send(gateway_name, to, "template", "bridge.send_template")
 
 	other_buttons, copy_comps, errors = split_copy_code_params(button_params)
 	view = _send_view(tpl) if tpl else _params_template_view(body_params, header_params)
 	header_raw = _header_list(header_params, bool(tpl))
-	components, build_errors = wt.build_send_components(view, body_params, header_raw, other_buttons)
+	components, build_errors = wt.build_send_components(view, body_params, header_raw, other_buttons, carousel_params)
 	errors += build_errors
 	if tpl:
 		seen = {(e["field"], e["code"]) for e in errors}
@@ -1001,6 +1021,14 @@ def send_template(
 	if errors:
 		raise BridgeError(send_error(errors))
 	components += copy_comps
+	from huf.ai.whatsapp import media_upload as _mu
+
+	file_ref = _mu.source_file(components)
+	if file_ref is not None:
+		try:
+			_mu.resolve_file_headers(acct, components, http_post=http_post)
+		except _mu.MediaUploadError as exc:
+			raise BridgeError(exc.payload()) from exc
 
 	header_type = view.get("header_type") or ""
 	header_given = any(c.get("type") == "header" for c in components)
@@ -1022,7 +1050,9 @@ def send_template(
 
 	if marketing_api and not force_graph:
 		raise BridgeError(_err("invalid_request", message="marketing_api requires force_graph."))
-	if force_graph or named or any(c.get("type") in ("header", "button") for c in components) or (tpl and _has_dynamic_url(tpl)):
+	if redact_params and not force_graph:
+		raise BridgeError(_err("invalid_request", message="redact_params requires force_graph."))
+	if force_graph or named or any(c.get("type") in ("header", "button", "carousel") for c in components) or (tpl and _has_dynamic_url(tpl)):
 		if not _may_bypass(trusted) and not frappe.has_permission("WhatsApp Message", "create"):
 			raise frappe.PermissionError("Not permitted to send WhatsApp messages")
 		template_payload: dict[str, Any] = {
@@ -1040,14 +1070,36 @@ def send_template(
 		}
 		if (ref := _clean_opaque_ref(opaque_ref)):
 			payload["biz_opaque_callback_data"] = ref
-		if force_graph:
-			posted = _graph_post(acct, payload, http_post, marketing_api=marketing_api)
-		else:
-			posted = {"wamid": _graph_post_message(acct, payload, http_post), "message_status": None}
+		def _post_once() -> dict[str, Any]:
+			if force_graph:
+				return _graph_post(acct, payload, http_post, marketing_api=marketing_api)
+			return {"wamid": _graph_post_message(acct, payload, http_post), "message_status": None}
+
+		try:
+			posted = _post_once()
+		except BridgeError as exc:
+			if file_ref is None or not _mu.is_expired_media_error(exc.payload, sent_media_id=True):
+				raise
+			# cached media id expired on Meta's side: re-upload once and resend
+			try:
+				fresh = [{"type": "header", "parameters": [{"type": "document", "document": {"file": file_ref}}]}]
+				old = payload["template"]["components"][0]["parameters"][0]["document"] if components and components[0].get("type") == "header" else {}
+				if old.get("filename"):
+					fresh[0]["parameters"][0]["document"]["filename"] = old["filename"]
+				_mu.resolve_file_headers(acct, fresh, http_post=http_post, force=True)
+			except _mu.MediaUploadError as up:
+				raise BridgeError(up.payload()) from up
+			payload["template"]["components"][0] = fresh[0]
+			posted = _post_once()
 		wamid = posted["wamid"]
-		mirror: dict[str, Any] = {"template_parameters": ",".join(params)}
-		if body_map:
-			mirror["body_param"] = json.dumps(body_map)
+		if redact_params:
+			mirror: dict[str, Any] = {"template_parameters": "***"}
+			if body_map:
+				mirror["body_param"] = json.dumps({k: "***" for k in body_map})
+		else:
+			mirror = {"template_parameters": ",".join(params)}
+			if body_map:
+				mirror["body_param"] = json.dumps(body_map)
 		header_comp = next((c for c in components if c.get("type") == "header"), None)
 		if header_comp:
 			hp = header_comp["parameters"][0]
@@ -1119,6 +1171,8 @@ def _check_send_against_template(
 	"""Compare raw send params with the template definition (counts, header kind, button kinds)."""
 	errors: list[dict[str, str]] = []
 	tv = wt._template_view(view)
+	if tv["auth"]:  # authentication templates: wt_auth.build_otp_components validates the single code and builds body + url button
+		return errors
 	if tv["fmt"] != "NAMED":  # NAMED mismatches (param_missing / param_unknown) come from build_send_components
 		given = list(body_params.values()) if isinstance(body_params, dict) else list(body_params or [])
 		expected = len(tv["body_vars"])
@@ -1153,7 +1207,7 @@ def _check_send_against_template(
 			errors.append(wt._e("header_params", "invalid_type", "This template has a LOCATION header; provide a location."))
 	elif items:
 		errors.append(wt._e("header_params", "not_expected", "This template has no header."))
-	buttons_n, _ = wt.normalize_button_params(button_params)
+	buttons_n, _ = wt_send_params.normalize_button_params(button_params)
 	buttons = tpl.get("buttons") or []
 	dynamic = {i for i, b in enumerate(buttons) if b.get("button_type") == "Visit Website" and b.get("url_type") == "Dynamic"}
 	copy_idx = {i for i, b in enumerate(buttons) if b.get("button_type") == wt.DOCTYPE_BUTTON_TYPE["COPY_CODE"]}
@@ -1188,7 +1242,7 @@ def send_media(
 	trusted: bool = False,
 	voice: bool | None = None,
 	http_post: Callable[..., Any] | None = None,
-	http_get: Callable[..., Any] | None = None,
+	http_get: Callable[..., Any] | None = None, gateway_name: str | None = None,
 ) -> dict[str, Any]:
 	"""Send an image/document/audio/video/sticker; exactly one Graph call.
 
@@ -1205,11 +1259,12 @@ def send_media(
 	media, errors = wt.validate_media_request(kind, link, media_id, caption, filename, voice)
 	if errors:
 		raise BridgeError(wt.validation_error(errors))
+	_pre_send(gateway_name, to, "media", "bridge.send_media", media["kind"])
 	if not media["media_id"]:
 		_preflight_link(media["kind"], media["link"], http_get)
 	if media["media_id"] or media["kind"] == "sticker" or media["voice"] or media["filename"]:
 		payload = wt.build_media_payload(normalize_phone(to), media, reply_to)
-		return _send_payload(account_name, payload, trusted, http_post)
+		return _send_payload(account_name, payload, trusted, http_post, gateway_name, _gated=True)
 	values = {
 		"doctype": "WhatsApp Message",
 		"type": "Outgoing",
@@ -1300,15 +1355,19 @@ def _mirror_direct_send(acct: dict[str, Any], payload: dict[str, Any], wamid: st
 		return {"success": True, "name": doc.name, "message_id": wamid, "status": doc.get("status")}
 	except Exception:
 		# already delivered: a failed audit row must not fail the send
+		frappe.log_error(title="WhatsApp mirror failed", message=frappe.get_traceback())
 		return {"success": True, "name": None, "message_id": wamid, "status": "Success", "mirrored": False}
 
 
 def _send_payload(
-	account_name: str, payload: dict[str, Any], trusted: bool = False, http_post: Callable[..., Any] | None = None
+	account_name: str, payload: dict[str, Any], trusted: bool = False, http_post: Callable[..., Any] | None = None,
+	gateway_name: str | None = None, _gated: bool = False,
 ) -> dict[str, Any]:
 	acct = _account_or_error(account_name)
 	if not _may_bypass(trusted) and not frappe.has_permission("WhatsApp Message", "create"):
 		raise frappe.PermissionError("Not permitted to send WhatsApp messages")
+	if not _gated:  # send_media / send_sticker already fired the hook for their payload branch
+		_pre_send(gateway_name, payload.get("to"), pre_send.kind_of(str(payload.get("type") or "")), "bridge._send_payload", str(payload.get("type") or ""))
 	wamid = _post_typed_message(acct, payload, http_post)
 	return _mirror_direct_send(acct, payload, wamid, trusted)
 
@@ -1322,51 +1381,52 @@ def _built(result: tuple[dict[str, Any] | None, list[dict[str, str]]]) -> dict[s
 
 def send_interactive(
 	account_name: str, to: str, kind: str, spec: dict[str, Any], reply_to: str | None = None,
-	trusted: bool = False, http_post: Callable[..., Any] | None = None,
+	trusted: bool = False, http_post: Callable[..., Any] | None = None, gateway_name: str | None = None,
 ) -> dict[str, Any]:
 	"""Send reply buttons / list / CTA URL / flow / location request (``kind``: buttons|list|cta_url|flow|location_request)."""
 	_account_or_error(account_name)
 	payload = _built(wm.build_interactive_payload(normalize_phone(to), kind, spec or {}, reply_to))
-	return _send_payload(account_name, payload, trusted, http_post)
+	return _send_payload(account_name, payload, trusted, http_post, gateway_name)
 
 
 def send_location(
 	account_name: str, to: str, latitude: Any, longitude: Any, name: str | None = None, address: str | None = None,
-	reply_to: str | None = None, trusted: bool = False, http_post: Callable[..., Any] | None = None,
+	reply_to: str | None = None, trusted: bool = False, http_post: Callable[..., Any] | None = None, gateway_name: str | None = None,
 ) -> dict[str, Any]:
 	_account_or_error(account_name)
 	payload = _built(wm.build_location_payload(normalize_phone(to), latitude, longitude, name, address, reply_to))
-	return _send_payload(account_name, payload, trusted, http_post)
+	return _send_payload(account_name, payload, trusted, http_post, gateway_name)
 
 
 def send_contacts(
 	account_name: str, to: str, contacts: Any, reply_to: str | None = None, trusted: bool = False,
-	http_post: Callable[..., Any] | None = None,
+	http_post: Callable[..., Any] | None = None, gateway_name: str | None = None,
 ) -> dict[str, Any]:
 	_account_or_error(account_name)
 	payload = _built(wm.build_contacts_payload(normalize_phone(to), contacts, reply_to))
-	return _send_payload(account_name, payload, trusted, http_post)
+	return _send_payload(account_name, payload, trusted, http_post, gateway_name)
 
 
 def send_reaction(
 	account_name: str, to: str, message_id: str, emoji: str = "", remove: bool = False, trusted: bool = False,
-	http_post: Callable[..., Any] | None = None,
+	http_post: Callable[..., Any] | None = None, gateway_name: str | None = None,
 ) -> dict[str, Any]:
 	"""React to (``emoji``) or un-react (empty emoji / ``remove``) an inbound message (target <= 30 days old)."""
 	_account_or_error(account_name)
 	payload = _built(wm.build_reaction_payload(normalize_phone(to), message_id, emoji, remove))
-	return _send_payload(account_name, payload, trusted, http_post)
+	return _send_payload(account_name, payload, trusted, http_post, gateway_name)
 
 
 def send_sticker(
 	account_name: str, to: str, link: str | None = None, media_id: str | None = None, reply_to: str | None = None,
-	trusted: bool = False, http_post: Callable[..., Any] | None = None, http_get: Callable[..., Any] | None = None,
+	trusted: bool = False, http_post: Callable[..., Any] | None = None, http_get: Callable[..., Any] | None = None, gateway_name: str | None = None,
 ) -> dict[str, Any]:
 	_account_or_error(account_name)
 	payload = _built(wm.build_sticker_payload(normalize_phone(to), link, media_id, reply_to))
+	_pre_send(gateway_name, to, "media", "bridge.send_sticker", "sticker")
 	if not media_id:
 		_preflight_link("sticker", link, http_get)
-	return _send_payload(account_name, payload, trusted, http_post)
+	return _send_payload(account_name, payload, trusted, http_post, gateway_name, _gated=True)
 
 
 def post_media_upload(
@@ -1405,7 +1465,7 @@ def send_voice_note(
 	media_id: str | None = None,
 	reply_to: str | None = None,
 	trusted: bool = False,
-	http_post: Callable[..., Any] | None = None,
+	http_post: Callable[..., Any] | None = None, gateway_name: str | None = None,
 ) -> dict[str, Any]:
 	"""Send audio as a voice note (``audio.voice: true``); rejects anything that is not Ogg/Opus before any call."""
 	if link and not media_id:
@@ -1414,7 +1474,7 @@ def send_voice_note(
 			raise BridgeError(wt.validation_error(errors))
 	return send_media(
 		account_name, to, "audio", link=link, media_id=media_id, reply_to=reply_to, trusted=trusted,
-		voice=True, http_post=http_post,
+		voice=True, http_post=http_post, gateway_name=gateway_name,
 	)
 
 
@@ -1573,6 +1633,12 @@ def validate_create_payload(payload: dict[str, Any]) -> dict[str, Any]:
 		problem = _check_sample_reference(spec["header_sample"])
 		if problem:
 			errors.append(problem)
+	if not errors:
+		for i, card in enumerate(spec.get("cards") or []):
+			if card["header_sample"] and not card["header_handle"]:
+				problem = _check_sample_reference(card["header_sample"])
+				if problem:
+					errors.append({**problem, "field": f"cards[{i}].sample"})
 	language = _language_link(language_code, payload.get("language"))
 	if not language:
 		errors.append(wt._e("language_code", "unknown_language", f"Language {language_code} is not installed on this site."))
@@ -1597,8 +1663,6 @@ def _docname_taken_by_other_account(account_name: str, docname: str) -> dict[str
 	return None
 
 
-_MEDIA_MIME_PREFIXES = {"IMAGE": ("image/",), "VIDEO": ("video/",), "DOCUMENT": ("application/", "text/")}
-_HEADER_SAMPLE_LIMITS = {"IMAGE": 5 * _MB, "VIDEO": 16 * _MB, "DOCUMENT": 100 * _MB}
 
 
 def _sample_problem(code: str, message: str) -> BridgeError:
@@ -1776,86 +1840,6 @@ def _preflight_link(kind: str, link: str | None, http_get: Callable[..., Any] | 
 	preflight_media_link(kind, link, http_get)
 
 
-def _read_header_sample(
-	sample: str, header_type: str, http_get: Callable[..., Any] | None = None
-) -> tuple[bytes, str]:
-	"""Bytes and MIME type of a media header sample: a public URL or an uploaded Frappe File."""
-	import mimetypes
-
-	if wt.is_http_url(sample):
-		resp = _fetch_sample(sample, http_get or _default_get)
-		content = resp.content
-		mime = str((getattr(resp, "headers", None) or {}).get("Content-Type") or "").split(";")[0].strip().lower()
-		mime = mime or (mimetypes.guess_type(urlparse(sample).path)[0] or "")
-	else:
-		name = frappe.db.get_value("File", {"file_url": sample}, "name")
-		if not name:
-			raise _sample_problem("sample_not_found", "No uploaded file matches this sample path.")
-		content = frappe.get_doc("File", name).get_content()
-		if isinstance(content, str):
-			content = content.encode()
-		mime = mimetypes.guess_type(sample)[0] or ""
-	if not mime.startswith(_MEDIA_MIME_PREFIXES[header_type]):
-		raise _sample_problem("invalid_sample", f"The sample is {mime or 'of unknown type'}, not an {header_type} file.")
-	if not content:
-		raise _sample_problem("invalid_sample", "The sample file is empty.")
-	if len(content) > _HEADER_SAMPLE_LIMITS[header_type]:
-		raise _sample_problem("sample_too_large", f"The {header_type} sample is larger than {_HEADER_SAMPLE_LIMITS[header_type] // _MB} MB.")
-	return content, mime
-
-
-def _upload_file_name(sample: str, mime: str) -> str:
-	"""``file_name`` query param of the upload session (documented as required)."""
-	base = os.path.basename(urlparse(sample).path) if wt.is_http_url(sample) else os.path.basename(sample)
-	base = re.sub(r"[^A-Za-z0-9._-]", "_", base)[:100]
-	return base or "sample" + (mimetypes.guess_extension(mime) or "")
-
-
-def upload_header_handle(
-	acct: dict[str, Any],
-	header_type: str,
-	sample: str,
-	http_post: Callable[..., Any] | None = None,
-	http_get: Callable[..., Any] | None = None,
-) -> str:
-	"""Meta resumable upload of a header sample; returns the ``header_handle`` (``h``).
-
-	Two calls, as in Meta's Resumable Upload API: ``POST /{app_id}/uploads`` opens a session
-	(file length and type), ``POST /{session id}`` with the raw bytes returns the handle. Raises
-	:class:`BridgeError` (validation error for a bad sample, ``upload_failed`` for a Meta refusal).
-	"""
-	if not acct.get("app_id"):
-		raise _sample_problem("app_id_missing", "Set the App ID on the WhatsApp Account to upload header samples.")
-	content, mime = _read_header_sample(sample, header_type, http_get)
-	http_post = http_post or _default_post
-	base = f"{acct['url']}/{acct['version']}"
-	try:
-		opened = http_post(
-			f"{base}/{acct['app_id']}/uploads",
-			params={"file_length": len(content), "file_type": mime, "file_name": _upload_file_name(sample, mime)},
-			headers={"Authorization": f"Bearer {acct['token']}"},
-			timeout=_HTTP_TIMEOUT,
-		)
-		code = getattr(opened, "status_code", 200)
-		if isinstance(code, int) and code >= 400:
-			raise BridgeError(_graph_err("upload_failed", opened))
-		session = str(opened.json()["id"])
-		sent = http_post(
-			f"{base}/{session}",
-			data=content,
-			headers={"Authorization": f"OAuth {acct['token']}", "file_offset": "0"},
-			timeout=60,
-		)
-		code = getattr(sent, "status_code", 200)
-		if isinstance(code, int) and code >= 400:
-			raise BridgeError(_graph_err("upload_failed", sent))
-		return str(sent.json()["h"])
-	except BridgeError:
-		raise
-	except Exception as exc:
-		raise BridgeError(_graph_err("upload_failed", exc)) from exc
-
-
 def _guard():
 	from huf.ai.gateway_adapters import whatsapp_template_guard as guard
 
@@ -2021,7 +2005,13 @@ def create_template(
 
 	if spec["header_type"] in wt.MEDIA_HEADER_TYPES and not spec["header_handle"]:
 		try:
-			spec["header_handle"] = upload_header_handle(acct, spec["header_type"], spec["header_sample"], http_post, http_get)
+			spec["header_handle"] = header_upload.upload_header_handle(acct, spec["header_type"], spec["header_sample"], http_post, http_get)
+		except BridgeError as exc:
+			return exc.payload
+
+	if spec.get("cards"):
+		try:
+			header_upload.upload_card_handles(acct, spec, http_post, http_get)
 		except BridgeError as exc:
 			return exc.payload
 
@@ -2193,13 +2183,6 @@ def _write_buttons(parent: str, rows: list[dict[str, Any]]) -> None:
 		child.creation = child.modified = now
 		child.docstatus = 0
 		child.db_insert()
-
-
-def _button_sig(rows: list[dict[str, Any]]) -> list[tuple]:
-	return [
-		(r.get("button_type") or "", r.get("button_label") or "", r.get("website_url") or "", r.get("phone_number") or "")
-		for r in rows
-	]
 
 
 def _refresh_local_components(name: str, tpl: dict[str, Any]) -> bool:
@@ -2426,14 +2409,6 @@ def _utcnow() -> datetime:
 	return datetime.now(timezone.utc)
 
 
-def _parse_ts(value: Any) -> datetime | None:
-	try:
-		dt = datetime.fromisoformat(str(value))
-	except (TypeError, ValueError):
-		return None
-	return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
-
-
 def _loads(value: Any, default: Any = None) -> Any:
 	if isinstance(value, (dict, list)):
 		return value
@@ -2476,11 +2451,6 @@ def _publish_status(template: str, status: str, reason: str = "") -> None:
 		frappe.publish_realtime("whatsapp_template_status", {"template": template, "status": status, "reason": reason})
 	except Exception:
 		pass
-
-
-def _clean_reason(reason: Any) -> str:
-	text = str(reason or "").strip()
-	return "" if text.upper() == "NONE" else text
 
 
 def _resolve_state_name(template_id: Any, name: Any, language: Any, account: str | None = None) -> str | None:
@@ -2940,6 +2910,9 @@ def get_template(name: str) -> dict[str, Any]:
 		"footer": {"text": row["footer"]} if row.get("footer") else None,
 		"buttons": _button_dicts(name),
 	}
+	cards = wt_carousel.carousel_cards(meta_components)
+	if cards is not None:
+		view["carousel"] = cards  # card definitions for the send dialog (header_type, body_vars, buttons)
 	business_id = ""
 	if row.get("whatsapp_account"):
 		business_id = frappe.db.get_value("WhatsApp Account", row["whatsapp_account"], "business_id") or ""
@@ -3047,7 +3020,7 @@ def edit_template(
 	if declared not in (None, "") and str(declared).upper() != merged["parameter_format"]:
 		return _err("immutable_field", field="parameter_format", message="The variable format (numbered or named) cannot be changed after creation.")
 	current_header = str(merged.get("header_type") or "").upper()
-	for key in ("body", "template", "sample_values", "named_samples", "header", "header_type", "sample", "header_handle", "footer", "buttons"):
+	for key in ("body", "template", "sample_values", "named_samples", "header", "header_type", "sample", "header_handle", "footer", "buttons", "cards"):
 		if key in payload:
 			merged[key] = payload[key]
 	if "template" in payload and "body" not in payload:
@@ -3063,8 +3036,10 @@ def edit_template(
 	# Meta may have reclassified the template (UTILITY -> MARKETING): compare with ITS category, not a stale one
 	current_category = str(state.get("category") or row.get("category") or "").upper()
 	category = str(payload.get("category") or current_category).upper()
-	if category not in TEMPLATE_CATEGORIES:
-		return _err("invalid_category", message="Category must be one of " + ", ".join(TEMPLATE_CATEGORIES))
+	# AUTHENTICATION templates have Meta's fixed OTP shape and are created, not edited into, through this path.
+	editable_categories = tuple(c for c in TEMPLATE_CATEGORIES if c != "AUTHENTICATION")
+	if category not in editable_categories:
+		return _err("invalid_category", message="Category must be one of " + ", ".join(editable_categories))
 	merged["category"] = category
 	ttl = payload.get("message_send_ttl_seconds") if payload.get("message_send_ttl_seconds") is not None else payload.get("ttl_seconds")
 	if ttl is not None and (isinstance(ttl, bool) or not isinstance(ttl, int)):
@@ -3110,14 +3085,22 @@ def edit_template(
 				return _err("media_header_edit_unsupported", message="The current media header cannot be re-sent and its sample could not be fetched; provide a new sample file.")
 			return wt.validation_error([problem])
 		try:
-			spec["header_handle"] = upload_header_handle(acct, spec["header_type"], spec["header_sample"], http_post, http_get)
+			spec["header_handle"] = header_upload.upload_header_handle(acct, spec["header_type"], spec["header_sample"], http_post, http_get)
 		except BridgeError as exc:
 			if reuploaded:
 				return _err("media_header_edit_unsupported", message="The current media header cannot be re-sent and its sample could not be fetched; provide a new sample file.", detail=exc.payload.get("message"))
 			return exc.payload
+	cards_edited = bool(payload.get("cards"))
+	if cards_edited:
+		try:
+			header_upload.upload_card_handles(acct, spec, http_post, http_get)
+		except BridgeError as exc:
+			return exc.payload
 	meta = wt.build_meta_payload(spec)
 	built = meta["components"]
-	if base_components is not None:
+	if cards_edited:
+		components = built  # the CAROUSEL is rebuilt whole (cards have no partial merge)
+	elif base_components is not None:
 		changed = {sec for sec, keys in _SECTION_KEYS.items() if any(k in payload for k in keys)}
 		if reuploaded:
 			changed.add("HEADER")

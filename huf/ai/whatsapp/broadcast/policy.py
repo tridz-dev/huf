@@ -128,6 +128,8 @@ LIMITS: tuple[Limit, ...] = (
 	Limit("audience_max_members", "Contacts per audience", 200000, "setting", "audiences", "contacts", 1, 10_000_000, "An audience stops accepting new contacts at this size."),
 	Limit("audience_inline_import_rows", "Import size run immediately", 10000, "setting", "audiences", "rows", 1, 1_000_000, "Larger imports run in the background."),
 	Limit("audience_max_import_rows", "Contacts per import", 200000, "setting", "audiences", "rows", 1, 10_000_000, "Most contacts one import may hold."),
+	Limit("audience_external_max_members", "Contacts per external refresh", 50000, "internal", "audiences", "contacts", note="Most contacts one call from a connected app may send in a single refresh."),
+	Limit("audience_refresh_timeout_seconds", "Audience refresh wait", 30, "internal", "audiences", "seconds", note="How long starting a broadcast waits for a connected app to refresh its audience before refusing to start."),
 	Limit("audience_max_csv_mb", "Audience CSV size", 20, "setting", "audiences", "MB", 1, 200, "Largest CSV text accepted for an audience import."),
 	Limit("audience_max_tags_per_member", "Tags per contact", 20, "setting", "audiences", "tags", 1, 100, "Most tags one contact can carry."),
 	Limit("audience_max_tag_length", "Tag length", 50, "setting", "audiences", "characters", 1, 200, "Longest tag accepted."),

@@ -18,7 +18,7 @@ from huf.ai.channels import run_as
 from huf.ai.channels.automation import reminder_policy
 from huf.ai.channels.adapters import lms
 from huf.ai.gateway_adapters import whatsapp_bridge as bridge
-from huf.ai.tools.whatsapp import _free_form_refusal
+from huf.ai.tools.whatsapp import _free_form_refusal, _pre_send_refusal
 from huf.ai.whatsapp import send_file
 
 COURSE = lms.COURSE
@@ -184,9 +184,15 @@ def lms_send_certificate(course: str = "", **_ignored) -> str:
 	account = _account_for_gateway(gateway) if gateway else None
 	if not account:
 		return _err("no_account", "This gateway has no WhatsApp account to send from.")
+	blocked = _pre_send_refusal({"gateway_name": gateway}, recipient, "media", "document")  # before the upload
+	if blocked:
+		return blocked
 	try:
 		media = bridge.upload_media(account, prepared["content"], prepared["mime"], prepared["filename"], kind="document")
-		result = bridge.send_media(account, recipient, "document", media_id=str(media["media_id"]), filename=prepared["filename"])
+		result = bridge.send_media(
+			account, recipient, "document", media_id=str(media["media_id"]), filename=prepared["filename"],
+			gateway_name=gateway or None,
+		)
 	except bridge.BridgeError as e:
 		payload = e.payload or {}
 		return _err(str(payload.get("error") or "send_failed"), str(payload.get("message") or "Could not send the certificate."))

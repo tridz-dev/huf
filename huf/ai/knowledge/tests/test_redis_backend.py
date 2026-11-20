@@ -301,6 +301,16 @@ class TestRedisBackend(unittest.TestCase):
 		# implementation path calls. Deletion goes through ft().search + delete.
 		self.mock_index.query.assert_not_called()
 
+	def test_delete_chunks_error_propagates(self):
+		"""A RediSearch failure during delete propagates so re-index never appends duplicates."""
+		self._initialize()
+		mock_ft = MagicMock()
+		mock_ft.search.side_effect = RuntimeError("boom")
+		self.mock_redis_client.ft.return_value = mock_ft
+
+		with self.assertRaises(RuntimeError):
+			self.backend.delete_chunks("input_1")
+
 	def test_delete_chunks_escapes_tag_query(self):
 		"""Non-alphanumeric characters in the input_id are escaped for the tag query."""
 		self.assertEqual(rb._escape_tag("KI-0001/abc"), "KI\\-0001\\/abc")

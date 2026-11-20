@@ -273,7 +273,7 @@ class TestWhatsAppToolBridgeRouting(unittest.TestCase):
 			result = json.loads(whatsapp.handle_action("send_message", to="+1 555-123-4567", message="hello"))
 		self.assertTrue(result["success"])
 		self.assertEqual(result["data"]["message_id"], "wamid.1")
-		mock_send.assert_called_once_with("WA-1", "15551234567", "hello")
+		mock_send.assert_called_once_with("WA-1", "15551234567", "hello", gateway_name="GW-1")
 		mock_post.assert_not_called()
 
 	def test_send_message_bridge_error_payload_is_returned(self):
@@ -588,6 +588,19 @@ class TestWhatsAppToolTypedSends(unittest.TestCase):
 		for param in ("latitude", "longitude", "emoji", "message_id", "sections", "display_text", "button_text", "media_id", "voice", "contact_name"):
 			self.assertIn(param, names)
 		self.assertEqual(len(names), len(tool["parameters"]))  # no duplicate parameter names
+
+
+class TestPreSendRefusalFailsClosed(unittest.TestCase):
+	def test_no_gateway_refuses_without_calling_policy(self):
+		with patch("huf.ai.whatsapp.outbound_policy.check_pre_send") as chk:
+			out = json.loads(whatsapp._pre_send_refusal({}, "15551234567", "text", "text"))
+		chk.assert_not_called()
+		self.assertEqual(out.get("error"), "blocked_by_hook")
+
+	def test_gateway_present_gates_with_it(self):
+		with patch("huf.ai.whatsapp.outbound_policy.check_pre_send") as chk:
+			self.assertIsNone(whatsapp._pre_send_refusal({"gateway_name": "GW"}, "1555", "text", "text"))
+		self.assertEqual(chk.call_args.args[0], "GW")
 
 
 if __name__ == "__main__":

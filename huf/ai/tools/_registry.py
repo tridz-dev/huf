@@ -8,9 +8,10 @@ Each entry is a dict with:
   - category: Agent Tool Type label
   - parameters: list of parameter definitions
 """
-
 from huf.ai.tools import telegram_admin_spec, telegram_tool_spec
 from huf.ai.tools.integration.registry_entries import with_service as _with_service
+from huf.ai.tools.s3.registry import S3_TOOLS
+from huf.ai.tools.messaging.outbound_actions import flag_outbound as _flag_outbound
 from huf.ai.tools.channel_specs import CHANNEL_TOOLS, COMMERCE_TOOLS, HANDOFF_TOOLS, LMS_TOOLS  # noqa: F401 (re-exported)
 
 # Array parameters whose elements are objects (the doctype row has no item-type field, so the schema
@@ -250,7 +251,7 @@ WHATSAPP_TOOLS = [
 			"send_list (to, body, button_text, sections [{title, rows: [{id, title, description}]}] up to 10 rows, optional header and footer), "
 			"send_cta_url (to, body, display_text, url, optional header and footer). "
 			"All send_* media, location, contact, reaction and interactive actions are free-form: they need an open 24h window (or the gateway's proactive-send setting), are refused for contacts who opted out, and are validated against Meta's limits before sending; "
-			"send_template (to/recipient, template_name, language_code, parameters, header_params, button_params), "
+			"send_template (to/recipient, template_name, language_code, parameters, header_params, button_params, carousel_params for carousel templates), "
 			"list_messages (to: the contact, limit, cursor; newest first, each item has the wamid in message_id), get_account_info, "
 			"list_templates (status; rows include review status and rejection reason), "
 			"create_template (template_name, category, language_code, body, sample_values, optional header_type/header/sample, "
@@ -273,10 +274,7 @@ WHATSAPP_TOOLS = [
 			_p("message", description="Message text for send_message. Alias: text."),
 			_p("text", description="Alias for 'message'."),
 			_p("template_name", description="Template name for send_template, or the new template's name for create_template."),
-			_p(
-				"category",
-				description="Template category for create_template: MARKETING or UTILITY.",
-			),
+			_p("category", description="Template category for create_template: MARKETING or UTILITY."),
 			_p("language_code", description="Template language code, e.g. 'en' or 'en_US' (default 'en')."),
 			_p("body", description="create_template: template body text (use {{1}}, {{2}} for variables). send_buttons / send_list / send_cta_url: the message text (buttons and cta_url max 1024, list max 4096)."),
 			_p("sample_values", description="Comma-separated example values for the body placeholders (create_template)."),
@@ -291,6 +289,7 @@ WHATSAPP_TOOLS = [
 			),
 			_p("header_params", type="array", description="send_template header parameter: one text value, or one {type: image|document, link} object."),
 			_p("button_params", type="array", description="send_template URL button parameters: [{index: 0, sub_type: 'url', text: '<url suffix>'}]."),
+			_p("carousel_params", type="array", description="send_template for a media-carousel template: one entry per card, [{header: {id} or {link} or an https URL, body: [values], buttons: [{index, sub_type: 'url'|'quick_reply', text}]}] in card order (2-10 cards). A JSON list or {cards: [...]} also works."),
 			_p("kind", description="Media kind for send_media: image, document, audio, video or sticker (the send_image/send_video/... actions set it for you)."),
 			_p("link", description="Public https URL of the media (send_media, send_image, send_video, send_audio, send_document, send_sticker). Give only one of link, media_id, file_url, file_id."),
 			_p("file_url", description="Media actions: file_url (/private/files/... or /files/...) of a Huf File created in this conversation (e.g. generate_image / generate_audio output) or uploaded by the user. Give exactly one of link, media_id, file_url, file_id. Other files are refused."),
@@ -2834,9 +2833,10 @@ ALL_INTEGRATION_TOOLS = (
 	+ _with_service(GOOGLE_PLACES_TOOLS, "google_maps")
 	+ _with_service(GOOGLE_DRIVE_TOOLS, "google_drive")
 	+ _with_service(GOOGLE_MEET_TOOLS, "google_meet")
+	+ _with_service(S3_TOOLS, "S3")
 	+ _with_service(SERP_HOTEL_TOOLS, "serpapi")
 	+ _with_service(SERP_REVIEW_TOOLS, "serpapi")
 	+ _with_service(SERP_YOUTUBE_TOOLS, "serpapi")
 	+ FRAPPE_CLOUD_TOOLS  # entries already declare service="frappe_cloud"
 )
-ALL_INTEGRATION_TOOLS = (*ALL_INTEGRATION_TOOLS, *CHANNEL_TOOLS)
+ALL_INTEGRATION_TOOLS = _flag_outbound((*ALL_INTEGRATION_TOOLS, *CHANNEL_TOOLS))

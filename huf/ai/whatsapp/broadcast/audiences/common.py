@@ -19,7 +19,7 @@ _LOG = "huf.whatsapp.audience"
 AUDIENCE_FIELDS = (
 	"name", "gateway", "title", "description", "is_adhoc", "consent_source", "consent_basis",
 	"purpose_marketing", "purpose_utility", "purpose_events", "default_consent_at", "consent_attested_by",
-	"consent_attested_at", "member_count", "suppressed_count", "creation", "modified",
+	"consent_attested_at", "member_count", "suppressed_count", "externally_managed", "managed_by", "creation", "modified",
 )  # fmt: skip
 
 
@@ -51,6 +51,7 @@ def _view(row: dict[str, Any]) -> dict[str, Any]:
 	out = {k: row.get(k) for k in AUDIENCE_FIELDS if not k.startswith("purpose_")}
 	out["consent_purposes"] = [p for p in aud.PURPOSES if cint(row.get(f"purpose_{p}"))]
 	out["is_adhoc"] = bool(cint(row.get("is_adhoc")))
+	out["externally_managed"] = bool(cint(row.get("externally_managed")))
 	for key in ("default_consent_at", "consent_attested_at", "creation", "modified"):
 		out[key] = _iso(out.get(key))
 	return out

@@ -25,7 +25,16 @@ export function draftToPreviewModel(draft: TemplateWizardDraft): PreviewModel {
     for (const token of extractVariables(draft.body, 'number')) list[Number(token) - 1] = draft.samples[token] ?? '';
     samples = Array.from(list, (v) => v ?? '');
   }
+  const cards = draft.carousel
+    ? draft.cards.map((c) => ({
+        header: { kind: c.headerType, url: c.mediaSample.trim() || undefined },
+        body: c.body,
+        samples: Array.from({ length: c.samples.length }, (_, i) => c.samples[i] ?? ''),
+        buttons: c.buttons.map((b) => ({ type: b.type, text: b.text.trim() || 'Button' })),
+      }))
+    : undefined;
   return {
+    cards,
     header: previewHeader,
     body: draft.body,
     samples,

@@ -1,4 +1,4 @@
-import { Bot, Settings } from 'lucide-react';
+import { SquareAsterisk, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { getServiceIdentity } from '@/data/serviceIdentity';
@@ -76,7 +76,7 @@ export function IntegrationCard({ setting, onOpen, onUseInAgent }: IntegrationCa
           }}
           data-testid={`integration-use-in-agent-${setting.name}`}
         >
-          <Bot className="mr-1.5 h-4 w-4" />
+          <SquareAsterisk className="mr-1.5 h-4 w-4" />
           Use in agent
         </Button>
         <Button

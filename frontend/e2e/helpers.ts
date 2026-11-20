@@ -33,6 +33,9 @@ export const ALL_CAPABILITIES = [
   'data.tables.manage',
   'data.records.view_own',
   'data.records.view_all',
+  'system.settings.manage',
+  'agent.edit',
+  'flows.manage',
 ];
 
 /**
@@ -59,6 +62,13 @@ export async function mockOfflineApis(page: Page) {
     return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ data: {} }) });
   });
   await page.route('**/api/method/**', (route) =>
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify({ message: [] }) }),
+  );
+
+  await page.route('**/api/method/huf.ai.flow.listing.cards.list_flow_cards**', (route) =>
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify({ message: { items: [], total: 0 } }) }),
+  );
+  await page.route('**/api/method/huf.ai.flow.listing.cards.list_flow_categories**', (route) =>
     route.fulfill({ contentType: 'application/json', body: JSON.stringify({ message: [] }) }),
   );
 

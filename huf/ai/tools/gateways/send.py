@@ -38,6 +38,8 @@ GATEWAY_SEND_TOOLS = [
 		),
 		"function_path": "huf.ai.tools.gateways.send.handle_gateway_send",
 		"category": "Communication Tools",
+		"is_outbound": 1,
+		"confirmation_summary_path": "huf.ai.tools.messaging.confirmation_summaries.single_target",
 		"parameters": [
 			{"label": "Gateway", "fieldname": "gateway", "type": "string", "required": 1,
 				"description": "Name of the Gateway to send through"},

@@ -21,6 +21,7 @@ class SeedResult:
     skipped: int
     errors: List[str]
     skipped_records: List[dict] = field(default_factory=list)
+    warnings: List[str] = field(default_factory=list)
 
 # Load order matters for dependency resolution.
 # Apps load last so a manifest may later reference agents/capabilities
@@ -54,6 +55,8 @@ def seed_app(app_name: str, huf_dir: Path) -> SeedResult:
 
                         if ok:
                             result.seeded += 1
+                            if isinstance(error, dict) and error.get("warnings"):
+                                result.warnings.extend(error["warnings"])
                         else:
                             result.skipped += 1
                             # Use a fallback name if the key isn't standard across all types
@@ -104,11 +107,30 @@ def on_app_installed(app_name):
         app_path = frappe.get_app_path(app_name)
         huf_dir = Path(app_path) / "huf"
         if huf_dir.is_dir():
+            # Tool Function rows must exist before agents link them.
+            try:
+                from huf.ai.tools.registry import sync_app_tools
+                sync_app_tools(app_name)
+            except Exception as e:
+                frappe.log_error(title="App Seeding Error", message=f"sync_app_tools failed for {app_name}: {e}")
             res = seed_app(app_name, huf_dir)
             if res.errors:
                 frappe.log_error(title="App Seeding", message=f"Seeding errors for {app_name}: {res.errors}")
     except Exception as e:
         frappe.log_error(title="App Seeding Error", message=f"Error in on_app_installed for {app_name}: {e}")
+
+def on_migrate():
+    """after_migrate hook: idempotently re-seed external apps.
+
+    Admin edits to seed-owned fields are preserved (see loaders._upsert_doc).
+    """
+    try:
+        for res in seed_all():
+            if res.errors:
+                frappe.log_error(title="App Seeding", message=f"Seeding errors for {res.app}: {res.errors}")
+    except Exception as e:
+        frappe.log_error(title="App Seeding Error", message=f"Error in on_migrate: {e}")
+
 
 @frappe.whitelist()
 def seed_all_apps():

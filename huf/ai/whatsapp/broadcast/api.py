@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import json
 import random
-import re
 import time
 from typing import Any
 
@@ -27,12 +26,29 @@ from huf.ai.whatsapp.management import (
 	_gateway_whatsapp_account,
 	_TEMPLATE_RECORD_RE,
 	_parse_json_arg,
-	_iso,
 )
 from huf.ai.gateway_adapters import whatsapp_bridge as bridge
 from huf.ai.whatsapp.broadcast import params as broadcast_params, policy
-from huf.ai.whatsapp.broadcast.checks import start_gate
+from huf.ai.whatsapp.broadcast.support import fallback_config
 
+
+from huf.ai.whatsapp.broadcast.support.api_helpers import (  # noqa: F401 - moved helpers, kept importable from api
+	_BROADCAST,
+	_BROADCAST_COUNT_FIELDS,
+	_BROADCAST_FIELDS,
+	_BROADCAST_LOG,
+	_BROADCAST_RECIPIENT,
+	_LONG_DIGITS_RE,
+	_UNSET,
+	_broadcast_audit,
+	_broadcast_view,
+	_carousel_template_problem,
+	_json_param,
+	_mask_digits,
+	_mask_phone,
+	_queued_count,
+	_reset_attestation,
+)
 
 # --- Broadcast (WP-7) ----------------------------------------------------------------------------
 # Thin API over broadcast_recipients / broadcast_limits / broadcast_cost / broadcast_runner. Those
@@ -40,19 +56,6 @@ from huf.ai.whatsapp.broadcast.checks import start_gate
 #
 # Scheduling and retry (``retry_failed_recipients``: only retryable ``failed`` rows go into a NEW Draft that must be
 # attested and started again) live in ``broadcast.schedule``.
-
-_BROADCAST = "WhatsApp Broadcast"
-_BROADCAST_RECIPIENT = "WhatsApp Broadcast Recipient"
-_BROADCAST_LOG = "huf.whatsapp.broadcast"
-_BROADCAST_COUNT_FIELDS = (
-	"total", "queued", "sending", "sent", "delivered", "read", "failed", "deferred", "unknown", "skipped",
-)
-_BROADCAST_FIELDS = (
-	"name", "title", "status", "pause_reason", "gateway", "whatsapp_account", "template", "template_name",
-	"language_code", "category", "body_params", "header_params", "button_params", "consent_source",
-	"consent_attested", "consent_attested_by", "consent_attested_at", "max_recipients", "mps", "send_via",
-	"scheduled_at", "started_by", "started_at", "finished_at", "creation", "modified", *_BROADCAST_COUNT_FIELDS,
-)
 
 
 def _broadcast_row(broadcast: Any) -> dict[str, Any] | dict[str, str]:
@@ -83,54 +86,6 @@ def _require_broadcast_read(broadcast: Any) -> dict[str, Any]:
 	return row
 
 
-def _broadcast_audit(broadcast: str, action: str, **details: Any) -> None:
-	"""Audit every mutation: structured log line plus a Comment on the Broadcast."""
-	user = getattr(frappe.session, "user", None)
-	extra = ", ".join(f"{k}={v}" for k, v in details.items() if v not in (None, ""))
-	frappe.logger(_BROADCAST_LOG).info(f"broadcast={broadcast} action={action} user={user} {extra}".strip())
-	try:
-		frappe.get_doc(_BROADCAST, broadcast).add_comment("Info", f"{action} by {user}" + (f": {extra}" if extra else ""))
-	except Exception:
-		frappe.logger(_BROADCAST_LOG).warning(f"broadcast={broadcast} action={action}: audit comment failed")
-
-
-def _broadcast_view(row: dict[str, Any]) -> dict[str, Any]:
-	out = {k: row.get(k) for k in _BROADCAST_FIELDS if k not in _BROADCAST_COUNT_FIELDS}
-	out["counts"] = {k: int(row.get(k) or 0) for k in _BROADCAST_COUNT_FIELDS}
-	for key in ("body_params", "header_params", "button_params"):
-		value = out.get(key)
-		if isinstance(value, str) and value:
-			try:
-				out[key] = json.loads(value)
-			except ValueError:
-				pass
-	for key in ("creation", "modified", "scheduled_at", "started_at", "finished_at", "consent_attested_at"):
-		out[key] = _iso(out.get(key))
-	return out
-
-
-def _queued_count(broadcast: str) -> int:
-	"""Recipients still to send (queued + deferred): same set as broadcast_cost.confirm_token and the runner."""
-	return int(frappe.db.count(_BROADCAST_RECIPIENT, {"broadcast": broadcast, "status": ["in", ["queued", "deferred"]]}) or 0)
-
-
-def _mask_phone(value: Any) -> Any:
-	text = str(value or "")
-	return ("*" * max(len(text) - 4, 0) + text[-4:]) if text else value
-
-
-_LONG_DIGITS_RE = re.compile(r"\d{7,}")
-
-
-def _mask_digits(text: Any) -> Any:
-	return _LONG_DIGITS_RE.sub(lambda m: _mask_phone(m.group(0)), text) if isinstance(text, str) else text
-
-
-def _json_param(value: Any, label: str) -> Any:
-	parsed = _parse_json_arg(value, label)
-	return parsed if parsed not in ("", None) else None
-
-
 @frappe.whitelist(methods=["POST"])
 @rate_limit(limit=policy.rate("rate_create_broadcast"), seconds=60)
 @_bridge_guard
@@ -146,6 +101,12 @@ def create_broadcast(
 	max_recipients: Any = None,
 	mps: Any = None,
 	send_via: str | None = None,
+	carousel_params: Any = None,
+	fallback_channels: Any = None,
+	fallback_body: str | None = None,
+	fallback_body_kind: str | None = None,
+	fallback_sms_gateway: str | None = None,
+	fallback_email_gateway: str | None = None,
 ) -> dict[str, Any]:
 	"""Create a Draft broadcast on a Gateway. The template must be an APPROVED template of the Gateway's own account.
 
@@ -161,8 +122,6 @@ def create_broadcast(
 		return _error("invalid_name", "Template must be the Meta name or '<name>-<language_code>'.")
 	if not title or not str(title).strip():
 		return _error("invalid_title", "A title is required.")
-	from huf.ai.whatsapp.broadcast import recipients as br
-
 	docname = bridge._template_docname(account, str(template).strip(), language_code or None)
 	tpl = None
 	if docname and frappe.db.exists("WhatsApp Templates", docname):
@@ -188,6 +147,17 @@ def create_broadcast(
 		problem = broadcast_params.header_error(header) or broadcast_params.button_error(buttons)
 		if problem:
 			return _error("invalid_params", problem)
+		carousel = _json_param(carousel_params, "carousel_params")
+		problem = broadcast_params.carousel_error(carousel) or _carousel_template_problem(tpl, carousel)
+		if problem:
+			return _error("invalid_params", problem)
+		fallback = fallback_config.clean({
+			"fallback_channels": fallback_channels, "fallback_body": fallback_body, "fallback_body_kind": fallback_body_kind,
+			"fallback_sms_gateway": fallback_sms_gateway, "fallback_email_gateway": fallback_email_gateway,
+		})
+		problem = fallback_config.check_complete(fallback.get("fallback_channels"), fallback.get("fallback_body"))
+		if problem:
+			return _error("invalid_fallback", problem)
 		cap = int(max_recipients) if max_recipients not in (None, "") else None
 		ceiling = policy.get("max_recipients_ceiling")
 		if cap is not None and (cap < 1 or (ceiling is not None and cap > ceiling)):
@@ -213,11 +183,13 @@ def create_broadcast(
 			"body_params": json.dumps(body) if body is not None else None,
 			"header_params": json.dumps(header) if header is not None else None,
 			"button_params": json.dumps(buttons) if buttons is not None else None,
+			"carousel_params": json.dumps(carousel) if carousel is not None else None,
 			"consent_source": (consent_source or "").strip() or None,
 			"consent_attested": 0,
 			"max_recipients": cap,
 			"mps": rate,
 			"send_via": send_via,
+			**fallback,
 		}
 	).insert(ignore_permissions=True)  # authority was proven by _send_authority above
 	_broadcast_audit(doc.name, "created", gateway=gateway, template=tpl.get("name"), category=tpl.get("category"))
@@ -225,10 +197,86 @@ def create_broadcast(
 
 
 @frappe.whitelist(methods=["POST"])
+@rate_limit(limit=policy.rate("rate_create_broadcast"), seconds=60)
+@_bridge_guard
+def update_broadcast(
+	broadcast: str | None = None,
+	title: str | None = None,
+	carousel_params: Any = _UNSET,
+	fallback_channels: Any = _UNSET,
+	fallback_body: Any = _UNSET,
+	fallback_body_kind: Any = _UNSET,
+	fallback_sms_gateway: Any = _UNSET,
+	fallback_email_gateway: Any = _UNSET,
+) -> dict[str, Any]:
+	"""Change a Draft broadcast's title, carousel defaults or cross-channel failover. Only the fields you pass change.
+
+	Failover: ``fallback_channels`` an ordered subset of ``["sms","email"]`` (empty list clears it, with the body and
+	kind), ``fallback_body`` plain text (required when channels are set), ``fallback_body_kind`` ``marketing`` or
+	``transactional``, and the SMS / email Gateways (you need read access to them). Queued recipient rows get the new
+	values. Needs write authority on the broadcast's Gateway."""
+	row = _require_broadcast_write(broadcast)
+	if row.get("error"):
+		return row
+	if row.get("status") != "Draft":
+		return _error("not_draft", "Only a Draft broadcast can be changed.")
+	given = {
+		"fallback_channels": fallback_channels, "fallback_body": fallback_body, "fallback_body_kind": fallback_body_kind,
+		"fallback_sms_gateway": fallback_sms_gateway, "fallback_email_gateway": fallback_email_gateway,
+	}
+	given = {k: v for k, v in given.items() if v is not _UNSET}
+	values: dict[str, Any] = {}
+	try:
+		if title is not None:
+			if not str(title).strip():
+				return _error("invalid_title", "A title is required.")
+			values["title"] = str(title).strip()[:140]
+		if carousel_params is not _UNSET:
+			carousel = _json_param(carousel_params, "carousel_params")
+			problem = broadcast_params.carousel_error(carousel) or _carousel_template_problem(row.get("template"), carousel)
+			if problem:
+				return _error("invalid_params", problem)
+			values["carousel_params"] = json.dumps(carousel) if carousel is not None else None
+		cleaned = fallback_config.clean(given)
+		if "fallback_channels" in given and not cleaned.get("fallback_channels"):
+			cleaned.update({"fallback_body": None, "fallback_body_kind": None})  # cleared channels clear the config
+		values.update(cleaned)
+		merged = {**{k: frappe.db.get_value(_BROADCAST, broadcast, k) for k in fallback_config.CONFIG_FIELDS}, **values}
+		problem = fallback_config.check_complete(merged.get("fallback_channels"), merged.get("fallback_body"))
+		if problem:
+			return _error("invalid_fallback", problem)
+	except (TypeError, ValueError) as exc:
+		return _error("invalid_params", str(exc))
+	if not values:
+		return _error("nothing_to_update", "Pass at least one field to change.")
+	prev = frappe.flags.get("in_broadcast_api")
+	frappe.flags.in_broadcast_api = True
+	try:
+		frappe.db.set_value(_BROADCAST, broadcast, values)
+		if any(k in values for k in fallback_config.CONFIG_FIELDS):
+			fallback_config.propagate(broadcast)
+	finally:
+		frappe.flags.in_broadcast_api = prev
+	_broadcast_audit(broadcast, "updated", fields=",".join(sorted(values)))
+	return {"success": True, "broadcast": broadcast, "updated": sorted(values)}
+
+
+@frappe.whitelist(methods=["POST"])
 @rate_limit(limit=policy.rate("rate_add_recipients"), seconds=60)
 @_bridge_guard
-def add_broadcast_recipients(broadcast: str | None = None, recipients: Any = None, csv_text: str | None = None) -> dict[str, Any]:
-	"""Add recipients to a Draft broadcast, from a list (``["+1555..", {"recipient":..,"params":..}]``) or CSV text."""
+def add_broadcast_recipients(
+	broadcast: str | None = None,
+	recipients: Any = None,
+	csv_text: str | None = None,
+	fallback_channels: Any = None,
+	fallback_body: str | None = None,
+	fallback_body_kind: str | None = None,
+	fallback_sms_gateway: str | None = None,
+	fallback_email_gateway: str | None = None,
+) -> dict[str, Any]:
+	"""Add recipients to a Draft broadcast, from a list (``["+1555..", {"recipient":..,"params":..,"fallback_email":..}]``)
+	or CSV text. The ``fallback_*`` arguments (validated like ``update_broadcast``) override the broadcast's failover for
+	every row of this call; a row may also carry its own ``fallback_*`` keys and a ``fallback_email``."""
 	row = _require_broadcast_write(broadcast)
 	if row.get("error"):
 		return row
@@ -253,6 +301,16 @@ def add_broadcast_recipients(broadcast: str | None = None, recipients: Any = Non
 	if len(items) > per_request:
 		return _error("too_many_recipients", f"At most {per_request} recipients per request.")
 	rows = [{"recipient": str(i)} if not isinstance(i, dict) else i for i in items]
+	batch = {k: v for k, v in {
+		"fallback_channels": fallback_channels, "fallback_body": fallback_body, "fallback_body_kind": fallback_body_kind,
+		"fallback_sms_gateway": fallback_sms_gateway, "fallback_email_gateway": fallback_email_gateway,
+	}.items() if v not in (None, "")}
+	if batch:
+		try:
+			batch = fallback_config.clean(batch)
+		except ValueError as exc:
+			return _error("invalid_fallback", str(exc))
+		rows = [{**batch, **r} for r in rows]
 	prev = frappe.flags.get("in_broadcast_api")
 	frappe.flags.in_broadcast_api = True  # recipient rows are insert-guarded; prepare() is the only writer
 	result = None
@@ -284,19 +342,6 @@ def add_broadcast_recipients(broadcast: str | None = None, recipients: Any = Non
 		added=result.get("added"), skipped=result.get("skipped_total"), invalid=result.get("invalid_total"),
 	)
 	return {"success": True, **result}
-
-
-def _reset_attestation(broadcast: str, why: str) -> None:
-	"""The attestation covered a different recipient list; the owner must attest again."""
-	prev = frappe.flags.get("in_broadcast_api")
-	frappe.flags.in_broadcast_api = True
-	try:
-		frappe.db.set_value(_BROADCAST, broadcast, {
-			"consent_attested": 0, "consent_attested_by": None, "consent_attested_at": None,
-		})
-	finally:
-		frappe.flags.in_broadcast_api = prev
-	frappe.get_doc(_BROADCAST, broadcast).add_comment("Info", f"attestation reset: {why}")
 
 
 @frappe.whitelist(methods=["POST"])
@@ -386,7 +431,8 @@ def preview_broadcast(broadcast: str | None = None) -> dict[str, Any]:
 	row = _require_broadcast_write(broadcast)  # preview feeds the start decision, so it needs write authority too
 	if row.get("error"):
 		return row
-	from huf.ai.whatsapp.broadcast import cost as broadcast_cost, limits as broadcast_limits
+	from huf.ai.whatsapp.broadcast import limits as broadcast_limits
+	from huf.ai.whatsapp.broadcast.support import cost as broadcast_cost
 
 	limits = broadcast_limits.preview(broadcast)
 	cost = broadcast_cost.estimate(broadcast)
@@ -405,96 +451,11 @@ def preview_broadcast(broadcast: str | None = None) -> dict[str, Any]:
 	}
 
 
-def _is_api_key_caller() -> bool:
-	"""True when the request is authenticated with an API key/secret (``Authorization: token key:secret``)."""
-	header = frappe.get_request_header("Authorization")
-	return isinstance(header, str) and header.strip().lower().startswith("token ")
-
-
-@frappe.whitelist(methods=["POST"])
-@rate_limit(limit=policy.rate("rate_start_broadcast"), seconds=60)
-@_bridge_guard
-def start_broadcast(
-	broadcast: str | None = None, confirm_count: Any = None, override_warnings: Any = None
-) -> dict[str, Any]:
-	"""Start (or restart a Draft) broadcast.
-
-	The typed count must equal the queued recipients (when ``require_typed_count`` is on; API-key callers skip it).
-	``override_warnings``: acknowledged warning codes; the runner refuses with ``warnings_changed`` (plus the
-	current warnings) when they differ, and enforces consent and one-running under a lock."""
-	row = _require_broadcast_write(broadcast)
-	if row.get("error"):
-		return row
-	acknowledged = start_gate.parse_override_warnings(override_warnings)
-	if acknowledged is None:
-		return _error("invalid_override_warnings", "override_warnings must be a JSON list of warning codes.")
-	queued = _queued_count(broadcast)
-	if queued <= 0:
-		return _error("no_recipients", "There are no queued recipients.")
-	if policy.get("require_typed_count") and not _is_api_key_caller():
-		if str(confirm_count if confirm_count is not None else "").strip() != str(queued):
-			return _error("confirm_mismatch", f"Type the number of queued recipients ({queued}) to confirm.")
-	from huf.ai.whatsapp.broadcast import runner as broadcast_runner
-
-	try:
-		result = broadcast_runner.start(broadcast, user=frappe.session.user, override_warnings=acknowledged, expected_count=queued)
-	except broadcast_runner.StartRefused as exc:
-		return {"success": False, "error": exc.code, "message": str(exc), **exc.extra}
-	_broadcast_audit(broadcast, "started", queued=queued, override_warnings=acknowledged)
-	return {"success": True, "broadcast": broadcast, "queued": queued, **(result if isinstance(result, dict) else {})}
-
-
-def _runner_action(broadcast: str | None, action: str, **kwargs: Any) -> dict[str, Any]:
-	row = _require_broadcast_write(broadcast)
-	if row.get("error"):
-		return row
-	from huf.ai.whatsapp.broadcast import runner as broadcast_runner
-
-	result = getattr(broadcast_runner, action)(broadcast, **kwargs)
-	_broadcast_audit(broadcast, action, **kwargs)
-	status = frappe.db.get_value(_BROADCAST, broadcast, "status")
-	return {"success": True, "broadcast": broadcast, "status": status, **(result if isinstance(result, dict) else {})}
-
-
-@frappe.whitelist(methods=["POST"])
-@rate_limit(limit=policy.rate("rate_pause_broadcast"), seconds=60)
-@_bridge_guard
-def pause_broadcast(broadcast: str | None = None) -> dict[str, Any]:
-	"""Pause a running broadcast; queued rows stay queued."""
-	return _runner_action(broadcast, "pause", reason="manual")
-
-
-@frappe.whitelist(methods=["POST"])
-@rate_limit(limit=policy.rate("rate_resume_broadcast"), seconds=60)
-@_bridge_guard
-def resume_broadcast(broadcast: str | None = None) -> dict[str, Any]:
-	"""Resume a paused broadcast."""
-	return _runner_action(broadcast, "resume")
-
-
-@frappe.whitelist(methods=["POST"])
-@rate_limit(limit=policy.rate("rate_cancel_broadcast"), seconds=60)
-@_bridge_guard
-def cancel_broadcast(broadcast: str | None = None) -> dict[str, Any]:
-	"""Cancel a broadcast: queued rows become skipped (cancelled); already sent messages are unaffected."""
-	return _runner_action(broadcast, "cancel")
-
-
-@frappe.whitelist(methods=["POST"])
-@rate_limit(limit=policy.rate("rate_pause_all"), seconds=60)
-@_bridge_guard
-def pause_all_broadcasts(gateway: str | None = None) -> dict[str, Any]:
-	"""Kill switch: pause every running broadcast of a Gateway."""
-	refused = _require_send_authority(gateway)
-	if refused:
-		return refused
-	running = frappe.get_all(_BROADCAST, filters={"gateway": gateway, "status": "Running"}, pluck="name") or []
-	from huf.ai.whatsapp.broadcast import runner as broadcast_runner
-
-	result = broadcast_runner.pause_all(gateway, "kill_switch")
-	broadcast_runner.hold_scheduled(gateway)
-	for name in running:
-		_broadcast_audit(name, "pause_all", gateway=gateway)
-	frappe.logger(_BROADCAST_LOG).info(f"gateway={gateway} action=pause_all user={frappe.session.user} paused={len(running)}")
-	return {"success": True, "gateway": gateway, "paused": running, **(result if isinstance(result, dict) else {})}
-
+from huf.ai.whatsapp.broadcast.support.api_controls import (  # noqa: E402,F401 - whitelisted endpoints, re-exported
+	_is_api_key_caller,
+	cancel_broadcast,
+	pause_all_broadcasts,
+	pause_broadcast,
+	resume_broadcast,
+	start_broadcast,
+)

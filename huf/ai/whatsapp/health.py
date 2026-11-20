@@ -399,7 +399,7 @@ def _gateway_stamp(gateway: dict[str, Any], field: str) -> datetime | None:
 def _cached_token_check(gateway_name: str) -> dict[str, Any] | None:
 	"""The last live token check, from cache only (no network, no secrets). None when never checked."""
 	try:
-		from huf.ai.whatsapp.token_check import _result_key
+		from huf.ai.whatsapp.setup.token_check import _result_key
 
 		cached = frappe.cache().get_value(_result_key(gateway_name), expires=True)
 	except Exception:

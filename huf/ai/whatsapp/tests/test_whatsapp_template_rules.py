@@ -114,7 +114,13 @@ CASES = [
 	# category / ttl
 	("category utility", _spec(category="UTILITY"), None),
 	("category marketing", _spec(category="MARKETING"), None),
-	("category authentication", _spec(category="AUTHENTICATION"), ("category", "category_not_supported")),
+	("auth with header", {"category": "AUTHENTICATION", "header": "Hi"}, ("header", "not_allowed")),
+	("auth with footer", {"category": "AUTHENTICATION", "footer": "x"}, ("footer", "not_allowed")),
+	("auth with buttons", {"category": "AUTHENTICATION", "buttons": [URLB]}, ("buttons", "not_allowed")),
+	("auth expiry 0", {"category": "AUTHENTICATION", "code_expiration_minutes": 0}, ("code_expiration_minutes", "expiry_out_of_range")),
+	("auth expiry 91", {"category": "AUTHENTICATION", "code_expiration_minutes": 91}, ("code_expiration_minutes", "expiry_out_of_range")),
+	("auth expiry str", {"category": "AUTHENTICATION", "code_expiration_minutes": "x"}, ("code_expiration_minutes", "invalid_expiry")),
+	("auth ttl", {"category": "AUTHENTICATION", "ttl_seconds": 60}, ("ttl_seconds", "ttl_not_allowed")),
 	("category junk", _spec(category="FOO"), ("category", "invalid_category")),
 	("ttl ok", _spec(category="UTILITY", ttl_seconds=30), None),
 	("ttl max ok", _spec(category="UTILITY", ttl_seconds=43200), None),
@@ -143,7 +149,7 @@ class TestTemplateRules(unittest.TestCase):
 	def test_every_rule_code_is_exercised(self):
 		wanted = {
 			"too_long", "required", "body_starts_with_variable", "body_ends_with_variable", "mixed_parameter_format",
-			"invalid_variable_name", "sample_missing", "sample_looks_like_personal_data", "category_not_supported",
+			"invalid_variable_name", "sample_missing", "sample_looks_like_personal_data",
 			"ttl_out_of_range", "ttl_not_allowed", "too_many_url_buttons", "too_many_copy_code_buttons",
 			"too_many_phone_buttons", "buttons_not_grouped", "too_many_buttons", "parameter_format_mismatch",
 		}
@@ -221,3 +227,49 @@ class TestSendComponents(unittest.TestCase):
 		self.assertEqual(comps[1], {"type": "body", "parameters": [{"type": "text", "text": "Ann"}]})
 		self.assertEqual(comps[2]["sub_type"], "url")
 		self.assertNotIn("parameter_name", comps[1]["parameters"][0])
+
+
+class TestAuthentication(unittest.TestCase):
+	def _auth(self, **extra):
+		spec, errors = wt.validate_template_spec({"category": "AUTHENTICATION", **extra})
+		self.assertEqual(errors, [])
+		return spec
+
+	def test_meta_payload_fixed_format(self):
+		spec = self._auth(add_security_recommendation=True, code_expiration_minutes=10)
+		meta = wt.build_meta_payload(spec)
+		self.assertEqual(meta["parameter_format"], "POSITIONAL")
+		self.assertNotIn("message_send_ttl_seconds", meta)
+		self.assertEqual(
+			meta["components"],
+			[
+				{"type": "BODY", "add_security_recommendation": True},
+				{"type": "FOOTER", "code_expiration_minutes": 10},
+				{"type": "BUTTONS", "buttons": [{"type": "OTP", "otp_type": "COPY_CODE", "text": "Copy code"}]},
+			],
+		)
+
+	def test_minimal_has_no_footer_or_recommendation(self):
+		comps = wt.build_meta_components(self._auth(otp_button_text="Copy"))
+		self.assertEqual(comps[0], {"type": "BODY"})
+		self.assertEqual([c["type"] for c in comps], ["BODY", "BUTTONS"])
+		self.assertEqual(comps[1]["buttons"][0]["text"], "Copy")
+
+	def test_send_components_from_spec_and_meta_list(self):
+		expected = [
+			{"type": "body", "parameters": [{"type": "text", "text": "123456"}]},
+			{"type": "button", "sub_type": "url", "index": "0", "parameters": [{"type": "text", "text": "123456"}]},
+		]
+		spec = self._auth()
+		self.assertEqual(wt.build_send_components(spec, ["123456"]), (expected, []))
+		meta_list = wt.build_meta_components(spec)
+		self.assertEqual(wt.build_send_components(meta_list, "123456"), (expected, []))
+
+	def test_send_rejects_bad_code_without_echo(self):
+		spec = self._auth()
+		for bad in ([], [""], ["12 34"], ["1" * 16], ["a", "b"]):
+			comps, errors = wt.build_send_components(spec, bad)
+			self.assertEqual(comps, [])
+			self.assertTrue(errors)
+		_, errors = wt.build_send_components(spec, ["12-3456789012345678"])
+		self.assertNotIn("12-3456789012345678", repr(errors))

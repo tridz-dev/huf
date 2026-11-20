@@ -102,6 +102,10 @@ class GatewayInboundRequest:
 	headers: Mapping[str, str] = field(default_factory=dict)
 	query: Mapping[str, str] = field(default_factory=dict)
 	method: str = "POST"
+	# Request URL parts as seen by the server (needed by URL-signed providers such as Twilio).
+	url: str = ""
+	path: str = ""
+	query_string: str = ""
 
 
 @dataclass(frozen=True, slots=True)

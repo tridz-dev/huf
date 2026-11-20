@@ -30,7 +30,7 @@ class IntegrationSettings(Document):
 		self._ensure_telegram_webhook_config()
 
 		if self.service == "whatsapp":
-			from huf.ai.whatsapp.credential_sync import validate_credential
+			from huf.ai.whatsapp.setup.credential_sync import validate_credential
 
 			validate_credential(self)
 	
@@ -44,7 +44,7 @@ class IntegrationSettings(Document):
 		never more than once per cooldown period.
 		"""
 		if self.service == "whatsapp":
-			from huf.ai.whatsapp.credential_sync import on_credential_update
+			from huf.ai.whatsapp.setup.credential_sync import on_credential_update
 
 			on_credential_update(self)
 			return

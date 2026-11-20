@@ -85,6 +85,11 @@ jobs:
         working-directory: frappe-bench
         run: bench get-app --skip-assets huf "${{ github.workspace }}"
 
+      # Some knowledge tests import pytest, which bench does not install.
+      - name: Install pytest
+        working-directory: frappe-bench
+        run: ./env/bin/pip install pytest
+
       - name: New site
         working-directory: frappe-bench
         run: |

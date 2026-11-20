@@ -37,6 +37,6 @@ test.describe('Settings, Users & Roles', () => {
     // /settings now routes to AgentSettingsPage — see App.tsx.
     await goto(page, '/settings');
     await waitForContent(page);
-    await expect(page.getByRole('heading', { name: 'Agent settings' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Code and skills' })).toBeVisible();
   });
 });
