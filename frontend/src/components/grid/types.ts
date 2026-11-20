@@ -34,6 +34,8 @@ export interface GridColumn<R = Record<string, CellValue>> {
   /** Return a one-line fix hint, or null when the value is fine. */
   validate?: (value: CellValue, row: R) => string | null;
   getValue?: (row: R) => CellValue;
+  /** Set false to keep this header static when the grid is sortable. */
+  sortable?: boolean;
 }
 
 export const TYPE_LABEL: Record<ColumnType, string> = {
@@ -121,4 +123,38 @@ export function parseTsv(text: string): string[][] {
   const lines = text.replace(/\r\n?/g, '\n').split('\n');
   if (lines.length > 1 && lines[lines.length - 1] === '') lines.pop();
   return lines.map((l) => l.split('\t'));
+}
+
+/** One plain sentence per type, shown by ColumnTypePicker. */
+export const TYPE_DESCRIPTION: Record<ColumnType, string> = {
+  text: 'A short line, like a name or an email.',
+  longtext: 'Paragraphs, like notes or a description.',
+  number: 'Whole or decimal numbers you can add up.',
+  currency: 'Money, shown with two decimals.',
+  date: 'A calendar day, sortable oldest to newest.',
+  select: 'One choice from a list you define.',
+  link: 'Points to a record in another table.',
+  checkbox: 'Yes or no.',
+};
+
+/* ---------- Sorting (§6.11.5) ---------- */
+
+export type SortDirection = 'asc' | 'desc';
+export interface GridSort {
+  key: string;
+  direction: SortDirection;
+}
+
+/** Header click cycle on one column: none → asc → desc → none. Another column starts at asc. */
+export function nextSort(current: GridSort | null | undefined, key: string): GridSort | null {
+  if (!current || current.key !== key) return { key, direction: 'asc' };
+  return current.direction === 'asc' ? { key, direction: 'desc' } : null;
+}
+
+/** Type-aware direction words, shared by DataGrid headers and SortChip. */
+export function sortDirectionLabel(type: ColumnType, direction: SortDirection): string {
+  if (isNumeric(type)) return direction === 'asc' ? '1→9' : '9→1';
+  if (type === 'date') return direction === 'asc' ? 'Oldest first' : 'Newest first';
+  if (type === 'checkbox') return direction === 'asc' ? 'No first' : 'Yes first';
+  return direction === 'asc' ? 'A→Z' : 'Z→A';
 }

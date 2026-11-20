@@ -7,10 +7,16 @@ export { DataGrid, GRID_ROW_H, type DataGridProps } from './DataGrid';
 export { CellDisplay, CellEditor, type CellEditorProps } from './GridCell';
 export { useGridNav, type CellPos, type CommitResult } from './useGridNav';
 export { FilterChip, SortChip, type FilterChipProps, type SortChipProps } from './FilterChip';
-export { GridToolbar, MatchCount, FieldsMenu, GridFooter, type GridToolbarProps, type FieldsMenuProps } from './GridToolbar';
+export { GridToolbar, MatchCount, FieldsMenu, GridFooter, footerText, type GridToolbarProps, type FieldsMenuProps } from './GridToolbar';
 export { BulkActionBar, type BulkAction, type BulkActionBarProps } from './BulkActionBar';
 export { RecordDrawer, type RecordDrawerProps } from './RecordDrawer';
 export { PermissionMatrix, applyGrant, type MatrixSubject, type MatrixCapability, type MatrixValue, type PermissionMatrixProps } from './PermissionMatrix';
-export { ImportMapper, SKIP_COLUMN, type SourceColumn, type TargetField, type RejectedRow, type ImportMapperProps } from './ImportMapper';
+export { ImportMapper, SKIP_COLUMN, importGaps, type SourceColumn, type TargetField, type RejectedRow, type ImportMapperProps } from './ImportMapper';
 export { ChangeImpactNotice, type ImpactLine, type ChangeImpactNoticeProps } from './ChangeImpactNotice';
 export { ConfirmDestructive, type Dependent, type ConfirmDestructiveProps } from './ConfirmDestructive';
+export { SortHeaderButton, ariaSort } from './FilterChip';
+export {
+  FilterBuilder, FilterEditor, FilterValueInput, filterOpsFor, filterNeedsValue, filterValueText,
+  type FilterOp, type FilterCondition, type FilterBuilderProps, type FilterEditorProps, type FilterValueInputProps,
+} from './FilterBuilder';
+export { ColumnTypePicker, ColumnTypeList, gridTypeOptions, type ColumnTypeOption, type ColumnTypePickerProps, type ColumnTypeListProps } from './ColumnTypePicker';

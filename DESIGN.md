@@ -265,6 +265,7 @@ Reading order, top to bottom: **head → status sentence → toolbar (ask + filt
 - **Reason line**: a problem row explains itself in one plain sentence under the title, with its own fix link ("This PDF is password protected. Retry").
 - **Adding state** (`adding`): row arrives with the §8 **drop-in**, title in `--steel`, `aria-busy`. Arriving rows sort to the top.
 - Hover → `--paper-deep`. Title is a button when the row opens a detail sheet.
+- **Configurable columns**: the 4-label tuple keeps the default ledger. For other ledgers (a tables list: *Name · Rows · Fields · Updated*) pass column defs `ResourceColumn[]` (`{ key, label, width?: CSS grid track, align?: start|center|end }`). The first def is always the title cell (glyph + title + reason); each row passes `cells={{ [key]: node }}` for the rest; the overflow slot stays last (`2rem`). Below `md` only title + actions show. Never fake extra columns by stuffing several values into `origin`.
 
 #### 6.10.5 Inline progress row (`ProgressRow`)
 - A long-running job is a **row at the top of the list it fills** (inside `ResourceListSlot`), not a card above the page, not a toast.
@@ -334,6 +335,9 @@ One vocabulary, user words, one glyph each: **Text, Long text, Number, Currency,
 | Link | `--signal-ink` text + external glyph | `Input` |
 | Checkbox | `Checkbox`, toggles in place (no edit mode) | — |
 
+#### 6.11.2a Type picker (`ColumnTypePicker`, `ColumnTypeList`)
+- Choosing a field type is choosing a meaning: each option is icon + user word + one-line description (*Currency — Money, shown with two decimals.*), grouped (Text, Numbers, Date, Choice, Reference) and searchable above 8 options. `ColumnTypePicker` is the popover form (closes on pick); `ColumnTypeList` is the inline list for sheets/create forms. Options default to `gridTypeOptions()` from `TYPE_LABEL`/`TYPE_ICON`/`TYPE_DESCRIPTION`; apps with a wider vocabulary (rating, phone, layout breaks) pass `ColumnTypeOption[]` with their own `value`s — still user words, never storage type names. `role=listbox`, options `aria-selected`, ↑/↓ move.
+
 #### 6.11.3 States
 | State | Look | Behaviour |
 |---|---|---|
@@ -360,15 +364,18 @@ One vocabulary, user words, one glyph each: **Text, Long text, Number, Currency,
 | Edit | Enter | save, move down |
 | Edit | Tab / Shift+Tab | save, move right / left |
 | Edit | Esc | cancel, restore the old value, focus back on the cell |
+| Header | Enter / Space / click | sort this column: none → ascending → descending → none |
 
 Saving: `onCellChange(rowId, key, value)` may return or resolve a one-line message (or throw) to reject the value; the grid shows it as the invalid state. Required columns reject empty values ("Company can't be empty"); `validate` adds per-column rules.
 
 #### 6.11.5 Toolbar (`GridToolbar`, `FilterChip`, `SortChip`, `MatchCount`, `FieldsMenu`, `GridFooter`)
 - Order: search (`AskField` from §6.10.3; `/` focuses it) → `Filter` / `Sort` / `FieldsMenu` triggers (outline `sm` buttons) → applied chips → right side `MatchCount` + `AutosaveStatus` (§6.12.6).
 - **FilterChip** reads as a sentence — *Status is Active*, *Renewal is before 1 Jan 2027* — with plain operators (is, is not, contains, is before, is empty). The body opens its editor popover; × or Backspace/Delete removes it. **SortChip**: *↑ Renewal Oldest first*, click reverses, × removes; direction words fit the type (A→Z, 1→9, Oldest first).
-- **MatchCount**: *212 of 1,284 rows* while filtered, *1,284 rows* otherwise — true totals from the server, never "25+". Polite live region.
+- **Sortable headers**: give `DataGrid` `sort` + `onSortChange` and every header becomes a button (columns opt out with `sortable: false`). Click, Enter or Space cycles none → asc → desc → none (`nextSort`); the `th` carries `aria-sort`; the arrow is `--signal` when active and appears on hover/focus otherwise. The same `{ key, direction }` drives the toolbar `SortChip` (use `sortDirectionLabel(type, direction)` for its words) — one sort state, two controls. Header keys never reach the cell navigation.
+- **FilterBuilder / FilterEditor**: the Filter trigger plus applied chips. The editor is field → condition → value: conditions come from `filterOpsFor(type)` (text: is, is not, contains, does not contain; numbers: is more/less than, is at least/most; dates: is before/after; dropdown and link: is / is not; checkbox: is; every type but checkbox: is empty / is not empty), and the value editor fits the type (`FilterValueInput`: date input, decimal keypad, option list, Yes/No checkbox; no value for *is empty*). Each condition is `{ field, op, value: string }`; callers map it to their query language once. Clicking a chip reopens the editor with *Update*.
+- **MatchCount**: *212 of 1,284 rows* while filtered, *1,284 rows* otherwise — true totals from the server. Polite live region.
 - **FieldsMenu**: checkbox list to show/hide columns; the title field is `locked`. The trigger shows "N hidden".
-- **GridFooter**: *Showing 1–25 of 1,284 rows*, a pager slot, and the key legend (Tab next · Enter save · Esc cancel · ⌘V paste rows).
+- **GridFooter**: *Showing 1–25 of 1,284 rows*, a pager slot, and the key legend (Tab next · Enter save · Esc cancel · ⌘V paste rows). When the backend can't count cheaply, say so honestly: `approximate` → *Showing 1–25 of 25+ rows* (at least this many), `total={null}` → *Showing 1–25 rows*. Never invent a total.
 
 #### 6.11.6 Bulk selection (`BulkActionBar`)
 - Floats bottom-centre over the grid (`--ink` bar, `shadow-lg`, drop-in): *3 rows selected* · *Select all 1,284* (when only a page is selected) · actions · ×. Non-destructive actions first, destructive last. Esc clears.
@@ -382,12 +389,13 @@ Saving: `onCellChange(rowId, key, value)` may return or resolve a one-line messa
 
 #### 6.11.9 Change impact (`ChangeImpactNotice`)
 - Before any edit that touches existing data (type change, field delete, import "replace"), show counts inline above the save button: *1,180 values convert · 104 values will be cleared*. Safe lines are quiet; loss lines are emphasised and switch the notice to `--warning` (or `--destructive` with `severity=error` when nothing can be restored). While counting: *Checking your data…*. Rename-only changes say they are safe.
+- Optional footer: `onConfirm` / `onCancel` (`confirmLabel` default *Apply change*) render right-aligned buttons inside the notice; confirm is `destructive` when a loss line has a count, disabled while `checking`, and shows a spinner while `confirming`. Use the footer when the notice *is* the confirm step (inline type change, import replace). When others depend on the thing being removed, open `ConfirmDestructive` from the confirm instead — never both stacked.
 
 #### 6.11.10 Destructive confirm (`ConfirmDestructive`)
 - The one dialog for deleting or replacing something others depend on: consequence with real numbers (*Removes 1,284 rows and 7 fields*), a **dependents list** (kind + name: *Agent · Billing agent*, *Flow · Renewal reminder*), recovery truth (*You can restore it for 30 days* / *This can't be undone*), optional type-the-name confirm, an optional gentler `alternative` (*Turn off instead*). The action stays disabled until the typed name matches.
 
 #### 6.11.11 Import (`ImportMapper`)
-- The review step of any file import: one row per incoming column — header + 3 sample values (mono) → target `Select` (fields with their type, *New field "X"*, *Don't import*) → a check in plain words (*All valid*, *12 not dates*, *Skipped*). Then a preview of the first rows, then the result line (*1,272 rows ready · 12 can't be imported · Download rejected rows*) and the rejected rows with reasons. The import button imports the valid rows; mode (add / update by key / replace) sits in the `header` slot, and "replace" shows a `ChangeImpactNotice`.
+- The review step of any file import: one row per incoming column — header + 3 sample values (mono) → target `Select` (fields with their type, *New field "X"*, *Don't import*) → a check in plain words (*All valid*, *12 not dates*, *Skipped*). Then a preview of the first rows, then the result line (*1,272 rows ready · 12 can't be imported · Download rejected rows*) and the rejected rows with reasons. Above the mapping: a `--warning` alert when a `required` target has no column (*Required field Name has no column. New rows will be rejected unless you map one.*) and a quiet note listing the columns set to *Don't import* (*2 columns won't be imported: Fax, Notes*) — `importGaps(columns, targets)` computes both. *New field "X"* calls `onCreateTarget(header, detectedType)` so the create form preselects the type. The import button imports the valid rows; mode (add / update by key / replace) sits in the `header` slot, and "replace" shows a `ChangeImpactNotice`.
 
 #### 6.11.12 Copy, motion and a11y
 - Copy: user words for types and operators; counts with separators; errors say how to fix (*Enter a number, like 1200*), never codes.
