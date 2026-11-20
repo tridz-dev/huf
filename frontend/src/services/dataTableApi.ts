@@ -9,7 +9,11 @@ import type {
 	HufDataTable,
 	TableAgentAccess,
 	TableAgentAction,
+	TableRecordsParams,
+	TableRecordsResult,
 } from '@/types/dataTable.types';
+
+export * from './dataTables/rowsApi';
 
 /**
  * Fields needed for the data tables list page
@@ -357,27 +361,24 @@ export async function getHufTableNames(): Promise<
  */
 export async function getTableRecords(
 	doctypeName: string,
-	params?: {
-		fields?: string[];
-		filters?: Array<[string, string, unknown]>;
-		search?: string;
-		limit?: number;
-		start?: number;
-		orderBy?: { field: string; order: 'asc' | 'desc' };
-	}
-): Promise<{ items: Record<string, unknown>[]; hasMore: boolean }> {
+	params?: TableRecordsParams
+): Promise<TableRecordsResult> {
 	try {
 		const result = await call.get('huf.huf.doctype.huf_data_table.api.get_table_records', {
 			doctype_name: doctypeName,
 			fields: params?.fields ? JSON.stringify(params.fields) : undefined,
-			filters: params?.filters ? JSON.stringify(params.filters) : undefined,
+			filters: params?.filters?.length ? JSON.stringify(params.filters) : undefined,
 			search: params?.search,
 			limit: params?.limit || 20,
 			start: params?.start || 0,
 			order_by: params?.orderBy ? `${params.orderBy.field} ${params.orderBy.order}` : 'modified desc',
 		});
-		
-		return result.message as { items: Record<string, unknown>[]; hasMore: boolean };
+		const m = (result.message ?? {}) as Partial<TableRecordsResult>;
+		return {
+			items: m.items ?? [],
+			hasMore: !!m.hasMore,
+			total: typeof m.total === 'number' ? m.total : undefined,
+		};
 	} catch (error) {
 		handleFrappeError(error, 'Error fetching records');
 	}
