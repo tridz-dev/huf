@@ -120,7 +120,7 @@ export function DataTableViewPage() {
 	return (
 		<PageFrame
 			title={schema.table_name}
-			meta={`${rowCount !== undefined ? `${rowCount.toLocaleString()} rows · ` : ''}${dataFields(schema).length} fields`}
+			meta={`${rowCount !== undefined ? `${rowCount.toLocaleString()} rows · ` : ''}${dataFields(schema).length} ${dataFields(schema).length === 1 ? 'field' : 'fields'}`}
 			actions={actions}
 			tabs={
 				<Tabs value={tab} onValueChange={(v) => setTab(parseTableTab(v))}>
@@ -152,6 +152,7 @@ export function DataTableViewPage() {
 				open={importOpen}
 				onOpenChange={(o) => !o && update({ import: null })}
 				schema={schema}
+				onSchemaChanged={loadSchema}
 				onImported={() => {
 					update({ import: null, tab: null });
 					void loadSchema();

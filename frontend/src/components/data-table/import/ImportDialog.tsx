@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,7 +12,10 @@ import { Spinner } from '@/components/ui/spinner';
 import { ImportMapper, ChangeImpactNotice, SKIP_COLUMN, type SourceColumn, type TargetField } from '@/components/grid';
 import { DropZone, ProgressRow } from '@/components/patterns';
 import { toColumnType } from '@/data/fieldTypeLabels';
-import type { DataTableSchema, ImportMode } from '@/types/dataTable.types';
+import { LAYOUT_FIELD_TYPES } from '@/data/fieldTypes';
+import { updateDataTable } from '@/services/dataTableApi';
+import { deriveFieldname } from '../builder/fieldRules';
+import type { DataTableFieldType, DataTableSchema, ImportMode } from '@/types/dataTable.types';
 import { useImportFlow } from './useImportFlow';
 
 export interface ImportDialogProps {
@@ -19,6 +23,8 @@ export interface ImportDialogProps {
 	onOpenChange: (open: boolean) => void;
 	schema: DataTableSchema;
 	onImported?: () => void;
+	/** Reload the schema after a field is created from the mapper. */
+	onSchemaChanged?: () => Promise<void> | void;
 }
 
 const MODES: { value: ImportMode; label: string; hint: string }[] = [
@@ -38,7 +44,11 @@ export function downloadRejected(csv: string, filename = 'rejected-rows.csv') {
 	URL.revokeObjectURL(url);
 }
 
-export function ImportDialog({ open, onOpenChange, schema, onImported }: ImportDialogProps) {
+const FIELDTYPE_FOR: Record<string, DataTableFieldType> = {
+	text: 'Data', longtext: 'Text', number: 'Float', currency: 'Currency', date: 'Date', checkbox: 'Check', select: 'Data', link: 'Data',
+};
+
+export function ImportDialog({ open, onOpenChange, schema, onImported, onSchemaChanged }: ImportDialogProps) {
 	const flow = useImportFlow(schema.name, onImported);
 	const [sheetUrl, setSheetUrl] = useState('');
 	const { reset } = flow;
@@ -51,11 +61,28 @@ export function ImportDialog({ open, onOpenChange, schema, onImported }: ImportD
 	}, [open, reset]);
 
 	const targets: TargetField[] = useMemo(
-		() => schema.fields.map((f) => ({ key: f.fieldname, label: f.label, type: toColumnType(f.fieldtype) })),
+		() =>
+			schema.fields
+				.filter((f) => !LAYOUT_FIELD_TYPES.includes(f.fieldtype))
+				.map((f) => ({ key: f.fieldname, label: f.label || f.fieldname, type: toColumnType(f.fieldtype), required: !!f.reqd })),
 		[schema.fields]
 	);
 
 	const { preview, phase } = flow;
+
+	const createTarget = async (header: string, detected?: string) => {
+		const taken = new Set(schema.fields.map((f) => f.fieldname));
+		const fieldname = deriveFieldname(header, taken, `field_${taken.size + 1}`);
+		try {
+			await updateDataTable(schema.name, {
+				fields: [...schema.fields, { fieldname, fieldtype: FIELDTYPE_FOR[detected ?? 'text'] ?? 'Data', label: header }],
+			});
+			await onSchemaChanged?.();
+			flow.map(header, fieldname);
+		} catch (err) {
+			toast.error('Could not add the field', { description: err instanceof Error ? err.message : undefined });
+		}
+	};
 	const columns: SourceColumn[] = useMemo(
 		() =>
 			(preview?.columns ?? []).map((c, i) => ({
@@ -170,6 +197,7 @@ export function ImportDialog({ open, onOpenChange, schema, onImported }: ImportD
 						header={modePicker}
 						columns={columns}
 						targets={targets}
+						onCreateTarget={(h, d) => void createTarget(h, d)}
 						onMap={(h, t) => flow.map(h, t === SKIP_COLUMN ? null : t)}
 						preview={{ headers: preview.columns.map((c) => c.header), rows: preview.sample_rows.slice(0, 5).map((row) => row.map((v) => String(v ?? ''))) }}
 						rejected={preview.invalid_rows.map((x) => ({ row: x.row, reason: x.message }))}

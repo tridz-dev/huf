@@ -34,7 +34,8 @@ describe('TablesLedger', () => {
 		const onAgentAccess = vi.fn();
 		render(<TablesLedger rows={[row()]} onOpen={vi.fn()} onAgentAccess={onAgentAccess} onDelete={vi.fn()} />);
 		expect(screen.getAllByText('Billing agent: read, edit')[0]).toBeInTheDocument();
-		expect(screen.getByText('1,284 rows · 7 fields')).toBeInTheDocument();
+		expect(screen.getByText('1,284')).toBeInTheDocument();
+		expect(screen.getByText('7')).toBeInTheDocument();
 		await userEvent.click(screen.getAllByRole('button', { name: 'More actions for Customers' })[0]);
 		await userEvent.click(await screen.findByRole('menuitem', { name: 'Agent access' }));
 		expect(onAgentAccess).toHaveBeenCalled();
