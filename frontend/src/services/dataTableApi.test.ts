@@ -12,6 +12,8 @@ import {
 	bulkInsertRows,
 	bulkUpdateRows,
 	exportRows,
+	getImportJobStatus,
+	isQueuedImport,
 	getTableAgentActivity,
 	getTableRecords,
 	listTablesSummary,
@@ -61,6 +63,19 @@ describe('dataTableApi', () => {
 		expect(post).toHaveBeenNthCalledWith(2, `${P}.import_export.run_import`, {
 			table_id: 'T', file_url: '/f.csv', mapping: '{"A":"a"}', mode: 'update', key_field: 'a',
 		});
+	});
+
+	it('queued import, confirm_replace and job status', async () => {
+		post.mockResolvedValue({ message: { queued: true, job_id: 'J1' } } as never);
+		const r = await runImport('T', '/f.csv', { mapping: {}, mode: 'replace', confirmReplace: true });
+		expect(isQueuedImport(r)).toBe(true);
+		expect(post).toHaveBeenLastCalledWith(`${P}.import_export.run_import`, {
+			table_id: 'T', file_url: '/f.csv', mapping: '{}', mode: 'replace', key_field: undefined, confirm_replace: 1,
+		});
+		expect(isQueuedImport({ inserted: 1, updated: 0, rejected: 0, rejected_rows: [], rejected_csv: '' })).toBe(false);
+		get.mockResolvedValue({ message: { status: 'running' } } as never);
+		expect((await getImportJobStatus('J1')).status).toBe('running');
+		expect(get).toHaveBeenLastCalledWith(`${P}.import_export.get_import_job_status`, { job_id: 'J1' });
 	});
 
 	it('read wrappers use GET', async () => {

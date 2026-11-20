@@ -4,7 +4,9 @@ import type {
 	BulkInsertResult,
 	ExportRowsParams,
 	ExportRowsResult,
+	ImportJobStatus,
 	ImportPreview,
+	QueuedImport,
 	RunImportParams,
 	RunImportResult,
 	TableAgentActivityItem,
@@ -128,11 +130,24 @@ export async function previewImport(tableId: string, fileUrl: string): Promise<I
 	}
 }
 
+export function isQueuedImport(r: RunImportResult | QueuedImport): r is QueuedImport {
+	return (r as QueuedImport).queued === true;
+}
+
+export async function getImportJobStatus(jobId: string): Promise<ImportJobStatus> {
+	try {
+		const r = await call.get(`${P}.import_export.get_import_job_status`, { job_id: jobId });
+		return r.message as ImportJobStatus;
+	} catch (error) {
+		handleFrappeError(error, 'Error checking import status');
+	}
+}
+
 export async function runImport(
 	tableId: string,
 	fileUrl: string,
 	params: RunImportParams
-): Promise<RunImportResult> {
+): Promise<RunImportResult | QueuedImport> {
 	try {
 		const r = await call.post(`${P}.import_export.run_import`, {
 			table_id: tableId,
@@ -140,8 +155,9 @@ export async function runImport(
 			mapping: JSON.stringify(params.mapping),
 			mode: params.mode,
 			key_field: params.keyField,
+			confirm_replace: params.confirmReplace ? 1 : undefined,
 		});
-		return r.message as RunImportResult;
+		return r.message as RunImportResult | QueuedImport;
 	} catch (error) {
 		handleFrappeError(error, 'Error importing rows');
 	}

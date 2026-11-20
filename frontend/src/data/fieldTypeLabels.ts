@@ -18,50 +18,54 @@ import {
 	Type,
 	type LucideIcon,
 } from 'lucide-react';
+import { TYPE_ICON, TYPE_LABEL, type ColumnType } from '@/components/grid';
 import type { DataTableFieldType } from '@/types/dataTable.types';
-
-/** Column types understood by the DataGrid. */
-export type GridColumnType = 'text' | 'number' | 'date' | 'select' | 'check' | 'longtext' | 'link';
 
 interface TypeInfo {
 	label: string;
 	icon: LucideIcon;
-	grid: GridColumnType;
+	column?: ColumnType;
+	/** App-own wording/glyph that is more specific than the grid's. */
+	own?: boolean;
 }
 
 const INFO: Partial<Record<DataTableFieldType, TypeInfo>> = {
-	Data: { label: 'Text', icon: Type, grid: 'text' },
-	'Small Text': { label: 'Long text', icon: AlignLeft, grid: 'longtext' },
-	Text: { label: 'Long text', icon: AlignLeft, grid: 'longtext' },
-	'Long Text': { label: 'Long text', icon: AlignLeft, grid: 'longtext' },
-	Int: { label: 'Whole number', icon: Hash, grid: 'number' },
-	Float: { label: 'Number', icon: Hash, grid: 'number' },
-	Currency: { label: 'Currency', icon: DollarSign, grid: 'number' },
-	Percent: { label: 'Percent', icon: Percent, grid: 'number' },
-	Check: { label: 'Checkbox', icon: CheckSquare, grid: 'check' },
-	Date: { label: 'Date', icon: Calendar, grid: 'date' },
-	Datetime: { label: 'Date and time', icon: CalendarClock, grid: 'date' },
-	Time: { label: 'Time', icon: Clock, grid: 'text' },
-	Duration: { label: 'Duration', icon: Timer, grid: 'text' },
-	Select: { label: 'Dropdown', icon: ListFilter, grid: 'select' },
-	Link: { label: 'Link to table', icon: Link2, grid: 'link' },
-	Rating: { label: 'Rating', icon: Star, grid: 'number' },
-	Color: { label: 'Color', icon: Palette, grid: 'text' },
-	Phone: { label: 'Phone', icon: Phone, grid: 'text' },
-	Attach: { label: 'File', icon: File, grid: 'text' },
-	'Attach Image': { label: 'Image', icon: Image, grid: 'text' },
+	Data: { label: 'Text', icon: Type },
+	'Small Text': { label: 'Long text', icon: AlignLeft, column: 'longtext' },
+	Text: { label: 'Long text', icon: AlignLeft, column: 'longtext' },
+	'Long Text': { label: 'Long text', icon: AlignLeft, column: 'longtext' },
+	Int: { label: 'Whole number', icon: Hash, column: 'number', own: true },
+	Float: { label: 'Number', icon: Hash, column: 'number', own: true },
+	Currency: { label: 'Currency', icon: DollarSign, column: 'currency' },
+	Percent: { label: 'Percent', icon: Percent, column: 'number', own: true },
+	Check: { label: 'Checkbox', icon: CheckSquare, column: 'checkbox' },
+	Date: { label: 'Date', icon: Calendar, column: 'date' },
+	Datetime: { label: 'Date and time', icon: CalendarClock, column: 'date', own: true },
+	Time: { label: 'Time', icon: Clock },
+	Duration: { label: 'Duration', icon: Timer },
+	Select: { label: 'Dropdown', icon: ListFilter, column: 'select' },
+	Link: { label: 'Link to table', icon: Link2, column: 'link', own: true },
+	Rating: { label: 'Rating', icon: Star, column: 'number', own: true },
+	Color: { label: 'Color', icon: Palette },
+	Phone: { label: 'Phone', icon: Phone },
+	Attach: { label: 'File', icon: File },
+	'Attach Image': { label: 'Image', icon: Image },
 };
 
+export function toColumnType(frappeType: string): ColumnType {
+	return INFO[frappeType as DataTableFieldType]?.column ?? 'text';
+}
+
 export function friendlyTypeName(frappeType: string): string {
-	return INFO[frappeType as DataTableFieldType]?.label ?? frappeType;
+	const info = INFO[frappeType as DataTableFieldType];
+	if (info?.column && !info.own) return TYPE_LABEL[info.column];
+	return info?.label ?? frappeType;
 }
 
 export function typeGlyph(frappeType: string): LucideIcon {
-	return INFO[frappeType as DataTableFieldType]?.icon ?? Type;
-}
-
-export function gridColumnType(frappeType: string): GridColumnType {
-	return INFO[frappeType as DataTableFieldType]?.grid ?? 'text';
+	const info = INFO[frappeType as DataTableFieldType];
+	if (info?.column && !info.own) return TYPE_ICON[info.column];
+	return info?.icon ?? Type;
 }
 
 /** One entry per friendly name, for type pickers (Long text maps to Text). */

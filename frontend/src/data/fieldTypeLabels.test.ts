@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FRIENDLY_TYPES, friendlyTypeName, gridColumnType, typeGlyph } from './fieldTypeLabels';
+import { FRIENDLY_TYPES, friendlyTypeName, toColumnType, typeGlyph } from './fieldTypeLabels';
 
 describe('fieldTypeLabels', () => {
 	it('maps friendly names', () => {
@@ -14,13 +14,14 @@ describe('fieldTypeLabels', () => {
 		expect(friendlyTypeName('Weird')).toBe('Weird');
 	});
 	it('maps grid types', () => {
-		expect(gridColumnType('Int')).toBe('number');
-		expect(gridColumnType('Check')).toBe('check');
-		expect(gridColumnType('Select')).toBe('select');
-		expect(gridColumnType('Link')).toBe('link');
-		expect(gridColumnType('Text')).toBe('longtext');
-		expect(gridColumnType('Datetime')).toBe('date');
-		expect(gridColumnType('Nope')).toBe('text');
+		expect(toColumnType('Int')).toBe('number');
+		expect(toColumnType('Currency')).toBe('currency');
+		expect(toColumnType('Check')).toBe('checkbox');
+		expect(toColumnType('Select')).toBe('select');
+		expect(toColumnType('Link')).toBe('link');
+		expect(toColumnType('Text')).toBe('longtext');
+		expect(toColumnType('Datetime')).toBe('date');
+		expect(toColumnType('Nope')).toBe('text');
 	});
 	it('has glyphs and unique picker labels', () => {
 		expect(typeGlyph('Date')).toBeTruthy();

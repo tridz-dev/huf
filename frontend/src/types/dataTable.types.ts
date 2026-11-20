@@ -215,6 +215,8 @@ export interface RunImportParams {
 	mapping: Record<string, string | null>;
 	mode: ImportMode;
 	keyField?: string;
+	/** Must be true for mode 'replace'. */
+	confirmReplace?: boolean;
 }
 
 export interface RunImportResult {
@@ -223,6 +225,18 @@ export interface RunImportResult {
 	rejected: number;
 	rejected_rows: ImportRowIssue[];
 	rejected_csv: string;
+}
+
+export interface QueuedImport {
+	queued: true;
+	job_id: string;
+}
+
+export interface ImportJobStatus {
+	status: 'queued' | 'running' | 'done' | 'failed';
+	progress?: number;
+	result?: RunImportResult;
+	error?: string;
 }
 
 export interface ExportRowsParams {
