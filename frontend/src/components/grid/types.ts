@@ -120,9 +120,41 @@ export const cellValue = <R,>(col: GridColumn<R>, row: R): CellValue =>
 
 /** Clipboard text (tab-separated, from a spreadsheet) to a matrix of cells. */
 export function parseTsv(text: string): string[][] {
-  const lines = text.replace(/\r\n?/g, '\n').split('\n');
-  if (lines.length > 1 && lines[lines.length - 1] === '') lines.pop();
-  return lines.map((l) => l.split('\t'));
+  // RFC 4180 style, with tab as the delimiter: a cell that starts with a quote
+  // may hold tabs and newlines, and "" inside it is a literal quote.
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let cell = '';
+  let i = 0;
+  const n = text.length;
+  while (i < n) {
+    if (cell === '' && text[i] === '"') {
+      i++;
+      let quoted = '';
+      let closed = false;
+      while (i < n) {
+        if (text[i] === '"') {
+          if (text[i + 1] === '"') { quoted += '"'; i += 2; continue; }
+          i++; closed = true; break;
+        }
+        quoted += text[i++];
+      }
+      // An unclosed quote, or text after the closing quote, is kept literally.
+      cell = closed ? quoted : `"${quoted}`;
+      while (i < n && text[i] !== '\t' && text[i] !== '\n' && text[i] !== '\r') cell += text[i++];
+      continue;
+    }
+    const ch = text[i];
+    if (ch === '\t') { row.push(cell); cell = ''; i++; continue; }
+    if (ch === '\r' || ch === '\n') {
+      row.push(cell); rows.push(row); row = []; cell = '';
+      i += ch === '\r' && text[i + 1] === '\n' ? 2 : 1;
+      continue;
+    }
+    cell += ch; i++;
+  }
+  if (cell !== '' || row.length > 0 || rows.length === 0) { row.push(cell); rows.push(row); }
+  return rows;
 }
 
 /** One plain sentence per type, shown by ColumnTypePicker. */

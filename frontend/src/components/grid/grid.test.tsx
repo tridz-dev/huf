@@ -179,3 +179,65 @@ describe('cell vocabulary', () => {
     expect(parseTsv('a\tb\r\nc\td\n')).toEqual([['a', 'b'], ['c', 'd']]);
   });
 });
+
+describe('DataGrid Shift-range selection (DSF-1)', () => {
+  type R = { id: string; name: string };
+  const cols: GridColumn<R>[] = [{ key: 'name', label: 'Name', type: 'text' }];
+  const mk = (ids: string[]) => ids.map((id) => ({ id, name: id.toUpperCase() }));
+  function Sel({ onSel }: { onSel: (s: Set<string>) => void }) {
+    const [rows, setRows] = useState(mk(['a', 'b', 'c', 'd', 'e', 'f']));
+    const [sel, setSel] = useState(new Set<string>());
+    return (
+      <>
+        <button onClick={() => setRows(mk(['x', 'y', 'z']))}>Next page</button>
+        <button onClick={() => setRows((rs) => [...rs].reverse())}>Sort</button>
+        <DataGrid<R> label="T" columns={cols} rows={rows} getRowId={(r) => r.id} selected={sel}
+          onSelectedChange={(s) => { setSel(s); onSel(s); }} onCellChange={() => {}} />
+      </>
+    );
+  }
+  const shiftClick = async (name: string) => {
+    const u = userEvent.setup();
+    await u.keyboard('{Shift>}');
+    await u.click(screen.getByRole('checkbox', { name }));
+    await u.keyboard('{/Shift}');
+  };
+
+  it('does not crash when the anchor index is past the new row set', async () => {
+    const onSel = vi.fn();
+    render(<Sel onSel={onSel} />);
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Select row 6' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Next page' }));
+    await shiftClick('Select row 2');
+    expect([...onSel.mock.lastCall![0]].sort()).toEqual(['f', 'y']);
+  });
+
+  it('selects the right range after the rows change', async () => {
+    const onSel = vi.fn();
+    render(<Sel onSel={onSel} />);
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Select row 2' })); // b
+    await userEvent.click(screen.getByRole('button', { name: 'Sort' })); // f e d c b a
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Select row 1' })); // f, new anchor
+    await shiftClick('Select row 3'); // f..d
+    expect([...onSel.mock.lastCall![0]].sort()).toEqual(['b', 'd', 'e', 'f']);
+  });
+});
+
+describe('parseTsv quoted cells (DSF-2)', () => {
+  it.each([
+    ['plain', 'a\tb\nc\td', [['a', 'b'], ['c', 'd']]],
+    ['CRLF + trailing newline', 'a\tb\r\nc\td\r\n', [['a', 'b'], ['c', 'd']]],
+    ['quoted multi-line', '"line 1\nline 2"\tx\ny\tz', [['line 1\nline 2', 'x'], ['y', 'z']]],
+    ['quoted CRLF inside', '"p\r\nq"\tx\r\n', [['p\r\nq', 'x']]],
+    ['quoted tab', '"a\tb"\tc', [['a\tb', 'c']]],
+    ['escaped quotes', '"say ""hi"""\t2', [['say "hi"', '2']]],
+    ['quote mid-cell is literal', '5" pipe\tok', [['5" pipe', 'ok']]],
+    ['empty cells', 'a\t\t\n\tb', [['a', '', ''], ['', 'b']]],
+    ['empty quoted', '""\tx', [['', 'x']]],
+    ['unclosed quote kept', '"abc', [['"abc']]],
+    ['empty input', '', [['']]],
+    ['blank last row kept', 'a\n\n', [['a'], ['']]],
+  ])('%s', (_n, text, out) => {
+    expect(parseTsv(text)).toEqual(out);
+  });
+});
