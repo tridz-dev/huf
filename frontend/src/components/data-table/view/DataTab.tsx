@@ -46,6 +46,8 @@ export const DataTab = forwardRef<DataTabHandle, DataTabProps>(function DataTab(
 	const [gridSort, setGridSort] = useState<GridSort | null>(null);
 	const sort = useMemo(() => (gridSort ? { field: gridSort.key, order: gridSort.direction } : null), [gridSort]);
 	const [page, setPage] = useState(0);
+	// Flips to false once a delete had to use the per-row fallback (not restorable).
+	const [undoAvailable, setUndoAvailable] = useState(true);
 	const [hidden, setHidden] = useState<Set<string>>(new Set());
 	const [selected, setSelected] = useState<Set<string>>(new Set());
 	const [drawerId, setDrawerId] = useState<string | null>(null);
@@ -184,6 +186,7 @@ export const DataTab = forwardRef<DataTabHandle, DataTabProps>(function DataTab(
 		const gone = names;
 		try {
 			const restorable = await track(() => deleteMany(doctype, gone));
+			setUndoAvailable(restorable);
 			setSelected(new Set());
 			await reload();
 			toast(`Deleted ${gone.length.toLocaleString()} ${gone.length === 1 ? 'row' : 'rows'}`, {
@@ -324,7 +327,7 @@ export const DataTab = forwardRef<DataTabHandle, DataTabProps>(function DataTab(
 				onOpenChange={setConfirmDelete}
 				title={`Delete ${names.length.toLocaleString()} ${names.length === 1 ? 'row' : 'rows'}?`}
 				consequence="These rows will be removed from the table."
-				recovery="You can undo this right after."
+				recovery={undoAvailable ? 'You can undo this right after.' : 'This cannot be undone.'}
 				actionLabel="Delete"
 				onConfirm={doDelete}
 			/>
