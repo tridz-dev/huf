@@ -15,3 +15,4 @@ export { ResultCard, ResultsNote, highlightTerms, matchStrength, type MatchStren
 export { DropZone, StepHint, type DropZoneProps, type Step } from './DropZone';
 export { SettingsSheet, SettingsSection, SettingsAdvanced, DangerZone, type SettingsSheetProps, type DangerZoneProps } from './SettingsSheet';
 export { Checklist, type ChecklistItem, type ChecklistProps } from './Checklist';
+export { LinkedListPopover, type LinkedItem, type LinkedListPopoverProps } from './LinkedListPopover';

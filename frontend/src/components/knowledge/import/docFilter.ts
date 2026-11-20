@@ -12,3 +12,6 @@ export function filterInputs(inputs: KnowledgeInputDoc[], filter: DocFilter | nu
   if (!filter) return inputs;
   return inputs.filter((i) => i.status === DOC_FILTER_STATUS[filter]);
 }
+
+/** Filter shown in the resource page pills: a status filter or everything. */
+export type SourceFilter = DocFilter | 'all';
