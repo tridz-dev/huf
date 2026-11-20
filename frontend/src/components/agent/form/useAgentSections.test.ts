@@ -89,7 +89,57 @@ describe('useAgentSections', () => {
     await act(async () => { await result.current.sections.retry(); });
     expect(result.current.sections.conflictFields).toEqual(['description']);
     expect(result.current.form.getValues('agent_name')).toBe('Server Name');
+    expect(api.updateAgentSection).toHaveBeenCalledTimes(1); // only the original failed save; no auto-save after reload
+  });
+
+  async function conflicted() {
+    const hook = await mount();
+    act(() => { hook.result.current.form.setValue('description', 'mine'); hook.result.current.form.setValue('instructions', 'mine-i'); });
+    api.updateAgentSection.mockRejectedValueOnce(new Error('Document has been modified after you have opened it'));
+    await act(async () => { await hook.result.current.sections.saveNow(); });
+    server = { ...server, description: 'theirs' };
+    rev = 'r9';
+    api.updateAgentSection.mockClear();
+    await act(async () => { await hook.result.current.sections.retry(); });
+    return hook;
+  }
+
+  it('conflict: no save call until resolved', async () => {
+    const { result } = await conflicted();
+    expect(result.current.sections.conflictFields).toEqual(['description']);
+    expect(api.updateAgentSection).not.toHaveBeenCalled();
+    await act(async () => { await result.current.sections.saveNow(); });
+    expect(api.updateAgentSection).not.toHaveBeenCalled();
+  });
+
+  it('Use theirs takes the server value', async () => {
+    const { result } = await conflicted();
+    act(() => { result.current.sections.resolveConflict('description', 'theirs'); });
+    expect(result.current.form.getValues('description')).toBe('theirs');
+    expect(result.current.sections.conflictFields).toEqual([]);
+  });
+
+  it('Keep mine saves the local value with the fresh revision', async () => {
+    const { result } = await conflicted();
+    act(() => { result.current.sections.resolveConflict('description', 'mine'); });
+    await act(async () => { await result.current.sections.saveNow(); });
     const last = api.updateAgentSection.mock.calls.at(-1)!;
+    expect((last[2] as Record<string, unknown>).description).toBe('mine');
     expect(last[3]).toBe('r9');
+  });
+
+  it('partial reload keeps the error and does not save', async () => {
+    const { result } = await mount();
+    act(() => { result.current.form.setValue('description', 'mine'); });
+    api.updateAgentSection.mockRejectedValueOnce(new Error('Document has been modified after you have opened it'));
+    await act(async () => { await result.current.sections.saveNow(); });
+    api.updateAgentSection.mockClear();
+    api.getAgentSection.mockImplementation(async (_id: string, sec: string) => {
+      if (sec === 'tools') throw new Error('down');
+      return { name: 'AG-1', modified: rev, values: { ...server } };
+    });
+    await act(async () => { await result.current.sections.retry(); });
+    expect(api.updateAgentSection).not.toHaveBeenCalled();
+    expect(result.current.sections.status).toBe('error');
   });
 });
