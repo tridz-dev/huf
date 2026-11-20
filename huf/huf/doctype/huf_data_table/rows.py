@@ -87,7 +87,7 @@ def count_records(doctype_name, query) -> int:
 		return frappe.db.count(doctype_name, filters=query["filters"] or None)
 	rows = frappe.get_list(
 		doctype_name,
-		fields=["count(name) as total"],
+		fields=[{"COUNT": "name", "as": "total"}],
 		filters=query["filters"],
 		or_filters=query["or_filters"],
 		limit_page_length=0,
