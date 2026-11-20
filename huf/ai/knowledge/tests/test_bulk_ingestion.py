@@ -227,7 +227,9 @@ def hdr():
 	fake.QueryDeadlockError = _Deadlock
 	fake.throw.side_effect = lambda msg: (_ for _ in ()).throw(_Boom(str(msg)))
 	fake.db.exists.return_value = None
-	with patch.object(mod, "frappe", fake), patch.object(mod.time, "sleep") as sleep:
+	with patch.object(mod, "frappe", fake), patch.object(mod, "_", lambda m: m), patch.object(
+		mod.time, "sleep"
+	) as sleep:
 		yield mod, fake, sleep
 
 
