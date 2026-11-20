@@ -12,11 +12,17 @@ export interface AgentTryPanelProps {
   getDraftOverrides: () => DraftOverrides;
   starters?: string[];
   /** Coaching banner slot; receives the last reply's tool-call names. */
-  renderBanner?: (last: { toolNames: string[]; response: string | null } | null) => ReactNode;
+  renderBanner?: (last: { toolNames: string[]; response: string | null; errored?: boolean } | null) => ReactNode;
   /** Footer model line, e.g. "Model: Gemini Flash (recommended)". */
   modelLabel?: string;
   badge?: string;
 }
+
+/** Provider credential failures read as a friendly message with a link, never the raw backend text. */
+export const MISSING_KEY_TEXT = "This agent's model has no API key. Add a key in Providers.";
+const MISSING_KEY_RE = /password not found|api[_ ]?key|authentication|unauthori[sz]ed/i;
+export const isMissingKeyError = (r: { error?: string | null; error_code?: string | null }) =>
+  r.error_code === 'missing_api_key' || (!!r.error && MISSING_KEY_RE.test(r.error));
 
 const secs = (ms: number) => `${(ms / 1000).toFixed(1)}s`;
 
@@ -25,7 +31,7 @@ export function AgentTryPanel({ agentName, getDraftOverrides, starters = [], ren
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
   const [runId, setRunId] = useState<string>();
-  const [last, setLast] = useState<{ toolNames: string[]; response: string | null } | null>(null);
+  const [last, setLast] = useState<{ toolNames: string[]; response: string | null; errored?: boolean } | null>(null);
   const seq = useRef(0);
 
   if (!agentName) {
@@ -54,8 +60,11 @@ export function AgentTryPanel({ agentName, getDraftOverrides, starters = [], ren
         ...(r.tokens?.total ? [{ kind: 'metric' as const, label: `${r.tokens.total} tokens` }] : []),
       ];
       setRunId(r.agent_run_id);
-      setLast({ toolNames: r.tool_calls.map((c) => c.tool), response: r.response });
-      settle({ content: r.success ? (r.response ?? '') : (r.error || 'That run did not finish. Check the details.'), inspector });
+      setLast({ toolNames: r.tool_calls.map((c) => c.tool), response: r.response, errored: !r.success });
+      const failure = isMissingKeyError(r)
+        ? <span>{MISSING_KEY_TEXT.replace(' Add a key in Providers.', '')} Add a key in <a className="underline" href="/providers">Providers</a>.</span>
+        : (r.error || 'That run did not finish. Check the details.');
+      settle({ content: r.success ? (r.response ?? '') : failure, inspector });
     } catch (e) {
       settle({
         content: isEndpointUnavailable(e)

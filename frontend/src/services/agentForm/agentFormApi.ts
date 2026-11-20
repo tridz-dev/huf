@@ -58,6 +58,7 @@ export interface DraftTestResult {
   success: boolean;
   response: string | null;
   error?: string | null;
+  error_code?: string | null;
   agent_run_id: string;
   conversation_id?: string;
   tool_calls: DraftToolCall[];

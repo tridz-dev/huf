@@ -186,7 +186,19 @@ export function useAgentSections({ id, isNew, form, abilities, canSave, onRename
     if (!target0 || isNew || !baselineRef.current || !canSave) return;
     if (conflictRef.current.length > 0) return; // unresolved conflicts: never overwrite the other user's change
     if (savingRef.current) { if (mode === 'explicit' || !pendingRef.current) pendingRef.current = mode; return; }
-    if (Object.keys(form.formState.errors).length > 0) await form.trigger();
+    if (mode === 'explicit') {
+      // Validate before anything else: a clean-but-invalid form (e.g. empty instructions) must still report and focus the error.
+      const ok = await form.trigger();
+      if (!ok) {
+        const errs = flattenErrors(form.formState.errors);
+        if (errs.length) {
+          setErrors(errs);
+          onTabWithError(tabForField(errs[0].fieldId.split('.')[0]));
+          toast.error(errs.length === 1 ? 'One thing needs fixing before it can save' : `${errs.length} things need fixing before it can save`);
+          return;
+        }
+      }
+    } else if (Object.keys(form.formState.errors).length > 0) await form.trigger();
     const dirty = dirtySections(mode);
     if (dirty.length === 0) {
       if (Object.keys(form.formState.errors).length === 0) setErrors([]);
@@ -335,14 +347,23 @@ export function useAgentSections({ id, isNew, form, abilities, canSave, onRename
     return { conflicts, partial };
   }, [form, isNew]);
 
-  const resolveConflict = useCallback((field: string, choice: 'mine' | 'theirs') => {
+  const applyChoice = useCallback((field: string, choice: 'mine' | 'theirs') => {
     if (choice === 'theirs') form.setValue(field as never, theirsRef.current[field] as never, { shouldDirty: false });
     const left = conflictRef.current.filter((f) => f !== field);
     conflictRef.current = left; setConflictFields(left);
   }, [form]);
+  // "Keep mine" force-saves the local version right away against the freshly fetched revision.
+  const saveAfterResolve = useCallback(() => {
+    if (conflictRef.current.length === 0) { setSaveError(null); window.setTimeout(() => void saveRef.current('explicit'), 0); }
+  }, []);
+  const resolveConflict = useCallback((field: string, choice: 'mine' | 'theirs') => {
+    applyChoice(field, choice);
+    if (choice === 'mine') saveAfterResolve();
+  }, [applyChoice, saveAfterResolve]);
   const resolveAllConflicts = useCallback((choice: 'mine' | 'theirs') => {
-    for (const f of conflictRef.current) resolveConflict(f, choice);
-  }, [resolveConflict]);
+    for (const f of [...conflictRef.current]) applyChoice(f, choice);
+    if (choice === 'mine') saveAfterResolve();
+  }, [applyChoice, saveAfterResolve]);
 
   const retry = useCallback(async () => {
     if (conflict || conflictRef.current.length) {

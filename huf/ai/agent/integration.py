@@ -1950,8 +1950,8 @@ def _update_agent_run_stats(agent_name):
     fail a user run.
     """
     try:
-        total_runs = frappe.db.count("Agent Run", filters={"agent": agent_name})
-        last_run_time = frappe.db.get_value("Agent Run", {"agent": agent_name}, "start_time", order_by="start_time DESC")
+        total_runs = frappe.db.count("Agent Run", filters={"agent": agent_name, "run_kind": ["!=", "draft_test"]})
+        last_run_time = frappe.db.get_value("Agent Run", {"agent": agent_name, "run_kind": ["!=", "draft_test"]}, "start_time", order_by="start_time DESC")
         frappe.db.sql(
             "UPDATE `tabAgent` SET `total_run`=%s, `last_run`=%s WHERE `name`=%s",
             (total_runs, last_run_time, agent_name),
@@ -3851,8 +3851,8 @@ async def _run_agent_stream_impl(
             yield {"type": "desktop_tools", **desktop_status}
 
         # Update agent stats
-        total_runs = frappe.db.count("Agent Run", filters={"agent": agent_name})
-        last_run_time = frappe.db.get_value("Agent Run", {"agent": agent_name}, "start_time", order_by="start_time DESC")
+        total_runs = frappe.db.count("Agent Run", filters={"agent": agent_name, "run_kind": ["!=", "draft_test"]})
+        last_run_time = frappe.db.get_value("Agent Run", {"agent": agent_name, "run_kind": ["!=", "draft_test"]}, "start_time", order_by="start_time DESC")
 
         frappe.db.set_value("Agent", agent_name, {
             "total_run": total_runs,

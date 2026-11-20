@@ -25,10 +25,19 @@ describe('AgentTryPanel', () => {
     expect(screen.getByText('412 tokens')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'View run details' })).toHaveAttribute('href', '/executions/RUN-1');
   });
+  it('maps a missing-key error to a friendly message with a Providers link and no coaching banner', async () => {
+    run.mockResolvedValue({ success: false, response: null, error: 'Password not found for AI Provider AWS Bedrock api_key', agent_run_id: null, tool_calls: [], latency_ms: 5 });
+    render(<AgentTryPanel agentName="A" getDraftOverrides={() => ({})} starters={['Hi']} renderBanner={(l) => (l && !l.errored ? <p>banner</p> : null)} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Hi' }));
+    expect((await screen.findAllByText(/has no API key/)).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('link', { name: 'Providers' })[0]).toHaveAttribute('href', '/providers');
+    expect(screen.queryByText(/Password not found/)).toBeNull();
+    expect(screen.queryByText('banner')).toBeNull();
+  });
   it('degrades gracefully when the endpoint is missing', async () => {
     run.mockRejectedValue({ unavailable: true });
     render(<AgentTryPanel agentName="A" getDraftOverrides={() => ({})} starters={['Hi']} />);
     await userEvent.click(screen.getByRole('button', { name: 'Hi' }));
-    expect(await screen.findByText(/needs a backend update/)).toBeInTheDocument();
+    expect((await screen.findAllByText(/needs a backend update/))[0]).toBeInTheDocument();
   });
 });
