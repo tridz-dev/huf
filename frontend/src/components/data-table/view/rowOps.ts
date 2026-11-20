@@ -12,14 +12,28 @@ import { toApiValue, toApiValues } from './model';
 
 /** Bulk endpoints first; per-row calls only when the server doesn't have them yet. */
 
-/** True when the error means the bulk endpoint itself doesn't exist (not a permission/validation/network failure). */
+/** Leading exception class of a Frappe error (createFrappeError.exceptionType can carry the message tail). */
+function excName(v: unknown): string {
+	if (typeof v !== 'string') return '';
+	return (v.split('.').pop() ?? '').match(/^[A-Za-z_]\w*/)?.[0] ?? '';
+}
+
+/**
+ * True when the error means the bulk endpoint itself doesn't exist. Decided only on the exception type
+ * (the frappe error helpers expose no HTTP status): AttributeError, or Frappe's "Failed to get method"
+ * signature. A DoesNotExistError ("<Doctype> <name> not found") is a missing record, never a missing endpoint.
+ */
 export function isMissingEndpoint(err: unknown): boolean {
-	const e = err as { message?: unknown; status?: unknown; httpStatus?: unknown; exc_type?: unknown; exceptionType?: unknown; originalError?: unknown } | null;
-	if (!e) return false;
-	if (e.status === 404 || e.httpStatus === 404) return true;
-	if (e.exc_type === 'AttributeError' || e.exceptionType === 'AttributeError') return true;
-	const msg = typeof e.message === 'string' ? e.message : '';
-	if (/\b404\b|not found|failed to get method|has no attribute|no such method/i.test(msg) && !/permission/i.test(msg)) return true;
+	const e = err as { message?: unknown; exc_type?: unknown; exception?: unknown; exceptionType?: unknown; originalError?: unknown } | null;
+	if (!e || typeof e !== 'object') return false;
+	const types = [e.exceptionType, e.exc_type, e.exception].map(excName);
+	if (types.includes('DoesNotExistError')) {
+		const text = [e.message, e.exception].filter((x) => typeof x === 'string').join(' ');
+		if (!/failed to get method/i.test(text)) return false;
+	}
+	if (types.includes('AttributeError')) return true;
+	const text = [e.message, e.exception].filter((x) => typeof x === 'string').join(' ');
+	if (/failed to get method/i.test(text)) return true;
 	return e.originalError ? isMissingEndpoint(e.originalError) : false;
 }
 

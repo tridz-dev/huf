@@ -16,13 +16,22 @@ beforeEach(() => vi.clearAllMocks());
 
 describe('rowOps fallback', () => {
 	it('detects a missing endpoint only', () => {
-		expect(isMissingEndpoint({ status: 404 })).toBe(true);
+		expect(isMissingEndpoint({ exceptionType: 'AttributeError' })).toBe(true);
+		expect(isMissingEndpoint({ status: 404 })).toBe(false);
 		expect(isMissingEndpoint(new Error('Failed to get method for command x'))).toBe(true);
 		expect(isMissingEndpoint(new Error('Insufficient Permission'))).toBe(false);
 		expect(isMissingEndpoint(new Error('Network error'))).toBe(false);
 	});
+	it('treats DoesNotExistError as a missing record, not a missing endpoint', async () => {
+		const err = Object.assign(new Error('Customer X not found'), { exceptionType: 'DoesNotExistError' });
+		expect(isMissingEndpoint(err)).toBe(false);
+		expect(isMissingEndpoint({ message: 'x', originalError: { exc_type: 'DoesNotExistError', message: 'Task t not found' } })).toBe(false);
+		m.bulkDeleteRows.mockRejectedValue(err);
+		await expect(deleteMany('D', ['a'])).rejects.toBe(err);
+		expect(m.deleteTableRecord).not.toHaveBeenCalled();
+	});
 	it('falls back per row when the endpoint is missing', async () => {
-		m.bulkDeleteRows.mockRejectedValue({ status: 404 });
+		m.bulkDeleteRows.mockRejectedValue(Object.assign(new Error('boom'), { exceptionType: 'AttributeError' }));
 		expect(await deleteMany('D', ['a', 'b'])).toBe(false);
 		expect(m.deleteTableRecord).toHaveBeenCalledTimes(2);
 	});
