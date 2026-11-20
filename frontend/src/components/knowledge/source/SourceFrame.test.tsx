@@ -58,6 +58,10 @@ describe('SourceFrame status sentence', () => {
     render(<Host disabled importing={{ label: 'Importing', done: 2, total: 0 }} />);
     expect(text()).toContain('2 found so far');
   });
+  it('shows N of M while running', () => {
+    render(<Host importing={{ label: 'Importing', done: 25, total: 350 }} />);
+    expect(text()).toContain('25 of 350');
+  });
   it('disabled, then empty', () => {
     const { unmount } = render(<Host disabled />);
     expect(text()).toContain('Turned off');

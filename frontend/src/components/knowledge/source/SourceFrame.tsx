@@ -83,7 +83,7 @@ function StatusLine({
     );
   }
   if (importing) {
-    const found = importing.total > 0 ? `${n(importing.done)} of ${n(importing.total)} found` : `${n(importing.done)} found so far`;
+    const found = importing.total > 0 ? `${n(importing.done)} of ${n(importing.total)}` : `${n(importing.done)} found so far`;
     return <StatusSentence tone="live" live parts={[importing.label || 'Importing', found]} />;
   }
   if (disabled) return <StatusSentence tone="off" parts={['Turned off']} />;
