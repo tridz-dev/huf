@@ -68,10 +68,12 @@ export async function setOne(doctype: string, name: string, key: string, value: 
 	await updateTableRecord(doctype, name, { [key]: toApiValue(value) });
 }
 
+export const SELECT_ALL_CAP = 5000;
+
 export async function fetchNames(doctype: string, filters: TableRecordFilter[], search: string, total: number): Promise<string[]> {
 	const r = await getTableRecords(doctype, {
 		fields: ['name'],
-		limit: Math.min(total, 5000),
+		limit: Math.min(total, SELECT_ALL_CAP),
 		filters: filters.length ? filters : undefined,
 		search: search || undefined,
 	});

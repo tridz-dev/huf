@@ -17,7 +17,7 @@ import {
 	DRAFT_PREFIX, PAGE_SIZE, buildColumns, defaultsFor, downloadCsv, errorText, isBlank, isDraft, planPaste,
 	requiredWithoutDefault, toApiFilters, toApiValues, toCsv, toTsv, type Row,
 } from './model';
-import { deleteMany, fetchNames, insertMany, serverExport, setOne, updateMany } from './rowOps';
+import { SELECT_ALL_CAP, deleteMany, fetchNames, insertMany, serverExport, setOne, updateMany } from './rowOps';
 import { useTableRows } from './useTableRows';
 
 export interface DataTabHandle {
@@ -221,7 +221,11 @@ export const DataTab = forwardRef<DataTabHandle, DataTabProps>(function DataTab(
 	const selectAll = async () => {
 		if (total === undefined) return;
 		try {
-			setSelected(new Set(await fetchNames(doctype, apiFilters, search, total)));
+			const picked = await fetchNames(doctype, apiFilters, search, total);
+			setSelected(new Set(picked));
+			if (total > SELECT_ALL_CAP) {
+				toast(`Selected the first ${picked.length.toLocaleString()} of ${total.toLocaleString()} rows`, { description: 'Narrow the filters to act on the rest.' });
+			}
 		} catch (err) {
 			toast.error('Could not select all rows', { description: errorText(err) });
 		}
@@ -315,7 +319,7 @@ export const DataTab = forwardRef<DataTabHandle, DataTabProps>(function DataTab(
 			<BulkActionBar
 				count={selected.size}
 				onClear={() => setSelected(new Set())}
-				selectAll={total !== undefined ? { total, onClick: () => void selectAll() } : undefined}
+				selectAll={total !== undefined ? { total: Math.min(total, SELECT_ALL_CAP), onClick: () => void selectAll() } : undefined}
 				actions={[
 					{ label: 'Set value', onClick: () => setSetValueOpen(true) },
 					{ label: 'Copy', onClick: copySelected },
