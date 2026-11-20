@@ -37,6 +37,14 @@ describe('repair-c-01: a closed dialog releases the page at once', () => {
     expect(overlay.className).toMatch(/motion-reduce:!animate-none/);
   });
 
+  it('a toast raised after the dialog opened survives a content re-mount (view change)', () => {
+    const { rerender } = render(<Dialog open><DialogContent key="a"><DialogTitle>A</DialogTitle></DialogContent></Dialog>);
+    const late = toast.success('Import finished');
+    const dismiss = vi.spyOn(toast, 'dismiss');
+    rerender(<Dialog open><DialogContent key="b"><DialogTitle>B</DialogTitle></DialogContent></Dialog>);
+    expect(dismiss.mock.calls.map((c) => c[0])).not.toContain(late);
+  });
+
   it('final2-04: opening a dialog clears passive toasts but keeps errors and Undo toasts', () => {
     const ok = toast.success('Saved');
     const info = toast.info('Heads up');

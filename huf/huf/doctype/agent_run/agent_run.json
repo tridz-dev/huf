@@ -476,7 +476,7 @@
    "fieldname": "run_kind",
    "fieldtype": "Select",
    "label": "Run Kind",
-   "options": "agent\ntool\norchestrator\nmemory_extraction",
+   "options": "agent\ntool\norchestrator\nmemory_extraction\ndraft_test",
    "read_only": 1
   },
   {

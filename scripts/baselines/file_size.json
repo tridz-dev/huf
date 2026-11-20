@@ -25,7 +25,6 @@
     "frontend/src/hooks/useInfiniteScroll.ts": 615,
     "frontend/src/hooks/useMeetingRecorder.ts": 724,
     "frontend/src/hooks/useVoiceCall.ts": 530,
-    "frontend/src/pages/AgentFormPage.tsx": 2634,
     "frontend/src/pages/AgentPromptFormPage.tsx": 736,
     "frontend/src/pages/AgentRunDetailPage.tsx": 544,
     "frontend/src/pages/AgentSummaryPromptFormPage.tsx": 625,

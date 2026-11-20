@@ -244,43 +244,16 @@
     "components/data-table/AppTablesSection.tsx": {
       "text_px": 2
     },
-    "components/data-table/BulkImportModal.tsx": {
-      "raw_element": 1
-    },
-    "components/data-table/DataRecordForm.tsx": {
-      "inline_style": 1
-    },
     "components/data-table/DataRecordFormLayout.tsx": {
       "fixed_height": 1,
       "raw_element": 1,
       "text_px": 1
     },
-    "components/data-table/DataRecordList.tsx": {
-      "fixed_height": 3,
-      "inline_style": 1
-    },
-    "components/data-table/DeleteTableDialog.tsx": {
-      "fixed_height": 1
-    },
-    "components/data-table/FieldCard.tsx": {
-      "fixed_height": 2,
-      "text_px": 1
-    },
-    "components/data-table/FieldConfigPanel.tsx": {
-      "fixed_height": 4,
-      "text_px": 2
-    },
-    "components/data-table/FieldTypeSelector.tsx": {
-      "fixed_height": 1
-    },
     "components/data-table/LinkFieldInput.tsx": {
       "fixed_height": 1
     },
-    "components/data-table/TableAgentAccessModal.tsx": {
-      "raw_element": 1
-    },
     "components/data-table/TableSettingsPanel.tsx": {
-      "fixed_height": 5,
+      "fixed_height": 4,
       "text_px": 1
     },
     "components/execution-profile/ExecutionProfilePermissionCard.tsx": {
@@ -590,9 +563,6 @@
     "pages/DataRecordViewPage.tsx": {
       "inline_style": 1
     },
-    "pages/DataTableViewPage.tsx": {
-      "fixed_height": 1
-    },
     "pages/ExecutionProfileFormPage.tsx": {
       "text_px": 2
     },
@@ -655,11 +625,11 @@
     }
   },
   "totals": {
-    "fixed_height": 106,
+    "fixed_height": 93,
     "hex_colour": 98,
-    "inline_style": 44,
-    "raw_element": 74,
-    "text_px": 347
+    "inline_style": 42,
+    "raw_element": 72,
+    "text_px": 344
   },
   "version": 1
 }

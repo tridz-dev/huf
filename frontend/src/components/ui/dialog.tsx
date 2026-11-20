@@ -5,7 +5,25 @@ import { dismissPassiveToasts } from '@/lib/ui/dismissPassiveToasts';
 
 import { cn } from '@/lib/utils';
 
-const Dialog = DialogPrimitive.Root;
+/*
+ * final2-04: a "saved" toast left over from the last action sat on the new dialog's bottom edge. Passive toasts are cleared when
+ * the dialog OPENS (the open flag turns true), not when its content mounts: a dialog that swaps views or re-mounts its content
+ * (e.g. an import dialog moving to its result) must not dismiss the toast that very result just raised.
+ */
+const Dialog = ({ open, defaultOpen, ...props }: React.ComponentProps<typeof DialogPrimitive.Root>) => {
+  const isOpen = open ?? undefined;
+  const wasOpen = React.useRef(false);
+  React.useEffect(() => {
+    if (isOpen && !wasOpen.current) dismissPassiveToasts();
+    if (isOpen !== undefined) wasOpen.current = !!isOpen;
+  }, [isOpen]);
+  React.useEffect(() => {
+    if (open === undefined && defaultOpen) dismissPassiveToasts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return <DialogPrimitive.Root open={open} defaultOpen={defaultOpen} {...props} />;
+};
+Dialog.displayName = 'Dialog';
 
 const DialogTrigger = DialogPrimitive.Trigger;
 
@@ -37,11 +55,6 @@ const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
 >(({ className, children, ...props }, ref) => {
-  // final2-04: a "saved" toast left over from the last action sat on the new dialog's bottom edge (the Danger zone was clipped).
-  // Passive toasts go; an error or a toast with a button (Undo) stays.
-  React.useEffect(() => {
-    dismissPassiveToasts();
-  }, []);
   return (
   <DialogPortal>
     <DialogOverlay />

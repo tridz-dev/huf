@@ -351,9 +351,9 @@ scheduler_events = {
         "huf.ai.knowledge.maintenance.cleanup_orphaned_files",
         "huf.ai.telegram_admin.send_daily_digests",
         "huf.ai.knowledge.maintenance.optimize_indexes",
-        # P2-10: Proactively mark expired Memory Records (past effective_until) as Expired
         "huf.ai.memory_tools.expire_stale_memory_records",
         "huf.ai.agent.chat.purge_trashed_conversations",
+        "huf.ai.agent.agent_form_api.purge_draft_test_records",
         "huf.ai.context_artifacts.purge_expired_context_artifacts",
         "huf.ai.gateway_service.purge_old_rejected_gateway_events",
         "huf.ai.gateway_service.cleanup_stale_access_entries",

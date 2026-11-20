@@ -1,12 +1,14 @@
 # HUF Design System
 
-## Instrument / Control-Room Direction
+## Quiet Control-Room Direction
 
-**Status:** v2.0 (UI v2) — derived from marketing redesign (`huf-redesign.html`), product UI redesign (`huf-dashboard-redesign.html`), and recent UI v2 iterations.
+**Status:** v3.0 ("Apple-quiet", shipped). This file documents what the product ships: the tokens in `frontend/src/index.css` (`:root` = light, `[data-theme="midnight"]` = dark) and `frontend/tailwind.config.*`. **When this file and `index.css` disagree, `index.css` is the truth and this file is the bug.** §2, §3, §4, §10 and §11 were reconciled with the shipped tokens in v3.0; the older v1/v2 "instrument" values (orange `#E8531F` signal, Big Shoulders / IBM Plex / Martian Mono, 2px radius, paper-green neutrals) are retired from the product and kept only in §3.2 as history for the marketing site.
 
-**v2.0 change:** Transitioned to UI v2 with tighter muted experimental sidebar density, integrated Chat PWA, and dedicated Execution Profiles & Management UI. (Builds upon v1.1 product type layer).
+**v3.0 change:** one quiet monochrome palette with a single purple signal, the platform system font stack, 8px radius, a raised shadow only on overlays and floating bars, and a component layer that owns every reusable shape: `components/ui` (primitives), `components/patterns` (§6.10 resource pages), `components/grid` (§6.11 data grids), `components/builder` (§6.12 builder forms).
 
-**Core idea:** HUF's real differentiator isn't "AI" — it's *control*: every agent action is recorded, permissioned, and auditable. The visual system should feel like an instrument panel or engineering ledger, not a glowing AI-startup gradient page. Light technical paper, condensed industrial type, hairline rules, and a single signal color used the way a warning lamp is used — sparingly, and always meaningfully.
+**Core idea:** HUF's real differentiator isn't "AI" — it's *control*: every agent action is recorded, permissioned, and auditable. The product should feel like a calm, precise instrument — quiet surfaces, hairline rules, plain words — with a single signal color used the way a warning lamp is used: sparingly, and always meaningfully.
+
+**We are a framework-based, design-system-fixed platform.** Pages compose primitives and patterns; they do not invent shapes, colours, sizes or spacing. A page that needs something new extends the system first (a pattern here, a token in `index.css`), then uses it.
 
 ---
 
@@ -14,117 +16,89 @@
 
 | Generic "AI slop" pattern | HUF system |
 |---|---|
-| Dark mode by default, purple→violet gradients | Light technical paper background; one dark section reserved for "inside the engine" (Control Plane) |
-| Inter/system font everywhere | Three deliberate typefaces, each with one job |
-| Rounded cards with colored icon-in-square + soft shadow | Hairline-bordered panels, 2px radius max, no shadows (one hard offset shadow only on the signature ledger) |
-| Numbered feature cards (01/02/03) as decoration | Numbering used only where it's *true* — fault codes (F-01), spec/part codes (AGT-01) |
-| Fake dashboard screenshot as hero | Live, real signature component: the **Agent Event Ledger** |
-| Status shown as colored badge pills | Status shown as a dot + mono label (dot color = meaning, not decoration) |
+| Purple→violet gradients, glowing hero cards | No gradients anywhere. The purple signal is a lamp (a dot, an edge, an active state), never a wash |
+| Dark mode by default | Light by default (`:root`); `midnight` is a true dark counterpart with the same relationships, chosen by the user |
+| Rounded cards with colored icon-in-square + soft shadow | Hairline-bordered panels, 8px radius, no shadow at rest; only overlays and floating bars are raised |
+| Numbered feature cards (01/02/03) as decoration | Numbering only where it is *true* — row numbers, steps in a real sequence, IDs |
+| Status as loud uppercase badges | Status as a dot + plain label (§7) or a sentence-case `pill-*` |
+| Jargon labels ("Data", "Int", "temperature") | Plain words ("Text", "Number", "Creativity: Balanced"); jargon lives in Advanced / Developer options |
 
-**Rule of thumb:** the signal color (orange) means *"look here"* — active state, live/running status, flagged values, one emphasized word per headline. It should never be used for general decoration or as a second brand color.
+**Rule of thumb:** the signal color (`--signal`, purple) means *"look here"* — the active cell, the selected item, the live/running dot, the primary focus ring, one emphasized link. It is never decoration and never a second brand color.
 
 ---
 
 ## 2. Color tokens
 
-| Token | Hex | Role |
+Values are the shipped light theme (`:root` in `index.css`). Use the token (Tailwind `bg-paper`, `text-steel`, `border-line`, …), never the hex — the `hex_colour` UI-drift guard fails on literals in `.tsx`. The `midnight` dark theme redefines the same names.
+
+| Token | Light | Role |
 |---|---|---|
-| `--paper` | `#F2F3EF` | Primary background (replaces white/light-gray app background) |
-| `--paper-deep` | `#E9EBE4` | Secondary surface — sidebars, hover states, recessed panels |
-| `--panel` | `#FBFCFA` | Elevated surface — cards, ledgers, content panels (product UI only) |
-| `--ink` | `#15181C` | Primary text, headings, borders on key elements |
-| `--ink-soft` | `#2A2F36` | Secondary dark surfaces (marketing dark section text on `--ink`) |
-| `--steel` | `#5A636F` | Secondary text — descriptions, labels, metadata |
-| `--steel-soft` | `#8A929C` | Tertiary text — placeholder icons, disabled, faint metadata |
-| `--line` | `#C7CCC0` / `#D7DACF` | Hairline borders and dividers (marketing/product variants) |
-| `--line-dark` | `#343A42` | Borders on dark sections |
-| `--signal` | `#E8531F` | **The** accent. Active states, live indicators, emphasis, primary CTA hover |
-| `--signal-ink` | `#BC3E0F` | Darker signal — emphasized headline words, link underlines, flagged numeric values |
-| `--good` | `#3F7A4E` | Healthy/success status dot (product UI only) |
+| `--paper` | `#FBFBFD` | App background |
+| `--paper-deep` | `#F4F4F7` | Recessed surfaces — sidebar, hover, table heads, quiet bands |
+| `--panel` | `#FFFFFF` | Raised content surface — cards, grids, sheets |
+| `--ink` | `#1D1D1F` | Primary text; the primary button fill; the floating bulk bar |
+| `--ink-soft` | `#2A2F36` | Secondary dark text |
+| `--steel` | `#6E6E73` | Secondary text — descriptions, labels, metadata |
+| `--steel-soft` | `#98989D` | Tertiary text — row numbers, type glyphs, faint metadata, off dots |
+| `--line` | `#ECECF0` | Hairline borders and dividers |
+| `--signal` | `#7A5AF0` | **The** accent: active cell / selection ring, live dot, selected preset edge, focus |
+| `--signal-ink` | `#5B3FC4` | Signal as text — links, "Recommended", info pills |
+| `--good` / `--good-tint` | `#1C7C54` / `#E8F5EE` | Ready / success |
+| `--warning` / `--warning-tint` | `#8A5A00` / `#FDF3E0` | Needs attention, data-impact warnings |
+| `--destructive` / `--destructive-tint` | `#B3261E` / `#FDECEA` | Errors, invalid cells, destructive actions |
 
 **Usage discipline:**
 - No gradients, anywhere.
-- Signal orange appears at most once or twice per screen as a *fill*; everywhere else it's a dot, underline, border-edge, or single word.
-- The dark (`--ink`) background is reserved for one structural meaning: "this is the control plane / inside the system." Don't use it for arbitrary sections.
+- Signal appears as a *fill* at most once or twice per screen; elsewhere it is a ring, dot, edge or a `/5`–`/10` tint for "selected".
+- Status colours (`good`, `warning`, `destructive`) carry meaning only; a page never picks them for decoration. Pages choose a **tone** (`ready | live | attention | error | off | neutral`, `patterns/tones.tsx`), and the token mapping lives once in the pattern layer.
 
 ---
 
 ## 3. Typography
 
-HUF runs **two type layers** that share a philosophy but serve different jobs. The marketing site is a poster — it can be loud. The product is a workspace — it must be quiet and legible. Both keep Big Shoulders for *character moments* (titles, big numbers, buttons), but they differ in what carries the everyday text and data.
+### 3.1 Product type (shipped)
 
-### 3.0 Marketing type layer (`huf-redesign.html`)
+One family: the platform system stack (`--body` / `--display` = `-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif`), plus `--mono` (`ui-monospace, 'SF Mono', Menlo, monospace`) for machine values. No web fonts are loaded. Hierarchy comes from the size/weight tokens, not from a second typeface.
 
-Three typefaces, three jobs. Never substitute one for another's role.
+| Tailwind class | Token | Size / weight | Use |
+|---|---|---|---|
+| `text-display` | `--text-display-*` | 28 / 600, −0.02em | Rare hero numbers, one per screen at most |
+| `text-title` | `--text-title-*` | 20 / 590, −0.015em | Page `<h1>`, one-card create titles |
+| `text-subtitle` | `--text-subtitle-*` | 18 / 590 | Section / panel headings |
+| `text-body-text` | `--text-body-*` | 15 / 400 | Reading text, chat messages |
+| `text-ui-text` | `--text-ui-*` | 13 / 500 | Workhorse: rows, cells, buttons, menus, fields |
+| `text-micro` | `--text-micro-*` | 12 / 500 | Helper text, chips, toolbar counts, field notes |
+| `text-meta` | `--text-meta-size` | 11 | Mono counts, row numbers, timestamps |
+| eyebrow | `--text-eyebrow-*` | 10, 0.07em, uppercase | Sidebar group labels only |
 
-| Typeface | Role | Where used |
-|---|---|---|
-| **Big Shoulders** (600/650/700, condensed, uppercase) | Display — the "machine signage" voice | Page titles (`H1`/`H2`), hero headline, large stat numbers/gauge values, dark-section headlines |
-| **Archivo** (400/500/600) | Body — the working voice | Paragraphs, ledes, descriptions, card titles |
-| **Martian Mono** (400/500) | Data / instrumentation voice | Eyebrows, fault/spec codes, timestamps, model names, IDs, run counts, status labels, telemetry, footnotes |
+- Sentence case everywhere; uppercase only for eyebrows.
+- `font-mono` is for identifiers and machine values (IDs, counts in chips, row numbers, tokens, latency) — never prose or labels.
+- Numbers in grids and counts use `tabular-nums` and thousands separators.
+- Never `text-[Npx]` (the `text_px` guard); add a token instead.
 
-**Font embed (marketing):**
-```html
-<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders:opsz,wght@10..72,600;10..72,650;10..72,700&family=Archivo:wght@400;500;600&family=Martian+Mono:wght@400;500&display=swap" rel="stylesheet">
-```
+### 3.2 History: the v1/v2 instrument layers (retired from the product)
 
-### 3.1 Product type layer (`huf-dashboard-redesign.html`) — **NEW in v1.1**
-
-The dashboard is something people stare at all day. Condensed display caps and a heavy geometric mono on every label create eye strain and a "designed object" feeling that fights usability. So the product swaps the two *workhorse* roles for the **IBM Plex** family — engineering-credible (it keeps the instrument theme) but far calmer and more legible at UI sizes, the way Slack, Grafana, and the Redis dashboard feel. Display type stays, but is **rationed to character moments only.**
-
-| Typeface | Role | Where used in product |
-|---|---|---|
-| **Big Shoulders** (700, uppercase) | Character / accent only | Page `<h1>`, the large gauge values, section panel headers ("Active Agents"), and **primary button labels** — the few places a little personality earns its keep |
-| **IBM Plex Sans** (400/500/600) | **UI workhorse** | Everything chrome: nav labels, table/row text, descriptions, breadcrumbs, status labels, form fields, menu items, secondary buttons |
-| **IBM Plex Mono** (400/500) | Data voice (lightened) | Technical metadata only: IDs (`agt_3f81`), model names, timestamps, counts, codes, telemetry values. Replaces Martian Mono — lighter color, normal letter-spacing, much easier to scan in dense tables |
-
-**Why IBM Plex Sans specifically (and not Inter):** Inter is the literal default of every AI dashboard template — using it would re-introduce the slop signal we removed. Plex Sans is equally legible but carries a subtle slab/engineering DNA that stays on-theme, and it's clearly distinguishable in a screenshot. It's the product's neutral, so it should feel almost invisible — that's the point.
-
-**The character/workhorse split (memorize this):**
-- **Character → Big Shoulders:** page title, big numbers, panel headers, primary CTA. *Loud, rare, intentional.*
-- **Workhorse → IBM Plex Sans:** every other piece of text. *Quiet, everywhere, invisible.*
-- **Data → IBM Plex Mono:** identifiers and machine values only. *Never used for prose or UI labels.*
-
-**Font embed (product):**
-```html
-<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders:opsz,wght@10..72,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-```
-
-### Type scale & treatment
-
-**Marketing:**
-- **Eyebrows** (mono, 11px, `letter-spacing: .14em`, uppercase, `--steel`) — preceded by an 8px solid signal-orange square. The recurring "tune in here" device.
-- **H1 (hero)** — Big Shoulders 700, `clamp(64px, 8.5vw, 118px)`, line-height `.92`, uppercase. One word per headline in `--signal-ink`.
-- **H2 (section)** — Big Shoulders 650, `clamp(44px–84px)`, uppercase.
-- **Body / lede** — Archivo, 17–18px, `--steel`, max-width `46–52ch`.
-
-**Product:**
-- **Page `<h1>`** — Big Shoulders 700, ~34–38px, uppercase. The one big display moment per screen.
-- **Panel headers** ("Active Agents") — Big Shoulders 700, ~17–18px, uppercase. Smaller character anchor for sections.
-- **Gauge values** — Big Shoulders 700, 38–44px, with a small **IBM Plex Mono** unit/sub-label (`%`, `s`, cents) at ~30–40% size in `--steel`.
-- **UI text** (nav, rows, descriptions, breadcrumbs) — IBM Plex Sans, 13–14.5px, `400–600`, sentence case (not uppercase — uppercase is reserved for display + mono labels).
-- **Button labels** — primary button: Big Shoulders 600 uppercase ~13px with `.06em` tracking (keeps a little character); secondary/ghost button: IBM Plex Sans 600, 13px, sentence or small-caps. Buttons no longer use mono in the product — mono is now data-only.
-- **Mono data** — IBM Plex Mono, 11–12px, **normal letter-spacing** (drop the wide tracking Martian Mono needed), normal case for values, light uppercase only for short status labels.
-
-**Restraint note (still applies, sharpened):** in the product, Big Shoulders appears in exactly four kinds of place — the page `<h1>`, gauge values, panel headers, and the primary button — plus one sanctioned exception: the compact topbar title on a **work surface** (see §6.9). Everywhere else is IBM Plex Sans (UI) or IBM Plex Mono (data). If you find yourself setting a table cell, a description, or a nav item in Big Shoulders or in mono, stop — that's the slip back toward "designed object."
+v1–v2 used Big Shoulders (display), Archivo / IBM Plex Sans (UI) and Martian / IBM Plex Mono (data) with an orange `#E8531F` signal and 2px radius. None of these ship in the product any more. The marketing pages (`huf-redesign.html`) may still use that layer; product code must not.
 
 ---
 
 ## 4. Layout & Structural Primitives
 
-| Primitive | Spec |
+| Primitive | Spec (shipped) |
 |---|---|
-| **Border radius** | `2px` everywhere (`--r`). No pill shapes, no large rounded corners. |
-| **Borders** | 1px hairline (`--line`) for dividers; 1px `--ink` for the outer edge of "instrument" containers (ledger, gauge strip, spec table top rule). |
-| **Shadows** | None, except the signature ledger's hard double-offset shadow (`6px 6px 0 var(--paper-deep), 6px 6px 0 1px var(--line)`) — this is the one allowed "object on a desk" effect. |
-| **Tick rule** | A repeating 1px-dash horizontal strip (`repeating-linear-gradient`) used as a section divider on the marketing page — evokes a chart recorder. Use sparingly, max once or twice per page. |
-| **Grid** | Marketing: asymmetric splits (7/5, 5/7, 6/6). Product: fixed 248px sidebar + fluid content, max-width 1280px. |
-| **Spacing** | Generous vertical rhythm on marketing (88–120px section padding); tighter, table-like rhythm in product (16–22px row/card padding). |
-| **Wrap** | `max-width: 1240px; margin: 0 auto; padding: 0 32px` (marketing). Product content: `max-width: 1280px; padding: 36px`. |
+| **Radius** | `--r` 8px default (`rounded`), `--r-sm` 6, `--r-md` 10, `--r-lg`/`--r-xl` 14, `--r-full` 999 (pills, chips, switches). |
+| **Borders** | 1px `--line` hairlines for panels, rows and dividers. |
+| **Shadows** | `--shadow-flat` (none) at rest. `shadow-md` = `--shadow-raised` for a lifted card (one-card create, current step). `shadow-lg` = `--shadow-overlay` only for things floating over content (popovers, sheets, the bulk bar). |
+| **Spacing** | `--space-1..7` = 4, 8, 12, 16, 24, 32, 48px (Tailwind 1, 2, 3, 4, 6, 8, 12). |
+| **Controls** | Heights `--control-h-sm/md/lg` = 30 / 34 / 38px via the component `size` prop or `h-control-*`; never `h-6..h-11` on a control (the `fixed_height` guard). Fields use `--field-label-h`, `--field-gap`, `--field-note-h` through `ui/field`. |
+| **Page** | Sidebar + fluid content; management pages via `PageFrame` (§6.9). Builder pages use `BuilderLayout` (§6.12). |
+
 
 ---
 
 ## 5. Components — Marketing Site
+
+*Marketing site only; uses the retired v2 layer described in §3.2. Nothing here applies to the product.*
 
 ### 5.1 Nav
 - Logo: wordmark "HUF" in Big Shoulders 700 + an 10px solid signal-orange square — no icon mark, no gradient logo.
@@ -190,7 +164,7 @@ The dashboard is something people stare at all day. Condensed display caps and a
 
 ## 6. Components — Product UI
 
-Same tokens and structural primitives as marketing, but running on the **product type layer** (§3.1): IBM Plex Sans for all UI chrome, IBM Plex Mono for data, and Big Shoulders rationed to four character moments (page `<h1>`, gauge values, panel headers, primary button). The result reads like a tool, not a poster.
+Product UI uses the shipped v3.0 tokens (§2–§4) and the single system type family (§3.1). **Reconciliation note:** §6.1–§6.8 were written for v2 and still name retired values in places (Big Shoulders, IBM Plex, "signal orange", 2px radius, ink-bordered boxes). Read those as their v3.0 equivalents — system font with the §3.1 size tokens, `--signal` (purple), `rounded` (8px), `--line` hairlines — and follow the shipped components in `components/ui` and `components/app-sidebar` where they differ. §6.9–§6.12 are current.
 
 ### 6.1 Sidebar (Instrument Panel)
 - Background `--paper-deep`, 1px right border.
@@ -291,6 +265,7 @@ Reading order, top to bottom: **head → status sentence → toolbar (ask + filt
 - **Reason line**: a problem row explains itself in one plain sentence under the title, with its own fix link ("This PDF is password protected. Retry").
 - **Adding state** (`adding`): row arrives with the §8 **drop-in**, title in `--steel`, `aria-busy`. Arriving rows sort to the top.
 - Hover → `--paper-deep`. Title is a button when the row opens a detail sheet.
+- **Configurable columns**: the 4-label tuple keeps the default ledger. For other ledgers (a tables list: *Name · Rows · Fields · Updated*) pass column defs `ResourceColumn[]` (`{ key, label, width?: CSS grid track, align?: start|center|end }`). The first def is always the title cell (glyph + title + reason); each row passes `cells={{ [key]: node }}` for the rest; the overflow slot stays last (`2rem`). Below `md` only title + actions show. Never fake extra columns by stuffing several values into `origin`.
 
 #### 6.10.5 Inline progress row (`ProgressRow`)
 - A long-running job is a **row at the top of the list it fills** (inside `ResourceListSlot`), not a card above the page, not a toast.
@@ -318,6 +293,11 @@ Reading order, top to bottom: **head → status sentence → toolbar (ask + filt
 #### 6.10.10 Next-steps checklist (`Checklist`)
 - Shown once a resource first becomes usable; 2–4 items, done items checked and quiet, open items are actions. Dismissible; the caller persists dismissal. It is the continuation of the empty-state `StepHint` — the same steps, now with progress.
 
+#### 6.10.12 Linked-items popover (`LinkedListPopover`)
+- For a count of things linked to this resource that people want to see without leaving the page (*Used by 2 agents ▾*). The trigger is a link-weight `Button` with a chevron, usually inside the status sentence or a row.
+- Popover (`w-72`): optional heading (*Agents using this*), up to ~8 visible rows (scrolls after), each = optional icon + label + optional mono meta (*3 calls today*); a row with `href` navigates, with `onSelect` acts, with neither is static. Empty state says what linking would do (*No agent uses this yet.*). Optional footer action after a separator (*Manage access*), `--signal-ink`.
+- Built from `Popover`, `Button` (ghost / link, `asChild` for anchors) and `Separator` — no raw buttons. Esc and outside click close; focus returns to the trigger.
+
 #### 6.10.11 Motion and states summary
 | Pattern | Motion | Live region |
 |---|---|---|
@@ -328,6 +308,154 @@ Reading order, top to bottom: **head → status sentence → toolbar (ask + filt
 All motion uses `motion-safe:` so `prefers-reduced-motion` disables it (§8).
 
 **Migration targets** (adopt these patterns when next touched): Knowledge source page (all of the above; see the Knowledge handoff), Knowledge library cards (status sentence), Flows / Agents / Automations list filters (`FilterPills` for status filters), Batch jobs (`ProgressRow` for running jobs), Executions (`AttentionBanner` for failed runs).
+
+
+### 6.11 Data grids (editable tables)
+
+A **data grid** is the place people *work in* a collection of records the way they would in a spreadsheet: read, edit in place, filter, select many, import. It is not a read-only ledger (§6.6) or a resource list (§6.10.4) — use those when rows are things you open, not values you edit. The patterns live in `frontend/src/components/grid/` (import from `@/components/grid`), are domain-free (rows are opaque, columns describe types), and are built only from `components/ui` primitives and §2 tokens. **Never hand-roll a grid, a filter chip row, a bulk bar, an import mapper or a permission matrix on a page.**
+
+Reading order: **head (§6.9) → GridToolbar → DataGrid → GridFooter**; overlays on top of the grid, never routes: filter popover, fields menu, `RecordDrawer`, import dialog with `ImportMapper`, `ConfirmDestructive`. `BulkActionBar` floats while rows are selected.
+
+#### 6.11.1 Anatomy (`DataGrid`)
+- One `--panel` with a hairline border, `rounded-lg`, scrolling inside itself (`max-h-[70vh]` default), sticky `--paper-deep` header.
+- Columns, left to right: selection checkbox (when `onSelectedChange`), row number (mono, `--steel-soft`; a button that opens the record when `onOpenRow`), then data columns. A trailing "Add row" line (`onAddRow`) with its `⌘ Enter` hint.
+- Header cell: type glyph (`TYPE_ICON`, `--steel-soft`) + label + optional quiet `tag` ("title", "key") + `*` when required. Numeric headers right-align. The type is announced to screen readers ("Seats, Number").
+- Row height is fixed at 36px (`GRID_ROW_H`); text truncates in the cell; long values are read in the drawer.
+
+#### 6.11.2 Types (`ColumnType`, `types.ts`)
+One vocabulary, user words, one glyph each: **Text, Long text, Number, Currency, Date, Dropdown (select), Link, Checkbox**. Storage types (Data, Int, Float, Small Text) never reach the UI; the app maps its storage types to these once (in its own data layer) and the grid formats and parses them in one place (`formatCell`, `parseCell`).
+
+| Type | Display | Editor |
+|---|---|---|
+| Text | truncated text | `Input size=sm` |
+| Long text | first line, truncated | `Textarea` (Enter saves, Shift+Enter new line) |
+| Number / Currency | right-aligned, tabular, separators; currency with 2 decimals, code in header | `Input` (`inputMode=decimal`), accepts `1,200.50` |
+| Date | `10 Dec 2026` (locale) | `Input type=date` |
+| Dropdown | sentence-case `pill-*` coloured by the option's **tone** (`TONE_PILL`) | `Select`, opens immediately; choosing saves |
+| Link | `--signal-ink` text + external glyph | `Input` |
+| Checkbox | `Checkbox`, toggles in place (no edit mode) | — |
+
+#### 6.11.2a Type picker (`ColumnTypePicker`, `ColumnTypeList`)
+- Choosing a field type is choosing a meaning: each option is icon + user word + one-line description (*Currency — Money, shown with two decimals.*), grouped (Text, Numbers, Date, Choice, Reference) and searchable above 8 options. `ColumnTypePicker` is the popover form (closes on pick); `ColumnTypeList` is the inline list for sheets/create forms. Options default to `gridTypeOptions()` from `TYPE_LABEL`/`TYPE_ICON`/`TYPE_DESCRIPTION`; apps with a wider vocabulary (rating, phone, layout breaks) pass `ColumnTypeOption[]` with their own `value`s — still user words, never storage type names. `role=listbox`, options `aria-selected`, ↑/↓ move.
+
+#### 6.11.3 States
+| State | Look | Behaviour |
+|---|---|---|
+| Rest | hairline grid | hover tints the row `--paper-deep/60` |
+| Active cell | 2px inset `--signal` ring | one per grid; roving `tabIndex=0` |
+| Editing | editor fills the cell, borderless | the cell keeps the ring |
+| Invalid | `--destructive-tint` cell, red ring, one-line fix hint under the cell + "Esc to undo" | editor stays open; `aria-invalid`, hint is `role=alert` |
+| Selected row | `--signal/5` tint, `aria-selected` | Shift-click selects a range from the last clicked row; the anchor resets when the row set changes (page, sort, filter) |
+| Read-only column | no edit on type/Enter | `aria-readonly` |
+| Empty | `empty` slot in place of rows (an §6.10.8-style start) | |
+| Large | > `windowFrom` (100) rows render a window + spacer rows | keyboard scrolls the active row into view |
+
+#### 6.11.4 Keyboard (spreadsheet muscle memory)
+| Mode | Key | Does |
+|---|---|---|
+| Navigate | Arrows / ⌘+Arrows | move one cell / to the edge |
+| Navigate | Tab / Shift+Tab | next / previous cell, wrapping rows; leaves the grid at the ends |
+| Navigate | Enter or F2 | edit (checkbox: toggle) |
+| Navigate | any printable key | edit, replacing the value with that key |
+| Navigate | Backspace / Delete | edit with an empty value |
+| Navigate | Space | toggle a checkbox cell |
+| Navigate | Shift+Enter | open the row in the drawer (`onOpenRow`) |
+| Navigate | ⌘V | paste tab-separated rows at the active cell (`onPaste`, `parseTsv`: quoted cells may hold tabs, newlines and `""` escapes, as Excel/Sheets copy them) |
+| Edit | Enter | save, move down |
+| Edit | Tab / Shift+Tab | save, move right / left |
+| Edit | Esc | cancel, restore the old value, focus back on the cell |
+| Header | Enter / Space / click | sort this column: none → ascending → descending → none |
+
+Saving: `onCellChange(rowId, key, value)` may return or resolve a one-line message (or throw) to reject the value; the grid shows it as the invalid state. Required columns reject empty values ("Company can't be empty"); `validate` adds per-column rules.
+
+#### 6.11.5 Toolbar (`GridToolbar`, `FilterChip`, `SortChip`, `MatchCount`, `FieldsMenu`, `GridFooter`)
+- Order: search (`AskField` from §6.10.3; `/` focuses it) → `Filter` / `Sort` / `FieldsMenu` triggers (outline `sm` buttons) → applied chips → right side `MatchCount` + `AutosaveStatus` (§6.12.6).
+- **FilterChip** reads as a sentence — *Status is Active*, *Renewal is before 1 Jan 2027* — with plain operators (is, is not, contains, is before, is empty). The body opens its editor popover; × or Backspace/Delete removes it. **SortChip**: *↑ Renewal Oldest first*, click reverses, × removes; direction words fit the type (A→Z, 1→9, Oldest first).
+- **Sortable headers**: give `DataGrid` `sort` + `onSortChange` and every header becomes a button (columns opt out with `sortable: false`). Click, Enter or Space cycles none → asc → desc → none (`nextSort`); the `th` carries `aria-sort`; the arrow is `--signal` when active and appears on hover/focus otherwise. The same `{ key, direction }` drives the toolbar `SortChip` (use `sortDirectionLabel(type, direction)` for its words) — one sort state, two controls. Header keys never reach the cell navigation.
+- **FilterBuilder / FilterEditor**: the Filter trigger plus applied chips. The editor is field → condition → value: conditions come from `filterOpsFor(type)` (text: is, is not, contains, does not contain; numbers: is more/less than, is at least/most; dates: is before/after; dropdown and link: is / is not; checkbox: is; every type but checkbox: is empty / is not empty), and the value editor fits the type (`FilterValueInput`: date input, decimal keypad, option list, Yes/No checkbox; no value for *is empty*). Each condition is `{ field, op, value: string }`; callers map it to their query language once. Clicking a chip reopens the editor with *Update*.
+- **MatchCount**: *212 of 1,284 rows* while filtered, *1,284 rows* otherwise — true totals from the server. Polite live region.
+- **FieldsMenu**: checkbox list to show/hide columns; the title field is `locked`. The trigger shows "N hidden".
+- **GridFooter**: *Showing 1–25 of 1,284 rows*, a pager slot, and the key legend (Tab next · Enter save · Esc cancel · ⌘V paste rows). When the backend can't count cheaply, say so honestly: `approximate` → *Showing 1–25 of 25+ rows* (at least this many), `total={null}` → *Showing 1–25 rows*. Never invent a total.
+
+#### 6.11.6 Bulk selection (`BulkActionBar`)
+- Floats bottom-centre over the grid (`--ink` bar, `shadow-lg`, drop-in): *3 rows selected* · *Select all 1,284* (when only a page is selected) · actions · ×. Non-destructive actions first, destructive last. Esc clears.
+- Destructive bulk actions open `ConfirmDestructive`; row delete offers undo in a toast when the backend can restore.
+
+#### 6.11.7 Record drawer (`RecordDrawer`)
+- Right sheet for one record: title, *4 of 1,284* with previous/next (Alt+↑/↓), all fields as `Field`s (long text gets room), then History. Use it for long text and wide tables; the grid stays the place to scan.
+
+#### 6.11.8 Permission matrix (`PermissionMatrix`)
+- Subjects (rows, `th scope=row`) × capabilities (columns) of checkboxes, each named "{capability} for {subject}". Capabilities declare `implies` (Edit → Read); `applyGrant` keeps the matrix consistent both ways (granting adds what it needs, revoking removes what depended on it). Arrow keys move; Space toggles. A `rowEnd` slot holds per-row actions.
+
+#### 6.11.9 Change impact (`ChangeImpactNotice`)
+- Before any edit that touches existing data (type change, field delete, import "replace"), show counts inline above the save button: *1,180 values convert · 104 values will be cleared*. Safe lines are quiet; loss lines are emphasised and switch the notice to `--warning` (or `--destructive` with `severity=error` when nothing can be restored). While counting: *Checking your data…*. Rename-only changes say they are safe.
+- Optional footer: `onConfirm` / `onCancel` (`confirmLabel` default *Apply change*) render right-aligned buttons inside the notice; confirm is `destructive` when a loss line has a count, disabled while `checking`, and shows a spinner while `confirming`. Use the footer when the notice *is* the confirm step (inline type change, import replace). When others depend on the thing being removed, open `ConfirmDestructive` from the confirm instead — never both stacked.
+
+#### 6.11.10 Destructive confirm (`ConfirmDestructive`)
+- The one dialog for deleting or replacing something others depend on: consequence with real numbers (*Removes 1,284 rows and 7 fields*), a **dependents list** (kind + name: *Agent · Billing agent*, *Flow · Renewal reminder*), recovery truth (*You can restore it for 30 days* / *This can't be undone*), optional type-the-name confirm, an optional gentler `alternative` (*Turn off instead*). The action stays disabled until the typed name matches.
+
+#### 6.11.11 Import (`ImportMapper`)
+- The review step of any file import: one row per incoming column — header + 3 sample values (mono) → target `Select` (fields with their type, *New field "X"*, *Don't import*) → a check in plain words (*All valid*, *12 not dates*, *Skipped*). Then a preview of the first rows, then the result line (*1,272 rows ready · 12 can't be imported · Download rejected rows*) and the rejected rows with reasons. Above the mapping: a `--warning` alert when a `required` target has no column (*Required field Name has no column. New rows will be rejected unless you map one.*) and a quiet note listing the columns set to *Don't import* (*2 columns won't be imported: Fax, Notes*) — `importGaps(columns, targets)` computes both. *New field "X"* calls `onCreateTarget(header, detectedType)` so the create form preselects the type. The import button imports the valid rows; mode (add / update by key / replace) sits in the `header` slot, and "replace" shows a `ChangeImpactNotice`.
+
+#### 6.11.12 Copy, motion and a11y
+- Copy: user words for types and operators; counts with separators; errors say how to fix (*Enter a number, like 1200*), never codes.
+- Motion: only the §8 drop-in (bulk bar, revealed settings); no animated cell transitions. All `motion-safe:`.
+- A11y: `role=grid` with `aria-rowcount`/`aria-colcount`/`aria-rowindex`; one tabbable cell; editors labelled by their column; errors `role=alert` and wired by `aria-describedby`; checkboxes named per row; match count and bulk count are polite live regions.
+
+**Migration targets:** Tables grid/list/fields/agents/import/delete (see `tracks/tables-ux/DS_HANDOFF.md`); any admin page that edits rows in place; agent/tool access grids (`PermissionMatrix`); every "Are you sure?" delete that has dependents (`ConfirmDestructive`).
+
+---
+
+### 6.12 Builder forms (configure + try)
+
+A **builder** is a page where people configure one thing and immediately see it work: an assistant, an automation, a widget, a template. The layout is **configure on the left, try on the right**. Patterns live in `frontend/src/components/builder/` (import from `@/components/builder`), domain-free, built from `components/ui`, §6.10 patterns and tokens.
+
+Reading order: **head (title + status pill + `AutosaveStatus` + one primary action) → tabs (§6.5, at most five, plain names) → `ErrorSummary` when a save failed → `FormSection`s** in the main column; **`TryPanel`** in the sticky side column. Creation is a separate **`OneCardCreate`** that ends in the builder.
+
+#### 6.12.1 Layout (`BuilderLayout`)
+- Main column `minmax(0,1fr)` + side panel 400px (`asideSize=lg` → 480px) from `lg` up; the panel is sticky (`top-4`, viewport height) so it stays in view while sections scroll. Below `lg` it stacks after the main column. The side panel is a labelled `aside`.
+
+#### 6.12.2 Sections and inline validation (`FormSection`, `RequiredMark`, `FieldError`, `focusFirstError`, `ErrorSummary`)
+- `FormSection`: `--panel` card, `text-subtitle` title, one-line description that says what the section does, optional head action ("Change").
+- Fields are `ui/field` with `required` (renders the `*`) and `error` (renders the note, `aria-invalid`, `role=alert`). Use `RequiredMark` / `FieldError` only for custom controls not wrapped in `Field`.
+- Validate on blur and on save, never on every keystroke. On a failed save: call `focusFirstError(form)` and show **one** `ErrorSummary` (*2 things need fixing* + a jump link per error). Never only a toast.
+- Error copy says what to do: *Add instructions so it knows what to do*, not *Field required*.
+
+#### 6.12.3 Switches that reveal (`ToggleReveal`, `ToggleRow`)
+- `ToggleReveal`: label + one-sentence consequence + `Switch`; when on, its dependent settings appear below in a labelled region (drop-in), with `aria-controls`/`aria-expanded`. When off they are not rendered (their values are kept by the caller).
+- `ToggleRow`: a row in a list of optional items — title, description, a tone-dot status line (*Ready*, *Needs a connection*), trailing actions, switch.
+
+#### 6.12.4 Presets (`PresetSelector`)
+- Named presets replace raw numbers (*Precise · Balanced · Creative*), each with a one-line description; one may be `recommended`. A radio group (arrows move and select). An optional **Custom** option reveals the raw controls. Raw parameters otherwise live under Advanced / Developer options.
+
+#### 6.12.5 Templates and suggestions (`TemplateChips`)
+- Outline pill buttons that **fill** the form (or the composer) — never submit. Used on the create card and as Try-panel empty-state suggestions.
+
+#### 6.12.6 Autosave (`AutosaveStatus`)
+| State | Copy | Look |
+|---|---|---|
+| `dirty` | Unsaved changes | `--steel` |
+| `saving` | Saving… (spinner) | `--steel` |
+| `saved` | Saved just now / Saved 4 min ago / Saved at 14:02 | `--steel`, check |
+| `error` | Couldn't save · Retry | `--destructive`; Retry re-runs the save |
+- A polite live region in the head, next to the primary action. Conflicts use `errorText` (*Someone else changed this · Reload*).
+
+#### 6.12.7 Try panel (`TryPanel`, `Inspector`)
+- Head: title (*Try it*), a neutral pill for what is being tried (*Draft · not published*), Reset. Optional **coaching banner** slot under the head (an `AttentionBanner` that names the fix and links to it).
+- Log (`role=log`, polite): user messages right on `--ink`, replies left on `--paper-deep`; a pending reply shows its current step with a spinner (*Looking up order 1042…*). Each reply may carry **inspector** chips: `call` (an action it ran), `source` (*Read: Returns policy.pdf*, signal tint), `metric` (*1.8s*, *412 tokens*, mono); failed items are red.
+- Screen readers: the log is not live and is `aria-busy` while a reply runs; each finished reply is announced once through a visually hidden polite region; messages carry sr-only *You:* / *Agent:* labels.
+- Empty: suggestions (`TemplateChips`), rendered outside the log. Composer: Enter sends, Shift+Enter new line. Footer slot: model line, *View run details*.
+- It renders state; the caller runs the conversation against the **current draft**.
+
+#### 6.12.8 Create (`OneCardCreate`, `StepCard`)
+- `OneCardCreate`: one centred card (`max-w-xl`, `shadow-md`) with only what's needed to get a working thing (name + the one essential field + template chips), defaults for everything else, and a verb that creates and opens it (*Create and try it*). ⌘Enter submits.
+- `StepCard`: numbered card for a short guided sequence on one page (current step raised, done steps quiet with a check, `aria-current=step`).
+
+#### 6.12.9 Motion and a11y
+- Motion: drop-in for revealed settings only; spinner while saving/running. All `motion-safe:`.
+- A11y: switches are labelled by their visible label and described by their consequence; presets are a radio group; errors are announced and linked; the try log and autosave status are polite live regions; spinners inside live regions are `aria-hidden`.
+
+**Migration targets:** Agent form (see `tracks/agent-form-ux/DS_HANDOFF.md`); any settings page with on/off features (`ToggleReveal`); any slider of model parameters (`PresetSelector`); any form that only toasts on validation failure (`ErrorSummary` + `focusFirstError`).
 
 ---
 
@@ -347,7 +475,7 @@ This is the unifying signal language across marketing and product — the same d
 | Left-edge rail on hover (spec rows) | `--signal` (3px) | appears on hover | "This is the focused/selected line" |
 | Active nav item edge | `--signal` (2px) | static | Current location |
 
-**Never** introduce a second accent color for status. Green (`--good`) is the *only* addition beyond the core palette, reserved exclusively for "healthy/success" states in the product UI — it does not appear in marketing.
+**Never** introduce a second accent color. Beyond `--signal`, only the three status colours exist (`--good`, `--warning`, `--destructive`, each with a `-tint`), and they are reached through tones (`patterns/tones.tsx`), never picked by a page.
 
 ---
 
@@ -373,124 +501,48 @@ This is the unifying signal language across marketing and product — the same d
 
 ## 10. Core CSS Tokens (Reference)
 
+The source is `frontend/src/index.css` (`:root` light, `[data-theme="midnight"]` dark). Abridged:
+
 ```css
 :root{
-  /* Surfaces */
-  --paper:      #F2F3EF;
-  --paper-deep: #E9EBE4;
-  --panel:      #FBFCFA;
-
-  /* Text & lines */
-  --ink:        #15181C;
-  --ink-soft:   #2A2F36;
-  --steel:      #5A636F;
-  --steel-soft: #8A929C;
-  --line:       #D7DACF;   /* product */
-  --line-marketing: #C7CCC0;
-  --line-dark:  #343A42;
-
-  /* Signal */
-  --signal:     #E8531F;
-  --signal-ink: #BC3E0F;
-  --good:       #3F7A4E;
-
-  /* Shape */
-  --r: 2px;
-
-  /* Type — MARKETING layer */
-  --display: 'Big Shoulders', sans-serif;  /* 600/650/700, uppercase, condensed */
-  --body:    'Archivo', sans-serif;        /* 400/500/600 */
-  --mono:    'Martian Mono', monospace;    /* 400/500 */
-
-  /* Type — PRODUCT layer (v1.1) */
-  --p-display: 'Big Shoulders', sans-serif; /* character moments only: h1, gauge values, panel headers, primary button */
-  --p-ui:      'IBM Plex Sans', sans-serif;  /* 400/500/600 — UI workhorse, everything chrome */
-  --p-mono:    'IBM Plex Mono', monospace;   /* 400/500 — data/identifiers only */
+  --paper:#FBFBFD; --paper-deep:#F4F4F7; --panel:#FFFFFF;
+  --ink:#1D1D1F; --ink-soft:#2A2F36; --steel:#6E6E73; --steel-soft:#98989D; --line:#ECECF0;
+  --signal:#7A5AF0; --signal-ink:#5B3FC4;
+  --good:#1C7C54; --good-tint:#E8F5EE; --warning:#8A5A00; --warning-tint:#FDF3E0;
+  --destructive:#B3261E; --destructive-tint:#FDECEA;
+  --r:8px; --r-sm:6px; --r-md:10px; --r-lg:14px; --r-xl:14px; --r-full:999px;
+  --shadow-flat:none; --shadow-raised:0 1px 2px rgba(0,0,0,.05); --shadow-overlay:0 8px 24px -8px rgba(0,0,0,.16);
+  --space-1:4px … --space-7:48px;
+  --control-h-sm:30px; --control-h-md:34px; --control-h-lg:38px;
+  --display/--body: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --mono: ui-monospace, 'SF Mono', Menlo, monospace;
+  --text-display/title/subtitle/body/ui/micro/meta/eyebrow-*: see §3.1
 }
-
 @keyframes blink{ 50%{ opacity:.2 } }
 @keyframes drop{ from{opacity:0; transform:translateY(-6px)} to{opacity:1; transform:none} }
 ```
 
-### Font embeds
-
-**Marketing:**
-```html
-<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders:opsz,wght@10..72,600;10..72,650;10..72,700&family=Archivo:wght@400;500;600&family=Martian+Mono:wght@400;500&display=swap" rel="stylesheet">
-```
-
-**Product:**
-```html
-<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders:opsz,wght@10..72,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-```
+`[data-theme="winter|summer|morning"]` blocks are dead code from the retired theme picker — do not use them.
 
 ---
 
 ## 11. Tailwind Config (Reference)
 
-```js
-// tailwind.config.js
-export default {
-  content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
-  theme: {
-    extend: {
-      colors: {
-        paper: '#F2F3EF',
-        'paper-deep': '#E9EBE4',
-        ink: '#15181C',
-        'ink-soft': '#2A2F36',
-        steel: '#5A636F',
-        'steel-soft': '#8A929C',
-        line: '#C7CCC0',
-        'line-dark': '#343A42',
-        signal: '#E8531F',
-        'signal-ink': '#BC3E0F',
-      },
-      fontFamily: {
-        display: ['"Big Shoulders"', 'sans-serif'],
-        body: ['Archivo', 'system-ui', 'sans-serif'],
-        mono: ['"Martian Mono"', 'monospace'],
-      },
-      borderRadius: {
-        DEFAULT: '2px',
-        sm: '2px',
-        md: '2px',
-        lg: '2px',
-        xl: '2px',
-        '2xl': '2px',
-        '3xl': '2px',
-        full: '2px',
-      },
-      animation: {
-        blink: 'blink 1.6s steps(2) infinite',
-        drop: 'drop 0.35s ease-out',
-      },
-      keyframes: {
-        blink: { '50%': { opacity: '0.2' } },
-        drop: {
-          from: { opacity: '0', transform: 'translateY(-6px)' },
-          to: { opacity: '1', transform: 'none' },
-        },
-      },
-    },
-  },
-  plugins: [],
-};
-```
+`frontend/tailwind.config.*` maps every token to a utility, so pages never need a raw value: colours (`bg-paper`, `text-steel`, `border-line`, `bg-signal/5`, `bg-good-tint` …), `rounded` → `--r` (and `-sm/-md/-lg/-xl/-full`), `shadow-md` → `--shadow-raised`, `shadow-lg`/`xl`/`2xl` → `--shadow-overlay`, `h-control-sm/md/lg`, `px-control*`, type sizes `text-display / text-title / text-subtitle / text-body-text / text-ui-text / text-micro / text-meta`, `font-sans/display/mono` → the CSS stacks, and `animate-blink` / `animate-drop`. Add a token to `index.css` and a key here before using a new value anywhere.
 
 ---
 
 ## 12. Quick Checklist Before Shipping a New Screen
 
-**Both surfaces**
-- [ ] Background is `--paper` / `--paper-deep` / `--panel` — not white, not dark, unless it's a "control plane" context.
-- [ ] No gradients, no drop shadows except the signature ledger.
-- [ ] Radius is 2px everywhere.
-- [ ] Signal orange used at most 1–2 times as a fill; otherwise as dot/edge/underline/single emphasized word.
-- [ ] Status communicated via dot + label, not a colored pill.
-- [ ] Numbering/codes used only where they reflect a real taxonomy (fault codes, spec codes, IDs) — not decorative 01/02/03.
-- [ ] Icons are outline-only, no colored container squares.
-- [ ] Motion limited to blink (live/running) and drop-in (new row) — reduced-motion respected.
+**Every product screen**
+- [ ] Built from `components/ui`, `@/components/patterns`, `@/components/grid` and `@/components/builder`; a missing shape was added to the system first, not hand-rolled on the page.
+- [ ] Colours, radius, shadows, spacing, control heights and type come from tokens (§2–§4); no hex, no `text-[Npx]`, no `h-6..h-11` on controls, no inline styles (`python3 scripts/run_standards.py` passes).
+- [ ] No gradients; shadows only on raised cards (`shadow-md`) and floating layers (`shadow-lg`).
+- [ ] Signal purple used at most 1–2 times as a fill; otherwise ring / dot / edge / tint / one link.
+- [ ] Status via a tone (dot + label, or `pill-*` from the tone) — never a page-picked colour.
+- [ ] Sentence case; mono only for machine values; numbers with thousands separators.
+- [ ] Motion limited to blink (live) and drop-in (arrivals, reveals), all `motion-safe:`.
+- [ ] Works in `midnight` (dark) without page changes.
 
 **Resource pages (§6.10)**
 - [ ] Built from `@/components/patterns`; no hand-rolled status line, filter row, progress card, banner, drop zone or settings tab.
@@ -501,17 +553,30 @@ export default {
 - [ ] Problems: one attention banner with one fix + a reason line on each affected row.
 - [ ] Search results show match words, not scores; highlighting is on plain text.
 - [ ] "/" focuses the ask field; filter pills work with arrow keys; progress text is a polite live region.
+- [ ] "Used by N …" counts open a `LinkedListPopover`, not a custom popover or a tab.
 
-**Marketing surface**
-- [ ] Body/lede in Archivo; eyebrows, codes, and data in Martian Mono.
-- [ ] Big Shoulders for hero/section headlines and large stat numbers.
+**Data grids (§6.11)**
+- [ ] The grid is a `DataGrid`; toolbar, chips, bulk bar, drawer, import, matrix and confirms come from `@/components/grid`.
+- [ ] Column types are user words with their glyph (Text, Long text, Number, Currency, Date, Dropdown, Link, Checkbox); storage types never reach the UI.
+- [ ] Tab / Enter / Esc / arrows / type-to-edit work; Esc restores the old value; invalid values show a one-line fix hint on the cell.
+- [ ] Counts are true totals (*212 of 1,284 rows*), from the server.
+- [ ] Filters read as sentences and are removable by × and Backspace; sorts say their direction in type-aware words.
+- [ ] Any change that touches existing data shows a `ChangeImpactNotice` with counts before save.
+- [ ] Every delete/replace with dependents uses `ConfirmDestructive` with the dependents list and the recovery truth; typed confirm for whole collections.
+- [ ] Imports go through `ImportMapper`: mapping, per-column checks, preview, import valid rows, download rejected rows.
+- [ ] Permission grids use `PermissionMatrix` with declared implications.
 
-**Product surface (v1.1)**
-- [ ] UI chrome (nav, rows, descriptions, tabs, breadcrumbs, secondary buttons) is **IBM Plex Sans**, sentence case.
-- [ ] Technical metadata (IDs, model names, timestamps, counts, codes) is **IBM Plex Mono**, normal tracking.
-- [ ] Big Shoulders appears in **only** four kinds of place: page `<h1>`, gauge values, panel headers, and the primary button label.
-- [ ] No table cell, description, nav item, or tab is set in Big Shoulders or mono — if it is, that's the slip back toward "designed object."
-- [ ] Uppercase reserved for display + short mono status labels; UI text stays sentence case.
+**Builder forms (§6.12)**
+- [ ] `BuilderLayout` with the try / preview panel sticky beside the form; the panel tries the current draft.
+- [ ] Creation is one `OneCardCreate` card with defaults and a verb that opens the builder.
+- [ ] At most five tabs with plain names; jargon is behind Advanced / Developer options.
+- [ ] Required fields marked (`Field required`); validation on blur and save; failed save → `focusFirstError` + one `ErrorSummary`; error copy says how to fix.
+- [ ] Features that need settings use `ToggleReveal`; optional items use `ToggleRow` with a status line.
+- [ ] Raw numeric parameters are `PresetSelector` presets (with Custom when needed).
+- [ ] The head shows `AutosaveStatus`; failure offers Retry; never a silent save failure.
+- [ ] Try panel shows what happened: calls, sources, latency/tokens, and a coaching banner that links to the fix.
+
+**Marketing surface** — separate site; see §3.2 history. Product rules above do not apply to `huf-redesign.html`.
 
 ---
 
