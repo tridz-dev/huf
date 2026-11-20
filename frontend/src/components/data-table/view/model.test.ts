@@ -29,6 +29,13 @@ describe('table view model', () => {
 			{ field: 'paid', op: 'is', value: 'Yes' },
 		], cols)).toEqual([['company', 'like', '%ac%'], ['seats', '>=', 5], ['stage', 'is', 'not set'], ['paid', '=', 1]]);
 	});
+	it('skips empty/NaN numeric conditions and escapes like wildcards', () => {
+		expect(toApiFilters([
+			{ field: 'seats', op: 'is at least', value: '' },
+			{ field: 'seats', op: 'is at most', value: 'abc' },
+			{ field: 'company', op: 'contains', value: '50%_x' },
+		], cols)).toEqual([['company', 'like', '%50\\%\\_x%']]);
+	});
 	it('plans paste into updates then inserts', () => {
 		const rows: Row[] = [toRow({ name: 'A', company: 'a' }, cols), toRow({ name: 'B', company: 'b' }, cols)];
 		const plan = planPaste([['x', '1'], ['y', '2'], ['z', 'nope']], { rowId: 'B', key: 'company' }, rows, cols);

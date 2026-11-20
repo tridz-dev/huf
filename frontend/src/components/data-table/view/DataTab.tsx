@@ -17,7 +17,7 @@ import {
 	DRAFT_PREFIX, PAGE_SIZE, buildColumns, defaultsFor, downloadCsv, errorText, isBlank, isDraft, planPaste,
 	requiredWithoutDefault, toApiFilters, toApiValues, toCsv, toTsv, type Row,
 } from './model';
-import { deleteMany, fetchNames, insertMany, serverExport, setOne, updateMany } from './rowOps';
+import { SELECT_ALL_CAP, deleteMany, fetchNames, insertMany, serverExport, setOne, updateMany } from './rowOps';
 import { useTableRows } from './useTableRows';
 
 export interface DataTabHandle {
@@ -46,6 +46,8 @@ export const DataTab = forwardRef<DataTabHandle, DataTabProps>(function DataTab(
 	const [gridSort, setGridSort] = useState<GridSort | null>(null);
 	const sort = useMemo(() => (gridSort ? { field: gridSort.key, order: gridSort.direction } : null), [gridSort]);
 	const [page, setPage] = useState(0);
+	// Flips to false once a delete had to use the per-row fallback (not restorable).
+	const [undoAvailable, setUndoAvailable] = useState(true);
 	const [hidden, setHidden] = useState<Set<string>>(new Set());
 	const [selected, setSelected] = useState<Set<string>>(new Set());
 	const [drawerId, setDrawerId] = useState<string | null>(null);
@@ -184,8 +186,11 @@ export const DataTab = forwardRef<DataTabHandle, DataTabProps>(function DataTab(
 		const gone = names;
 		try {
 			const restorable = await track(() => deleteMany(doctype, gone));
+			setUndoAvailable(restorable);
 			setSelected(new Set());
-			await reload();
+			// Deleting every row on the last page would leave an empty page; step back.
+			if (page > 0 && gone.length >= rows.length) setPage(page - 1);
+			else await reload();
 			toast(`Deleted ${gone.length.toLocaleString()} ${gone.length === 1 ? 'row' : 'rows'}`, {
 				duration: 10000,
 				action: restorable
@@ -216,7 +221,11 @@ export const DataTab = forwardRef<DataTabHandle, DataTabProps>(function DataTab(
 	const selectAll = async () => {
 		if (total === undefined) return;
 		try {
-			setSelected(new Set(await fetchNames(doctype, apiFilters, search, total)));
+			const picked = await fetchNames(doctype, apiFilters, search, total);
+			setSelected(new Set(picked));
+			if (total > SELECT_ALL_CAP) {
+				toast(`Selected the first ${picked.length.toLocaleString()} of ${total.toLocaleString()} rows`, { description: 'Narrow the filters to act on the rest.' });
+			}
 		} catch (err) {
 			toast.error('Could not select all rows', { description: errorText(err) });
 		}
@@ -227,7 +236,7 @@ export const DataTab = forwardRef<DataTabHandle, DataTabProps>(function DataTab(
 	const hasNext = total !== undefined ? to < total : hasMore;
 	const drawerIdx = drawerId ? allRows.findIndex((r) => r.name === drawerId) : -1;
 
-	if (!loading && !error && !filtered && rows.length === 0 && drafts.length === 0) {
+	if (!loading && !error && !filtered && page === 0 && (total ?? 0) === 0 && rows.length === 0 && drafts.length === 0) {
 		return (
 			<DropZone
 				icon={Database}
@@ -310,7 +319,7 @@ export const DataTab = forwardRef<DataTabHandle, DataTabProps>(function DataTab(
 			<BulkActionBar
 				count={selected.size}
 				onClear={() => setSelected(new Set())}
-				selectAll={total !== undefined ? { total, onClick: () => void selectAll() } : undefined}
+				selectAll={total !== undefined ? { total: Math.min(total, SELECT_ALL_CAP), onClick: () => void selectAll() } : undefined}
 				actions={[
 					{ label: 'Set value', onClick: () => setSetValueOpen(true) },
 					{ label: 'Copy', onClick: copySelected },
@@ -324,7 +333,7 @@ export const DataTab = forwardRef<DataTabHandle, DataTabProps>(function DataTab(
 				onOpenChange={setConfirmDelete}
 				title={`Delete ${names.length.toLocaleString()} ${names.length === 1 ? 'row' : 'rows'}?`}
 				consequence="These rows will be removed from the table."
-				recovery="You can undo this right after."
+				recovery={undoAvailable ? 'You can undo this right after.' : 'This cannot be undone.'}
 				actionLabel="Delete"
 				onConfirm={doDelete}
 			/>
