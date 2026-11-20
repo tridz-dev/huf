@@ -1,293 +1,162 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2, Loader2, Database, RefreshCcw, MoreVertical, Upload, SquareAsterisk } from 'lucide-react';
+import { Download, Loader2, Pencil, Plus, Trash2, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { FilterBar } from '@/components/dashboard/filters/FilterBar';
-import { DropZone } from '@/components/patterns';
-import { DataRecordList } from '@/components/data-table/DataRecordList';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { OverflowMenu, type OverflowMenuItem } from '@/components/patterns';
+import { PageFrame } from '@/layouts/PageFrame';
 import { DeleteTableDialog } from '@/components/data-table/DeleteTableDialog';
-import { BulkImportModal } from '@/components/data-table/BulkImportModal';
-import { TableAgentAccessModal } from '@/components/data-table/TableAgentAccessModal';
-import {
-	getTableSchema,
-	getTableRecords,
-	deleteDataTable,
-} from '@/services/dataTableApi';
-import { LAYOUT_FIELD_TYPES } from '@/data/fieldTypes';
-import type { DataTableFieldDef, DataTableSchema } from '@/types/dataTable.types';
+import { FieldsTab } from '@/components/data-table/FieldsTab';
+import { AgentsTab } from '@/components/data-table/AgentsTab';
+import { ImportDialog } from '@/components/data-table/import/ImportDialog';
+import { DataTab, type DataTabHandle } from '@/components/data-table/view/DataTab';
+import { ActivityTab } from '@/components/data-table/view/ActivityTab';
+import { dataFields, errorText } from '@/components/data-table/view/model';
+import { deleteDataTable, getTableSchema } from '@/services/dataTableApi';
+import type { DataTableSchema } from '@/types/dataTable.types';
 
-export interface DataTableViewPageProps {
-	onHeaderActionsChange?: (actions: ReactNode) => void;
+export const TABLE_TABS = ['data', 'fields', 'agents', 'activity'] as const;
+export type TableTab = (typeof TABLE_TABS)[number];
+const TAB_LABEL: Record<TableTab, string> = { data: 'Data', fields: 'Fields', agents: 'Agents', activity: 'Activity' };
+
+export function parseTableTab(v: string | null): TableTab {
+	return (TABLE_TABS as readonly string[]).includes(v ?? '') ? (v as TableTab) : 'data';
 }
 
-export function DataTableViewPage({ onHeaderActionsChange }: DataTableViewPageProps) {
+export function DataTableViewPage() {
 	const { tableId } = useParams<{ tableId: string }>();
 	const navigate = useNavigate();
+	const [params, setParams] = useSearchParams();
+	const tab = parseTableTab(params.get('tab'));
+	const importOpen = params.get('import') === '1';
 
 	const [schema, setSchema] = useState<DataTableSchema | null>(null);
-	const [records, setRecords] = useState<Record<string, unknown>[]>([]);
-	const [loading, setLoading] = useState(true);
-	const [recordsLoading, setRecordsLoading] = useState(true);
-	const [search, setSearch] = useState('');
-	const [hasMore, setHasMore] = useState(false);
-	const [page, setPage] = useState(0);
-
-	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+	const [rowCount, setRowCount] = useState<number | undefined>(undefined);
+	const [deleteOpen, setDeleteOpen] = useState(false);
 	const [deleting, setDeleting] = useState(false);
-	const [importModalOpen, setImportModalOpen] = useState(false);
-	const [agentAccessOpen, setAgentAccessOpen] = useState(false);
+	const [dataKey, setDataKey] = useState(0);
+	const dataRef = useRef<DataTabHandle>(null);
 
 	const loadSchema = useCallback(async () => {
 		if (!tableId) return;
 		try {
-			const s = await getTableSchema(tableId);
-			setSchema(s);
+			setSchema(await getTableSchema(tableId));
 		} catch (err) {
-			toast.error('Failed to load table', { description: err instanceof Error ? err.message : 'An error occurred.' });
+			toast.error('Failed to load table', { description: errorText(err) });
 			navigate('/data');
-		} finally {
-			setLoading(false);
 		}
 	}, [tableId, navigate]);
 
-	const loadRecords = useCallback(
-		async (reset = false) => {
-			if (!schema) return;
-			setRecordsLoading(true);
-			try {
-				const start = reset ? 0 : page * 20;
-				const result = await getTableRecords(schema.doctype_name, {
-					limit: 20,
-					start,
-					search: search || undefined,
-				});
-				if (reset) {
-					setRecords(result.items);
-					setPage(1);
-				} else {
-					setRecords((prev) => [...prev, ...result.items]);
-					setPage((p) => p + 1);
-				}
-				setHasMore(result.hasMore);
-			} catch (err) {
-				toast.error('Failed to load records', { description: err instanceof Error ? err.message : 'An error occurred.' });
-			} finally {
-				setRecordsLoading(false);
-			}
-		},
-		[schema, page, search]
-	);
-
 	useEffect(() => {
-		loadSchema();
+		void loadSchema();
 	}, [loadSchema]);
 
-	useEffect(() => {
-		if (schema) {
-			setPage(0);
-			setRecords([]);
-			loadRecords(true);
-		}
-		// Only reload when schema changes
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [schema?.name]);
+	const update = (changes: Record<string, string | null>) => {
+		const next = new URLSearchParams(params);
+		for (const [k, v] of Object.entries(changes)) (v === null ? next.delete(k) : next.set(k, v));
+		setParams(next, { replace: true });
+	};
+	const setTab = (t: TableTab) => update({ tab: t === 'data' ? null : t });
 
-	const handleRowClick = (record: Record<string, unknown>) => {
-		if (!tableId || !record.name) return;
-		navigate(`/data/${tableId}/${record.name as string}`);
+	const addRow = () => {
+		if (tab !== 'data') setTab('data');
+		window.setTimeout(() => dataRef.current?.addRow(), 0);
 	};
 
-	const handleAddRecord = useCallback(() => {
-		if (!tableId) return;
-		navigate(`/data/${tableId}/new`);
-	}, [navigate, tableId]);
-
-	useEffect(() => {
-		if (!onHeaderActionsChange) return;
-
-		onHeaderActionsChange(
-			<div className="flex items-center gap-2">
-				<Button size="sm" onClick={handleAddRecord}>
-					<Plus className="w-3.5 h-3.5 mr-1.5" />
-					Add record
-				</Button>
-				<Button size="sm" variant="outline" onClick={() => setImportModalOpen(true)}>
-					<Upload className="w-3.5 h-3.5 mr-1.5" />
-					Import data
-				</Button>
-				<DropdownMenu>
-					<DropdownMenuTrigger asChild>
-						<Button variant="outline" size="sm" className="w-8 px-0 rounded border-line text-steel hover:bg-paper-deep hover:text-ink">
-							<MoreVertical className="h-4 w-4" />
-							<span className="sr-only">Open menu</span>
-						</Button>
-					</DropdownMenuTrigger>
-					<DropdownMenuContent align="end">
-						<DropdownMenuItem onClick={() => navigate(`/data/${tableId}/edit`)}>
-							<Pencil className="w-3.5 h-3.5 mr-2" />
-							Edit table
-						</DropdownMenuItem>
-						<DropdownMenuItem onClick={() => setAgentAccessOpen(true)}>
-							<SquareAsterisk className="w-3.5 h-3.5 mr-2" />
-							Add to agent…
-						</DropdownMenuItem>
-						<DropdownMenuItem
-							onClick={() => setDeleteDialogOpen(true)}
-							className="text-destructive focus:text-destructive"
-						>
-							<Trash2 className="w-3.5 h-3.5 mr-2" />
-							Delete
-						</DropdownMenuItem>
-					</DropdownMenuContent>
-				</DropdownMenu>
-			</div>
-		);
-
-		return () => onHeaderActionsChange(null);
-	}, [onHeaderActionsChange, navigate, tableId, handleAddRecord]);
-
-	const handleDeleteTable = async () => {
+	const handleDelete = async () => {
 		if (!tableId) return;
 		setDeleting(true);
 		try {
 			const result = await deleteDataTable(tableId);
-			toast.success(
-				`Table deleted (${result.deleted_records} record${result.deleted_records !== 1 ? 's' : ''} removed)`
-			);
+			toast.success(`Table deleted (${result.deleted_records} ${result.deleted_records === 1 ? 'row' : 'rows'} removed)`);
 			navigate('/data');
 		} catch (err) {
-			toast.error('Failed to delete table', { description: err instanceof Error ? err.message : 'An error occurred.' });
+			toast.error('Failed to delete table', { description: errorText(err) });
 		} finally {
 			setDeleting(false);
-			setDeleteDialogOpen(false);
+			setDeleteOpen(false);
 		}
 	};
 
-	if (loading || !schema) {
+	if (!schema || !tableId) {
 		return (
-			<div className="flex items-center justify-center h-full">
-				<Loader2 className="w-6 h-6 animate-spin text-steel-soft" />
+			<div className="flex h-full items-center justify-center">
+				<Loader2 className="h-6 w-6 animate-spin text-steel-soft" />
 			</div>
 		);
 	}
 
-	const dataFields = schema.fields.filter(
-		(f: DataTableFieldDef) => !LAYOUT_FIELD_TYPES.includes(f.fieldtype)
+	const empty = rowCount === 0;
+	const items: OverflowMenuItem[] = [
+		...(tab === 'data'
+			? [
+					{ label: 'Export', icon: Download, onSelect: () => dataRef.current?.exportAll() },
+					...(empty ? [] : [{ label: 'Import', icon: Upload, onSelect: () => update({ import: '1' }) }]),
+				]
+			: []),
+		{ label: 'Edit fields', icon: Pencil, onSelect: () => setTab('fields') },
+		{ label: 'Delete table', icon: Trash2, destructive: true, separated: true, onSelect: () => setDeleteOpen(true) },
+	];
+
+	const actions = (
+		<>
+			{tab === 'data' &&
+				(empty ? (
+					<Button size="sm" onClick={() => update({ import: '1' })}>
+						<Upload aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+						Import
+					</Button>
+				) : (
+					<Button size="sm" onClick={addRow}>
+						<Plus aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+						Add row
+					</Button>
+				))}
+			<OverflowMenu items={items} label={`More actions for ${schema.table_name}`} />
+		</>
 	);
-	const recordCount = records.length;
 
 	return (
-		<div className="h-full overflow-auto">
-			<div className="p-6 space-y-6 max-w-5xl mx-auto">
-				{/* Header */}
-				<div className="flex items-start justify-between gap-4">
-					<div>
-						<h2 className="text-xl font-semibold">{schema.table_name}</h2>
-						{schema.description && (
-							<p className="text-sm text-steel mt-1">
-								{schema.description}
-							</p>
-						)}
-						<div className="flex items-center gap-4 mt-2 text-xs text-steel-soft">
-							<span>{dataFields.length} fields</span>
-							<span>{recordCount} records loaded</span>
-						</div>
-					</div>
-				</div>
+		<PageFrame
+			title={schema.table_name}
+			meta={`${rowCount !== undefined ? `${rowCount.toLocaleString()} rows · ` : ''}${dataFields(schema).length} fields`}
+			actions={actions}
+			tabs={
+				<Tabs value={tab} onValueChange={(v) => setTab(parseTableTab(v))}>
+					<TabsList aria-label="Table sections">
+						{TABLE_TABS.map((t) => (
+							<TabsTrigger key={t} value={t}>
+								{TAB_LABEL[t]}
+							</TabsTrigger>
+						))}
+					</TabsList>
+				</Tabs>
+			}
+		>
+			{tab === 'data' && <DataTab key={dataKey} ref={dataRef} schema={schema} tableId={tableId} onImport={() => update({ import: '1' })} onCount={setRowCount} />}
+			{tab === 'fields' && <FieldsTab schema={schema} tableId={tableId} onChanged={() => void loadSchema()} />}
+			{tab === 'agents' && <AgentsTab schema={schema} tableId={tableId} />}
+			{tab === 'activity' && <ActivityTab tableId={tableId} />}
 
-				{/* Search + Refresh */}
-				<FilterBar
-					searchPlaceholder="Search records..."
-					searchValue={search}
-					onSearchChange={setSearch}
-					onSearchSubmit={() => loadRecords(true)}
-					actions={
-						<Button
-							variant="ghost"
-							size="icon"
-							className="h-8 w-8 rounded border border-line bg-panel text-steel hover:bg-paper-deep hover:text-ink"
-							onClick={() => loadRecords(true)}
-						>
-							<RefreshCcw className="w-3.5 h-3.5" />
-						</Button>
-					}
-				/>
-
-				{/* Records table */}
-				{records.length === 0 && !recordsLoading ? (
-					<DropZone
-						icon={Database}
-						title="No records in this table yet"
-						hint="Add records one by one, or import many at once from a file."
-						actions={
-							<>
-								<Button size="sm" onClick={handleAddRecord}>
-									<Plus className="w-3.5 h-3.5 mr-1.5" />
-									Add first record
-								</Button>
-								<Button size="sm" variant="outline" onClick={() => setImportModalOpen(true)}>
-									<Upload className="w-3.5 h-3.5 mr-1.5" />
-									Import
-								</Button>
-							</>
-						}
-					/>
-				) : (
-					<DataRecordList
-						records={records}
-						fields={schema.fields}
-						loading={recordsLoading && records.length === 0}
-						onRowClick={handleRowClick}
-					/>
-				)}
-
-				{/* Load More */}
-				{hasMore && (
-					<div className="text-center">
-						<Button
-							variant="outline"
-							size="sm"
-							onClick={() => loadRecords(false)}
-							disabled={recordsLoading}
-                            className="rounded border-line bg-panel text-steel hover:bg-paper-deep hover:text-ink"
-						>
-							{recordsLoading ? (
-								<Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
-							) : null}
-							Load more
-						</Button>
-					</div>
-				)}
-			</div>
-
-			{/* Delete Table Dialog */}
 			<DeleteTableDialog
-				open={deleteDialogOpen}
-				onOpenChange={setDeleteDialogOpen}
+				open={deleteOpen}
+				onOpenChange={setDeleteOpen}
 				tableName={schema.table_name}
-				recordCount={recordCount}
-				onConfirm={handleDeleteTable}
+				recordCount={rowCount ?? 0}
+				onConfirm={handleDelete}
 				loading={deleting}
 			/>
-
-			{/* Bulk Import Modal */}
-			{tableId && (
-				<BulkImportModal
-					open={importModalOpen}
-					onOpenChange={setImportModalOpen}
-					tableId={tableId}
-					tableName={schema.table_name}
-					onImportComplete={() => loadRecords(true)}
-				/>
-			)}
-
-			<TableAgentAccessModal
-				open={agentAccessOpen}
-				onOpenChange={setAgentAccessOpen}
-				table={schema}
+			<ImportDialog
+				open={importOpen}
+				onOpenChange={(o) => !o && update({ import: null })}
+				schema={schema}
+				onImported={() => {
+					update({ import: null, tab: null });
+					void loadSchema();
+					setDataKey((k) => k + 1);
+				}}
 			/>
-		</div>
+		</PageFrame>
 	);
 }
