@@ -8,10 +8,11 @@ export { OverflowMenu, type OverflowMenuItem, type OverflowMenuProps } from './O
 export { AskField, isEditableTarget, type AskFieldProps } from './AskField';
 export { FilterPills, type FilterPill, type FilterPillsProps } from './FilterPills';
 export { CollectionToolbar, type CollectionToolbarProps } from './CollectionToolbar';
-export { ResourceList, ResourceRow, ResourceListSlot, TypeGlyph, type ResourceListProps, type ResourceRowProps } from './ResourceList';
+export { ResourceList, ResourceRow, ResourceListSlot, TypeGlyph, resourceGridTemplate, type ResourceColumn, type ResourceListProps, type ResourceRowProps } from './ResourceList';
 export { ProgressRow, progressCopy, type ProgressRowProps } from './ProgressRow';
 export { AttentionBanner, type AttentionBannerProps } from './AttentionBanner';
 export { ResultCard, ResultsNote, highlightTerms, matchStrength, type MatchStrength, type ResultCardProps } from './ResultCard';
 export { DropZone, StepHint, type DropZoneProps, type Step } from './DropZone';
 export { SettingsSheet, SettingsSection, SettingsAdvanced, DangerZone, type SettingsSheetProps, type DangerZoneProps } from './SettingsSheet';
 export { Checklist, type ChecklistItem, type ChecklistProps } from './Checklist';
+export { LinkedListPopover, type LinkedItem, type LinkedListPopoverProps } from './LinkedListPopover';
