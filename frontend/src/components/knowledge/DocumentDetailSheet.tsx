@@ -37,7 +37,7 @@ export function DocumentDetailSheet({ input, onOpenChange }: DocumentDetailSheet
                 <Badge variant="pill-neutral">{itemStatusLabel(input.status)}</Badge>
               </Row>
               {reason && <Row label="Reason">{reason}</Row>}
-              <Row label="Searchable parts">{(input.chunks_created ?? 0).toLocaleString()}</Row>
+              <Row label="Sections">{(input.chunks_created ?? 0).toLocaleString()}</Row>
               <Row label="Added">{formatTimeAgo(input.creation)}</Row>
               {input.input_type === 'File' && input.file && (
                 <Row label="File">

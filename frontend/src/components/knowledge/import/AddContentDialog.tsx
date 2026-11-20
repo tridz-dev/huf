@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { useEffect, useMemo, useState, type DragEvent, type ReactNode } from 'react';
+import { Cloud, FolderOpen, Loader2, Server, ChevronLeft } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { Dialog, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import {
@@ -24,11 +26,13 @@ import {
 } from '@/services/knowledgeApi';
 import type { KnowledgeInputDoc } from '@/types/knowledge.types';
 import { UploadPanel } from './UploadPanel';
-import { EMPTY_REMOTE, isZip, type RemoteValues, type StagedFile } from './importHelpers';
+import { MAX_FILE_MB, EMPTY_REMOTE, isZip, stageFiles, type RemoteValues, type StagedFile } from './importHelpers';
 import { EMPTY_DIRECT, TextPanel, WebPagePanel, type DirectValues } from './DirectInputPanels';
 import { DirectoryPanel, S3Panel, SftpPanel } from './RemoteSourcePanels';
 
-type TabKey = 'upload' | 'directory' | 's3' | 'sftp' | 'text' | 'url';
+type Primary = 'upload' | 'url' | 'text' | 'storage';
+type StorageKind = 'directory' | 's3' | 'sftp';
+type TabKey = Primary | StorageKind;
 
 interface AddContentDialogProps {
   open: boolean;
@@ -40,6 +44,12 @@ interface AddContentDialogProps {
   onInputAdded?: () => void;
   /** When set, shows a "Skip for now" link (used by the create flow). */
   onSkip?: () => void;
+  /** Open preselected on a choice. */
+  initialTab?: 'upload' | 'storage';
+  /** Files to stage as soon as the dialog opens (dropped on the page). */
+  initialFiles?: File[];
+  /** Extra header content, e.g. the create-flow stepper. */
+  headerExtra?: ReactNode;
 }
 
 async function uploadPrivate(file: File, onProgress: (pct: number) => void): Promise<string> {
@@ -64,10 +74,16 @@ export function AddContentDialog({
   onStarted,
   onInputAdded,
   onSkip,
+  initialTab = 'upload',
+  initialFiles,
+  headerExtra,
 }: AddContentDialogProps) {
   const [options, setOptions] = useState<ImportOptions | null>(null);
   const [optionsError, setOptionsError] = useState<string | null>(null);
-  const [tab, setTab] = useState<TabKey>('upload');
+  const [primary, setPrimary] = useState<Primary>(initialTab);
+  const [storageKind, setStorageKind] = useState<StorageKind | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const tab: TabKey = primary === 'storage' ? storageKind ?? 'storage' : primary;
   const [staged, setStaged] = useState<StagedFile[]>([]);
   const [remote, setRemote] = useState<RemoteValues>(EMPTY_REMOTE);
   const [direct, setDirect] = useState<DirectValues>(EMPTY_DIRECT);
@@ -88,10 +104,23 @@ export function AddContentDialog({
       setStaged([]);
       setRemote(EMPTY_REMOTE);
       setDirect(EMPTY_DIRECT);
-      setTab('upload');
+      setPrimary('upload');
+      setStorageKind(null);
+      setDragOver(false);
       setBusy(false);
     }
   }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const hasStorage = (options?.source_kinds ?? []).some((k) => k === 'S3' || k === 'SFTP' || k === 'Directory');
+    setPrimary(initialTab === 'storage' && !hasStorage ? 'upload' : initialTab);
+    if (initialFiles && initialFiles.length > 0 && options) {
+      setPrimary('upload');
+      setStaged((cur) => [...cur, ...stageFiles(initialFiles, options.allowed_extensions, cur)]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, initialFiles, options]);
 
   const kinds = useMemo(() => new Set<SourceKind>(options?.source_kinds ?? []), [options]);
   const accepted = staged.filter((s) => !s.rejected);
@@ -156,7 +185,6 @@ export function AddContentDialog({
         config = { ssh_connection: remote.sshConnection, root_path: remote.rootPath.trim() };
       }
       const result = await startImport(knowledgeSource, kind, config);
-      toast.success('Import started. You can keep working while we read your files.');
       onOpenChange(false);
       onStarted(result.ingestion);
     } catch (e) {
@@ -167,26 +195,64 @@ export function AddContentDialog({
     }
   };
 
-  const tabs: Array<{ key: TabKey; label: string; show: boolean }> = [
-    { key: 'upload', label: 'Upload', show: true },
-    { key: 'directory', label: 'Folder on server', show: kinds.has('Directory') },
-    { key: 's3', label: 'S3', show: kinds.has('S3') },
-    { key: 'sftp', label: 'SFTP', show: kinds.has('SFTP') },
-    { key: 'text', label: 'Text', show: true },
-    { key: 'url', label: 'Web page', show: true },
+  const storageCards: Array<{ key: StorageKind; title: string; text: string; icon: typeof Cloud; show: boolean }> = [
+    { key: 's3', title: 'Amazon S3 / Cloudflare R2', text: 'Import everything under a bucket folder.', icon: Cloud, show: kinds.has('S3') },
+    { key: 'sftp', title: 'SFTP server', text: 'Import files from a server you have connected.', icon: Server, show: kinds.has('SFTP') },
+    { key: 'directory', title: 'Server folder', text: 'Import from a folder on this server.', icon: FolderOpen, show: kinds.has('Directory') },
   ];
-  const visibleTabs = tabs.filter((t) => t.show);
+  const visibleCards = storageCards.filter((c) => c.show);
+  const primaries: Array<{ key: Primary; label: string; show: boolean }> = [
+    { key: 'upload', label: 'Upload files', show: true },
+    { key: 'url', label: 'Web page', show: true },
+    { key: 'text', label: 'Text', show: true },
+    { key: 'storage', label: 'Connect storage', show: visibleCards.length > 0 },
+  ];
+  const maxMb = options?.max_file_mb ?? MAX_FILE_MB;
+
+  const submitLabel =
+    tab === 'upload' ? (accepted.length > 0 ? `Add ${accepted.length} ${accepted.length === 1 ? 'file' : 'files'}` : 'Add files')
+    : tab === 'url' ? 'Add web page'
+    : tab === 'text' ? 'Add text'
+    : 'Start import';
+  const disabledReason = busy
+    ? ''
+    : tab === 'upload' ? 'Choose at least one file first.'
+    : tab === 'url' ? 'Enter a web address first.'
+    : tab === 'text' ? 'Type or paste some text first.'
+    : tab === 'storage' ? 'Choose where to import from.'
+    : 'Fill in the required fields first.';
+
+  const onDropBody = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setDragOver(false);
+    if (busy || !options || e.dataTransfer.files.length === 0) return;
+    const dropped = Array.from(e.dataTransfer.files);
+    setPrimary('upload');
+    setStaged((cur) => [...cur, ...stageFiles(dropped, options.allowed_extensions, cur)]);
+  };
 
   return (
     <Dialog open={open} onOpenChange={(next) => (busy ? undefined : onOpenChange(next))}>
       <DialogScrollContent className="max-w-2xl">
         <DialogScrollHeader>
           <DialogTitle>Add content{sourceLabel ? ` to "${sourceLabel}"` : ''}</DialogTitle>
+          {headerExtra}
           <DialogDescription>
             Add documents so your agents can answer from them. We read and prepare them in the background.
           </DialogDescription>
         </DialogScrollHeader>
-        <DialogScrollBody className="space-y-4 py-2">
+        <DialogScrollBody
+          className={cn('space-y-4 py-2 transition-colors', dragOver && 'rounded-md bg-primary/5 ring-2 ring-primary ring-offset-2')}
+          onDragOver={(e: DragEvent<HTMLDivElement>) => {
+            e.preventDefault();
+            if (!busy) setDragOver(true);
+          }}
+          onDragLeave={(e: DragEvent<HTMLDivElement>) => {
+            if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragOver(false);
+          }}
+          onDrop={onDropBody}
+          data-testid="add-content-body"
+        >
           {optionsError && (
             <Alert variant="destructive">
               <AlertDescription>{optionsError}</AlertDescription>
@@ -198,10 +264,10 @@ export function AddContentDialog({
             </div>
           )}
           {options && (
-            <Tabs value={tab} onValueChange={(v) => setTab(v as TabKey)}>
-              <TabsList>
-                {visibleTabs.map((t) => (
-                  <TabsTrigger key={t.key} value={t.key} disabled={busy}>
+            <Tabs value={primary} onValueChange={(v) => setPrimary(v as Primary)}>
+              <TabsList className="w-full">
+                {primaries.filter((t) => t.show).map((t) => (
+                  <TabsTrigger key={t.key} value={t.key} disabled={busy} className="flex-1">
                     {t.label}
                   </TabsTrigger>
                 ))}
@@ -210,24 +276,48 @@ export function AddContentDialog({
                 <UploadPanel
                   staged={staged}
                   allowedExtensions={options.allowed_extensions}
+                  maxMb={maxMb}
                   disabled={busy}
                   onChange={setStaged}
                 />
               </TabsContent>
-              <TabsContent value="directory" className="pt-3">
-                <DirectoryPanel options={options} values={remote} onChange={setRemote} disabled={busy} />
-              </TabsContent>
-              <TabsContent value="s3" className="pt-3">
-                <S3Panel options={options} values={remote} onChange={setRemote} disabled={busy} />
-              </TabsContent>
-              <TabsContent value="sftp" className="pt-3">
-                <SftpPanel options={options} values={remote} onChange={setRemote} disabled={busy} />
+              <TabsContent value="url" className="pt-3">
+                <WebPagePanel values={direct} onChange={setDirect} disabled={busy} />
               </TabsContent>
               <TabsContent value="text" className="pt-3">
                 <TextPanel values={direct} onChange={setDirect} disabled={busy} />
               </TabsContent>
-              <TabsContent value="url" className="pt-3">
-                <WebPagePanel values={direct} onChange={setDirect} disabled={busy} />
+              <TabsContent value="storage" className="pt-3">
+                {storageKind === null ? (
+                  <div className="grid gap-2">
+                    {visibleCards.map((c) => (
+                      <button
+                        key={c.key}
+                        type="button"
+                        disabled={busy}
+                        onClick={() => setStorageKind(c.key)}
+                        className="flex items-center gap-3 rounded-md border p-3 text-left hover:bg-muted"
+                        data-testid={`storage-card-${c.key}`}
+                      >
+                        <c.icon className="h-5 w-5 shrink-0 text-steel-soft" />
+                        <span>
+                          <span className="block text-sm font-medium">{c.title}</span>
+                          <span className="block text-xs text-steel">{c.text}</span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <Button type="button" variant="ghost" size="sm" onClick={() => setStorageKind(null)} disabled={busy}>
+                      <ChevronLeft className="mr-1 h-4 w-4" />
+                      Back
+                    </Button>
+                    {storageKind === 'directory' && <DirectoryPanel options={options} values={remote} onChange={setRemote} disabled={busy} />}
+                    {storageKind === 's3' && <S3Panel options={options} values={remote} onChange={setRemote} disabled={busy} />}
+                    {storageKind === 'sftp' && <SftpPanel options={options} values={remote} onChange={setRemote} disabled={busy} />}
+                  </div>
+                )}
               </TabsContent>
             </Tabs>
           )}
@@ -238,20 +328,25 @@ export function AddContentDialog({
           )}
         </DialogScrollBody>
         <DialogScrollFooter>
-          {onSkip && (
-            <Button type="button" variant="link" className="mr-auto" onClick={onSkip} disabled={busy}>
-              Skip for now
-            </Button>
-          )}
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>
-            Cancel
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => (onSkip ? onSkip() : onOpenChange(false))}
+            disabled={busy}
+          >
+            {onSkip ? 'Skip for now' : 'Cancel'}
           </Button>
-          <Button type="button" onClick={() => void submit()} disabled={!canSubmit} data-testid="import-submit">
-            {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {tab === 'upload' && accepted.length > 0
-              ? `Import ${accepted.length} ${accepted.length === 1 ? 'item' : 'items'}`
-              : 'Import'}
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span tabIndex={canSubmit ? -1 : 0}>
+                <Button type="button" onClick={() => void submit()} disabled={!canSubmit} data-testid="import-submit">
+                  {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {submitLabel}
+                </Button>
+              </span>
+            </TooltipTrigger>
+            {!canSubmit && disabledReason && <TooltipContent>{disabledReason}</TooltipContent>}
+          </Tooltip>
         </DialogScrollFooter>
       </DialogScrollContent>
     </Dialog>

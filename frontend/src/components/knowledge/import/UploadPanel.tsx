@@ -9,11 +9,12 @@ import { MAX_FILE_MB, formatSize, isZip, stageFiles, type StagedFile } from './i
 interface UploadPanelProps {
   staged: StagedFile[];
   allowedExtensions: string[];
+  maxMb?: number;
   disabled?: boolean;
   onChange: (next: StagedFile[]) => void;
 }
 
-export function UploadPanel({ staged, allowedExtensions, disabled, onChange }: UploadPanelProps) {
+export function UploadPanel({ staged, allowedExtensions, maxMb = MAX_FILE_MB, disabled, onChange }: UploadPanelProps) {
   const [dragOver, setDragOver] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -21,8 +22,6 @@ export function UploadPanel({ staged, allowedExtensions, disabled, onChange }: U
     if (!list || list.length === 0 || disabled) return;
     onChange([...staged, ...stageFiles(Array.from(list), allowedExtensions, staged)]);
   };
-
-  const exts = allowedExtensions.map((e) => e.replace(/^\./, '').toUpperCase());
 
   return (
     <div className="space-y-3">
@@ -47,11 +46,10 @@ export function UploadPanel({ staged, allowedExtensions, disabled, onChange }: U
       >
         <Upload className="h-6 w-6 text-steel-soft" />
         <p className="text-sm">
-          Drag files or a .zip here, or <span className="text-signal-ink underline">choose files</span>
+          Drop files anywhere here, or <span className="text-signal-ink underline">choose files</span>
         </p>
         <p className="text-xs text-steel-soft">
-          {exts.length > 0 ? `${exts.slice(0, 8).join(', ')}${exts.length > 8 ? ' and more' : ''}` : 'Documents and text files'}
-          , up to {MAX_FILE_MB} MB each. A zip is unpacked for you.
+          PDF, Word, PowerPoint, Excel, text, Markdown or web pages · up to {maxMb} MB each · a .zip is unpacked
         </p>
         <Input
           ref={inputRef}

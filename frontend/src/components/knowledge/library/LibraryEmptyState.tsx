@@ -8,8 +8,8 @@ export function LibraryEmptyState({ onUpload, onConnect }: { onUpload: () => voi
       <h2 className="text-xl font-semibold">Teach your agents with your own documents.</h2>
       <p className="text-steel">Upload files, connect a folder or a bucket, and ask questions to check the answers.</p>
       <div className="flex flex-wrap justify-center gap-2">
-        <Button onClick={onUpload}>Upload documents</Button>
-        <Button variant="outline" onClick={onConnect}>Connect a folder or cloud storage</Button>
+        <Button onClick={onUpload}>Add content</Button>
+        <Button variant="outline" onClick={onConnect}>Connect storage</Button>
       </div>
       <ol className="grid gap-3 pt-3 text-sm text-steel sm:grid-cols-3">
         {STEPS.map((s, i) => (

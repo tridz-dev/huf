@@ -370,7 +370,6 @@ function KnowledgeSourceFormPage() {
               onCancel={fromAgent ? handleCancel : undefined}
               onRebuildIndex={handleRebuildIndex}
               onAddContent={() => undefined}
-              onTest={() => undefined}
               onToggleDisabled={() => undefined}
             />
             <Form {...form}>

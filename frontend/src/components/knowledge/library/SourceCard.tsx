@@ -1,4 +1,4 @@
-import { MoreVertical, Pause, Pencil, Play, Trash2 } from 'lucide-react';
+import { MoreVertical, Pause, Pencil, Play, Search, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -42,13 +42,12 @@ export function SourceCard({ source, counts, agentCount, onOpen, onTest, onAddFi
         <Badge variant={HEALTH_BADGE[health]} size="sm" title={hint}>{HEALTH_LABEL[health]}</Badge>
       </div>
       <div className="space-y-0.5 text-sm text-steel">
-        <p>{docs} · Updated {formatTimeAgo(source.modified)}</p>
-        <p>Used by {agentCount} {agentCount === 1 ? 'agent' : 'agents'}</p>
+        <p>{docs} · Updated {formatTimeAgo(source.modified || source.creation)}</p>
+        {agentCount > 0 && <p>Used by {agentCount} {agentCount === 1 ? 'agent' : 'agents'}</p>}
         <p className="text-xs">{hint}</p>
       </div>
       <div className="mt-auto flex items-center gap-2 pt-1">
-        <Button size="sm" variant="outline" onClick={stop(onTest)}>Test</Button>
-        <Button size="sm" variant="outline" onClick={stop(onAddFiles)}>Add files</Button>
+        <Button size="sm" variant="outline" onClick={stop(onAddFiles)}>Add content</Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="ml-auto" title="More actions" onClick={(e) => e.stopPropagation()}>
@@ -56,6 +55,7 @@ export function SourceCard({ source, counts, agentCount, onOpen, onTest, onAddFi
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+            <DropdownMenuItem onClick={stop(onTest)}><Search className="w-4 h-4 mr-2" />Test</DropdownMenuItem>
             <DropdownMenuItem onClick={stop(onRename)}><Pencil className="w-4 h-4 mr-2" />Rename</DropdownMenuItem>
             <DropdownMenuItem onClick={stop(onToggleDisabled)}>
               {source.disabled ? <Play className="w-4 h-4 mr-2" /> : <Pause className="w-4 h-4 mr-2" />}

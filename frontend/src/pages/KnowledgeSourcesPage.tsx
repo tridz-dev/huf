@@ -29,6 +29,7 @@ export default KnowledgeSourcesPage;
 function KnowledgeSourcesPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const [createTab, setCreateTab] = useState<'upload' | 'storage'>('upload');
   const createOpen = searchParams.get('new') === '1';
   const openCreate = () =>
     setSearchParams((p) => {
@@ -163,7 +164,7 @@ function KnowledgeSourcesPage() {
               }}
             />
           ) : (
-            <LibraryEmptyState onUpload={openCreate} onConnect={openCreate} />
+            <LibraryEmptyState onUpload={openCreate} onConnect={() => { setCreateTab('storage'); openCreate(); }} />
           )
         }
         renderItem={(source) => (
@@ -197,7 +198,7 @@ function KnowledgeSourcesPage() {
             : 'No more knowledge sources to load'}
         </div>
       )}
-      <CreateSourceDialog open={createOpen} onOpenChange={setCreateOpen} agent={searchParams.get('agent')} />
+      <CreateSourceDialog initialAddTab={createTab} open={createOpen} onOpenChange={setCreateOpen} agent={searchParams.get('agent')} />
       <ConfirmActionDialog
         open={deleteTarget !== null}
         onOpenChange={(o) => !o && setDeleteTarget(null)}

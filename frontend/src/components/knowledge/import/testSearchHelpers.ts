@@ -64,3 +64,23 @@ export function highlightParts(text: string, query: string): { text: string; hit
     .filter(Boolean)
     .map((part) => ({ text: part, hit: words.includes(part.toLowerCase()) }));
 }
+
+/** Collapse consecutive duplicate lines (repeated headers/footers) and blank runs. */
+export function dedupeLines(text: string): string {
+  const out: string[] = [];
+  for (const raw of text.split('\n')) {
+    const line = raw.trimEnd();
+    if (out.length > 0 && out[out.length - 1].trim() === line.trim()) continue;
+    out.push(line);
+  }
+  return out.join('\n').trim();
+}
+
+/** Question suggestion from a document title, or null when the title is not a readable name. */
+export function questionFromTitle(title: string): string | null {
+  const name = title.trim().replace(/\.[a-z0-9]{2,5}$/i, '').replace(/[_-]+/g, ' ').trim();
+  if (name.length < 3 || name.length > 60) return null;
+  if (/^https?:\/\//i.test(title.trim()) || !/[a-z]{3}/i.test(name)) return null;
+  if (/^[0-9a-f]{8,}$/i.test(name.replace(/\s/g, ''))) return null;
+  return `What is ${name}?`;
+}

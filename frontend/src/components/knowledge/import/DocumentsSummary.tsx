@@ -28,13 +28,12 @@ export function HealthBadge({ health, className }: { health: Health; className?:
 
 interface DocumentsSummaryProps {
   counts: InputCounts;
-  onReviewProblems?: () => void;
   filter?: DocFilter | null;
   onFilterChange?: (filter: DocFilter | null) => void;
   className?: string;
 }
 
-export function DocumentsSummary({ counts, onReviewProblems, filter = null, onFilterChange, className }: DocumentsSummaryProps) {
+export function DocumentsSummary({ counts, filter = null, onFilterChange, className }: DocumentsSummaryProps) {
   const parts: Array<{ label: string; tone: string; key?: DocFilter }> = [
     { label: `${counts.ready.toLocaleString()} ready`, tone: 'text-good', key: 'ready' },
   ];
@@ -72,11 +71,6 @@ export function DocumentsSummary({ counts, onReviewProblems, filter = null, onFi
             {p.label}
           </span>
         ),
-      )}
-      {counts.failed + counts.skipped > 0 && onReviewProblems && (
-        <button type="button" onClick={onReviewProblems} className="text-signal-ink underline-offset-4 hover:underline">
-          Review
-        </button>
       )}
     </div>
   );

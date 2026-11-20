@@ -44,6 +44,7 @@ export function IngestionProgressCard({
   const active = isActiveIngestion(status);
   const percent = Math.round((data.progress || 0) * 100);
   const done = counts.indexed + counts.error + counts.skipped;
+  const scanning = status === 'Scanning';
   const problems = counts.error + counts.skipped;
 
   const doCancel = async () => {
@@ -95,22 +96,29 @@ export function IngestionProgressCard({
       <CardContent className="space-y-3 py-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="text-sm">
-            <span className="font-medium">Importing</span>
-            <span className="text-steel">
-              {' '}
-              {ingestionStatusLabel(status)}
-              {counts.total > 0 ? ` / ${done} of ${counts.total} files` : ''}
+            <span className="font-medium">
+              {scanning || counts.total === 0 ? 'Finding files…' : `Preparing ${done} of ${counts.total}`}
             </span>
           </div>
           <Button type="button" size="sm" variant="outline" onClick={() => setConfirmOpen(true)} data-testid="ingestion-cancel">
             Cancel
           </Button>
         </div>
-        <Progress value={percent} />
+        {scanning || counts.total === 0 ? (
+          <Progress value={100} className="animate-pulse" data-testid="ingestion-indeterminate" />
+        ) : (
+          <Progress value={percent} />
+        )}
         <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-steel">
           <span>
-            {counts.indexed} ready, {counts.skipped} skipped, {counts.error} failed
-            {lostMessage ? ` · ${lostMessage}` : ''}
+            {[
+              counts.indexed > 0 ? `${counts.indexed} ready` : '',
+              counts.skipped > 0 ? `${counts.skipped} skipped` : '',
+              counts.error > 0 ? `${counts.error} failed` : '',
+              lostMessage ?? '',
+            ]
+              .filter(Boolean)
+              .join(' · ')}
           </span>
           <Button type="button" size="sm" variant="ghost" onClick={() => onViewDetails(ingestion)}>
             View details

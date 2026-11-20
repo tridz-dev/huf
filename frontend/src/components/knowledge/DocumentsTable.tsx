@@ -132,7 +132,6 @@ export function DocumentsTable({
               <TableHead>Title</TableHead>
               <TableHead>Origin</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead className="text-right">Searchable parts</TableHead>
               <TableHead>Added</TableHead>
               <TableHead className="w-10" />
             </TableRow>
@@ -141,7 +140,7 @@ export function DocumentsTable({
             {rows.length === 0 && (
               <TableRow>
                 <TableCell
-                  colSpan={6}
+                  colSpan={5}
                   className="py-6 text-center text-sm text-steel"
                 >
                   No documents match your search.
@@ -177,9 +176,6 @@ export function DocumentsTable({
                     >
                       {itemStatusLabel(input.status)}
                     </Badge>
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {(input.chunks_created ?? 0).toLocaleString()}
                   </TableCell>
                   <TableCell className="whitespace-nowrap text-sm text-steel">
                     {formatTimeAgo(input.creation)}
