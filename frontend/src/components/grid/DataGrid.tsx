@@ -191,7 +191,7 @@ export function DataGrid<R>({
                         <CellDisplay col={col} value={cellValue(col, row)} onToggle={onCellChange ? () => nav.toggle({ r, c }) : undefined} />
                       )}
                       {err && (
-                        <p id={errId} role="alert" className="absolute left-0 top-full z-20 mt-0.5 w-max max-w-xs rounded-md border border-destructive/30 bg-panel px-2 py-1 text-micro text-destructive shadow-raised">
+                        <p id={errId} role="alert" className="absolute left-0 top-full z-20 mt-0.5 w-max max-w-xs rounded-md border border-destructive/30 bg-panel px-2 py-1 text-micro text-destructive shadow-md">
                           {err} <span className="text-steel">· Esc to undo</span>
                         </p>
                       )}

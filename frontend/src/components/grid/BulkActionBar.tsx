@@ -38,7 +38,7 @@ export function BulkActionBar({ count, noun = ['row', 'rows'], actions, onClear,
   const ordered = [...actions.filter((a) => !a.destructive), ...actions.filter((a) => a.destructive)];
   return (
     <div role="toolbar" aria-label="Selected rows"
-      className={cn('fixed bottom-6 left-1/2 z-40 flex -translate-x-1/2 items-center gap-1 rounded-lg bg-ink px-2 py-1.5 text-primary-foreground shadow-overlay motion-safe:animate-drop', className)}>
+      className={cn('fixed bottom-6 left-1/2 z-40 flex -translate-x-1/2 items-center gap-1 rounded-lg bg-ink px-2 py-1.5 text-primary-foreground shadow-lg motion-safe:animate-drop', className)}>
       <span role="status" aria-live="polite" className="px-2 text-ui-text font-medium">
         {count.toLocaleString()} {count === 1 ? noun[0] : noun[1]} selected
       </span>

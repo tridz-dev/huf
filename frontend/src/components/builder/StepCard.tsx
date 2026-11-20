@@ -23,7 +23,7 @@ export interface StepCardProps {
 export function StepCard({ step, title, description, state = 'current', children, footer, className }: StepCardProps) {
   return (
     <section aria-current={state === 'current' ? 'step' : undefined} data-state={state}
-      className={cn('rounded-lg border bg-panel p-5', state === 'current' ? 'border-line shadow-raised' : 'border-line opacity-80', className)}>
+      className={cn('rounded-lg border bg-panel p-5', state === 'current' ? 'border-line shadow-md' : 'border-line opacity-80', className)}>
       <div className="flex items-start gap-3">
         {step !== undefined && (
           <span aria-hidden="true" className={cn('flex h-6 w-6 shrink-0 items-center justify-center rounded-full font-mono text-meta',
@@ -65,7 +65,7 @@ export function OneCardCreate({ title, description, children, submitLabel, onSub
   };
   return (
     <form noValidate onSubmit={submit} onKeyDown={onKey} aria-busy={busy || undefined}
-      className={cn('mx-auto w-full max-w-xl rounded-lg border border-line bg-panel p-6 shadow-raised', className)}>
+      className={cn('mx-auto w-full max-w-xl rounded-lg border border-line bg-panel p-6 shadow-md', className)}>
       <h1 className="text-title font-semibold text-ink">{title}</h1>
       {description && <p className="mt-1 text-ui-text text-steel">{description}</p>}
       <div className="mt-5 space-y-4">{children}</div>
