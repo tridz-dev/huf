@@ -64,7 +64,7 @@ export function useAgentSections({ id, isNew, form, abilities, canSave, onRename
   const [errors, setErrors] = useState<FormError[]>([]);
   const [savedAt, setSavedAt] = useState<Date | null>(null);
   const savingRef = useRef(false);
-  const pendingRef = useRef(false);
+  const pendingRef = useRef<SaveMode | null>(null);
   const abilitiesRef = useRef(abilities);
   abilitiesRef.current = abilities;
   const idRef = useRef(id);
@@ -178,7 +178,7 @@ export function useAgentSections({ id, isNew, form, abilities, canSave, onRename
   const saveAll = useCallback(async (mode: SaveMode) => {
     const target0 = idRef.current;
     if (!target0 || isNew || !baselineRef.current || !canSave) return;
-    if (savingRef.current) { pendingRef.current = true; return; }
+    if (savingRef.current) { if (mode === 'explicit' || !pendingRef.current) pendingRef.current = mode; return; }
     if (Object.keys(form.formState.errors).length > 0) await form.trigger();
     const dirty = dirtySections(mode);
     if (dirty.length === 0) {
@@ -251,7 +251,7 @@ export function useAgentSections({ id, isNew, form, abilities, canSave, onRename
     } finally {
       savingRef.current = false;
       setSaving(false);
-      if (pendingRef.current) { pendingRef.current = false; window.setTimeout(() => void saveRef.current('auto'), 0); }
+      if (pendingRef.current) { const next = pendingRef.current; pendingRef.current = null; window.setTimeout(() => void saveRef.current(next), 0); }
     }
   }, [ab.tools, ab.mcp, ab.knowledge, ab.skills, canSave, desktopAccessStatus, dirtySections, fieldsFor, form, isNew, onRenamed, onTabWithError]);
   const saveRef = useRef(saveAll);
