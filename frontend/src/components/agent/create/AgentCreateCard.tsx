@@ -4,13 +4,14 @@
  * after `onCreate`.
  */
 import { useEffect, useRef, useState } from 'react';
-import { OneCardCreate, ErrorSummary, focusFirstError, TemplateChips, type FormError } from '@/components/builder';
+import { OneCardCreate, ErrorSummary, focusFirstError, TemplateChips, TemplateGallery, type FormError } from '@/components/builder';
 import { AttentionBanner } from '@/components/patterns';
 import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { AGENT_EXAMPLES, type AgentExample } from './agentExamples';
 import { getWorkspaceDefaultModel } from '@/services/agentForm/agentFormApi';
 import { getModels, getProviders } from '@/services/providerApi';
 
@@ -21,12 +22,9 @@ export interface AgentCreateValues {
   model?: string;
 }
 
-export const AGENT_TEMPLATES = [
-  { id: 'support', label: 'Customer support', instructions: 'You are a friendly customer support agent. Answer questions clearly using only what you know, ask for missing details, and say so when you are not sure instead of guessing.' },
-  { id: 'sales', label: 'Sales', instructions: 'You are a helpful sales assistant. Understand what the customer needs, recommend the right option, answer pricing questions honestly, and suggest a clear next step.' },
-  { id: 'helpdesk', label: 'Internal helpdesk', instructions: 'You are an internal helpdesk agent for our team. Answer questions about company processes and tools, point to the right person or document, and keep replies short.' },
-  { id: 'research', label: 'Research', instructions: 'You are a research assistant. Break the question down, gather the relevant facts, summarise them clearly, and note anything you could not verify.' },
-] as const;
+/** Featured examples shown as chips; the full set lives in the gallery. */
+export const AGENT_TEMPLATES = AGENT_EXAMPLES.filter((e) => e.featured);
+const toChip = (e: AgentExample) => ({ id: e.id, label: e.label, description: e.description, meta: e.sets, category: e.category });
 
 const NON_CHAT = /embed|whisper|tts|speech|moderation|image|dall|rerank|transcri/i;
 const isChat = (m: { name: string; model_name?: string; modalities?: string }) => {
@@ -51,6 +49,7 @@ export function AgentCreateCard({ onCreate, busy, onCancel, error }: Props) {
   const [errs, setErrs] = useState<FormError[]>([]);
   const [model, setModel] = useState<{ provider: string | null; model: string | null }>({ provider: null, model: null });
   const [modelState, setModelState] = useState<'loading' | 'ready' | 'none' | 'unavailable'>('loading');
+  const [gallery, setGallery] = useState(false);
   const [changing, setChanging] = useState(false);
   const [providers, setProviders] = useState<{ name: string; provider_name: string }[]>([]);
   const [models, setModels] = useState<{ name: string; model_name: string }[]>([]);
@@ -78,7 +77,7 @@ export function AgentCreateCard({ onCreate, busy, onCancel, error }: Props) {
   };
 
   const pick = (id: string) => {
-    const t = AGENT_TEMPLATES.find((x) => x.id === id);
+    const t = AGENT_EXAMPLES.find((x) => x.id === id);
     if (!t) return;
     setTemplate(id);
     setInstructions(t.instructions);
@@ -106,13 +105,17 @@ export function AgentCreateCard({ onCreate, busy, onCancel, error }: Props) {
         <ErrorSummary errors={errs} />
         {error && <p role="alert" className="text-micro text-destructive">{error}</p>}
         <Field label="Name" required id="agent-name" error={errFor('agent-name')}>
-          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Support assistant" autoFocus />
+          <Input id="agent-name" aria-invalid={errFor('agent-name') ? true : undefined} value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Support assistant" autoFocus />
         </Field>
-        <TemplateChips items={AGENT_TEMPLATES.map(({ id, label }) => ({ id, label }))} onPick={pick} activeId={template} />
         <Field label="Instructions" required id="agent-instructions" error={errFor('agent-instructions')}
-          hint="Tell it who it helps and how to answer.">
-          <Textarea rows={6} value={instructions} onChange={(e) => setInstructions(e.target.value)} />
+          hint="Say who it helps, what it can look up or change, and when to hand off to a person.">
+          <Textarea id="agent-instructions" aria-describedby="agent-instructions-note" aria-invalid={errFor('agent-instructions') ? true : undefined} rows={6} value={instructions} onChange={(e) => setInstructions(e.target.value)}
+            placeholder="Describe what this agent should do — e.g. answer order questions from our Orders table and escalate refunds over $200 to a person." />
         </Field>
+        <TemplateChips lead="Or start from an example:" label="Example agents" items={AGENT_TEMPLATES.map(toChip)}
+          onPick={pick} activeId={template} onMore={() => setGallery(true)} />
+        <TemplateGallery open={gallery} onOpenChange={setGallery} items={AGENT_EXAMPLES.map(toChip)} onPick={pick}
+          activeId={template} title="Example agents" description="Each one fills in a name and instructions. Edit them, then connect knowledge, tables and channels after you create it." />
         {modelState === 'none' && (
           <AttentionBanner message="No chat model is set up yet. Add a provider before you try this agent." />
         )}
