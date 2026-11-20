@@ -128,6 +128,16 @@ describe('useAgentSections', () => {
     expect(last[3]).toBe('r9');
   });
 
+  it('Keep mine force-saves immediately without another click', async () => {
+    const { result } = await conflicted();
+    api.updateAgentSection.mockClear();
+    await act(async () => { result.current.sections.resolveConflict('description', 'mine'); await new Promise((r) => setTimeout(r, 20)); });
+    const last = api.updateAgentSection.mock.calls.at(-1)!;
+    expect((last[2] as Record<string, unknown>).description).toBe('mine');
+    expect(last[3]).toBe('r9');
+    expect(result.current.sections.status).toBe('saved');
+  });
+
   it('partial reload keeps the error and does not save', async () => {
     const { result } = await mount();
     act(() => { result.current.form.setValue('description', 'mine'); });

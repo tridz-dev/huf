@@ -51,7 +51,7 @@ export function AgentHeader({
           {autosave}
         </div>
         {(lastRun !== undefined || totalRun !== undefined) && (
-          <p className="text-xs text-steel-soft">Last run {lastRun ? formatTimeAgo(lastRun) : 'never'} &middot; {totalRun ?? 0} runs</p>
+          <p className="text-xs text-steel-soft">Last run {lastRun ? formatTimeAgo(lastRun) : 'never'} &middot; {totalRun ?? 0} {totalRun === 1 ? 'run' : 'runs'}</p>
         )}
       </div>
       <div className="flex flex-wrap items-center gap-2">
