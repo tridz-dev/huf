@@ -32,6 +32,7 @@ def _load_mod(name):
 	return mod
 
 
+_load_mod("csv_out")
 sec = _load_mod("import_security")
 ie = _load_mod("import_export")
 _load_mod("import_replace")
@@ -282,3 +283,15 @@ def test_replace_success(monkeypatch):
 	res = _dr("DT", ["a"], [(2, {"a": 1}, ["1"]), (3, {"a": 2}, ["2"])], [])
 	assert res["inserted"] == 2 and not res["rejected"]
 	fr.db.rollback.assert_not_called()
+
+
+def test_csv_embedded_quotes_in_formula_cell_preserved():
+	raw = 'name,link\nA,"=HYPERLINK(""http://x"")"\nB,"say ""hi"""\n'
+	h, r = ie.parse_csv(raw)
+	assert r[0][1] == '=HYPERLINK("http://x")'
+	assert r[1][1] == 'say "hi"'
+
+
+def test_csv_semicolon_delimiter_still_sniffed():
+	h, r = ie.parse_csv('a;b\n1;"x ""y"" z"\n2;3\n')
+	assert h == ["a", "b"] and r[0] == ["1", 'x "y" z']

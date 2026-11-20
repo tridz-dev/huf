@@ -212,6 +212,29 @@ def _discard_draft_records(run_name=None, conversation_name=None):
         frappe.db.delete("Agent Conversation", {"name": conversation_name})
 
 
+MISSING_KEY_MESSAGE = "This agent's model has no API key. Add a key in Providers."
+_MISSING_KEY_MARKERS = (
+    "password not found",
+    "api key",
+    "api_key",
+    "no api key",
+    "authentication",
+    "unauthorized",
+    "invalid x-api-key",
+    "incorrect api key",
+)
+
+
+def friendly_run_error(error):
+    """Return (message, code) with provider/credential failures mapped to a friendly message."""
+    if not error:
+        return error, None
+    low = str(error).lower()
+    if any(m in low for m in _MISSING_KEY_MARKERS):
+        return MISSING_KEY_MESSAGE, "missing_api_key"
+    return error, None
+
+
 def purge_draft_test_records():
     """Daily safety net: remove draft-test leftovers (crashed or killed runs)."""
     from frappe.utils import add_to_date
@@ -308,12 +331,24 @@ def run_agent_draft_test(agent_name: str, prompt: str, draft_overrides=None) -> 
             fields=["tool", "tool_args", "tool_result", "status", "error_message"],
             order_by="creation asc",
         )
+    except Exception as exc:
+        message, code = friendly_run_error(str(exc))
+        if code:
+            return {
+                "success": False, "response": None, "error": message, "error_code": code,
+                "agent_run_id": None, "conversation_id": None, "tool_calls": [],
+                "latency_ms": int((time.monotonic() - started) * 1000),
+                "tokens": {"input": None, "output": None, "total": None},
+            }
+        raise
     finally:
         _discard_draft_records(run_doc.name if run_doc else None, conversation.name)
+    error, error_code = friendly_run_error(run.get("error_message"))
     return {
         "success": run.get("status") == "Success",
         "response": run.get("response") or result.get("response"),
-        "error": run.get("error_message"),
+        "error": error,
+        "error_code": error_code,
         "agent_run_id": None,
         "conversation_id": None,
         "tool_calls": calls,

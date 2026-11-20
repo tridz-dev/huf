@@ -18,6 +18,7 @@ import uuid
 import frappe
 from frappe import _
 
+from .csv_out import _FORMULA_PREFIXES, _csv_safe, _is_number, rejected_to_csv, to_csv_text  # noqa: F401
 from .file_limits import check_import_file_size
 from .import_security import _import_error, _max_import_bytes, check_xlsx_size, strip_reserved
 
@@ -30,7 +31,6 @@ _DATE_FORMATS = ("%Y-%m-%d", "%d-%m-%Y", "%d/%m/%Y", "%Y/%m/%d", "%m/%d/%Y")
 _DATETIME_FORMATS = ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S.%f")
 _TRUE = {"1", "true", "yes", "y", "checked", "on"}
 _FALSE = {"0", "false", "no", "n", "unchecked", "off", ""}
-_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
 
 
 # ---------------------------------------------------------------- pure logic
@@ -38,11 +38,13 @@ _FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
 def parse_csv(raw: bytes | str):
 	text = raw.decode("utf-8-sig", errors="replace") if isinstance(raw, bytes) else raw.lstrip("﻿")
 	sample = text[:8192]
+	# Sniff only the delimiter: a sniffed doublequote=False mangles "" inside quoted cells.
+	delimiter = ","
 	try:
-		dialect = csv.Sniffer().sniff(sample, delimiters=",;\t|")
+		delimiter = csv.Sniffer().sniff(sample, delimiters=",;\t|").delimiter
 	except csv.Error:
-		dialect = csv.excel
-	rows = [r for r in csv.reader(io.StringIO(text), dialect)]
+		pass
+	rows = list(csv.reader(io.StringIO(text), delimiter=delimiter, quotechar='"', doublequote=True))
 	return _split_header(rows)
 
 
@@ -110,14 +112,6 @@ def _parse_datetime(v: str):
 			pass
 	d = _parse_date(v)
 	return datetime.datetime.combine(d, datetime.time()) if d else None
-
-
-def _is_number(v: str) -> bool:
-	try:
-		float(v.replace(",", ""))
-		return True
-	except ValueError:
-		return False
 
 
 def detect_type(values) -> str:
@@ -224,32 +218,6 @@ def build_record(headers, row, mapping, fields_by_name):
 		if field.get("reqd") and fn not in rec and fn not in seen and field["fieldtype"] != "Check":
 			errors.append(str(_("{0} is required").format(field.get("label") or fn)))
 	return rec, errors
-
-
-def to_csv_text(headers, rows) -> str:
-	buf = io.StringIO()
-	w = csv.writer(buf, lineterminator="\n")
-	w.writerow(headers)
-	for r in rows:
-		w.writerow([_csv_safe(c) for c in r])
-	return buf.getvalue()
-
-
-def _csv_safe(v):
-	if v is None:
-		return ""
-	if isinstance(v, (datetime.datetime, datetime.date, datetime.timedelta)):
-		return str(v)
-	s = str(v)
-	# Neutralise spreadsheet formula injection; leave plain negative numbers alone.
-	if s.startswith(_FORMULA_PREFIXES) and not (s[0] in "+-" and _is_number(s)):
-		return "'" + s
-	return s
-
-
-def rejected_to_csv(headers, rejected) -> str:
-	"""rejected: list of (row_number, message, raw_row)."""
-	return to_csv_text(["row", "error", *headers], [[n, m, *r] for n, m, r in rejected])
 
 
 # ------------------------------------------------------------ frappe wrappers
@@ -434,12 +402,14 @@ def _do_import(doctype_name, headers, rows, mapping, mode, key_field):
 		from .import_replace import do_replace
 		return do_replace(doctype_name, headers, records, rejected, _result)
 	inserted = updated = 0
+	skipped = []
 	for rownum, rec, raw in records:
 		try:
 			if mode == "update":
 				name = frappe.db.get_value(doctype_name, {key_field: rec[key_field]}, "name")
 				if not name:
-					raise frappe.DoesNotExistError(str(_("No record with {0} = {1}").format(key_field, rec[key_field])))
+					skipped.append((rownum, str(_("key not found")), raw))
+					continue
 				doc = frappe.get_doc(doctype_name, name)
 				doc.update(strip_reserved(rec))
 				doc.save()
@@ -450,16 +420,18 @@ def _do_import(doctype_name, headers, rows, mapping, mode, key_field):
 		except Exception as e:
 			rejected.append((rownum, re.sub(r"<[^>]+>", "", str(e)), raw))
 	rejected.sort(key=lambda t: t[0])
-	return _result(inserted, updated, rejected, headers)
+	return _result(inserted, updated, rejected, headers, skipped=skipped)
 
 
-def _result(inserted, updated, rejected, headers, note=None):
+def _result(inserted, updated, rejected, headers, note=None, skipped=None):
 	out = {
 		"inserted": inserted,
 		"updated": updated,
 		"rejected": len(rejected),
 		"rejected_rows": [{"row": n, "message": m} for n, m, _r in rejected],
 		"rejected_csv": rejected_to_csv(headers, rejected) if rejected else "",
+		"skipped": len(skipped or []),
+		"skipped_rows": [{"row": n, "message": m} for n, m, _r in (skipped or [])],
 	}
 	if note:
 		out["note"] = note

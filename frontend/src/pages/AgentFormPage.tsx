@@ -203,7 +203,7 @@ export function AgentFormPage() {
         <BuilderLayout asideLabel="Try it" asideSize="lg" aside={
           <AgentTryPanel agentName={agentId} getDraftOverrides={getDraftOverrides} starters={starters} modelLabel={modelName ? `Model: ${modelName}` : undefined}
             badge={values.disabled ? 'Draft · not published' : 'Published'}
-            renderBanner={(last) => last && last.toolNames.length === 0 && abilities.tools.length > 0 ? (
+            renderBanner={(last) => last && !last.errored && last.toolNames.length === 0 && abilities.tools.length > 0 ? (
               <AttentionBanner message="That answer did not use any of its actions." action={{ label: 'Fix in Abilities', onClick: () => setActiveTab('abilities') }} />
             ) : null} />
         }>
@@ -211,8 +211,8 @@ export function AgentFormPage() {
             title={title} disabled={!!values.disabled} modelLabel={isVoiceOnly ? undefined : modelName || 'Model'}
             isSystem={sections.isSystem} locked={locked}
             autosave={<span className="inline-flex items-center gap-2">
-              <AutosaveStatus state={sections.status} savedAt={sections.savedAt} onRetry={sections.conflictFields.length ? undefined : sections.retry} errorText={sections.errorText} />
-              {sections.status === 'error' && canManage && (
+              <AutosaveStatus state={sections.status} savedAt={sections.savedAt} onRetry={sections.conflictFields.length || sections.errors.length ? undefined : sections.retry} errorText={sections.errorText} />
+              {sections.status === 'error' && canManage && sections.errors.length === 0 && (
                 <Button type="button" variant="link" size="sm" onClick={() => void sections.reloadLatest()}>Reload latest</Button>
               )}
             </span>}
@@ -226,10 +226,10 @@ export function AgentFormPage() {
             <div data-testid="conflict-resolver">
               <AttentionBanner
                 message={`Someone else changed: ${sections.conflictFields.map(conflictLabel).join(', ')}. Keep yours or use theirs.`}
-                action={{ label: 'Use theirs (all)', onClick: () => sections.resolveAllConflicts('theirs') }}
-                secondary={{ label: 'Keep mine (all)', onClick: () => sections.resolveAllConflicts('mine') }}
+                action={{ label: sections.conflictFields.length > 1 ? 'Use theirs (all)' : 'Use theirs', onClick: () => sections.resolveAllConflicts('theirs') }}
+                secondary={{ label: sections.conflictFields.length > 1 ? 'Keep mine (all)' : 'Keep mine', onClick: () => sections.resolveAllConflicts('mine') }}
               />
-              <ul className="divide-y divide-line border-b border-line px-4 text-ui-text">
+              {sections.conflictFields.length > 1 && <ul className="divide-y divide-line border-b border-line px-4 text-ui-text">
                 {sections.conflictFields.map((f) => (
                   <li key={f} className="flex items-center gap-2 py-1.5">
                     <span className="flex-1">{conflictLabel(f)}</span>
@@ -237,7 +237,7 @@ export function AgentFormPage() {
                     <Button type="button" variant="outline" size="sm" onClick={() => sections.resolveConflict(f, 'theirs')}>Use theirs</Button>
                   </li>
                 ))}
-              </ul>
+              </ul>}
               <Button type="button" variant="link" size="sm" onClick={() => void sections.reloadLatest()}>Reload latest</Button>
             </div>
           )}

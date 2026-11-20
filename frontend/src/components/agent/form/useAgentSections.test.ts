@@ -80,27 +80,35 @@ describe('useAgentSections', () => {
   it('FEF-C: after a conflict, retry refreshes revisions and reports conflicting fields', async () => {
     const { result } = await mount();
     act(() => { result.current.form.setValue('description', 'mine'); result.current.form.setValue('instructions', 'mine-i'); });
-    api.updateAgentSection.mockRejectedValueOnce(new Error('Document has been modified after you have opened it'));
-    await act(async () => { await result.current.sections.saveNow(); });
-    expect(result.current.sections.conflict).toBe(true);
-
     server = { ...server, description: 'theirs', agent_name: 'Server Name' }; // description conflicts, agent_name does not
     rev = 'r9';
-    await act(async () => { await result.current.sections.retry(); });
+    api.updateAgentSection.mockRejectedValueOnce(new Error('Document has been modified after you have opened it'));
+    await act(async () => { await result.current.sections.saveNow(); });
+    await waitFor(() => expect(result.current.sections.conflictFields).toEqual(['description'])); // reloaded automatically, no Retry click
     expect(result.current.sections.conflictFields).toEqual(['description']);
     expect(result.current.form.getValues('agent_name')).toBe('Server Name');
     expect(api.updateAgentSection).toHaveBeenCalledTimes(1); // only the original failed save; no auto-save after reload
   });
 
+  it('a TimestampMismatchError reloads the latest automatically, so Keep mine / Use theirs show without Retry', async () => {
+    const { result } = await mount();
+    act(() => { result.current.form.setValue('description', 'mine'); });
+    server = { ...server, description: 'theirs' };
+    rev = 'r9';
+    api.updateAgentSection.mockRejectedValueOnce(new Error('TimestampMismatchError: Document has been modified after you have opened it'));
+    await act(async () => { await result.current.sections.saveNow(); });
+    await waitFor(() => expect(result.current.sections.conflictFields).toEqual(['description']));
+  });
+
   async function conflicted() {
     const hook = await mount();
     act(() => { hook.result.current.form.setValue('description', 'mine'); hook.result.current.form.setValue('instructions', 'mine-i'); });
-    api.updateAgentSection.mockRejectedValueOnce(new Error('Document has been modified after you have opened it'));
-    await act(async () => { await hook.result.current.sections.saveNow(); });
     server = { ...server, description: 'theirs' };
     rev = 'r9';
+    api.updateAgentSection.mockRejectedValueOnce(new Error('Document has been modified after you have opened it'));
+    await act(async () => { await hook.result.current.sections.saveNow(); });
+    await waitFor(() => expect(hook.result.current.sections.conflictFields).toEqual(['description']));
     api.updateAgentSection.mockClear();
-    await act(async () => { await hook.result.current.sections.retry(); });
     return hook;
   }
 
@@ -128,16 +136,26 @@ describe('useAgentSections', () => {
     expect(last[3]).toBe('r9');
   });
 
+  it('Keep mine force-saves immediately without another click', async () => {
+    const { result } = await conflicted();
+    api.updateAgentSection.mockClear();
+    await act(async () => { result.current.sections.resolveConflict('description', 'mine'); await new Promise((r) => setTimeout(r, 20)); });
+    const last = api.updateAgentSection.mock.calls.at(-1)!;
+    expect((last[2] as Record<string, unknown>).description).toBe('mine');
+    expect(last[3]).toBe('r9');
+    expect(result.current.sections.status).toBe('saved');
+  });
+
   it('partial reload keeps the error and does not save', async () => {
     const { result } = await mount();
     act(() => { result.current.form.setValue('description', 'mine'); });
     api.updateAgentSection.mockRejectedValueOnce(new Error('Document has been modified after you have opened it'));
-    await act(async () => { await result.current.sections.saveNow(); });
-    api.updateAgentSection.mockClear();
     api.getAgentSection.mockImplementation(async (_id: string, sec: string) => {
       if (sec === 'tools') throw new Error('down');
       return { name: 'AG-1', modified: rev, values: { ...server } };
     });
+    await act(async () => { await result.current.sections.saveNow(); });
+    api.updateAgentSection.mockClear();
     await act(async () => { await result.current.sections.retry(); });
     expect(api.updateAgentSection).not.toHaveBeenCalled();
     expect(result.current.sections.status).toBe('error');

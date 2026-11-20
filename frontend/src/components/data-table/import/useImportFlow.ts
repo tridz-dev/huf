@@ -42,7 +42,7 @@ export interface ImportFlow {
 const isMissingEndpoint = (e: unknown) =>
 	/not found|not whitelisted|attributeerror|404|does not exist|no module/i.test(String((e as Error)?.message ?? e));
 
-export function useImportFlow(tableId: string, onImported?: () => void): ImportFlow {
+export function useImportFlow(tableId: string, onImported?: (r: RunImportResult) => void): ImportFlow {
 	const [phase, setPhase] = useState<ImportPhase>('pick');
 	const [error, setError] = useState('');
 	const [fileUrl, setFileUrl] = useState('');
@@ -70,7 +70,7 @@ export function useImportFlow(tableId: string, onImported?: () => void): ImportF
 		(r: RunImportResult) => {
 			setResult(r);
 			setPhase('done');
-			onImported?.();
+			onImported?.(r);
 		},
 		[onImported]
 	);

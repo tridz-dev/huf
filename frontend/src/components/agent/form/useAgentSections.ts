@@ -186,7 +186,19 @@ export function useAgentSections({ id, isNew, form, abilities, canSave, onRename
     if (!target0 || isNew || !baselineRef.current || !canSave) return;
     if (conflictRef.current.length > 0) return; // unresolved conflicts: never overwrite the other user's change
     if (savingRef.current) { if (mode === 'explicit' || !pendingRef.current) pendingRef.current = mode; return; }
-    if (Object.keys(form.formState.errors).length > 0) await form.trigger();
+    if (mode === 'explicit') {
+      // Validate before anything else: a clean-but-invalid form (e.g. empty instructions) must still report and focus the error.
+      const ok = await form.trigger();
+      if (!ok) {
+        const errs = flattenErrors(form.formState.errors);
+        if (errs.length) {
+          setErrors(errs);
+          onTabWithError(tabForField(errs[0].fieldId.split('.')[0]));
+          toast.error(errs.length === 1 ? 'One thing needs fixing before it can save' : `${errs.length} things need fixing before it can save`);
+          return;
+        }
+      }
+    } else if (Object.keys(form.formState.errors).length > 0) await form.trigger();
     const dirty = dirtySections(mode);
     if (dirty.length === 0) {
       if (Object.keys(form.formState.errors).length === 0) setErrors([]);
@@ -255,6 +267,10 @@ export function useAgentSections({ id, isNew, form, abilities, canSave, onRename
       const message = getFrappeErrorMessage(error) || (error as Error)?.message || "Couldn't save";
       setSaveError(message);
       toast.error(`Couldn't save: ${message}`);
+      // A concurrent edit (TimestampMismatchError): fetch the latest now so the banner offers Keep mine / Use theirs at once.
+      if (/modified|timestamp|changed|conflict/i.test(message)) {
+        void reloadRef.current().catch((e) => console.error('Reload after conflict failed:', e));
+      }
     } finally {
       savingRef.current = false;
       setSaving(false);
@@ -263,6 +279,7 @@ export function useAgentSections({ id, isNew, form, abilities, canSave, onRename
   }, [ab.tools, ab.mcp, ab.knowledge, ab.skills, canSave, desktopAccessStatus, dirtySections, fieldsFor, form, isNew, onRenamed, onTabWithError]);
   const saveRef = useRef(saveAll);
   saveRef.current = saveAll;
+  const reloadRef = useRef<() => Promise<ReloadResult>>(async () => ({ conflicts: [], partial: false }));
 
   // Debounced autosave: waits for a pause in editing, never loops on an error (it only re-arms on a change).
   useEffect(() => {
@@ -335,14 +352,25 @@ export function useAgentSections({ id, isNew, form, abilities, canSave, onRename
     return { conflicts, partial };
   }, [form, isNew]);
 
-  const resolveConflict = useCallback((field: string, choice: 'mine' | 'theirs') => {
+  reloadRef.current = reloadLatest;
+
+  const applyChoice = useCallback((field: string, choice: 'mine' | 'theirs') => {
     if (choice === 'theirs') form.setValue(field as never, theirsRef.current[field] as never, { shouldDirty: false });
     const left = conflictRef.current.filter((f) => f !== field);
     conflictRef.current = left; setConflictFields(left);
   }, [form]);
+  // "Keep mine" force-saves the local version right away against the freshly fetched revision.
+  const saveAfterResolve = useCallback(() => {
+    if (conflictRef.current.length === 0) { setSaveError(null); window.setTimeout(() => void saveRef.current('explicit'), 0); }
+  }, []);
+  const resolveConflict = useCallback((field: string, choice: 'mine' | 'theirs') => {
+    applyChoice(field, choice);
+    if (choice === 'mine') saveAfterResolve();
+  }, [applyChoice, saveAfterResolve]);
   const resolveAllConflicts = useCallback((choice: 'mine' | 'theirs') => {
-    for (const f of conflictRef.current) resolveConflict(f, choice);
-  }, [resolveConflict]);
+    for (const f of [...conflictRef.current]) applyChoice(f, choice);
+    if (choice === 'mine') saveAfterResolve();
+  }, [applyChoice, saveAfterResolve]);
 
   const retry = useCallback(async () => {
     if (conflict || conflictRef.current.length) {

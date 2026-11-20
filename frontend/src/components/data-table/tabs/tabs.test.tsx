@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { FieldsTab } from '../FieldsTab';
 import { AgentsTab } from '../AgentsTab';
 import { fieldRulesText } from './fieldRules';
+import { ToolSignaturePanel } from './ToolSignaturePanel';
 
 const api = vi.hoisted(() => ({
 	getTableToolSignature: vi.fn(),
@@ -64,5 +65,22 @@ describe('AgentsTab', () => {
 		await userEvent.click(edit);
 		await waitFor(() => expect(api.setTableAgentAccess).toHaveBeenCalledWith('T1', 'A1', ['view', 'edit']));
 		await waitFor(() => expect(screen.getByRole('checkbox', { name: 'Edit for Billing' })).not.toBeChecked());
+	});
+});
+
+describe('ToolSignaturePanel grant filtering', () => {
+	const sigTools = ['view', 'view', 'create', 'edit', 'delete'].map((action, i) => ({
+		action, tool_name: `tool_${i}`, description: `d${i}`, params: [],
+	}));
+	it('shows only tools matching granted actions, and a message when none', async () => {
+		api.getTableToolSignature.mockResolvedValue({ tools: sigTools });
+		api.getTableAgentAccess.mockResolvedValue([{ agent: 'A1', agent_name: 'B', actions: ['view'], tools: [] }]);
+		const { unmount } = render(<ToolSignaturePanel tableId="T1" />);
+		expect(await screen.findAllByText(/^d[01]$/)).toHaveLength(2);
+		expect(screen.queryByText('d4')).toBeNull();
+		unmount();
+		api.getTableAgentAccess.mockResolvedValue([]);
+		render(<ToolSignaturePanel tableId="T1" />);
+		expect(await screen.findByText(/No agent has access/)).toBeInTheDocument();
 	});
 });

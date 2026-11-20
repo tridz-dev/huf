@@ -77,6 +77,12 @@ describe('PresetSelector', () => {
 });
 
 describe('inline validation helpers', () => {
+  it('focusFirstError moves focus from an invalid wrapper to the real textarea inside it', () => {
+    render(<div data-testid="root2"><div id="w" tabIndex={-1} aria-invalid="true"><textarea data-testid="ta" /></div></div>);
+    expect(focusFirstError(screen.getByTestId('root2'))).toBe(true);
+    expect(document.activeElement).toBe(screen.getByTestId('ta'));
+  });
+
   it('focusFirstError focuses the first invalid control; ErrorSummary jumps to fields', async () => {
     render(
       <div data-testid="root">
