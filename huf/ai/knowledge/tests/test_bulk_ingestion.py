@@ -12,6 +12,8 @@ controllers -- needs a live bench and is deliberately not covered here.
 
 import json
 
+import pytest
+
 from huf.ai.knowledge.bulk_runner import (
 	compute_progress,
 	decide_idempotency,
@@ -205,3 +207,64 @@ class TestFinalizationGuard:
 
 	def test_processing_none_defaults_to_zero(self):
 		assert should_finalize({}) is True
+
+
+class _Deadlock(Exception):
+	pass
+
+
+class _Boom(Exception):
+	pass
+
+
+@pytest.fixture
+def hdr():
+	from unittest.mock import MagicMock, patch
+
+	import huf.ai.knowledge.bulk_api as mod
+
+	fake = MagicMock()
+	fake.QueryDeadlockError = _Deadlock
+	fake.throw.side_effect = lambda msg: (_ for _ in ()).throw(_Boom(str(msg)))
+	fake.db.exists.return_value = None
+	with patch.object(mod, "frappe", fake), patch.object(mod, "_", lambda m: m), patch.object(
+		mod.time, "sleep"
+	) as sleep:
+		yield mod, fake, sleep
+
+
+class TestHeaderSeriesRetry:
+	def test_one_deadlock_then_success(self, hdr):
+		mod, fake, sleep = hdr
+		doc = fake.get_doc.return_value
+		doc.insert.side_effect = [_Deadlock(), doc]
+		assert mod.create_ingestion_header("KS-1") is doc
+		assert doc.insert.call_count == 2
+		fake.db.rollback.assert_called_once()
+		sleep.assert_called_once()
+		assert 0.05 <= sleep.call_args.args[0] <= 0.4
+
+	def test_persistent_deadlock_raises_clear_error(self, hdr):
+		mod, fake, sleep = hdr
+		fake.get_doc.return_value.insert.side_effect = _Deadlock()
+		with pytest.raises(_Boom, match="Another import is starting right now"):
+			mod.create_ingestion_header("KS-1")
+		assert fake.get_doc.return_value.insert.call_count == 5
+		assert fake.db.rollback.call_count == 5
+		assert sleep.call_count == 4
+
+	def test_duplicate_check_runs_each_attempt(self, hdr):
+		mod, fake, _ = hdr
+		doc = fake.get_doc.return_value
+		doc.insert.side_effect = [_Deadlock(), _Deadlock(), doc]
+		mod.create_ingestion_header("KS-1")
+		assert fake.db.exists.call_count == 3
+
+	def test_active_ingestion_after_rollback_blocks_insert(self, hdr):
+		mod, fake, _ = hdr
+		doc = fake.get_doc.return_value
+		doc.insert.side_effect = _Deadlock()
+		fake.db.exists.side_effect = [None, "ING-7"]
+		with pytest.raises(_Boom, match="already queued"):
+			mod.create_ingestion_header("KS-1")
+		assert doc.insert.call_count == 1
