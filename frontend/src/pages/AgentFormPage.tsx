@@ -8,6 +8,7 @@ import { Form } from '@/components/ui/form';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AutosaveStatus, BuilderLayout, ErrorSummary, FormSection, focusFirstError } from '@/components/builder';
+import { Button } from '@/components/ui/button';
 import { AttentionBanner, DangerZone } from '@/components/patterns';
 import { usePermissions } from '@/contexts/PermissionsContext';
 import { createAgent, duplicateAgent } from '@/services/agentApi';
@@ -39,6 +40,11 @@ import { useAgentFormEffects } from '@/components/agent/form/useAgentFormEffects
 
 const DEFAULT_TAB: TabKey = 'setup';
 const tabFromHash = (): TabKey => resolveTab(window.location.hash.slice(1)) ?? DEFAULT_TAB;
+
+const conflictLabel = (f: string) => {
+  const t = f.replace(/_/g, ' ');
+  return t.charAt(0).toUpperCase() + t.slice(1);
+};
 
 export function AgentFormPage() {
   const { id } = useParams<{ id: string }>();
@@ -204,12 +210,37 @@ export function AgentFormPage() {
           <AgentHeader
             title={title} disabled={!!values.disabled} modelLabel={isVoiceOnly ? undefined : modelName || 'Model'}
             isSystem={sections.isSystem} locked={locked}
-            autosave={<AutosaveStatus state={sections.status} savedAt={sections.savedAt} onRetry={sections.retry} errorText={sections.errorText} />}
+            autosave={<span className="inline-flex items-center gap-2">
+              <AutosaveStatus state={sections.status} savedAt={sections.savedAt} onRetry={sections.conflictFields.length ? undefined : sections.retry} errorText={sections.errorText} />
+              {sections.status === 'error' && canManage && (
+                <Button type="button" variant="link" size="sm" onClick={() => void sections.reloadLatest()}>Reload latest</Button>
+              )}
+            </span>}
             showSave={canManage && (sections.status === 'dirty' || sections.status === 'error')} saving={sections.status === 'saving'} onSave={sections.saveNow}
             onTogglePublish={() => { form.setValue('disabled', !values.disabled, { shouldDirty: true }); void sections.saveNow(); }}
             onDuplicate={handleDuplicate} duplicating={duplicating} onViewLogs={() => navigate(`/executions?agents=${encodeURIComponent(agentId!)}`)}
             onDelete={() => setShowDelete(true)} agentId={agentId!} allowChat={sections.persistedAllowChat}
             lastRun={sections.lastRun} totalRun={sections.totalRun} />
+
+          {sections.conflictFields.length > 0 && (
+            <div data-testid="conflict-resolver">
+              <AttentionBanner
+                message={`Someone else changed: ${sections.conflictFields.map(conflictLabel).join(', ')}. Keep yours or use theirs.`}
+                action={{ label: 'Use theirs (all)', onClick: () => sections.resolveAllConflicts('theirs') }}
+                secondary={{ label: 'Keep mine (all)', onClick: () => sections.resolveAllConflicts('mine') }}
+              />
+              <ul className="divide-y divide-line border-b border-line px-4 text-ui-text">
+                {sections.conflictFields.map((f) => (
+                  <li key={f} className="flex items-center gap-2 py-1.5">
+                    <span className="flex-1">{conflictLabel(f)}</span>
+                    <Button type="button" variant="outline" size="sm" onClick={() => sections.resolveConflict(f, 'mine')}>Keep mine</Button>
+                    <Button type="button" variant="outline" size="sm" onClick={() => sections.resolveConflict(f, 'theirs')}>Use theirs</Button>
+                  </li>
+                ))}
+              </ul>
+              <Button type="button" variant="link" size="sm" onClick={() => void sections.reloadLatest()}>Reload latest</Button>
+            </div>
+          )}
 
           <ErrorSummary errors={sections.errors} onSelect={selectError} />
 

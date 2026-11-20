@@ -10,13 +10,39 @@ import { bulkDeleteRows, bulkInsertRows, bulkUpdateRows } from '@/services/dataT
 import type { ExportRowsResult, TableRecordFilter } from '@/types/dataTable.types';
 import { toApiValue, toApiValues } from './model';
 
-/** Bulk endpoints first; per-row calls when the server doesn't have them yet. */
+/** Bulk endpoints first; per-row calls only when the server doesn't have them yet. */
+
+/** Leading exception class of a Frappe error (createFrappeError.exceptionType can carry the message tail). */
+function excName(v: unknown): string {
+	if (typeof v !== 'string') return '';
+	return (v.split('.').pop() ?? '').match(/^[A-Za-z_]\w*/)?.[0] ?? '';
+}
+
+/**
+ * True when the error means the bulk endpoint itself doesn't exist. Decided only on the exception type
+ * (the frappe error helpers expose no HTTP status): AttributeError, or Frappe's "Failed to get method"
+ * signature. A DoesNotExistError ("<Doctype> <name> not found") is a missing record, never a missing endpoint.
+ */
+export function isMissingEndpoint(err: unknown): boolean {
+	const e = err as { message?: unknown; exc_type?: unknown; exception?: unknown; exceptionType?: unknown; originalError?: unknown } | null;
+	if (!e || typeof e !== 'object') return false;
+	const types = [e.exceptionType, e.exc_type, e.exception].map(excName);
+	if (types.includes('DoesNotExistError')) {
+		const text = [e.message, e.exception].filter((x) => typeof x === 'string').join(' ');
+		if (!/failed to get method/i.test(text)) return false;
+	}
+	if (types.includes('AttributeError')) return true;
+	const text = [e.message, e.exception].filter((x) => typeof x === 'string').join(' ');
+	if (/failed to get method/i.test(text)) return true;
+	return e.originalError ? isMissingEndpoint(e.originalError) : false;
+}
 
 export async function updateMany(doctype: string, names: string[], values: Record<string, CellValue>): Promise<void> {
 	const api = toApiValues(values);
 	try {
 		await bulkUpdateRows(doctype, names, api);
-	} catch {
+	} catch (err) {
+		if (!isMissingEndpoint(err)) throw err;
 		await Promise.all(names.map((n) => updateTableRecord(doctype, n, api)));
 	}
 }
@@ -26,7 +52,8 @@ export async function insertMany(doctype: string, rows: Record<string, CellValue
 	try {
 		const r = await bulkInsertRows(doctype, api);
 		return (r.errors ?? []).map((e) => `Row ${e.index + 1}: ${e.message}`);
-	} catch {
+	} catch (err) {
+		if (!isMissingEndpoint(err)) throw err;
 		const errors: string[] = [];
 		for (const [i, row] of api.entries()) {
 			try {
@@ -44,7 +71,8 @@ export async function deleteMany(doctype: string, names: string[]): Promise<bool
 	try {
 		await bulkDeleteRows(doctype, names);
 		return true;
-	} catch {
+	} catch (err) {
+		if (!isMissingEndpoint(err)) throw err;
 		for (const n of names) await deleteTableRecord(doctype, n);
 		return false;
 	}
@@ -54,10 +82,12 @@ export async function setOne(doctype: string, name: string, key: string, value: 
 	await updateTableRecord(doctype, name, { [key]: toApiValue(value) });
 }
 
+export const SELECT_ALL_CAP = 5000;
+
 export async function fetchNames(doctype: string, filters: TableRecordFilter[], search: string, total: number): Promise<string[]> {
 	const r = await getTableRecords(doctype, {
 		fields: ['name'],
-		limit: Math.min(total, 5000),
+		limit: Math.min(total, SELECT_ALL_CAP),
 		filters: filters.length ? filters : undefined,
 		search: search || undefined,
 	});

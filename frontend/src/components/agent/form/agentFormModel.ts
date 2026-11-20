@@ -27,7 +27,15 @@ export function normalizeFlag(value: boolean | number | undefined): 0 | 1 {
   return value === true || value === 1 ? 1 : 0;
 }
 
+/** Local mode carries no template and no version; a 0 version means "none". Mirrors useAgentFormEffects. */
+function templateVersion(mode: string | undefined, template: string | null | undefined, v: number | null | undefined): number | undefined {
+  if (mode === 'Local' || !template) return undefined;
+  return typeof v === 'number' && v > 0 ? v : undefined;
+}
+
 export function mapAgentDocToFormValues(agent: Partial<AgentDoc>): AgentFormValues {
+  const promptMode = agent.prompt_mode || 'Local';
+  const summaryMode = agent.summary_prompt_mode || 'Local';
   return {
     agent_name: agent.agent_name || '',
     agent_modality: (agent.agent_modality as AgentFormValues['agent_modality']) || 'Both',
@@ -48,11 +56,10 @@ export function mapAgentDocToFormValues(agent: Partial<AgentDoc>): AgentFormValu
       prompt_text: row.prompt_text || '',
     })),
     default_plan: agent.default_plan || [],
-    prompt_mode: agent.prompt_mode || 'Local',
-    agent_prompt: agent.agent_prompt || '',
-    prompt_version_locked: agent.prompt_version_locked === 1,
-    template_version_at_attach:
-      agent.template_version_at_attach !== undefined ? agent.template_version_at_attach : undefined,
+    prompt_mode: promptMode,
+    agent_prompt: promptMode === 'Local' ? '' : agent.agent_prompt || '',
+    prompt_version_locked: promptMode === 'Local' || !agent.agent_prompt ? false : agent.prompt_version_locked === 1,
+    template_version_at_attach: templateVersion(promptMode, agent.agent_prompt, agent.template_version_at_attach),
     allow_all_users: !!agent.allow_all_users,
     allow_guest: !!agent.allow_guest,
     allowed_users: (agent.allowed_users || []).map((row) => row.user).filter(Boolean),
@@ -66,10 +73,10 @@ export function mapAgentDocToFormValues(agent: Partial<AgentDoc>): AgentFormValu
     context_strategy: agent.context_strategy || undefined,
     summary_model: agent.summary_model || undefined,
     summary_ratio: agent.summary_ratio !== undefined && agent.summary_ratio !== null ? agent.summary_ratio : undefined,
-    summary_prompt_mode: agent.summary_prompt_mode || 'Local',
-    summary_prompt_template: agent.summary_prompt_template || '',
-    summary_prompt_version_locked: agent.summary_prompt_version_locked === 1,
-    summary_template_version_at_attach: agent.summary_template_version_at_attach !== undefined ? agent.summary_template_version_at_attach : undefined,
+    summary_prompt_mode: summaryMode,
+    summary_prompt_template: summaryMode === 'Local' ? '' : agent.summary_prompt_template || '',
+    summary_prompt_version_locked: summaryMode === 'Local' || !agent.summary_prompt_template ? false : agent.summary_prompt_version_locked === 1,
+    summary_template_version_at_attach: templateVersion(summaryMode, agent.summary_prompt_template, agent.summary_template_version_at_attach),
     summary_prompt: agent.summary_prompt || '',
     history_limit: agent.history_limit !== undefined && agent.history_limit !== null ? agent.history_limit : undefined,
     max_knowledge_tokens:
