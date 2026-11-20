@@ -199,6 +199,37 @@ def _fake_file(counter=[0]):
 	return types.SimpleNamespace(name=f"F{counter[0]}", file_url=f"/private/files/f{counter[0]}")
 
 
+class TestBlockedZipMembersVisible:
+	def test_blocked_members_recorded_as_unsafe(self, tmp_path):
+		z = tmp_path / "evil.zip"
+		blob = b"t"
+		for _ in range(4):  # zip nested 4 deep
+			buf = io.BytesIO()
+			with zipfile.ZipFile(buf, "w") as zf:
+				zf.writestr("t.txt" if blob == b"t" else "z.zip", blob)
+			blob = buf.getvalue()
+		_zip(z, {"../evil.txt": "x", "/abs/path.txt": "y", "deep.zip": blob, "ok.txt": "fine"})
+		bulk_sources, ctx = _scan_ctx()
+		ctx.add_local = MagicMock()
+		res = expand_zip(str(z), str(tmp_path / "out"), Limits(max_zip_depth=2))
+		bulk_sources._add_expanded(ctx, res)
+		unsafe = [e for e in ctx.entries if e["skip_reason"] == "Unsafe"]
+		assert len(unsafe) == len(res.blocked) >= 3
+		keys = " ".join(e["external_key"] for e in unsafe)
+		assert "../evil.txt" in keys and "/abs/path.txt" in keys
+		assert all(e["file"] is None and len(e["external_key"]) <= 255 for e in unsafe)
+		ctx.add_local.assert_called_once()
+		assert ctx.add_local.call_args[0][0] == "ok.txt"
+		assert not (tmp_path / "evil.txt").exists()
+
+	def test_long_unsafe_name_truncated(self):
+		bulk_sources, ctx = _scan_ctx()
+		res = types.SimpleNamespace(files=[], blocked=[("../" + "a" * 600, "path escapes destination")])
+		bulk_sources._add_expanded(ctx, res)
+		assert len(ctx.entries[0]["external_key"]) <= 255
+		assert ctx.entries[0]["skip_reason"] == "Unsafe"
+
+
 class TestS3Scan:
 	def _install_s3(self, pages, downloads):
 		mod = types.ModuleType("huf.ai.tools.s3")
@@ -481,3 +512,65 @@ class TestStartImportValidation:
 		assert hdr.call_args.kwargs["status"] == "Scanning" and hdr.call_args.kwargs["source_kind"] == "S3"
 		kwargs = fake.enqueue.call_args.kwargs
 		assert kwargs["queue"] == "long" and kwargs["config"] == {"bucket": "b", "prefix": "p/"}
+
+
+class TestMaterializeUnsafeEntry:
+	"""materialize() routes Unsafe zip members (no File) through the preset-skip path."""
+
+	ENTRY = {"external_key": "zip://F/../evil.txt", "file": None, "checksum": None, "skip_reason": "Unsafe"}
+
+	def _fake_frappe(self):
+		rows = {}  # name -> row dict
+		inserted = []
+
+		def get_value(doctype, filters, fieldname=None, *a, **kw):
+			if doctype == "Knowledge Ingestion":
+				return "KS-1"
+			assert doctype == "Knowledge Input"
+			if isinstance(filters, dict):
+				for name, row in rows.items():
+					if row["external_key"] == filters.get("external_key"):
+						return name
+				return None
+			return rows[filters][fieldname]
+
+		def set_value(doctype, name, values):
+			rows[name].update(values)
+
+		def get_doc(data):
+			doc = MagicMock()
+			doc.flags = types.SimpleNamespace()
+			doc.data = data
+
+			def insert(**kw):
+				rows[f"KI-{len(rows) + 1}"] = dict(data)
+				inserted.append(doc)
+
+			doc.insert.side_effect = insert
+			return doc
+
+		fake = MagicMock()
+		fake.flags = types.SimpleNamespace()
+		fake.db.get_value.side_effect = get_value
+		fake.db.set_value.side_effect = set_value
+		fake.get_doc.side_effect = get_doc
+		return fake, rows, inserted
+
+	def test_unsafe_inserted_skipped_then_updated_not_duplicated(self):
+		from huf.ai.knowledge import bulk_materialize as bm
+
+		fake, rows, inserted = self._fake_frappe()
+		with patch.object(bm, "frappe", fake):
+			stats = bm.materialize("ING-1", [dict(self.ENTRY)])
+			assert len(inserted) == 1 and len(rows) == 1
+			doc = inserted[0]
+			assert doc.data["status"] == "Skipped"
+			assert doc.data["skip_reason"] == "Unsafe"
+			assert doc.flags.ignore_validate is True
+			assert stats["skipped_preset"] == 1
+
+			bm.materialize("ING-2", [dict(self.ENTRY)])
+		assert len(inserted) == 1 and len(rows) == 1
+		row = next(iter(rows.values()))
+		assert row["status"] == "Skipped" and row["skip_reason"] == "Unsafe"
+		assert row["ingestion"] == "ING-2"

@@ -27,6 +27,7 @@ export const SOURCE_KIND_LABELS: Record<SourceKind, string> = {
 const SKIP_REASON_TEXT: Record<string, string> = {
   'No Text': 'No readable text was found in this file.',
   Unsupported: 'This file type is not supported.',
+  Unsafe: 'Blocked for safety (unsafe path, link or encrypted file inside the zip).',
   'Too Large': 'This file is larger than the size limit.',
   Duplicate: 'Same content as another file in this import.',
   Unchanged: 'Already added and has not changed.',

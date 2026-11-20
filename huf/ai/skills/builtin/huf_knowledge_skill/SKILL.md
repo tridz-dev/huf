@@ -105,7 +105,7 @@ string) of entries:
 
 Header statuses: `Queued | Running | Completed | Completed with Errors | Failed | Cancelled`.
 Item statuses: `Pending | Processing | Indexed | Error | Skipped` (`skip_reason`:
-`Duplicate | Unchanged | No Text | Too Large | Unsupported`).
+`Duplicate | Unchanged | No Text | Too Large | Unsupported | Unsafe`).
 
 **"Retrivable" is NOT a status.** Never tell the user content is retrievable
 from counts alone — run one `knowledge_search` probe per acceptance run (§7).
