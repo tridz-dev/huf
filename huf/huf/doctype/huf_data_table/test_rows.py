@@ -21,7 +21,7 @@ from huf.huf.doctype.huf_data_table.rows import (
 
 
 class TestRows(IntegrationTestCase):
-	TABLE = "Test Rows Table"
+	TABLE = f"Test Rows {frappe.generate_hash(length=8)}"
 	DT = f"HF {TABLE}"
 
 	@classmethod
@@ -44,6 +44,11 @@ class TestRows(IntegrationTestCase):
 			frappe.db.commit()
 		super().tearDownClass()
 
+	def tearDown(self):
+		for name in frappe.get_all("Huf Data Table", filters={"table_name": ["like", "Test Rows Tools %"]}, pluck="name"):
+			delete_data_table(name)
+		frappe.db.commit()
+
 	def test_bulk_insert_reports_row_errors(self):
 		res = bulk_insert_rows(self.DT, [{"title": "a", "qty": 1}, {"qty": 2}])
 		self.assertEqual(len(res["inserted"]), 1)
@@ -55,6 +60,7 @@ class TestRows(IntegrationTestCase):
 		self.assertEqual(bulk_delete_rows(self.DT, names)["deleted"], 2)
 		self.assertEqual(restore_rows(self.DT, names)["restored"], 2)
 		self.assertEqual(frappe.db.get_value(self.DT, names[0], "qty"), 9)
+		self.assertEqual(frappe.db.get_value(self.DT, names[0], "title"), "u1")
 
 	def test_records_total_and_operator_guard(self):
 		bulk_insert_rows(self.DT, [{"title": "t1", "qty": 5}, {"title": "t2", "qty": 6}])
@@ -72,11 +78,11 @@ class TestRows(IntegrationTestCase):
 		self.assertTrue(any(t["action"] == "create" for t in sig["tools"]))
 
 	def test_update_resyncs_and_delete_removes_tools(self):
-		name = create_data_table(table_name="Test Rows Tools", fields=[{"label": "Title", "fieldtype": "Data"}])["data"]["name"]
+		name = create_data_table(table_name=f"Test Rows Tools {frappe.generate_hash(length=6)}", fields=[{"label": "Title", "fieldtype": "Data"}])["data"]["name"]
 		dt = frappe.db.get_value("Huf Data Table", name, "doctype_name")
 		from huf.huf.doctype.huf_data_table.api import _scaffold_tool, _table_tool_name
 
-		tool = _scaffold_tool(dt, "Test Rows Tools", "Create Document", "create")
+		tool = _scaffold_tool(dt, frappe.db.get_value("Huf Data Table", name, "table_name"), "Create Document", "create")
 		update_data_table(name, fields=[{"label": "Title", "fieldtype": "Data"}, {"label": "Extra", "fieldtype": "Int"}])
 		params = [p.fieldname for p in frappe.get_doc("Agent Tool Function", tool).parameters]
 		self.assertIn("extra", params)

@@ -1,24 +1,37 @@
 """Bench integration tests for import/export (need a site: bench run-tests --module ...)."""
+from unittest.mock import patch
+
 import frappe
 from frappe.tests import IntegrationTestCase
 
 from huf.huf.doctype.huf_data_table import import_export as ie
-from huf.huf.doctype.huf_data_table.api import create_data_table
+from huf.huf.doctype.huf_data_table.api import create_data_table, delete_data_table
 
 
 class TestImportExport(IntegrationTestCase):
 	def setUp(self):
 		frappe.set_user("Administrator")
+		self._tables = []
+		self.addCleanup(self._drop_tables)
 		res = create_data_table(
-			table_name="IE Test Table",
+			table_name=f"IE Test {frappe.generate_hash(length=8)}",
 			fields=[
 				{"label": "Title", "fieldtype": "Data", "reqd": 1},
 				{"label": "Qty", "fieldtype": "Int"},
 				{"label": "Status", "fieldtype": "Select", "options": "Open\nClosed"},
 			],
 		)
-		self.table = res.get("name") if isinstance(res, dict) else res
+		data = res.get("data", res) if isinstance(res, dict) else res
+		self.table = data.get("name") if isinstance(data, dict) else data
+		self._tables.append(self.table)
 		self.dt = frappe.db.get_value("Huf Data Table", self.table, "doctype_name")
+
+	def _drop_tables(self):
+		frappe.set_user("Administrator")
+		for name in self._tables:
+			if frappe.db.exists("Huf Data Table", name):
+				delete_data_table(name)
+		frappe.db.commit()
 
 	def _file(self, content):
 		f = frappe.get_doc({"doctype": "File", "file_name": "t.csv", "content": content, "is_private": 1}).insert()
@@ -50,5 +63,11 @@ class TestImportExport(IntegrationTestCase):
 		self.assertEqual(frappe.db.count("File"), before)
 
 	def test_create_only_user_can_preview(self):
-		# TODO(bench): user with only data.records.create passes _require_import
-		pass
+		def only_create(cap):
+			return cap == "data.records.create"
+
+		with patch.object(ie, "_can", only_create):
+			ie._require_import()  # must not raise
+		with patch.object(ie, "_can", lambda cap: False):
+			with self.assertRaises(frappe.PermissionError):
+				ie._require_import()

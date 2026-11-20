@@ -164,8 +164,12 @@ def restore_rows(doctype_name: str, names: str | list) -> dict:
 			continue
 		deleted = frappe.get_doc("Deleted Document", deleted_name)
 		doc = frappe.get_doc(json.loads(deleted.data))
+		original = {k: doc.get(k) for k in ("owner", "creation", "modified", "modified_by")}
 		doc.flags.from_restore = True
-		doc.insert()
+		# Document.insert() renames to a fresh name (autoincrement/hash) unless set_name is given;
+		# without it the row comes back under a new id and lookups by the old name find nothing.
+		doc.insert(set_name=str(deleted.deleted_name))
+		frappe.db.set_value(doc.doctype, doc.name, original, update_modified=False)
 		deleted.db_set({"restored": 1, "new_name": doc.name})
 		restored += 1
 	return {"restored": restored}
