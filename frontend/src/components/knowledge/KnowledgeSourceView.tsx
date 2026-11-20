@@ -1,14 +1,13 @@
-import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { toast } from 'sonner';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { UseFormReturn } from 'react-hook-form';
 import type { AIProvider } from '@/types/agent.types';
 import type { KnowledgeInputDoc, KnowledgeSourceDoc } from '@/types/knowledge.types';
-import { deleteKnowledgeSource } from '@/services/knowledgeApi';
+import { getImportOptions, type ImportOptions } from '@/services/knowledgeApi';
+import { Checklist } from '@/components/patterns';
 import { getAgentsForSource } from '@/services/knowledge/usageApi';
-import { getFrappeErrorMessage } from '@/lib/frappe-error';
 import { AddContentDialog } from './import/AddContentDialog';
-import { ConfirmActionDialog } from './import/ConfirmActionDialog';
+import { ConnectAgentDialog } from './journey/ConnectAgentDialog';
+import { checklistArmed, checklistDismissed, setChecklistArmed, setChecklistDismissed } from './source/checklistState';
 import { IngestionProblemsSheet } from './import/IngestionProblemsSheet';
 import type { SourceFilter } from './import/docFilter';
 import { SourceAskResults, useSourceAsk } from './source/SourceAskResults';
@@ -39,6 +38,8 @@ interface KnowledgeSourceViewProps {
   onToggleDisabled: () => void;
   /** Refetch source + inputs (never saves the source). */
   onChanged: () => void;
+  onRenameCommit?: (name: string) => void | Promise<void>;
+  onRenameCancel?: () => void;
   onReprocessInput: (name: string) => Promise<void> | void;
   onDeleteInput: (name: string) => Promise<void> | void;
 }
@@ -46,7 +47,6 @@ interface KnowledgeSourceViewProps {
 /** Existing-source page: one tabless resource page composed from the DS patterns. */
 export function KnowledgeSourceView(props: KnowledgeSourceViewProps) {
   const { form, source, inputs } = props;
-  const navigate = useNavigate();
   const overview = useKnowledgeOverview(source.name, source, inputs);
   const { counts } = overview;
   const ask = useSourceAsk(source);
@@ -57,19 +57,30 @@ export function KnowledgeSourceView(props: KnowledgeSourceViewProps) {
   const [progress, setProgress] = useState<{ label: string; done: number; total: number } | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [deleteOpen, setDeleteOpen] = useState(false);
-  const [deleting, setDeleting] = useState(false);
+  const [deleteRequest, setDeleteRequest] = useState(0);
+  const [connectOpen, setConnectOpen] = useState(false);
+  const [importOptions, setImportOptions] = useState<ImportOptions | null>(null);
+  const [checklistOn, setChecklistOn] = useState(() => checklistArmed(source.name) && !checklistDismissed(source.name));
+  const askRef = useRef<HTMLInputElement>(null);
   const [dropped, setDropped] = useState<File[]>([]);
   const [addTab, setAddTab] = useState<'upload' | 'storage'>('upload');
-  const [agentCount, setAgentCount] = useState(0);
+  const [agents, setAgents] = useState<string[]>([]);
   const ingestion = shown ?? overview.active;
   const hasDocs = counts.total > 0 || !!ingestion;
   const searching = query.trim() !== '' && (ask.asked !== '' || ask.searching);
 
+  const loadAgents = useCallback(() => {
+    getAgentsForSource(source.name)
+      .then(setAgents)
+      .catch(() => undefined);
+  }, [source.name]);
+  useEffect(() => {
+    loadAgents();
+  }, [loadAgents]);
   useEffect(() => {
     let alive = true;
-    getAgentsForSource(source.name)
-      .then((a) => alive && setAgentCount(a.length))
+    getImportOptions(source.name)
+      .then((o) => alive && setImportOptions(o))
       .catch(() => undefined);
     return () => {
       alive = false;
@@ -85,17 +96,12 @@ export function KnowledgeSourceView(props: KnowledgeSourceViewProps) {
     setAddTab(tab);
     props.onAddOpenChange(true);
   };
-  const confirmDelete = async () => {
-    setDeleting(true);
-    try {
-      await deleteKnowledgeSource(source.name);
-      toast.success('Knowledge source deleted');
-      navigate('/knowledge', { replace: true });
-    } catch (e) {
-      toast.error(getFrappeErrorMessage(e) || 'Could not delete this knowledge source');
-      setDeleting(false);
-    }
+  const dismissChecklist = () => {
+    setChecklistDismissed(source.name);
+    setChecklistOn(false);
   };
+  const showChecklist = checklistOn && counts.total > 0 && !ingestion;
+  const asked = ask.asked !== '';
 
   return (
     <>
@@ -108,7 +114,11 @@ export function KnowledgeSourceView(props: KnowledgeSourceViewProps) {
         counts={counts}
         health={overview.health}
         importing={progress}
-        agentCount={agentCount}
+        agents={agents}
+        onConnectAgent={() => setConnectOpen(true)}
+        deleteRequest={deleteRequest}
+        onRenameCommit={props.onRenameCommit}
+        onRenameCancel={props.onRenameCancel}
         onAddContent={() => openAdd('upload')}
         onOpenSettings={() => setSettingsOpen(true)}
         onOpenHistory={() => setHistoryOpen(true)}
@@ -129,7 +139,18 @@ export function KnowledgeSourceView(props: KnowledgeSourceViewProps) {
             onFilterChange={setFilter}
             counts={counts}
             hasDocs={hasDocs}
+            askRef={askRef}
           />
+          {showChecklist && (
+            <Checklist
+              onDismiss={dismissChecklist}
+              items={[
+                { label: 'Documents added', done: true },
+                { label: 'Try a question', done: asked, onClick: () => askRef.current?.focus() },
+                { label: 'Connect to an agent', done: agents.length > 0, onClick: () => setConnectOpen(true) },
+              ]}
+            />
+          )}
           {searching ? (
             <SourceAskResults
               asked={ask.asked}
@@ -156,6 +177,10 @@ export function KnowledgeSourceView(props: KnowledgeSourceViewProps) {
                     onProgress={setProgress}
                     onViewDetails={setProblemsFor}
                     onFinished={() => {
+                      if (!checklistDismissed(source.name)) {
+                        setChecklistArmed(source.name);
+                        setChecklistOn(true);
+                      }
                       setShown(null);
                       setProgress(null);
                       overview.refresh();
@@ -165,6 +190,7 @@ export function KnowledgeSourceView(props: KnowledgeSourceViewProps) {
                 ) : undefined
               }
               onAddContent={openAdd}
+              importOptions={importOptions}
               onFiles={(files) => {
                 setDropped(files);
                 openAdd('upload');
@@ -219,7 +245,10 @@ export function KnowledgeSourceView(props: KnowledgeSourceViewProps) {
         dirty={props.dirty}
         saving={props.saving}
         onSave={props.onSubmit}
-        onDelete={() => setDeleteOpen(true)}
+        onDelete={() => {
+          setSettingsOpen(false);
+          setDeleteRequest((r) => r + 1);
+        }}
       />
       <SourceHistorySheet
         open={historyOpen}
@@ -227,15 +256,11 @@ export function KnowledgeSourceView(props: KnowledgeSourceViewProps) {
         knowledgeSource={source.name}
         refreshKey={overview.bump}
       />
-      <ConfirmActionDialog
-        open={deleteOpen}
-        onOpenChange={setDeleteOpen}
-        title="Delete this knowledge source?"
-        description="This removes the source and all of its documents. Agents using it will lose access. This cannot be undone."
-        confirmLabel="Delete source"
-        destructive
-        busy={deleting}
-        onConfirm={confirmDelete}
+      <ConnectAgentDialog
+        open={connectOpen}
+        onOpenChange={setConnectOpen}
+        knowledgeSource={source.name}
+        onConnected={loadAgents}
       />
     </>
   );

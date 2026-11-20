@@ -21,6 +21,13 @@ SLICE_LIMIT = 25
 SLICE_DEADLINE_SECONDS = 600
 LOCK_TTL_SECONDS = 120
 MAX_ATTEMPTS = 5
+# A busy per-source lock means the SOURCE is busy (e.g. a killed worker left
+# ``knowledge_index_<source>`` set for its 300s TTL), not that the item
+# failed. Back off inside the job, then re-chain; give up on the pending rows
+# only after the source stayed busy past the lock TTL plus a margin.
+BUSY_BACKOFF_SECONDS = 10
+BUSY_CAP_SECONDS = 360
+BUSY_SINCE_PREFIX = "huf:ingest_busy_since:"
 RUNNING_STALE_MINUTES = 3
 QUEUED_STALE_MINUTES = 5
 # Scan jobs heartbeat the header; silence this long means the worker is gone.
@@ -279,24 +286,17 @@ def _processed_slice(ingestion_name: str, lock_key: str) -> int:
 			continue
 
 		if result.get("status") == "busy":
-			# Per-source lock contention: defer, not error. The item counts as
-			# NOT processed in this slice. Guard against infinite busy loops:
-			# after MAX_ATTEMPTS attempts, mark Error with a clear message.
-			if attempts >= MAX_ATTEMPTS:
-				frappe.db.set_value(
-					"Knowledge Input",
-					row.name,
-					{
-						"status": "Error",
-						"error_message": _(
-							"Source indexing lock was busy for {0} consecutive attempts; item abandoned for this run"
-						).format(MAX_ATTEMPTS),
-					},
-				)
-			else:
-				frappe.db.set_value("Knowledge Input", row.name, {"status": "Pending"})
+			# Source-level contention, not an item failure: undo the claim
+			# (no attempt increment), stop the slice so the remaining rows
+			# are not burned, and back off before the caller re-chains.
+			frappe.db.set_value(
+				"Knowledge Input", row.name, {"status": "Pending", "attempts": attempts - 1}
+			)
 			frappe.db.commit()
-			continue
+			_handle_source_busy(ingestion_name, lock_key)
+			break
+
+		_clear_busy(ingestion_name)
 
 		if result.get("status") == "success" and not result.get("chunks_created"):
 			# Honesty rule: a document yielding 0 chunks is Skipped / No Text.
@@ -320,6 +320,58 @@ def _processed_slice(ingestion_name: str, lock_key: str) -> int:
 		frappe.db.commit()
 
 	return processed
+
+
+def _clear_busy(ingestion_name: str) -> None:
+	try:
+		frappe.cache().delete(BUSY_SINCE_PREFIX + ingestion_name)
+	except Exception:
+		pass
+
+
+def _handle_source_busy(ingestion_name: str, lock_key: str) -> None:
+	"""Track how long the source has been busy; back off or fail the rest.
+
+	The first-busy timestamp lives in the cache (no schema change); losing it
+	only restarts the clock. Past BUSY_CAP_SECONDS the remaining Pending rows
+	get a clear Error instead of being retried forever.
+	"""
+	key = BUSY_SINCE_PREFIX + ingestion_name
+	now = time.time()
+	raw = frappe.cache().get(key)
+	since = last = None
+	try:
+		if raw is not None:
+			raw = raw.decode() if isinstance(raw, bytes) else str(raw)
+			since, last = (float(x) for x in raw.split("|", 1))
+	except (TypeError, ValueError):
+		since = last = None
+	# A gap since the last busy hit means a new busy episode (e.g. after a
+	# cancel/re-run): restart the clock instead of inheriting a stale start.
+	if since is None or now - last > BUSY_BACKOFF_SECONDS * 3:
+		since = now
+	frappe.cache().set(key, f"{since}|{now}", ex=BUSY_CAP_SECONDS + 60)
+
+	if now - since > BUSY_CAP_SECONDS:
+		frappe.db.sql(
+			"""
+			UPDATE `tabKnowledge Input`
+			SET status = 'Error', error_message = %s
+			WHERE ingestion = %s AND status = 'Pending'
+			""",
+			(_("Another indexing job held this source for too long"), ingestion_name),
+		)
+		frappe.db.commit()
+		_clear_busy(ingestion_name)
+		return
+
+	# Keep the ingestion lock alive while waiting, then let the source lock
+	# expire/free before the next slice.
+	try:
+		frappe.cache().expire(lock_key, LOCK_TTL_SECONDS)
+	except Exception:
+		pass
+	time.sleep(BUSY_BACKOFF_SECONDS)
 
 
 def _finalize_or_self_chain(ingestion_name: str, slice: int) -> dict:

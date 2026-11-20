@@ -14,11 +14,11 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
-import { reprocessInput, retryIngestion } from '@/services/knowledgeApi';
+import { reprocessInput, retryIngestion, type ImportOptions } from '@/services/knowledgeApi';
 import { formatTimeAgo } from '@/utils/time';
 import type { KnowledgeInputDoc } from '@/types/knowledge.types';
 import { DocumentDetailSheet } from '../DocumentDetailSheet';
-import { inputOrigin, inputTitle } from '../DocumentsTable';
+import { inputOrigin, inputTitle } from '../inputDisplay';
 import { ConfirmActionDialog } from '../import/ConfirmActionDialog';
 import { DOC_FILTER_STATUS, type SourceFilter } from '../import/docFilter';
 import { itemReason, itemStatusLabel, type InputCounts } from '../import/ingestionLabels';
@@ -28,7 +28,14 @@ const STEPS = [
   { title: 'Try a question', description: 'See what your agents would find' },
   { title: 'Connect to an agent', description: 'Let an agent use it' },
 ];
-const ACCEPT = '.pdf,.docx,.md,.txt,.csv,.zip';
+
+/** Accept list and plain-words hint from the backend's import options (no hardcoded types). */
+export function dropZoneCopy(options?: ImportOptions | null): { accept?: string; hint?: string } {
+  const exts = (options?.allowed_extensions ?? []).map((e) => e.replace(/^\./, '').toLowerCase()).filter(Boolean);
+  if (exts.length === 0) return {};
+  const size = options?.max_file_mb ? ` Up to ${options.max_file_mb} MB each.` : '';
+  return { accept: exts.map((e) => `.${e}`).join(','), hint: `${exts.map((e) => e.toUpperCase()).join(', ')}.${size}` };
+}
 
 export interface SourceDocumentsProps {
   knowledgeSource: string;
@@ -41,6 +48,7 @@ export interface SourceDocumentsProps {
   slot?: ReactNode;
   onAddContent: (tab: 'upload' | 'storage') => void;
   onFiles: (files: File[]) => void;
+  importOptions?: ImportOptions | null;
   onRetried: (ingestion?: string) => void;
   onReprocess: (name: string) => Promise<void> | void;
   onRemove: (name: string) => Promise<void> | void;
@@ -75,6 +83,7 @@ export function SourceDocuments({
   slot,
   onAddContent,
   onFiles,
+  importOptions,
   onRetried,
   onReprocess,
   onRemove,
@@ -87,23 +96,36 @@ export function SourceDocuments({
     setRetrying(true);
     try {
       const failed = inputs.filter((i) => i.status === 'Error');
-      const ing = failed.find((i) => i.ingestion)?.ingestion;
-      if (ing) await retryIngestion(ing, true);
-      else for (const i of failed) await reprocessInput(i.name);
-      toast.success('Retrying failed documents.');
-      onRetried(ing || undefined);
-    } catch (e) {
-      toast.error(getFrappeErrorMessage(e) || 'Could not retry');
+      const ingestions = [...new Set(failed.map((i) => i.ingestion).filter((x): x is string => !!x))];
+      const orphans = failed.filter((i) => !i.ingestion);
+      const results = await Promise.allSettled([
+        ...ingestions.map((ing) => retryIngestion(ing, true)),
+        ...orphans.map((i) => reprocessInput(i.name)),
+      ]);
+      const okCount = results.filter((r) => r.status === 'fulfilled').length;
+      const bad = results.length - okCount;
+      const parts = [
+        ingestions.length ? `${ingestions.length} ${ingestions.length === 1 ? 'import' : 'imports'}` : '',
+        orphans.length ? `${orphans.length} ${orphans.length === 1 ? 'document' : 'documents'}` : '',
+      ].filter(Boolean);
+      if (bad === 0) toast.success(`Retrying ${failed.length} failed ${failed.length === 1 ? 'document' : 'documents'} (${parts.join(', ')}).`);
+      else if (okCount > 0) toast.warning(`Retried ${okCount} of ${results.length} (${parts.join(', ')}); ${bad} could not be retried.`);
+      else toast.error('Could not retry the failed documents');
+      if (okCount > 0) onRetried(ingestions[0]);
     } finally {
       setRetrying(false);
     }
   };
 
+  const [reprocessing, setReprocessing] = useState<string | null>(null);
   const retryOne = async (name: string) => {
+    setReprocessing(name);
     try {
       await onReprocess(name);
     } catch (e) {
       toast.error(getFrappeErrorMessage(e) || 'Could not retry');
+    } finally {
+      setReprocessing(null);
     }
   };
 
@@ -113,8 +135,7 @@ export function SourceDocuments({
         <StepHint current={0} steps={STEPS} />
         <DropZone
           title="Drop files here to add them"
-          hint="PDF, Word, Markdown, text and CSV. Up to 50 MB each."
-          accept={ACCEPT}
+          {...dropZoneCopy(importOptions)}
           onFiles={onFiles}
           actions={
             <>
@@ -171,7 +192,7 @@ export function SourceDocuments({
                     i.status === 'Error' ? (
                       <>
                         {itemReason(i)}{' '}
-                        <Button type="button" variant="link" size="sm" onClick={() => void retryOne(i.name)}>
+                        <Button type="button" variant="link" size="sm" disabled={reprocessing === i.name} onClick={() => void retryOne(i.name)}>
                           Retry
                         </Button>
                       </>
@@ -186,7 +207,7 @@ export function SourceDocuments({
                       label={`More actions for ${title}`}
                       items={[
                         { label: 'Open', icon: ExternalLink, onSelect: () => setOpenName(i.name) },
-                        { label: 'Reprocess', icon: RefreshCw, disabled: adding, onSelect: () => void onReprocess(i.name) },
+                        { label: 'Reprocess', icon: RefreshCw, disabled: adding || reprocessing === i.name, onSelect: () => void retryOne(i.name) },
                         { label: 'Remove', icon: Trash2, destructive: true, onSelect: () => setRemoveTarget(i.name) },
                       ]}
                     />

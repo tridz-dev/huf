@@ -2,7 +2,7 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { KnowledgeInputDoc } from '@/types/knowledge.types';
-import { SourceDocuments, type SourceDocumentsProps } from './SourceDocuments';
+import { SourceDocuments, dropZoneCopy, type SourceDocumentsProps } from './SourceDocuments';
 
 const doc = (o: Partial<KnowledgeInputDoc>) =>
   ({ name: 'a', input_type: 'File', status: 'Indexed', file_name: 'a.pdf', creation: '2026-01-01 10:00:00', ...o }) as KnowledgeInputDoc;
@@ -41,5 +41,12 @@ describe('SourceDocuments', () => {
   it('hides the banner when nothing failed', () => {
     render(<SourceDocuments {...base({ inputs: [doc({})], counts: { total: 1, ready: 1, failed: 0, skipped: 0, inProgress: 0 } })} />);
     expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('builds the drop zone copy from import options', () => {
+    const c = dropZoneCopy({ allowed_extensions: ['.pdf', 'TXT'], max_file_mb: 25 } as any);
+    expect(c.accept).toBe('.pdf,.txt');
+    expect(c.hint).toBe('PDF, TXT. Up to 25 MB each.');
+    expect(dropZoneCopy(null)).toEqual({});
   });
 });

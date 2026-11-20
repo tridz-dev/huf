@@ -1,3 +1,4 @@
+import type { Ref } from 'react';
 import { AskField, CollectionToolbar, FilterPills } from '@/components/patterns';
 import type { SourceFilter } from '../import/docFilter';
 import type { InputCounts } from '../import/ingestionLabels';
@@ -10,14 +11,16 @@ export interface SourceToolbarProps {
   onFilterChange: (v: SourceFilter) => void;
   counts: InputCounts;
   hasDocs: boolean;
+  askRef?: Ref<HTMLInputElement>;
 }
 
-export function SourceToolbar({ query, onQueryChange, onSubmit, filter, onFilterChange, counts, hasDocs }: SourceToolbarProps) {
+export function SourceToolbar({ query, onQueryChange, onSubmit, filter, onFilterChange, counts, hasDocs, askRef }: SourceToolbarProps) {
   const showFilters = hasDocs && !query.trim();
   return (
     <CollectionToolbar
       search={
         <AskField
+          ref={askRef}
           value={query}
           onChange={onQueryChange}
           onSubmit={onSubmit}

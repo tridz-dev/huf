@@ -17,7 +17,7 @@ from .bulk_runner import (
 
 # Source scanners pre-classify files they will not index (no File doc is
 # created for them): the manifest entry carries the skip_reason.
-PRESET_SKIP_REASONS = ("Too Large", "Unsupported", "Unsafe")
+PRESET_SKIP_REASONS = ("Too Large", "Unsupported", "Unsafe", "No Text")
 
 
 def _materialize_preset_skip(ingestion_name: str, source_name: str, entry: dict, stats: dict) -> None:
@@ -109,6 +109,7 @@ def materialize(ingestion_name: str, entries: list) -> dict:
 					{
 						"ingestion": ingestion_name,
 						"external_checksum": checksum,
+						"file": entry.get("file_url"),
 						"status": "Pending",
 						"skip_reason": None,
 						"error_message": None,

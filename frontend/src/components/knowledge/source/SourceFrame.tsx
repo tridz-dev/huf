@@ -1,10 +1,11 @@
-import { useState, type ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { History, PauseCircle, PlayCircle, Plus, RotateCcw, Settings, Trash2 } from 'lucide-react';
+import { History, PauseCircle, PlayCircle, Plug, Plus, RotateCcw, Settings, Trash2 } from 'lucide-react';
 import type { UseFormReturn } from 'react-hook-form';
 import { PageFrame } from '@/layouts/PageFrame';
 import { Button } from '@/components/ui/button';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { InlineEditName } from '@/components/common/InlineEditName';
 import { OverflowMenu, StatusSentence, type Tone } from '@/components/patterns';
 import { deleteKnowledgeSource } from '@/services/knowledgeApi';
@@ -22,25 +23,61 @@ export interface SourceFrameProps {
   counts: InputCounts;
   health: Health;
   importing: null | { label: string; done: number; total: number };
-  agentCount?: number;
+  /** Agents that use this source (names). */
+  agents?: string[];
+  onConnectAgent: () => void;
+  /** Increment to open the delete confirm (Settings → Delete reuses it). */
+  deleteRequest?: number;
   onAddContent: () => void;
   onOpenSettings: () => void;
   onOpenHistory: () => void;
   onRebuildIndex: () => void;
   onToggleDisabled: () => void;
   onReview: () => void;
+  /** Persist an inline rename (Enter/blur). Should toast success/error. */
+  onRenameCommit?: (name: string) => void | Promise<void>;
+  /** Esc during an inline rename: restore the saved name. */
+  onRenameCancel?: () => void;
   children: ReactNode;
 }
 
 const n = (v: number) => v.toLocaleString();
 
+function UsedBy({ agents, onConnect }: { agents: string[]; onConnect: () => void }) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        {/* TODO(DS: LinkedListPopover): replace this popover with the generic pattern. */}
+        <Button type="button" variant="link" data-testid="used-by" className="h-auto p-0 text-inherit">
+          used by {n(agents.length)} {agents.length === 1 ? 'agent' : 'agents'}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-64 p-2">
+        <ul className="space-y-0.5">
+          {agents.map((a) => (
+            <li key={a}>
+              <Link to={`/agents/${encodeURIComponent(a)}`} className="block truncate rounded px-2 py-1.5 text-sm hover:bg-muted">
+                {a}
+              </Link>
+            </li>
+          ))}
+        </ul>
+        <Button type="button" variant="ghost" onClick={onConnect} className="mt-1 h-auto w-full justify-start px-2 py-1.5 text-sm font-normal text-signal-ink">
+          Connect another agent
+        </Button>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 function StatusLine({
   counts,
   disabled,
   importing,
-  agentCount,
+  agents,
   onReview,
-}: Pick<SourceFrameProps, 'counts' | 'disabled' | 'importing' | 'agentCount' | 'onReview'>) {
+  onConnectAgent,
+}: Pick<SourceFrameProps, 'counts' | 'disabled' | 'importing' | 'onReview' | 'onConnectAgent'> & { agents: string[] }) {
   if (counts.failed > 0) {
     return (
       <StatusSentence tone="attention" action={{ label: 'Review', onClick: onReview }}>
@@ -51,7 +88,7 @@ function StatusLine({
     );
   }
   if (importing) {
-    const found = importing.total > 0 ? `${n(importing.done)} of ${n(importing.total)} found` : `${n(importing.done)} found so far`;
+    const found = importing.total > 0 ? `${n(importing.done)} of ${n(importing.total)}` : `${n(importing.done)} found so far`;
     return <StatusSentence tone="live" live parts={[importing.label || 'Importing', found]} />;
   }
   if (disabled) return <StatusSentence tone="off" parts={['Turned off']} />;
@@ -62,8 +99,9 @@ function StatusLine({
         parts={[
           'Ready',
           `${n(counts.total)} ${counts.total === 1 ? 'document' : 'documents'}`,
-          !!agentCount && agentCount > 0 && `used by ${n(agentCount)} ${agentCount === 1 ? 'agent' : 'agents'}`,
+          agents.length > 0 && <UsedBy key="used" agents={agents} onConnect={onConnectAgent} />,
         ]}
+        action={agents.length === 0 ? { label: 'Connect to an agent', onClick: onConnectAgent } : undefined}
       />
     );
   }
@@ -71,13 +109,21 @@ function StatusLine({
 }
 
 export function SourceFrame(props: SourceFrameProps) {
-  const { form, knowledgeSource, sourceStatus, disabled, rebuilding, counts, importing, agentCount, children } = props;
+  const { form, knowledgeSource, sourceStatus, disabled, rebuilding, counts, importing, children } = props;
+  const agents = props.agents ?? [];
   const navigate = useNavigate();
   const [rebuildOpen, setRebuildOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const indexing = rebuilding || sourceStatus === 'Indexing' || sourceStatus === 'Rebuilding';
   const name = form.watch('source_name');
+  const lastDelete = useRef(props.deleteRequest ?? 0);
+  useEffect(() => {
+    if ((props.deleteRequest ?? 0) !== lastDelete.current) {
+      lastDelete.current = props.deleteRequest ?? 0;
+      setDeleteOpen(true);
+    }
+  }, [props.deleteRequest]);
 
   const confirmDelete = async () => {
     setDeleting(true);
@@ -98,11 +144,13 @@ export function SourceFrame(props: SourceFrameProps) {
           <InlineEditName
             value={name}
             onChange={(value) => form.setValue('source_name', value, { shouldDirty: true })}
+            onCommit={props.onRenameCommit}
+            onCancelEdit={props.onRenameCancel}
             placeholder="e.g. Product documentation"
           />
         }
         meta={
-          <StatusLine counts={counts} disabled={disabled} importing={importing} agentCount={agentCount} onReview={props.onReview} />
+          <StatusLine counts={counts} disabled={disabled} importing={importing} agents={agents} onReview={props.onReview} onConnectAgent={props.onConnectAgent} />
         }
         actions={
           <>
@@ -114,6 +162,7 @@ export function SourceFrame(props: SourceFrameProps) {
               items={[
                 { label: 'Settings', icon: Settings, onSelect: props.onOpenSettings },
                 { label: 'History', icon: History, onSelect: props.onOpenHistory },
+                { label: 'Connect to an agent', icon: Plug, onSelect: props.onConnectAgent },
                 { label: 'Rebuild search index', icon: RotateCcw, disabled: indexing, onSelect: () => setRebuildOpen(true) },
                 {
                   label: disabled ? 'Turn on' : 'Turn off',
