@@ -261,6 +261,74 @@ Every screen composes from one of two sanctioned templates. Nothing hand-rolls a
 - **Choose a work surface** when the user is *doing* something live — prompting, comparing, conversing. Chrome compresses to make room for the bench.
 - Both templates share the same tokens, the §6.5 tab row, and the status vocabulary; they differ only in how much chrome the task can afford.
 
+### 6.10 Resource pages (collection views)
+
+A **resource page** is a management page (§6.9, `PageFrame`) whose job is one collection of things that belong to one parent resource: the documents in a source, the files in a dataset, the members of a team, the runs of a job. The patterns below are domain-free; they live in `frontend/src/components/patterns/` (import from `@/components/patterns`) and are built only from `components/ui` primitives and the §2 tokens. **Never hand-roll one of these shapes on a page;** extend the pattern instead.
+
+Reading order, top to bottom: **head → status sentence → toolbar (ask + filters) → inline rows (progress, attention) → list** — or, when a search is active, **results** in place of the list; or, when the collection is empty, the **empty drop state** in place of toolbar filters and list.
+
+#### 6.10.1 Anatomy and the no-tabs default
+- **Head** = `PageFrame` `title` (the resource name; rename via a pencil or the overflow menu), `meta` = the **status sentence**, `actions` = **exactly one primary action** (the verb that grows the collection: "Add content", "Invite") + an `OverflowMenu` for everything else (Settings, History, maintenance actions, then a separator, then Turn off / Delete).
+- **No tabs by default.** Settings open in a **settings sheet** (§6.10.9), activity/history opens from the overflow menu, and search lives in the toolbar. One surface means the user never has to guess which tab holds the thing that changed.
+- **Use §6.5 tabs only when** the page holds two or more *peer collections* of comparable weight that the user switches between as a routine (Executions: runs vs approvals), or a secondary view is itself a full collection with its own toolbar. A settings form, a test box, or an activity log is **not** a reason for a tab.
+
+#### 6.10.2 Status sentence (`StatusSentence`)
+- One `ToneDot` + one plain sentence, segments joined by " · ": *"Ready · 1,241 documents · used by 2 agents"*, *"Importing · 1,240 of 3,000 found"*, *"No documents yet"*.
+- Optional single inline action as a link ("Review"). The sentence states **one** state; if two are true, the more urgent wins (error > attention > live > ready > off).
+- Tones (`Tone`, mapped once in `patterns/tones.tsx`): `ready` → `--good`; `live` → `--signal`, **blink** (§8); `attention` → `--warning`; `error` → `--destructive`; `off`/`neutral` → `--steel-soft`. Only `live` moves.
+- Set `live` (polite `aria-live`) while the state is changing; leave it off at rest.
+- Copy: sentence case, numbers with thousands separators, no internal status words ("Queued", "Scanning") — say what is happening.
+
+#### 6.10.3 Collection toolbar (`CollectionToolbar`, `AskField`, `FilterPills`)
+- **AskField**: the one search box. Placeholder says both jobs ("Ask a question or search these documents…"). Shows a `/` key hint; `/` anywhere outside an editable element focuses it; Esc clears; Enter submits. Role `search`, `aria-keyshortcuts="/"`. Only one AskField per page binds the shortcut.
+- **FilterPills**: single-choice radio group (arrow keys move, roving tabindex), first pill is "All". Each pill: label + mono count. A pill that means "you must act" takes the `attention` tone on its count. Zero-count optional pills may hide (`hideEmpty`) — never the selected one.
+- While search results are showing, hide the filter row (results are not filtered by status).
+
+#### 6.10.4 Resource list (`ResourceList`, `ResourceRow`, `TypeGlyph`)
+- One bordered `--panel` with a quiet column header (`Name · Origin · Status · Added`) — a ledger (§6.6), not cards.
+- Row: `[TypeGlyph + title (+ reason line) | origin (mono, --steel-soft, truncated) | status pill | relative time | OverflowMenu]`. Below `md` the row collapses to title (+origin under it) and status + menu.
+- **Status** uses the sentence-case `Badge` `pill-*` family: Ready → `pill-success`, Adding… → `pill-info`, Needs attention → `pill-warning`, Skipped → `pill-neutral`, Failed → `pill-danger`.
+- **Reason line**: a problem row explains itself in one plain sentence under the title, with its own fix link ("This PDF is password protected. Retry").
+- **Adding state** (`adding`): row arrives with the §8 **drop-in**, title in `--steel`, `aria-busy`. Arriving rows sort to the top.
+- Hover → `--paper-deep`. Title is a button when the row opens a detail sheet.
+
+#### 6.10.5 Inline progress row (`ProgressRow`)
+- A long-running job is a **row at the top of the list it fills** (inside `ResourceListSlot`), not a card above the page, not a toast.
+- Copy: *"{Label} from {source} — {done} of {total} · {eta}   Cancel"*. Blinking `live` dot; thin bar (`h-1`).
+- **Determinate** when the total is known (`role=progressbar` with value). **Indeterminate** when it is not: no fill, *"412 files found so far"*, no ETA. Never show a fake percentage.
+- The text is a polite live region. Cancel is a link-weight action that opens a confirm; finished state replaces the row with a status sentence change (and an attention banner if anything failed) — the row disappears.
+
+#### 6.10.6 Attention banner (`AttentionBanner`)
+- One line at the top of the list: icon + count sentence (*"3 documents could not be added."*) + **one** fix action ("Retry all") + optional secondary ("Show them", which selects the attention filter pill). `--warning-tint` band, `role=alert`.
+- Count only; per-item reasons stay on the rows. Never stack banners — merge into one sentence. Not rendered at count 0.
+
+#### 6.10.7 Result / citation card (`ResultCard`, `ResultsNote`)
+- Search/ask results replace the list. A `ResultsNote` says what the user is looking at (*"These are the passages your agents would read."*) with "Clear search".
+- Card: `TypeGlyph` + title + mono location ("page 3") + match word (`High match` / `Good match` / `Weak match`, never a raw score) + passage with query terms in `<mark>` (`--signal` 15% tint) + "Open". `matchStrength(score)` owns the thresholds.
+- Highlighting is done on plain text (`highlightTerms`), never by injecting HTML.
+
+#### 6.10.8 Empty drop state (`StepHint`, `DropZone`)
+- When the collection is empty: status sentence `off` (*"No documents yet"*), the AskField stays (disabled-looking is not needed — it simply returns nothing), filters and list are replaced by a **3-step hint** (`StepHint`: Add → Try → Connect; current step `aria-current="step"`) and a dashed **drop zone** with the accepted types and limits in plain words, and the primary + one secondary add action.
+- The drop zone is a click/keyboard target too; drag-over switches the border to `--signal`.
+
+#### 6.10.9 Settings side sheet (`SettingsSheet`, `SettingsSection`, `SettingsAdvanced`, `DangerZone`)
+- Right sheet from the overflow menu's "Settings". Fixed order: everyday fields (name, description, the on/off switch with its consequence) → `SettingsAdvanced` (collapsed) → `DangerZone` last.
+- Danger zone states the consequence with real numbers (*"Removes all 1,241 documents. This can't be undone."*); its button opens a confirm dialog, never acts directly.
+
+#### 6.10.10 Next-steps checklist (`Checklist`)
+- Shown once a resource first becomes usable; 2–4 items, done items checked and quiet, open items are actions. Dismissible; the caller persists dismissal. It is the continuation of the empty-state `StepHint` — the same steps, now with progress.
+
+#### 6.10.11 Motion and states summary
+| Pattern | Motion | Live region |
+|---|---|---|
+| Status sentence | dot blinks only for `live` | polite, only while changing |
+| Resource row `adding` | drop-in once | `aria-busy` |
+| Progress row | dot blinks | polite |
+| Attention banner | none | `role=alert` |
+All motion uses `motion-safe:` so `prefers-reduced-motion` disables it (§8).
+
+**Migration targets** (adopt these patterns when next touched): Knowledge source page (all of the above; see the Knowledge handoff), Knowledge library cards (status sentence), Flows / Agents / Automations list filters (`FilterPills` for status filters), Batch jobs (`ProgressRow` for running jobs), Executions (`AttentionBanner` for failed runs).
+
 ---
 
 ## 7. Status & Indicator Vocabulary
@@ -423,6 +491,16 @@ export default {
 - [ ] Numbering/codes used only where they reflect a real taxonomy (fault codes, spec codes, IDs) — not decorative 01/02/03.
 - [ ] Icons are outline-only, no colored container squares.
 - [ ] Motion limited to blink (live/running) and drop-in (new row) — reduced-motion respected.
+
+**Resource pages (§6.10)**
+- [ ] Built from `@/components/patterns`; no hand-rolled status line, filter row, progress card, banner, drop zone or settings tab.
+- [ ] One primary action in the head; everything else in the overflow menu; destructive items last.
+- [ ] No tabs unless there are two peer collections (§6.10.1); settings live in a side sheet.
+- [ ] Status sentence tone matches §7 (`live` blinks, nothing else does); counts use thousands separators.
+- [ ] Long jobs show as an inline progress row; unknown totals are indeterminate ("N found so far"), never a fake percent.
+- [ ] Problems: one attention banner with one fix + a reason line on each affected row.
+- [ ] Search results show match words, not scores; highlighting is on plain text.
+- [ ] "/" focuses the ask field; filter pills work with arrow keys; progress text is a polite live region.
 
 **Marketing surface**
 - [ ] Body/lede in Archivo; eyebrows, codes, and data in Martian Mono.
