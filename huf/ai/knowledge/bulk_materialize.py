@@ -109,6 +109,7 @@ def materialize(ingestion_name: str, entries: list) -> dict:
 					{
 						"ingestion": ingestion_name,
 						"external_checksum": checksum,
+						"file": entry.get("file_url"),
 						"status": "Pending",
 						"skip_reason": None,
 						"error_message": None,
