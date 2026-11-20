@@ -10,11 +10,11 @@ test.describe('Navigation & shell', () => {
     await goto(page, '/dashboard');
     await waitForContent(page);
 
-    // 'Data'/'Knowledge' were renamed to 'Tables'/'Sources' (see
+    // 'Data'/'Knowledge' were renamed to 'Tables'/'Knowledge' (see
     // app-sidebar.tsx libraryNavItems). 'Users' no longer lives in the main
     // nav at all — 'Members' now only appears inside the Settings rail (see
     // the 'settings collapsible reveals settings pages' test below).
-    for (const label of ['Dashboard', 'Tables', 'Sources', 'Chat']) {
+    for (const label of ['Dashboard', 'Tables', 'Knowledge', 'Chat']) {
       await expect(page.getByRole('link', { name: label, exact: true }).first()).toBeVisible();
     }
     // Agents link carries a numeric count badge, so its name is e.g. "Agents 0".

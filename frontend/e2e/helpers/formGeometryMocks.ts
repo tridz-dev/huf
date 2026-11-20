@@ -195,14 +195,14 @@ const S: Array<[string, string, ((p: Page) => Promise<void>)?]> = [
     await p.waitForTimeout(600);
   }],
   ['tg-general', 'gateways/Telegram%20Bot'],
-  ['tg-credentials', 'gateways/Telegram%20Bot', async (p: Page) => { await click(p, '[role=tab]:has-text("Credentials")'); }],
+  ['tg-credentials', 'gateways/Telegram%20Bot', async (p: Page) => { await p.getByText('Credentials', { exact: true }).first().scrollIntoViewIfNeeded().catch(() => {}); }],
   ['tg-recipients', 'gateways/Telegram%20Bot', async (p: Page) => { await click(p, '[role=tab]:has-text("Recipients")'); }],
   ['tg-channel', 'gateways/Telegram%20Bot', async (p: Page) => { await click(p, '[role=tab]:has-text("Channel")'); }],
   ['gw-new-telegram', 'gateways/new?service=telegram'],
   ['wa-gw-channel', 'gateways/WA-Settings', async (p: Page) => { await click(p, '[role=tab]:has-text("Channel")'); }],
   ['int-list', 'integrations'],
   ['int-detail', 'integrations/GitHub%20Main'],
-  ['int-detail-credentials', 'integrations/GitHub%20Main', async (p: Page) => { await click(p, '[role=tab]:has-text("Credentials")'); }],
+  ['int-detail-credentials', 'integrations/GitHub%20Main', async (p: Page) => { await p.getByText('Credentials', { exact: true }).first().scrollIntoViewIfNeeded().catch(() => {}); }],
   ['int-services', 'integration-services'],
   ['int-service-form', 'integration-services/telegram'],
 ];

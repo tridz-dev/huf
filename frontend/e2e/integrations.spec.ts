@@ -27,7 +27,7 @@ test.describe('Integrations, Knowledge & MCP', () => {
     await goto(page, '/knowledge');
     await waitForContent(page);
     await expect(page.getByPlaceholder('Search knowledge sources...')).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'No knowledge sources' })).toBeVisible();
+    await expect(page.getByText('Teach your agents with your own documents.')).toBeVisible();
   });
 
   test('mcp servers page renders', async ({ page }) => {
