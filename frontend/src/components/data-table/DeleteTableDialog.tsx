@@ -1,16 +1,6 @@
-import { useState } from 'react';
-import {
-	AlertDialog,
-	AlertDialogAction,
-	AlertDialogCancel,
-	AlertDialogContent,
-	AlertDialogDescription,
-	AlertDialogFooter,
-	AlertDialogHeader,
-	AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { useEffect, useState } from 'react';
+import { ConfirmDestructive, type Dependent } from '@/components/grid';
+import { getTableDependencies } from '@/services/dataTableApi';
 
 interface DeleteTableDialogProps {
 	open: boolean;
@@ -19,6 +9,8 @@ interface DeleteTableDialogProps {
 	recordCount: number;
 	onConfirm: () => void;
 	loading?: boolean;
+	/** Registry id for the dependency lookup; defaults to tableName. */
+	tableId?: string;
 }
 
 export function DeleteTableDialog({
@@ -27,56 +19,47 @@ export function DeleteTableDialog({
 	tableName,
 	recordCount,
 	onConfirm,
-	loading,
+	tableId,
 }: DeleteTableDialogProps) {
-	const [confirmText, setConfirmText] = useState('');
-	const requireConfirmation = recordCount > 0;
-	const canDelete = !requireConfirmation || confirmText === tableName;
+	const [dependents, setDependents] = useState<Dependent[]>([]);
+	const [liveCount, setLiveCount] = useState<number | null>(null);
 
+	useEffect(() => {
+		if (!open || !tableName) return;
+		let live = true;
+		getTableDependencies(tableId || tableName)
+			.then((d) => {
+				if (!live) return;
+				setLiveCount(d.record_count);
+				setDependents([
+					...d.agents.map((a) => ({ kind: 'Agent', label: a.agent_name || a.agent })),
+					...d.flows.map((f) => ({ kind: 'Flow', label: f.title || f.name })),
+				]);
+			})
+			.catch(() => {
+				// Endpoint missing or failed: fall back to the count the caller gave us.
+				if (live) { setLiveCount(null); setDependents([]); }
+			});
+		return () => { live = false; };
+	}, [open, tableName, tableId]);
+
+	const rows = liveCount ?? recordCount;
+	const consequence =
+		rows > 0
+			? `Removes the table and all ${rows.toLocaleString()} ${rows === 1 ? 'row' : 'rows'} in it.`
+			: 'Removes the table and its fields.';
 	return (
-		<AlertDialog open={open} onOpenChange={onOpenChange}>
-			<AlertDialogContent>
-				<AlertDialogHeader>
-					<AlertDialogTitle>Delete table "{tableName}"?</AlertDialogTitle>
-					<AlertDialogDescription>
-						This will permanently delete the table and all its data.
-						{recordCount > 0 && (
-							<span className="block mt-2 font-medium text-destructive">
-								This table contains {recordCount} record{recordCount !== 1 ? 's' : ''}{' '}
-								that will be permanently lost.
-							</span>
-						)}
-					</AlertDialogDescription>
-				</AlertDialogHeader>
-				{requireConfirmation && (
-					<div className="space-y-2 py-2">
-						<Label htmlFor="confirm-delete">
-							Type <span className="font-mono font-medium">{tableName}</span> to
-							confirm:
-						</Label>
-						<Input
-							id="confirm-delete"
-							value={confirmText}
-							onChange={(e) => setConfirmText(e.target.value)}
-							placeholder={tableName}
-							className="h-8"
-						/>
-					</div>
-				)}
-				<AlertDialogFooter>
-					<AlertDialogCancel onClick={() => setConfirmText('')}>Cancel</AlertDialogCancel>
-					<AlertDialogAction
-						onClick={() => {
-							setConfirmText('');
-							onConfirm();
-						}}
-						disabled={!canDelete || loading}
-						className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-					>
-						{loading ? 'Deleting...' : 'Delete Table'}
-					</AlertDialogAction>
-				</AlertDialogFooter>
-			</AlertDialogContent>
-		</AlertDialog>
+		<ConfirmDestructive
+			open={open}
+			onOpenChange={onOpenChange}
+			title={`Delete "${tableName}"?`}
+			consequence={consequence}
+			// Hard delete today: do not promise a restore window.
+			recovery="This can't be undone."
+			dependents={dependents}
+			confirmText={tableName}
+			actionLabel="Delete table"
+			onConfirm={onConfirm}
+		/>
 	);
 }

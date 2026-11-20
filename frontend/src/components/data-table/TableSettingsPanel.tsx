@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Input } from '@/components/ui/input';
+import { Field } from '@/components/ui/field';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -23,6 +24,8 @@ interface TableSettingsPanelProps {
 	tableGroup: string;
 	fields: DataTableFieldDef[];
 	isEdit: boolean;
+	/** Inline validation message for the table name. */
+	tableNameError?: string;
 	onTableNameChange: (value: string) => void;
 	onDescriptionChange: (value: string) => void;
 	onIconChange: (value: string) => void;
@@ -40,6 +43,7 @@ export function TableSettingsPanel({
 	tableGroup,
 	fields,
 	isEdit,
+	tableNameError,
 	onTableNameChange,
 	onDescriptionChange,
 	onIconChange,
@@ -66,19 +70,17 @@ export function TableSettingsPanel({
 			</div>
 
 			{/* Primary fields — what the table is */}
-			<div className="space-y-1.5">
-				<Label htmlFor="table-name" size="sm">
-					Table Name *
-				</Label>
-				<Input
-					id="table-name"
-					value={tableName}
-					onChange={(e) => onTableNameChange(e.target.value)}
-					placeholder="e.g. Products, Contacts"
-					className="h-8 text-sm"
-					disabled={isEdit}
-				/>
-			</div>
+			<Field label="Table name" required error={tableNameError} id="table-name">
+				{(c) => (
+					<Input
+						{...c}
+						value={tableName}
+						onChange={(e) => onTableNameChange(e.target.value)}
+						placeholder="e.g. Products, Contacts"
+						disabled={isEdit}
+					/>
+				)}
+			</Field>
 
 			<div className="space-y-1.5">
 				<Label htmlFor="table-description" size="sm">

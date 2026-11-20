@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { useNavigate, useParams, useBlocker, type Location } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Save, Loader2, Settings2, Shield } from 'lucide-react';
@@ -7,135 +7,18 @@ import { Button } from '@/components/ui/button';
 import { TableBuilderCanvas } from '@/components/data-table/TableBuilderCanvas';
 import { FieldConfigPanel } from '@/components/data-table/FieldConfigPanel';
 import { TableSettingsPanel } from '@/components/data-table/TableSettingsPanel';
-import { createDataTable, updateDataTable, getTableSchema } from '@/services/dataTableApi';
+import { createDataTable, updateDataTable, getTableSchema, getTableDependencies } from '@/services/dataTableApi';
+import { focusFirstError } from '@/components/builder';
+import type { Dependent } from '@/components/grid';
+import { builderReducer, initialBuilderState } from '@/components/data-table/builder/builderReducer';
+import { FieldDeleteConfirm } from '@/components/data-table/builder/FieldDeleteConfirm';
+import { isExistingField, needsDeleteConfirm, validateBuilder } from '@/components/data-table/builder/fieldRules';
 import { LAYOUT_FIELD_TYPES } from '@/data/fieldTypes';
-import type { DataTableFieldDef, DataTableFieldType, DataTableSchema } from '@/types/dataTable.types';
+import type { DataTableFieldDef, DataTableFieldType } from '@/types/dataTable.types';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { UnsavedChangesDialog } from '@/components/UnsavedChangesDialog';
 import { useSaveShortcut } from '@/hooks/useSaveShortcut';
-
-interface BuilderState {
-	tableName: string;
-	description: string;
-	tableGroup: string;
-	icon: string;
-	autonameMethod: string;
-	titleField: string;
-	fields: DataTableFieldDef[];
-	selectedFieldIndex: number | null;
-	isDirty: boolean;
-	registryName: string;
-}
-
-type BuilderAction =
-	| { type: 'SET_TABLE_NAME'; payload: string }
-	| { type: 'SET_DESCRIPTION'; payload: string }
-	| { type: 'SET_TABLE_GROUP'; payload: string }
-	| { type: 'SET_ICON'; payload: string }
-	| { type: 'SET_AUTONAME_METHOD'; payload: string }
-	| { type: 'SET_TITLE_FIELD'; payload: string }
-	| { type: 'ADD_FIELD'; payload: DataTableFieldDef }
-	| { type: 'UPDATE_FIELD'; payload: { index: number; updates: Partial<DataTableFieldDef> } }
-	| { type: 'REMOVE_FIELD'; payload: number }
-	| { type: 'REORDER_FIELDS'; payload: { from: number; to: number } }
-	| { type: 'SELECT_FIELD'; payload: number | null }
-	| { type: 'LOAD_SCHEMA'; payload: DataTableSchema }
-	| { type: 'MARK_CLEAN' };
-
-const initialState: BuilderState = {
-	tableName: '',
-	description: '',
-	tableGroup: '',
-	icon: '',
-	autonameMethod: 'Autoincrement',
-	titleField: '',
-	fields: [],
-	selectedFieldIndex: null,
-	isDirty: false,
-	registryName: '',
-};
-
-function builderReducer(state: BuilderState, action: BuilderAction): BuilderState {
-	switch (action.type) {
-		case 'SET_TABLE_NAME':
-			return { ...state, tableName: action.payload, isDirty: true };
-		case 'SET_DESCRIPTION':
-			return { ...state, description: action.payload, isDirty: true };
-		case 'SET_TABLE_GROUP':
-			return { ...state, tableGroup: action.payload, isDirty: true };
-		case 'SET_ICON':
-			return { ...state, icon: action.payload, isDirty: true };
-		case 'SET_AUTONAME_METHOD':
-			return { ...state, autonameMethod: action.payload, isDirty: true };
-		case 'SET_TITLE_FIELD':
-			return { ...state, titleField: action.payload, isDirty: true };
-		case 'ADD_FIELD':
-			return {
-				...state,
-				fields: [...state.fields, action.payload],
-				selectedFieldIndex: state.fields.length,
-				isDirty: true,
-			};
-		case 'UPDATE_FIELD': {
-			const newFields = [...state.fields];
-			newFields[action.payload.index] = {
-				...newFields[action.payload.index],
-				...action.payload.updates,
-			};
-			return { ...state, fields: newFields, isDirty: true };
-		}
-		case 'REMOVE_FIELD': {
-			const newFields = state.fields.filter((_, i) => i !== action.payload);
-			let newSelected = state.selectedFieldIndex;
-			if (newSelected === action.payload) {
-				newSelected = null;
-			} else if (newSelected !== null && newSelected > action.payload) {
-				newSelected--;
-			}
-			return {
-				...state,
-				fields: newFields,
-				selectedFieldIndex: newSelected,
-				isDirty: true,
-			};
-		}
-		case 'REORDER_FIELDS': {
-			const { from, to } = action.payload;
-			const newFields = [...state.fields];
-			const [moved] = newFields.splice(from, 1);
-			newFields.splice(to, 0, moved);
-			let newSelected = state.selectedFieldIndex;
-			if (newSelected === from) {
-				newSelected = to;
-			} else if (newSelected !== null) {
-				if (from < newSelected && to >= newSelected) newSelected--;
-				else if (from > newSelected && to <= newSelected) newSelected++;
-			}
-			return { ...state, fields: newFields, selectedFieldIndex: newSelected, isDirty: true };
-		}
-		case 'SELECT_FIELD':
-			return { ...state, selectedFieldIndex: action.payload };
-		case 'LOAD_SCHEMA':
-			return {
-				...state,
-				tableName: action.payload.table_name,
-				description: action.payload.description || '',
-				tableGroup: action.payload.table_group || '',
-				icon: action.payload.icon || '',
-				autonameMethod: action.payload.autoname_method || 'Autoincrement',
-				titleField: action.payload.title_field_name || '',
-				fields: action.payload.fields,
-				registryName: action.payload.name,
-				selectedFieldIndex: null,
-				isDirty: false,
-			};
-		case 'MARK_CLEAN':
-			return { ...state, isDirty: false };
-		default:
-			return state;
-	}
-}
 
 export function DataTableBuilderPage() {
 	const { tableId } = useParams<{ tableId: string }>();
@@ -144,12 +27,46 @@ export function DataTableBuilderPage() {
 
 	const { hasCapability, isLoading: permissionsLoading } = usePermissions();
 
-	const [state, dispatch] = useReducer(builderReducer, initialState);
+	const [state, dispatch] = useReducer(builderReducer, initialBuilderState);
 	const [saving, setSaving] = useState(false);
 	const [loading, setLoading] = useState(isEdit);
 	const isMobile = useIsMobile();
 	const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 	const allowNavigationRef = useRef(false);
+	const [showErrors, setShowErrors] = useState(false);
+	const [pendingDelete, setPendingDelete] = useState<number | null>(null);
+	const [deps, setDeps] = useState<{ recordCount?: number; dependents: Dependent[] }>({ dependents: [] });
+
+	// Row count + agents/flows for the field-delete confirm. Best effort: no endpoint yet means no counts.
+	useEffect(() => {
+		if (!isEdit || !tableId) return;
+		getTableDependencies(tableId)
+			.then((d) =>
+				setDeps({
+					recordCount: d.record_count,
+					dependents: [
+						...d.agents.map((a) => ({ kind: 'Agent', label: a.agent_name || a.agent })),
+						...d.flows.map((f) => ({ kind: 'Flow', label: f.title || f.name })),
+					],
+				})
+			)
+			.catch(() => setDeps({ dependents: [] }));
+	}, [isEdit, tableId]);
+
+	const errors = useMemo(
+		() => (showErrors ? validateBuilder(state.tableName, state.fields) : null),
+		[showErrors, state.tableName, state.fields]
+	);
+	const errorIndexes = useMemo(
+		() => new Set(Object.keys(errors?.fields ?? {}).map(Number)),
+		[errors]
+	);
+
+	const requestRemove = (index: number) => {
+		const f = state.fields[index];
+		if (f && needsDeleteConfirm(f, state.originalFields)) setPendingDelete(index);
+		else dispatch({ type: 'REMOVE_FIELD', payload: index });
+	};
 
 	useEffect(() => {
 		if (isEdit) {
@@ -220,22 +137,13 @@ export function DataTableBuilderPage() {
 	);
 
 	const handleSave = async () => {
-		if (!state.tableName.trim()) {
-			toast.error('Table name is required');
-			return;
-		}
-
-		const dataFields = state.fields.filter(
-			(f) => !LAYOUT_FIELD_TYPES.includes(f.fieldtype)
-		);
-		if (dataFields.length === 0) {
-			toast.error('Add at least one data field');
-			return;
-		}
-
-		const unlabeledField = dataFields.find((f) => !f.label?.trim());
-		if (unlabeledField) {
-			toast.error('All fields must have a label');
+		const found = validateBuilder(state.tableName, state.fields);
+		if (found.count > 0) {
+			setShowErrors(true);
+			if (found.tableName || found.noFields) dispatch({ type: 'SELECT_FIELD', payload: null });
+			else if (found.firstFieldIndex !== null) dispatch({ type: 'SELECT_FIELD', payload: found.firstFieldIndex });
+			// Wait for the panel to render the invalid control, then focus it.
+			setTimeout(() => focusFirstError(), 0);
 			return;
 		}
 
@@ -310,7 +218,11 @@ export function DataTableBuilderPage() {
 	const sidebarContent = (
 		selectedField ? (
 			<FieldConfigPanel
+				key={state.selectedFieldIndex}
 				field={selectedField}
+				isExisting={isExistingField(selectedField, state.originalFields)}
+				otherFieldnames={state.fields.filter((_, i) => i !== state.selectedFieldIndex).map((f) => f.fieldname)}
+				errors={errors?.fields[state.selectedFieldIndex!]}
 				onUpdate={(updates) =>
 					dispatch({
 						type: 'UPDATE_FIELD',
@@ -320,12 +232,7 @@ export function DataTableBuilderPage() {
 						},
 					})
 				}
-				onDelete={() =>
-					dispatch({
-						type: 'REMOVE_FIELD',
-						payload: state.selectedFieldIndex!,
-					})
-				}
+				onDelete={() => requestRemove(state.selectedFieldIndex!)}
 				onOpenTableSettings={() =>
 					dispatch({ type: 'SELECT_FIELD', payload: null })
 				}
@@ -340,6 +247,7 @@ export function DataTableBuilderPage() {
 				titleField={state.titleField}
 				fields={state.fields}
 				isEdit={isEdit}
+				tableNameError={errors?.tableName}
 				onTableNameChange={(v) =>
 					dispatch({ type: 'SET_TABLE_NAME', payload: v })
 				}
@@ -378,9 +286,9 @@ export function DataTableBuilderPage() {
 								}
 							}}
 							onAddField={handleAddField}
-							onRemoveField={(index) =>
-								dispatch({ type: 'REMOVE_FIELD', payload: index })
-							}
+							onRemoveField={requestRemove}
+							errorIndexes={errorIndexes}
+							emptyError={errors?.noFields}
 							onReorderFields={(from, to) =>
 								dispatch({
 									type: 'REORDER_FIELDS',
@@ -448,6 +356,17 @@ export function DataTableBuilderPage() {
 				</div>
 			</div>
 
+			<FieldDeleteConfirm
+				open={pendingDelete !== null}
+				onOpenChange={(o) => !o && setPendingDelete(null)}
+				fieldLabel={pendingDelete !== null ? state.fields[pendingDelete]?.label ?? '' : ''}
+				recordCount={deps.recordCount}
+				dependents={deps.dependents}
+				onConfirm={() => {
+					if (pendingDelete !== null) dispatch({ type: 'REMOVE_FIELD', payload: pendingDelete });
+					setPendingDelete(null);
+				}}
+			/>
 			<UnsavedChangesDialog blocker={blocker} />
 		</div>
 	);
