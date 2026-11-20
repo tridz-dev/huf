@@ -574,3 +574,21 @@ class TestMaterializeUnsafeEntry:
 		row = next(iter(rows.values()))
 		assert row["status"] == "Skipped" and row["skip_reason"] == "Unsafe"
 		assert row["ingestion"] == "ING-2"
+
+
+class TestMaterializeNoTextEntry:
+	"""A zero-byte file (file None, skip_reason "No Text") must be preset-skipped, not need a File."""
+
+	ENTRY = {"external_key": "s3://B/empty.txt", "file": None, "checksum": None, "skip_reason": "No Text"}
+
+	def test_no_text_becomes_skipped_with_ignore_validate(self):
+		from huf.ai.knowledge import bulk_materialize as bm
+
+		fake, rows, inserted = TestMaterializeUnsafeEntry()._fake_frappe()
+		with patch.object(bm, "frappe", fake):
+			stats = bm.materialize("ING-1", [dict(self.ENTRY)])
+		assert len(inserted) == 1
+		assert inserted[0].data["status"] == "Skipped"
+		assert inserted[0].data["skip_reason"] == "No Text"
+		assert inserted[0].flags.ignore_validate is True
+		assert stats["skipped_preset"] == 1
