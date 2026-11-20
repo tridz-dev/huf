@@ -345,7 +345,7 @@ One vocabulary, user words, one glyph each: **Text, Long text, Number, Currency,
 | Active cell | 2px inset `--signal` ring | one per grid; roving `tabIndex=0` |
 | Editing | editor fills the cell, borderless | the cell keeps the ring |
 | Invalid | `--destructive-tint` cell, red ring, one-line fix hint under the cell + "Esc to undo" | editor stays open; `aria-invalid`, hint is `role=alert` |
-| Selected row | `--signal/5` tint, `aria-selected` | Shift-click selects a range |
+| Selected row | `--signal/5` tint, `aria-selected` | Shift-click selects a range from the last clicked row; the anchor resets when the row set changes (page, sort, filter) |
 | Read-only column | no edit on type/Enter | `aria-readonly` |
 | Empty | `empty` slot in place of rows (an §6.10.8-style start) | |
 | Large | > `windowFrom` (100) rows render a window + spacer rows | keyboard scrolls the active row into view |
@@ -360,7 +360,7 @@ One vocabulary, user words, one glyph each: **Text, Long text, Number, Currency,
 | Navigate | Backspace / Delete | edit with an empty value |
 | Navigate | Space | toggle a checkbox cell |
 | Navigate | Shift+Enter | open the row in the drawer (`onOpenRow`) |
-| Navigate | ⌘V | paste tab-separated rows at the active cell (`onPaste`, `parseTsv`) |
+| Navigate | ⌘V | paste tab-separated rows at the active cell (`onPaste`, `parseTsv`: quoted cells may hold tabs, newlines and `""` escapes, as Excel/Sheets copy them) |
 | Edit | Enter | save, move down |
 | Edit | Tab / Shift+Tab | save, move right / left |
 | Edit | Esc | cancel, restore the old value, focus back on the cell |
@@ -443,7 +443,8 @@ Reading order: **head (title + status pill + `AutosaveStatus` + one primary acti
 #### 6.12.7 Try panel (`TryPanel`, `Inspector`)
 - Head: title (*Try it*), a neutral pill for what is being tried (*Draft · not published*), Reset. Optional **coaching banner** slot under the head (an `AttentionBanner` that names the fix and links to it).
 - Log (`role=log`, polite): user messages right on `--ink`, replies left on `--paper-deep`; a pending reply shows its current step with a spinner (*Looking up order 1042…*). Each reply may carry **inspector** chips: `call` (an action it ran), `source` (*Read: Returns policy.pdf*, signal tint), `metric` (*1.8s*, *412 tokens*, mono); failed items are red.
-- Empty: suggestions (`TemplateChips`). Composer: Enter sends, Shift+Enter new line. Footer slot: model line, *View run details*.
+- Screen readers: the log is not live and is `aria-busy` while a reply runs; each finished reply is announced once through a visually hidden polite region; messages carry sr-only *You:* / *Agent:* labels.
+- Empty: suggestions (`TemplateChips`), rendered outside the log. Composer: Enter sends, Shift+Enter new line. Footer slot: model line, *View run details*.
 - It renders state; the caller runs the conversation against the **current draft**.
 
 #### 6.12.8 Create (`OneCardCreate`, `StepCard`)

@@ -61,7 +61,7 @@ export function DataGrid<R>({
   const body = useRef<HTMLTableSectionElement>(null);
   const [scrollTop, setScrollTop] = useState(0);
   const [viewH, setViewH] = useState(600);
-  const anchor = useRef<number | null>(null);
+  const anchor = useRef<string | null>(null);
   const wasEditing = useRef(false);
   const uid = useRef(`grid-${Math.random().toString(36).slice(2, 8)}`).current;
 
@@ -96,15 +96,22 @@ export function DataGrid<R>({
   const allOn = rows.length > 0 && rows.every((r) => sel.has(getRowId(r)));
   const someOn = !allOn && rows.some((r) => sel.has(getRowId(r)));
 
+  // Shift-click anchor is a row id, not an index: indexes go stale when the
+  // row set is paged, sorted or filtered. Reset it whenever `rows` changes.
+  useEffect(() => {
+    anchor.current = null;
+  }, [rows]);
+
   const toggleRow = (i: number, shift: boolean) => {
     const next = new Set(sel);
     const id = getRowId(rows[i]);
     const on = !sel.has(id);
-    if (shift && anchor.current !== null) {
-      const [a, b] = [Math.min(anchor.current, i), Math.max(anchor.current, i)];
+    const from = shift && anchor.current !== null ? rows.findIndex((r) => getRowId(r) === anchor.current) : -1;
+    if (from >= 0) {
+      const [a, b] = [Math.min(from, i), Math.max(from, i)];
       for (let k = a; k <= b; k++) (on ? next.add(getRowId(rows[k])) : next.delete(getRowId(rows[k])));
     } else on ? next.add(id) : next.delete(id);
-    anchor.current = i;
+    anchor.current = id;
     onSelectedChange?.(next);
   };
 

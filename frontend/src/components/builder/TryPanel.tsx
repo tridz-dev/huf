@@ -6,7 +6,7 @@
  * suggestions, and a composer (Enter sends, Shift+Enter new line).
  * It renders what it is given; running the conversation is the caller's job.
  */
-import { useEffect, useRef, type KeyboardEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { RotateCcw } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -78,6 +78,19 @@ export function TryPanel({
     const el = log.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages]);
+  // Announce each finished reply once, as plain text, through a separate
+  // polite region; the log itself is not live so streaming steps stay quiet.
+  const [announce, setAnnounce] = useState('');
+  const announced = useRef(new Set<string>());
+  const textOf = useRef<Record<string, HTMLDivElement | null>>({});
+  useEffect(() => {
+    const done = [...messages].reverse().find((m) => m.from === 'reply' && !m.pending);
+    if (done && !announced.current.has(done.id)) {
+      announced.current.add(done.id);
+      setAnnounce(`Agent: ${textOf.current[done.id]?.textContent ?? ''}`);
+    }
+  }, [messages]);
+  const pending = messages.some((m) => m.pending);
   const send = () => {
     if (draft.trim() && !busy) onSend();
   };
@@ -99,18 +112,22 @@ export function TryPanel({
         )}
       </div>
       {banner && <div className="border-b border-line">{banner}</div>}
-      <div ref={log} role="log" aria-live="polite" aria-label={`${title} conversation`} className="flex-1 space-y-3 overflow-y-auto p-4">
-        {messages.length === 0 && empty}
+      {messages.length === 0 && empty && <div className="px-4 pt-4">{empty}</div>}
+      <div ref={log} role="log" aria-live="off" aria-busy={pending || undefined} aria-label={`${title} conversation`} className="flex-1 space-y-3 overflow-y-auto p-4">
         {messages.map((m) => (
           <div key={m.id} className={cn('flex', m.from === 'user' ? 'justify-end' : 'justify-start')}>
             <div aria-busy={m.pending || undefined}
               className={cn('max-w-[85%] rounded-xl px-3.5 py-2.5 text-ui-text', m.from === 'user' ? 'bg-ink text-primary-foreground' : 'bg-paper-deep text-ink')}>
-              {m.pending ? <span className="inline-flex items-center gap-2"><Spinner role="presentation" aria-hidden="true" className="h-3.5 w-3.5" />{m.content}</span> : m.content}
+              <span className="sr-only">{m.from === 'user' ? 'You: ' : 'Agent: '}</span>
+              <div ref={(el) => { textOf.current[m.id] = el; }}>
+                {m.pending ? <span className="inline-flex items-center gap-2"><Spinner role="presentation" aria-hidden="true" className="h-3.5 w-3.5" />{m.content}</span> : m.content}
+              </div>
               {m.inspector && m.inspector.length > 0 && <Inspector items={m.inspector} />}
             </div>
           </div>
         ))}
       </div>
+      <div role="status" aria-live="polite" aria-atomic="true" className="sr-only" data-testid="try-announce">{announce}</div>
       <div className="border-t border-line p-3">
         <div className="flex items-end gap-2 rounded-lg border border-line bg-panel p-1.5 focus-within:ring-2 focus-within:ring-ring">
           <Textarea value={draft} onChange={(e) => onDraftChange(e.target.value)} onKeyDown={onKey} rows={1} placeholder={placeholder}
