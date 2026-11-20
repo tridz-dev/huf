@@ -70,7 +70,7 @@ describe('DataTab', () => {
 		api.getTableRecords.mockResolvedValue({ items, hasMore: true, total: undefined });
 		render(<DataTab schema={schema} tableId="t" onImport={() => undefined} />);
 		await screen.findByText('Co 0');
-		expect(screen.getByText('Rows 1–25, more available')).toBeInTheDocument();
+		expect(screen.getByText('Showing 1–25 of 25+ rows')).toBeInTheDocument();
 	});
 
 	it('shows the empty state with add and import', async () => {

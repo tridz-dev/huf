@@ -1,24 +1,21 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { ArrowUpDown, Database, Filter, Plus, Upload } from 'lucide-react';
+import { Database, Plus, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
-	BulkActionBar, ConfirmDestructive, DataGrid, FieldsMenu, FilterChip, GridFooter, GridToolbar, MatchCount, SortChip,
-	type CellValue,
+	BulkActionBar, ConfirmDestructive, DataGrid, FieldsMenu, FilterBuilder, GridFooter, GridToolbar, MatchCount, SortChip, sortDirectionLabel,
+	type CellValue, type FilterCondition, type GridSort,
 } from '@/components/grid';
 import { AutosaveStatus, type AutosaveState } from '@/components/builder';
 import { AskField, DropZone } from '@/components/patterns';
 import { createTableRecord, getTableRecords } from '@/services/dataTableApi';
 import { restoreRows } from '@/services/dataTables/rowsApi';
 import type { DataTableSchema } from '@/types/dataTable.types';
-import { FilterEditor } from './FilterEditor';
 import { RecordPanel } from './RecordPanel';
 import { SetValueDialog } from './SetValueDialog';
 import {
-	DRAFT_PREFIX, PAGE_SIZE, buildColumns, defaultsFor, describeValue, downloadCsv, errorText, isBlank, isDraft, planPaste,
-	requiredWithoutDefault, sortWords, toApiFilters, toApiValues, toCsv, toTsv, type FilterCond, type Row,
+	DRAFT_PREFIX, PAGE_SIZE, buildColumns, defaultsFor, downloadCsv, errorText, isBlank, isDraft, planPaste,
+	requiredWithoutDefault, toApiFilters, toApiValues, toCsv, toTsv, type Row,
 } from './model';
 import { deleteMany, fetchNames, insertMany, serverExport, setOne, updateMany } from './rowOps';
 import { useTableRows } from './useTableRows';
@@ -45,16 +42,15 @@ export const DataTab = forwardRef<DataTabHandle, DataTabProps>(function DataTab(
 
 	const [searchText, setSearchText] = useState('');
 	const [search, setSearch] = useState('');
-	const [filters, setFilters] = useState<FilterCond[]>([]);
-	const [sort, setSort] = useState<{ field: string; order: 'asc' | 'desc' } | null>(null);
+	const [filters, setFilters] = useState<FilterCondition[]>([]);
+	const [gridSort, setGridSort] = useState<GridSort | null>(null);
+	const sort = useMemo(() => (gridSort ? { field: gridSort.key, order: gridSort.direction } : null), [gridSort]);
 	const [page, setPage] = useState(0);
 	const [hidden, setHidden] = useState<Set<string>>(new Set());
 	const [selected, setSelected] = useState<Set<string>>(new Set());
 	const [drawerId, setDrawerId] = useState<string | null>(null);
 	const [setValueOpen, setSetValueOpen] = useState(false);
 	const [confirmDelete, setConfirmDelete] = useState(false);
-	const [filterOpen, setFilterOpen] = useState(false);
-	const [editing, setEditing] = useState<number | null>(null);
 	const [drafts, setDrafts] = useState<Row[]>([]);
 	const [save, setSave] = useState<{ state: AutosaveState; at: number | null; retry?: () => void }>({ state: 'idle', at: null });
 	const [tableTotal, setTableTotal] = useState<number | undefined>(undefined);
@@ -226,12 +222,6 @@ export const DataTab = forwardRef<DataTabHandle, DataTabProps>(function DataTab(
 		}
 	};
 
-	const pushFilter = (c: FilterCond) => {
-		setFilters((f) => [...f, c]);
-		setPage(0);
-		setFilterOpen(false);
-	};
-
 	const from = rows.length ? page * PAGE_SIZE + 1 : 0;
 	const to = page * PAGE_SIZE + rows.length;
 	const hasNext = total !== undefined ? to < total : hasMore;
@@ -265,63 +255,19 @@ export const DataTab = forwardRef<DataTabHandle, DataTabProps>(function DataTab(
 				search={<AskField value={searchText} onChange={setSearchText} placeholder={tableTotal !== undefined ? `Search ${tableTotal.toLocaleString()} rows` : 'Search rows'} />}
 				controls={
 					<>
-						<Popover open={filterOpen} onOpenChange={setFilterOpen}>
-							<PopoverTrigger asChild>
-								<Button variant="outline" size="sm" className="gap-1.5">
-									<Filter aria-hidden="true" className="h-3.5 w-3.5" />
-									Filter
-								</Button>
-							</PopoverTrigger>
-							<PopoverContent align="start" className="w-80">
-								<FilterEditor columns={columns} submitLabel="Add filter" onSubmit={pushFilter} />
-							</PopoverContent>
-						</Popover>
-						<DropdownMenu>
-							<DropdownMenuTrigger asChild>
-								<Button variant="outline" size="sm" className="gap-1.5">
-									<ArrowUpDown aria-hidden="true" className="h-3.5 w-3.5" />
-									Sort
-								</Button>
-							</DropdownMenuTrigger>
-							<DropdownMenuContent align="start">
-								{columns.map((c) => (
-									<DropdownMenuItem key={c.key} onSelect={() => { setSort({ field: c.key, order: 'asc' }); setPage(0); }}>
-										{c.label}
-									</DropdownMenuItem>
-								))}
-							</DropdownMenuContent>
-						</DropdownMenu>
+						<FilterBuilder columns={columns} value={filters} onChange={(f) => { setFilters(f); setPage(0); }} />
 						<FieldsMenu fields={columns.map((c) => ({ key: c.key, label: c.label, locked: c.tag === 'title' }))} hidden={hidden} onHiddenChange={setHidden} />
 					</>
 				}
 				chips={
 					<>
-						{filters.map((f, i) => (
-							<FilterChip
-								key={`${f.field}-${i}`}
-								field={labelOf(f.field)}
-								operator={f.op}
-								value={describeValue(f)}
-								open={editing === i}
-								onOpenChange={(o) => setEditing(o ? i : null)}
-								onRemove={() => { setFilters((fs) => fs.filter((_, j) => j !== i)); setPage(0); }}
-								editor={
-									<FilterEditor
-										columns={columns}
-										initial={f}
-										submitLabel="Update"
-										onSubmit={(c) => { setFilters((fs) => fs.map((x, j) => (j === i ? c : x))); setEditing(null); setPage(0); }}
-									/>
-								}
-							/>
-						))}
 						{sort && (
 							<SortChip
 								field={labelOf(sort.field)}
 								direction={sort.order}
-								directionLabel={sortWords(columns.find((c) => c.key === sort.field)?.type, sort.order)}
-								onToggle={() => setSort({ ...sort, order: sort.order === 'asc' ? 'desc' : 'asc' })}
-								onRemove={() => setSort(null)}
+								directionLabel={sortDirectionLabel(columns.find((c) => c.key === sort.field)?.type ?? 'text', sort.order)}
+								onToggle={() => setGridSort({ key: sort.field, direction: sort.order === 'asc' ? 'desc' : 'asc' })}
+								onRemove={() => { setGridSort(null); setPage(0); }}
 							/>
 						)}
 					</>
@@ -355,17 +301,12 @@ export const DataTab = forwardRef<DataTabHandle, DataTabProps>(function DataTab(
 					onOpenRow={setDrawerId}
 					onPaste={(m, at) => void paste(m, at)}
 					rowNumberOffset={page * PAGE_SIZE}
+					sort={gridSort}
+					onSortChange={(next) => { setGridSort(next); setPage(0); }}
 					empty={<p className="py-8 text-center text-ui-text text-steel">No rows match. Clear a filter or the search to see more.</p>}
 				/>
 			</div>
-			{total !== undefined ? (
-				<GridFooter from={from} to={to} total={total} pager={<Pager page={page} hasNext={hasNext} onPage={setPage} />} />
-			) : (
-				<div className="flex items-center gap-3 py-2 text-micro text-steel">
-					<span>{rows.length ? `Rows ${from.toLocaleString()}–${to.toLocaleString()}${hasMore ? ', more available' : ''}` : 'No rows'}</span>
-					<Pager page={page} hasNext={hasNext} onPage={setPage} />
-				</div>
-			)}
+			<GridFooter from={from} to={to} total={total ?? (hasMore ? to : null)} approximate={total === undefined && hasMore} pager={<Pager page={page} hasNext={hasNext} onPage={setPage} />} />
 			<BulkActionBar
 				count={selected.size}
 				onClear={() => setSelected(new Set())}

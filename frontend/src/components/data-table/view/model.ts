@@ -1,4 +1,4 @@
-import type { CellValue, ColumnType, GridColumn } from '@/components/grid';
+import type { CellValue, FilterCondition, FilterOp, GridColumn } from '@/components/grid';
 import { parseCell } from '@/components/grid';
 import { LAYOUT_FIELD_TYPES } from '@/data/fieldTypes';
 import { toColumnType } from '@/data/fieldTypeLabels';
@@ -84,28 +84,6 @@ export function isBlank(v: CellValue): boolean {
 
 // ─── Filters and sort ───
 
-export type FilterOp = 'is' | 'is not' | 'contains' | 'does not contain' | 'is more than' | 'is less than' | 'is at least' | 'is at most' | 'is before' | 'is after' | 'is empty' | 'is not empty';
-
-export interface FilterCond {
-	field: string;
-	op: FilterOp;
-	value: string;
-}
-
-const TEXT_OPS: FilterOp[] = ['is', 'is not', 'contains', 'does not contain', 'is empty', 'is not empty'];
-const NUM_OPS: FilterOp[] = ['is', 'is not', 'is more than', 'is less than', 'is at least', 'is at most', 'is empty', 'is not empty'];
-const DATE_OPS: FilterOp[] = ['is', 'is not', 'is before', 'is after', 'is empty', 'is not empty'];
-
-export function opsFor(type: ColumnType): FilterOp[] {
-	if (type === 'number' || type === 'currency') return NUM_OPS;
-	if (type === 'date') return DATE_OPS;
-	if (type === 'checkbox') return ['is'];
-	if (type === 'select') return ['is', 'is not', 'is empty', 'is not empty'];
-	return TEXT_OPS;
-}
-
-export const needsValue = (op: FilterOp) => op !== 'is empty' && op !== 'is not empty';
-
 const OP_API: Record<Exclude<FilterOp, 'contains' | 'does not contain' | 'is empty' | 'is not empty'>, string> = {
 	is: '=',
 	'is not': '!=',
@@ -117,7 +95,7 @@ const OP_API: Record<Exclude<FilterOp, 'contains' | 'does not contain' | 'is emp
 	'is after': '>',
 };
 
-export function toApiFilters(conds: FilterCond[], columns: GridColumn<Row>[]): TableRecordFilter[] {
+export function toApiFilters(conds: FilterCondition[], columns: GridColumn<Row>[]): TableRecordFilter[] {
 	const out: TableRecordFilter[] = [];
 	for (const c of conds) {
 		const col = columns.find((x) => x.key === c.field);
@@ -133,16 +111,6 @@ export function toApiFilters(conds: FilterCond[], columns: GridColumn<Row>[]): T
 		}
 	}
 	return out;
-}
-
-export function describeValue(cond: FilterCond): string | undefined {
-	return needsValue(cond.op) ? cond.value : undefined;
-}
-
-export function sortWords(type: ColumnType | undefined, direction: 'asc' | 'desc'): string {
-	if (type === 'date') return direction === 'asc' ? 'Oldest first' : 'Newest first';
-	if (type === 'number' || type === 'currency') return direction === 'asc' ? '1→9' : '9→1';
-	return direction === 'asc' ? 'A→Z' : 'Z→A';
 }
 
 // ─── Paste and export ───
