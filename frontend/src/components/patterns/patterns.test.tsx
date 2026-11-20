@@ -137,3 +137,24 @@ describe('AttentionBanner and ResultCard helpers', () => {
 		expect(matchStrength(0.1)).toBe('weak');
 	});
 });
+
+describe('LinkedListPopover', () => {
+	it('lists linked items, runs onSelect and the footer, and shows an empty state', async () => {
+		const { LinkedListPopover } = await import('./LinkedListPopover');
+		const onSelect = vi.fn();
+		const onFooter = vi.fn();
+		const { rerender } = render(
+			<LinkedListPopover label="Used by 2 items" title="Using this"
+				items={[{ id: 'a', label: 'Alpha', meta: '3 calls', onSelect }, { id: 'b', label: 'Beta', href: '/b' }]}
+				footer={{ label: 'Manage', onClick: onFooter }} />,
+		);
+		await userEvent.click(screen.getByRole('button', { name: /Used by 2 items/ }));
+		expect(screen.getByRole('link', { name: 'Beta' })).toHaveAttribute('href', '/b');
+		await userEvent.click(screen.getByRole('button', { name: /Alpha/ }));
+		expect(onSelect).toHaveBeenCalledOnce();
+		await userEvent.click(screen.getByRole('button', { name: 'Manage' }));
+		expect(onFooter).toHaveBeenCalledOnce();
+		rerender(<LinkedListPopover label="Used by 0 items" items={[]} empty="Nothing uses this yet." open onOpenChange={() => {}} />);
+		expect(screen.getByTestId('linked-empty')).toHaveTextContent('Nothing uses this yet.');
+	});
+});

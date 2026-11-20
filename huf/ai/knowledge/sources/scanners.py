@@ -34,7 +34,7 @@ from .safety import (
 	walk_directory,
 )
 
-HEARTBEAT_EVERY = 25
+HEARTBEAT_EVERY = 10
 HEARTBEAT_MIN_INTERVAL = 30  # seconds, for forced/throttled heartbeats
 MAX_KEY_LEN = 255
 
@@ -109,7 +109,16 @@ class ScanContext:
 		if not force and self._last_beat and now - self._last_beat < HEARTBEAT_MIN_INTERVAL:
 			return
 		self._last_beat = now
-		frappe.db.set_value("Knowledge Ingestion", self.ingestion_name, "modified", now_datetime(), update_modified=False)
+		self._beat()
+
+	def _beat(self) -> None:
+		"""Bump ``modified`` and publish the running count (read by the status UI while Scanning)."""
+		frappe.db.set_value(
+			"Knowledge Ingestion",
+			self.ingestion_name,
+			{"modified": now_datetime(), "total_items": len(self.entries)},
+			update_modified=False,
+		)
 		frappe.db.commit()
 
 	def zip_progress(self) -> None:
@@ -128,8 +137,7 @@ class ScanContext:
 	def heartbeat(self) -> None:
 		self._seen += 1
 		if self._seen % HEARTBEAT_EVERY == 0:
-			frappe.db.set_value("Knowledge Ingestion", self.ingestion_name, "modified", now_datetime(), update_modified=False)
-			frappe.db.commit()
+			self._beat()
 
 
 def make_private_file(knowledge_source: str, filename: str, content: bytes):
