@@ -90,13 +90,15 @@ export function ConnectAgentDialog({ open, onOpenChange, knowledgeSource, onConn
             const locked = a.is_system === 1;
             const reason = isLinked ? 'Already connected' : locked ? 'System agents cannot be edited' : '';
             return (
-              <label
+              <div
                 key={a.name}
+                onClick={() => !reason && !busy && toggle(a.name)}
                 className={`flex items-start gap-3 rounded-md border p-3 ${reason ? 'opacity-70' : 'cursor-pointer hover:bg-muted'}`}
               >
                 <Checkbox
                   checked={isLinked || picked.has(a.name)}
                   disabled={!!reason || busy}
+                  onClick={(e) => e.stopPropagation()}
                   onCheckedChange={() => toggle(a.name)}
                   className="mt-0.5"
                 />
@@ -105,7 +107,7 @@ export function ConnectAgentDialog({ open, onOpenChange, knowledgeSource, onConn
                   {a.description && <span className="block truncate text-xs text-steel">{a.description}</span>}
                   {reason && <span className="block text-xs text-steel-soft">{reason}</span>}
                 </span>
-              </label>
+              </div>
             );
           })}
         </DialogScrollBody>

@@ -4,7 +4,7 @@ import { Form } from '@/components/ui/form';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { AIProvider } from '@/types/agent.types';
 import type { KnowledgeInputDoc, KnowledgeSourceDoc } from '@/types/knowledge.types';
-import { ConnectAgentDialog } from './ConnectAgentDialog';
+import { ConnectAgentDialog } from './journey/ConnectAgentDialog';
 import { DocumentsTab } from './DocumentsTab';
 import { KnowledgeActivityTab } from './KnowledgeActivityTab';
 import { KnowledgeSourceHeader } from './KnowledgeSourceHeader';

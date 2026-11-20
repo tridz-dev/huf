@@ -18,7 +18,7 @@ import {
   questionFromTitle,
   type TestResult,
 } from './import/testSearchHelpers';
-import { TestSnippet } from './import/TestSnippet';
+import { TestSnippet } from './journey/TestSnippet';
 
 const LEVEL_VARIANT = { high: 'default', good: 'secondary', weak: 'outline' } as const;
 

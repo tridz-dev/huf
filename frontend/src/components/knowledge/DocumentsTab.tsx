@@ -4,7 +4,7 @@ import { getFrappeErrorMessage } from '@/lib/frappe-error';
 import { reprocessInput, retryIngestion } from '@/services/knowledgeApi';
 import { UploadCloud } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { NextStepsCard } from './import/NextStepsCard';
+import { NextStepsCard } from './journey/NextStepsCard';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import type { KnowledgeInputDoc, KnowledgeSourceDoc } from '@/types/knowledge.types';

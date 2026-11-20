@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { dedupeLines, highlightParts } from './testSearchHelpers';
+import { dedupeLines, highlightParts } from '../import/testSearchHelpers';
 
 const MAX_LINES = 3;
 
