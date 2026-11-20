@@ -50,7 +50,11 @@ def _affected_dimensions(since):
     """
     rows = frappe.db.get_all(
         "Agent Run",
-        filters={"status": ["in", TERMINAL_STATUSES], "start_time": [">=", since]},
+        filters={
+            "status": ["in", TERMINAL_STATUSES],
+            "start_time": [">=", since],
+            "run_kind": ["!=", "draft_test"],
+        },
         fields=["start_time", *DIMENSION_FIELDS],
         limit_page_length=0,
     )
@@ -117,6 +121,7 @@ def _recompute_rollup(granularity: str, bucket_start, dimension_key: str):
         ["status", "in", TERMINAL_STATUSES],
         ["start_time", ">=", bucket_start],
         ["start_time", "<", bucket_end],
+        ["run_kind", "!=", "draft_test"],
     ]
     for field, value in zip(DIMENSION_FIELDS, dimensions):
         filters.append([field, "is", "not set"] if value == "__none__" else [field, "=", value])

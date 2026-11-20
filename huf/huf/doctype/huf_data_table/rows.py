@@ -18,6 +18,16 @@ from .api import (
 
 ALLOWED_OPERATORS = {"=", "!=", ">", "<", ">=", "<=", "like", "not like", "in", "not in", "is", "between"}
 MAX_BULK_ROWS = 5000
+RESERVED_KEYS = frozenset(
+	("name", "owner", "creation", "modified", "modified_by", "docstatus", "idx", "doctype", "parent", "parentfield", "parenttype")
+)
+
+
+def strip_reserved(values):
+	"""Drop server-controlled keys from an incoming row/values dict."""
+	if not isinstance(values, dict):
+		return {}
+	return {k: v for k, v in values.items() if k not in RESERVED_KEYS}
 
 
 def _loads(value, default):
@@ -77,7 +87,7 @@ def count_records(doctype_name, query) -> int:
 		return frappe.db.count(doctype_name, filters=query["filters"] or None)
 	rows = frappe.get_list(
 		doctype_name,
-		fields=["count(name) as total"],
+		fields=[{"COUNT": "name", "as": "total"}],
 		filters=query["filters"],
 		or_filters=query["or_filters"],
 		limit_page_length=0,
@@ -105,7 +115,7 @@ def bulk_insert_rows(doctype_name: str, rows: str | list) -> dict:
 	inserted, errors = [], []
 	for index, row in enumerate(rows):
 		try:
-			doc = frappe.get_doc({**row, "doctype": doctype_name})
+			doc = frappe.get_doc({**strip_reserved(row), "doctype": doctype_name})
 			doc.insert()
 			inserted.append(doc.name)
 		except Exception as exc:
@@ -123,7 +133,7 @@ def bulk_update_rows(doctype_name: str, names: str | list, values: str | dict) -
 	for name in names:
 		doc = frappe.get_doc(doctype_name, name)
 		doc.check_permission("write")
-		doc.update(values)
+		doc.update(strip_reserved(values))
 		doc.save()
 		updated += 1
 	return {"updated": updated}
@@ -150,19 +160,23 @@ def restore_rows(doctype_name: str, names: str | list) -> dict:
 	_require_table(doctype_name)
 	names = _loads(names, [])
 	_check_bulk(names)
-	if not frappe.has_permission(doctype_name, "create"):
+	if not (frappe.has_permission(doctype_name, "create") and frappe.has_permission(doctype_name, "read")):
 		frappe.throw(_("You do not have permission to restore rows."), frappe.PermissionError)
+	can_admin = frappe.has_permission("Deleted Document", "write")
 	restored = 0
 	for name in names:
 		deleted_name = frappe.db.get_value(
 			"Deleted Document",
 			{"deleted_doctype": doctype_name, "deleted_name": name, "restored": 0},
-			"name",
+			["name", "owner"],
 			order_by="creation desc",
+			as_dict=True,
 		)
-		if not deleted_name:
+		# Deleted Document.owner is the user who deleted the row. Anything the caller
+		# did not delete (or does not exist) is skipped identically: no existence leak.
+		if not deleted_name or not (can_admin or deleted_name.owner == frappe.session.user):
 			continue
-		deleted = frappe.get_doc("Deleted Document", deleted_name)
+		deleted = frappe.get_doc("Deleted Document", deleted_name.name)
 		doc = frappe.get_doc(json.loads(deleted.data))
 		original = {k: doc.get(k) for k in ("owner", "creation", "modified", "modified_by")}
 		doc.flags.from_restore = True

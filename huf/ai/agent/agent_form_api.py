@@ -13,6 +13,7 @@ import time
 
 import frappe
 from frappe import _
+from frappe.rate_limiter import rate_limit
 
 # Names containing these are not chat models (mirrors app_seeding.hub_orchestrator).
 _NON_CHAT_MARKERS = ("embedding", "whisper", "dall-e", "gpt-image", "tts", "image", "alternate")
@@ -143,7 +144,99 @@ def _clean_overrides(draft_overrides) -> dict:
     return cleaned
 
 
+DRAFT_TEST_LIMIT_PER_MIN = 10
+
+
+def _check_draft_rate_limit():
+    """Per-user cap (the decorator below is IP based): 10 draft tests per minute."""
+    key = frappe.cache.make_key(f"huf_draft_test_rl:{frappe.session.user}")
+    if not frappe.cache.get(key):
+        frappe.cache.setex(key, 60, 0)
+    if frappe.cache.incrby(key, 1) > DRAFT_TEST_LIMIT_PER_MIN:
+        frappe.throw(_("Too many draft tests. Please wait a minute."), frappe.ValidationError)
+
+
+def _validate_draft_overrides(overrides: dict):
+    """Permission-check overridden tools and validate provider/model like set_workspace_default_model."""
+    for name in overrides.get("agent_tool") or []:
+        if not frappe.has_permission("Agent Tool Function", "read", name):
+            frappe.throw(_("Tool '{0}' was not found.").format(name), frappe.ValidationError)
+    model, provider = overrides.get("model"), overrides.get("provider")
+    if model:
+        row = frappe.db.get_value("AI Model", model, ["provider", "model_name", "modalities"], as_dict=True)
+        if not row or not row.get("provider"):
+            frappe.throw(_("AI Model '{0}' was not found.").format(model), frappe.ValidationError)
+        if provider and provider != row["provider"]:
+            frappe.throw(
+                _("Model '{0}' does not belong to provider '{1}'.").format(model, provider), frappe.ValidationError
+            )
+        if not _is_chat_model({"name": model, **row}):
+            frappe.throw(_("Model '{0}' is not a chat model.").format(model), frappe.ValidationError)
+    elif provider and not frappe.db.exists("AI Provider", provider):
+        frappe.throw(_("AI Provider '{0}' was not found.").format(provider), frappe.ValidationError)
+
+
+DRAFT_CHANNEL = "draft_test"
+
+
+def _discard_draft_records(run_name=None, conversation_name=None):
+    """Draft tests are throwaway: remove their run, tool calls, messages and conversation so they
+    never show in conversation lists, analytics or run budgets.
+
+    Tolerates a missing run (crash before insert). The conversation and its messages are only
+    deleted when the conversation's channel is "draft_test", so a bad run->conversation link can
+    never take a real conversation with it.
+
+    Rows keyed by the run/conversation are removed explicitly (db.delete skips link cleanup):
+    tool calls, messages, context artifacts, memory records, pins, chat rows, rollup archive
+    rows, and Comment/Version entries. Analytics rollups are keyed by dimension buckets, not by
+    run, and draft runs are excluded from them (run_kind != draft_test), so none remain.
+    """
+    if run_name:
+        frappe.db.delete("Agent Tool Call", {"agent_run": run_name})
+        frappe.db.delete("Agent Message", {"agent_run": run_name})
+        frappe.db.delete("Agent Context Artifact", {"agent_run": run_name})
+        frappe.db.delete("Memory Record", {"run": run_name})
+        frappe.db.delete("Comment", {"reference_doctype": "Agent Run", "reference_name": run_name})
+        frappe.db.delete("Version", {"ref_doctype": "Agent Run", "docname": run_name})
+        frappe.db.delete("Agent Run", {"name": run_name})
+    if conversation_name and frappe.db.get_value("Agent Conversation", conversation_name, "channel") == DRAFT_CHANNEL:
+        for dt in ("Agent Message", "Agent Context Artifact", "Memory Record", "Conversation Pin",
+                   "Agent Chat", "Agent Run Analytics Rollup Archive"):
+            frappe.db.delete(dt, {"conversation": conversation_name})
+        frappe.db.delete("Agent Tool Call", {"agent_run": ["in", frappe.get_all(
+            "Agent Run", filters={"conversation": conversation_name}, pluck="name")]})
+        frappe.db.delete("Agent Run", {"conversation": conversation_name})
+        frappe.db.delete("Comment", {"reference_doctype": "Agent Conversation", "reference_name": conversation_name})
+        frappe.db.delete("Version", {"ref_doctype": "Agent Conversation", "docname": conversation_name})
+        frappe.db.delete("Agent Conversation", {"name": conversation_name})
+
+
+def purge_draft_test_records():
+    """Daily safety net: remove draft-test leftovers (crashed or killed runs)."""
+    from frappe.utils import add_to_date
+
+    cutoff = add_to_date(None, hours=-1)
+    runs = frappe.get_all(
+        "Agent Run",
+        filters={"run_kind": "draft_test", "creation": ["<", cutoff]},
+        fields=["name", "conversation"],
+        limit_page_length=0,
+    )
+    for r in runs:
+        _discard_draft_records(r["name"], r["conversation"])
+    # Orphaned draft conversations (crash before the run was inserted).
+    for name in frappe.get_all(
+        "Agent Conversation",
+        filters={"channel": DRAFT_CHANNEL, "creation": ["<", cutoff]},
+        pluck="name",
+        limit_page_length=0,
+    ):
+        _discard_draft_records(None, name)
+
+
 @frappe.whitelist(methods=["POST"])
+@rate_limit(limit=DRAFT_TEST_LIMIT_PER_MIN, seconds=60)
 def run_agent_draft_test(agent_name: str, prompt: str, draft_overrides=None) -> dict:
     """Run a saved agent once with unsaved draft values applied in memory (never saved).
 
@@ -154,6 +247,8 @@ def run_agent_draft_test(agent_name: str, prompt: str, draft_overrides=None) -> 
     agent_doc = frappe.get_doc("Agent", agent_name)
     agent_doc.check_permission("write")
     overrides = _clean_overrides(draft_overrides)
+    _validate_draft_overrides(overrides)
+    _check_draft_rate_limit()
     if not frappe.has_permission("Agent Run", "create"):
         frappe.throw(_("You do not have permission to create an Agent Run."), frappe.PermissionError)
 
@@ -172,53 +267,55 @@ def run_agent_draft_test(agent_name: str, prompt: str, draft_overrides=None) -> 
     channel = "draft_test"
     conv_manager = ConversationManager(agent_name=agent_name, channel=channel, external_id=None)
     conversation = conv_manager.create_new_conversation(title=f"Draft test of {agent_name}")
-    conv_manager.add_message(conversation, "user", prompt, provider, model, agent_name, None)
-
-    run_doc = frappe.get_doc({
-        "doctype": "Agent Run",
-        "agent": agent_name,
-        "status": "Started",
-        "conversation": conversation.name,
-        "prompt": prompt,
-        "model": model,
-        "provider": provider,
-        "sequence": _next_run_sequence(conversation.name),
-        "run_kind": "draft_test",
-    })
-    run_doc.insert()
-
+    run_doc = None
     started = time.monotonic()
-    result = _execute_agent_run(
-        agent_name=agent_name,
-        run_id=run_doc.name,
-        conversation_id=conversation.name,
-        prompt=prompt,
-        provider=provider,
-        model=model,
-        channel_id=channel,
-        skip_user_message=True,
-        draft_overrides=overrides,
-    ) or {}
-    latency_ms = int((time.monotonic() - started) * 1000)
+    try:
+        conv_manager.add_message(conversation, "user", prompt, provider, model, agent_name, None)
+        run_doc = frappe.get_doc({
+            "doctype": "Agent Run",
+            "agent": agent_name,
+            "status": "Started",
+            "conversation": conversation.name,
+            "prompt": prompt,
+            "model": model,
+            "provider": provider,
+            "sequence": _next_run_sequence(conversation.name),
+            "run_kind": "draft_test",
+        })
+        run_doc.insert()
+        result = _execute_agent_run(
+            agent_name=agent_name,
+            run_id=run_doc.name,
+            conversation_id=conversation.name,
+            prompt=prompt,
+            provider=provider,
+            model=model,
+            channel_id=channel,
+            skip_user_message=True,
+            draft_overrides=overrides,
+        ) or {}
+        latency_ms = int((time.monotonic() - started) * 1000)
 
-    run = frappe.db.get_value(
-        "Agent Run",
-        run_doc.name,
-        ["status", "response", "error_message", "input_tokens", "output_tokens", "total_tokens"],
-        as_dict=True,
-    ) or {}
-    calls = frappe.get_all(
-        "Agent Tool Call",
-        filters={"agent_run": run_doc.name},
-        fields=["tool", "tool_args", "tool_result", "status", "error_message"],
-        order_by="creation asc",
-    )
+        run = frappe.db.get_value(
+            "Agent Run",
+            run_doc.name,
+            ["status", "response", "error_message", "input_tokens", "output_tokens", "total_tokens"],
+            as_dict=True,
+        ) or {}
+        calls = frappe.get_all(
+            "Agent Tool Call",
+            filters={"agent_run": run_doc.name},
+            fields=["tool", "tool_args", "tool_result", "status", "error_message"],
+            order_by="creation asc",
+        )
+    finally:
+        _discard_draft_records(run_doc.name if run_doc else None, conversation.name)
     return {
         "success": run.get("status") == "Success",
         "response": run.get("response") or result.get("response"),
         "error": run.get("error_message"),
-        "agent_run_id": run_doc.name,
-        "conversation_id": conversation.name,
+        "agent_run_id": None,
+        "conversation_id": None,
         "tool_calls": calls,
         "latency_ms": latency_ms,
         "tokens": {
