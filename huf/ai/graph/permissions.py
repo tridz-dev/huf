@@ -92,6 +92,7 @@ class ToolPermission:
 	doctype: str | None
 	http: bool = False
 	code: bool = False
+	recovery_guarantee: str | None = None  # SafeDeoptCommittedGuardWiring: None means "undeclared"
 
 
 ToolClassifier = Callable[[str], ToolPermission]
@@ -111,11 +112,17 @@ def default_tool_classifier(tool_id: str) -> ToolPermission:
 		PermissionAwareToolRegistry.TOOL_PERMISSIONS.get(ttype, {}).get("permission")
 	)
 	doctype = getattr(tool_doc, "reference_doctype", None) or None
+	# SafeDeoptCommittedGuardWiring, plan section 1: an unset Select field comes back as ""
+	# from Frappe, not None -- normalise so "undeclared" is unambiguous downstream (the
+	# replay guard's own default-to-"none" behaviour, section 3, depends on this being None,
+	# never the empty string).
+	recovery_guarantee = getattr(tool_doc, "recovery_guarantee", None) or None
 	return ToolPermission(
 		ptype=ptype,
 		doctype=doctype,
 		http=ttype in _HTTP_TOOL_TYPES,
 		code=ttype in _CODE_TOOL_TYPES,
+		recovery_guarantee=recovery_guarantee,
 	)
 
 
