@@ -166,7 +166,7 @@ function DataPage() {
 				title={`Delete ${toDelete?.name ?? 'table'}?`}
 				consequence={
 					toDelete
-						? `Removes all ${toDelete.rows.toLocaleString()} rows and ${toDelete.fields} fields.`
+						? `Removes all ${toDelete.rows.toLocaleString()} ${toDelete.rows === 1 ? 'row' : 'rows'} and ${toDelete.fields} ${toDelete.fields === 1 ? 'field' : 'fields'}.`
 						: ''
 				}
 				recovery="This can't be undone."

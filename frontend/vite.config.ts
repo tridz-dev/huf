@@ -4,10 +4,26 @@ import proxyOptions from './proxyOptions';
 import { defineConfig } from 'vite';
 
 
+/**
+ * index.html carries Jinja placeholders that huf/www/huf.py fills in production.
+ * The dev server serves the file raw, so `JSON.parse({{ boot }})` was a syntax
+ * error ("Unexpected token '{'") on every full reload. Fill them with inert values in dev.
+ */
+const devTemplatePlaceholders = () => ({
+  name: 'huf-dev-template-placeholders',
+  apply: 'serve' as const,
+  transformIndexHtml: (html: string) =>
+    html
+      .replace('{{ boot }}', JSON.stringify('{}'))
+      .replace('{{ csrf_token }}', 'dev')
+      .replace('{{ app_name }}', 'huf'),
+});
+
 export default defineConfig({
   base: '/assets/huf/frontend/',
   plugins: [
     react(),
+    devTemplatePlaceholders(),
     // VitePWA removed to prevent aggressive caching
   ],
   resolve: {
