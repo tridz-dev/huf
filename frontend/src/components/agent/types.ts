@@ -171,6 +171,13 @@ export const agentFormSchema = z.object({
       });
     }
   }
+  if (values.prompt_mode !== "Template" && !values.instructions?.trim()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["instructions"],
+      message: 'Add instructions so it knows what to do',
+    });
+  }
   if (values.prompt_mode === "Template" && !values.agent_prompt?.trim()) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
