@@ -7,6 +7,10 @@ import { cn } from '@/lib/utils';
 interface InlineEditNameProps {
   value: string;
   onChange: (value: string) => void;
+  /** Fires on Enter/blur with a non-empty, changed value. */
+  onCommit?: (value: string) => void;
+  /** Fires on Esc, after the value is reverted. */
+  onCancelEdit?: () => void;
   placeholder?: string;
   className?: string;
   disabled?: boolean;
@@ -15,23 +19,32 @@ interface InlineEditNameProps {
 export function InlineEditName({
   value,
   onChange,
+  onCommit,
+  onCancelEdit,
   placeholder,
   className,
   disabled,
 }: InlineEditNameProps) {
   const [isEditing, setIsEditing] = React.useState(false);
   const snapshotRef = React.useRef(value);
+  const doneRef = React.useRef(false);
 
   const commit = () => {
+    if (doneRef.current) return;
+    doneRef.current = true;
     setIsEditing(false);
     if (!value.trim()) {
       onChange(snapshotRef.current);
+    } else if (value !== snapshotRef.current) {
+      onCommit?.(value);
     }
   };
 
   const revert = () => {
+    doneRef.current = true;
     setIsEditing(false);
     onChange(snapshotRef.current);
+    onCancelEdit?.();
   };
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
@@ -46,6 +59,7 @@ export function InlineEditName({
 
   const startEditing = () => {
     snapshotRef.current = value;
+    doneRef.current = false;
     setIsEditing(true);
   };
 

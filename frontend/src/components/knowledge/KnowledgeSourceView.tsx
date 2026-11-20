@@ -38,6 +38,8 @@ interface KnowledgeSourceViewProps {
   onToggleDisabled: () => void;
   /** Refetch source + inputs (never saves the source). */
   onChanged: () => void;
+  onRenameCommit?: (name: string) => void | Promise<void>;
+  onRenameCancel?: () => void;
   onReprocessInput: (name: string) => Promise<void> | void;
   onDeleteInput: (name: string) => Promise<void> | void;
 }
@@ -115,6 +117,8 @@ export function KnowledgeSourceView(props: KnowledgeSourceViewProps) {
         agents={agents}
         onConnectAgent={() => setConnectOpen(true)}
         deleteRequest={deleteRequest}
+        onRenameCommit={props.onRenameCommit}
+        onRenameCancel={props.onRenameCancel}
         onAddContent={() => openAdd('upload')}
         onOpenSettings={() => setSettingsOpen(true)}
         onOpenHistory={() => setHistoryOpen(true)}

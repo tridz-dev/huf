@@ -34,6 +34,10 @@ export interface SourceFrameProps {
   onRebuildIndex: () => void;
   onToggleDisabled: () => void;
   onReview: () => void;
+  /** Persist an inline rename (Enter/blur). Should toast success/error. */
+  onRenameCommit?: (name: string) => void | Promise<void>;
+  /** Esc during an inline rename: restore the saved name. */
+  onRenameCancel?: () => void;
   children: ReactNode;
 }
 
@@ -43,9 +47,10 @@ function UsedBy({ agents, onConnect }: { agents: string[]; onConnect: () => void
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <button type="button" data-testid="used-by" className="rounded-sm underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+        {/* TODO(DS: LinkedListPopover): replace this popover with the generic pattern. */}
+        <Button type="button" variant="link" data-testid="used-by" className="h-auto p-0 text-inherit">
           used by {n(agents.length)} {agents.length === 1 ? 'agent' : 'agents'}
-        </button>
+        </Button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-64 p-2">
         <ul className="space-y-0.5">
@@ -57,9 +62,9 @@ function UsedBy({ agents, onConnect }: { agents: string[]; onConnect: () => void
             </li>
           ))}
         </ul>
-        <button type="button" onClick={onConnect} className="mt-1 w-full rounded px-2 py-1.5 text-left text-sm text-signal-ink hover:bg-muted">
+        <Button type="button" variant="ghost" onClick={onConnect} className="mt-1 h-auto w-full justify-start px-2 py-1.5 text-sm font-normal text-signal-ink">
           Connect another agent
-        </button>
+        </Button>
       </PopoverContent>
     </Popover>
   );
@@ -139,6 +144,8 @@ export function SourceFrame(props: SourceFrameProps) {
           <InlineEditName
             value={name}
             onChange={(value) => form.setValue('source_name', value, { shouldDirty: true })}
+            onCommit={props.onRenameCommit}
+            onCancelEdit={props.onRenameCancel}
             placeholder="e.g. Product documentation"
           />
         }
