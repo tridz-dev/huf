@@ -57,8 +57,11 @@ export function FieldError({ id, children }: { id?: string; children?: ReactNode
 export function focusFirstError(root: ParentNode | null = typeof document === 'undefined' ? null : document): boolean {
   const el = root?.querySelector<HTMLElement>('[aria-invalid="true"]');
   if (!el) return false;
-  el.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
-  el.focus();
+  // The flagged element may be a wrapper around the real control: focus the control so the caret and focus ring land on it.
+  const native = /^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(el.tagName) ? el : el.querySelector<HTMLElement>('textarea, input:not([type="hidden"]), select, button, [contenteditable="true"]');
+  const target = native ?? el;
+  target.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+  target.focus();
   return true;
 }
 

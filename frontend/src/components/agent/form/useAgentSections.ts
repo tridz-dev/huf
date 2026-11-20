@@ -267,6 +267,10 @@ export function useAgentSections({ id, isNew, form, abilities, canSave, onRename
       const message = getFrappeErrorMessage(error) || (error as Error)?.message || "Couldn't save";
       setSaveError(message);
       toast.error(`Couldn't save: ${message}`);
+      // A concurrent edit (TimestampMismatchError): fetch the latest now so the banner offers Keep mine / Use theirs at once.
+      if (/modified|timestamp|changed|conflict/i.test(message)) {
+        void reloadRef.current().catch((e) => console.error('Reload after conflict failed:', e));
+      }
     } finally {
       savingRef.current = false;
       setSaving(false);
@@ -275,6 +279,7 @@ export function useAgentSections({ id, isNew, form, abilities, canSave, onRename
   }, [ab.tools, ab.mcp, ab.knowledge, ab.skills, canSave, desktopAccessStatus, dirtySections, fieldsFor, form, isNew, onRenamed, onTabWithError]);
   const saveRef = useRef(saveAll);
   saveRef.current = saveAll;
+  const reloadRef = useRef<() => Promise<ReloadResult>>(async () => ({ conflicts: [], partial: false }));
 
   // Debounced autosave: waits for a pause in editing, never loops on an error (it only re-arms on a change).
   useEffect(() => {
@@ -346,6 +351,8 @@ export function useAgentSections({ id, isNew, form, abilities, canSave, onRename
     setSaveError(null);
     return { conflicts, partial };
   }, [form, isNew]);
+
+  reloadRef.current = reloadLatest;
 
   const applyChoice = useCallback((field: string, choice: 'mine' | 'theirs') => {
     if (choice === 'theirs') form.setValue(field as never, theirsRef.current[field] as never, { shouldDirty: false });

@@ -211,8 +211,8 @@ export function AgentFormPage() {
             title={title} disabled={!!values.disabled} modelLabel={isVoiceOnly ? undefined : modelName || 'Model'}
             isSystem={sections.isSystem} locked={locked}
             autosave={<span className="inline-flex items-center gap-2">
-              <AutosaveStatus state={sections.status} savedAt={sections.savedAt} onRetry={sections.conflictFields.length ? undefined : sections.retry} errorText={sections.errorText} />
-              {sections.status === 'error' && canManage && (
+              <AutosaveStatus state={sections.status} savedAt={sections.savedAt} onRetry={sections.conflictFields.length || sections.errors.length ? undefined : sections.retry} errorText={sections.errorText} />
+              {sections.status === 'error' && canManage && sections.errors.length === 0 && (
                 <Button type="button" variant="link" size="sm" onClick={() => void sections.reloadLatest()}>Reload latest</Button>
               )}
             </span>}
