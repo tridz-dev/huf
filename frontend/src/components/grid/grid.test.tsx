@@ -222,3 +222,22 @@ describe('DataGrid Shift-range selection (DSF-1)', () => {
     expect([...onSel.mock.lastCall![0]].sort()).toEqual(['b', 'd', 'e', 'f']);
   });
 });
+
+describe('parseTsv quoted cells (DSF-2)', () => {
+  it.each([
+    ['plain', 'a\tb\nc\td', [['a', 'b'], ['c', 'd']]],
+    ['CRLF + trailing newline', 'a\tb\r\nc\td\r\n', [['a', 'b'], ['c', 'd']]],
+    ['quoted multi-line', '"line 1\nline 2"\tx\ny\tz', [['line 1\nline 2', 'x'], ['y', 'z']]],
+    ['quoted CRLF inside', '"p\r\nq"\tx\r\n', [['p\r\nq', 'x']]],
+    ['quoted tab', '"a\tb"\tc', [['a\tb', 'c']]],
+    ['escaped quotes', '"say ""hi"""\t2', [['say "hi"', '2']]],
+    ['quote mid-cell is literal', '5" pipe\tok', [['5" pipe', 'ok']]],
+    ['empty cells', 'a\t\t\n\tb', [['a', '', ''], ['', 'b']]],
+    ['empty quoted', '""\tx', [['', 'x']]],
+    ['unclosed quote kept', '"abc', [['"abc']]],
+    ['empty input', '', [['']]],
+    ['blank last row kept', 'a\n\n', [['a'], ['']]],
+  ])('%s', (_n, text, out) => {
+    expect(parseTsv(text)).toEqual(out);
+  });
+});

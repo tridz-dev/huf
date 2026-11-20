@@ -360,7 +360,7 @@ One vocabulary, user words, one glyph each: **Text, Long text, Number, Currency,
 | Navigate | Backspace / Delete | edit with an empty value |
 | Navigate | Space | toggle a checkbox cell |
 | Navigate | Shift+Enter | open the row in the drawer (`onOpenRow`) |
-| Navigate | ⌘V | paste tab-separated rows at the active cell (`onPaste`, `parseTsv`) |
+| Navigate | ⌘V | paste tab-separated rows at the active cell (`onPaste`, `parseTsv`: quoted cells may hold tabs, newlines and `""` escapes, as Excel/Sheets copy them) |
 | Edit | Enter | save, move down |
 | Edit | Tab / Shift+Tab | save, move right / left |
 | Edit | Esc | cancel, restore the old value, focus back on the cell |
