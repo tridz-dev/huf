@@ -1,5 +1,7 @@
 """Integration tests for rows.py (need a real bench; run with `bench run-tests`)."""
 
+import uuid
+
 import frappe
 from frappe.tests import IntegrationTestCase
 
@@ -21,7 +23,7 @@ from huf.huf.doctype.huf_data_table.rows import (
 
 
 class TestRows(IntegrationTestCase):
-	TABLE = f"Test Rows {frappe.generate_hash(length=8)}"
+	TABLE = f"Test Rows {uuid.uuid4().hex[:8]}"
 	DT = f"HF {TABLE}"
 
 	@classmethod
