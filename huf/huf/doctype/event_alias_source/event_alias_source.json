@@ -1,0 +1,73 @@
+{
+ "actions": [],
+ "creation": "2026-11-21 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "istable": 1,
+ "field_order": [
+  "enabled",
+  "reference_doctype",
+  "doc_event",
+  "condition",
+  "payload_mapping",
+  "dedupe_key"
+ ],
+ "fields": [
+  {
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "label": "Enabled",
+   "description": "Untick to pause this source without deleting it.",
+   "default": "1",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "reference_doctype",
+   "fieldtype": "Link",
+   "label": "Document Type",
+   "description": "The kind of document whose change fires this event, for example Sales Invoice.",
+   "options": "DocType",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "doc_event",
+   "fieldtype": "Select",
+   "label": "When",
+   "description": "The moment in the document's life that fires the event. Runs after the change is saved for good.",
+   "options": "after_insert\non_update\non_submit\non_cancel\non_trash\nafter_delete",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "condition",
+   "fieldtype": "Small Text",
+   "label": "Only When",
+   "description": "Optional rule using the document as doc, for example doc.grand_total > 1000. Leave empty to fire every time."
+  },
+  {
+   "fieldname": "payload_mapping",
+   "fieldtype": "JSON",
+   "label": "Payload Mapping",
+   "description": "Maps each payload field to an expression on doc, for example {\"customer\": \"doc.customer\"}. Leave empty to send the document type and name only."
+  },
+  {
+   "fieldname": "dedupe_key",
+   "fieldtype": "Small Text",
+   "label": "Duplicate Guard",
+   "description": "Expression that identifies one real occurrence, for example doc.name. The event fires once per value within a short window. Leave empty to use the document type, name and event."
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-11-21 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Huf",
+ "name": "Event Alias Source",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

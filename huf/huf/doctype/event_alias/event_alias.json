@@ -1,0 +1,148 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "creation": "2026-11-21 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "app",
+  "key",
+  "label",
+  "status",
+  "version",
+  "replaced_by",
+  "description",
+  "section_payload",
+  "payload_schema",
+  "pii_fields",
+  "section_sources",
+  "sources"
+ ],
+ "fields": [
+  {
+   "fieldname": "app",
+   "fieldtype": "Data",
+   "label": "App",
+   "description": "The app that owns this event, for example the app's technical name. Used to group events in pickers.",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "set_only_once": 1
+  },
+  {
+   "fieldname": "key",
+   "fieldtype": "Data",
+   "label": "Key",
+   "description": "Short code for the event, unique within the app (letters, numbers, dots, underscores). Automations match on app and key, so avoid renaming it.",
+   "reqd": 1,
+   "in_list_view": 1,
+   "set_only_once": 1
+  },
+  {
+   "fieldname": "label",
+   "fieldtype": "Data",
+   "label": "Business Name",
+   "description": "The plain-language name people see when choosing this event, for example Customer purchase.",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "description": "Active events fire automations. Deprecated events still fire, with a warning, until you move automations to the replacement.",
+   "options": "Active\nDeprecated",
+   "default": "Active",
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "version",
+   "fieldtype": "Int",
+   "label": "Version",
+   "description": "Goes up by one when a source is removed, so older automations can be spotted. Adding things keeps the version.",
+   "default": "1",
+   "read_only": 1
+  },
+  {
+   "fieldname": "replaced_by",
+   "fieldtype": "Link",
+   "label": "Replaced By",
+   "description": "Set when this event is deprecated: the event automations should use instead.",
+   "options": "Event Alias",
+   "depends_on": "eval:doc.status=='Deprecated'"
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "label": "Description",
+   "description": "What happens in the business when this event fires, in one or two sentences."
+  },
+  {
+   "fieldname": "section_payload",
+   "fieldtype": "Section Break",
+   "label": "Payload"
+  },
+  {
+   "fieldname": "payload_schema",
+   "fieldtype": "JSON",
+   "label": "Payload Fields",
+   "description": "Describes the data sent with the event (field name to description). Shown to people building automations."
+  },
+  {
+   "fieldname": "pii_fields",
+   "fieldtype": "JSON",
+   "label": "Personal Data Fields",
+   "description": "List of payload field names that contain personal data, so they can be hidden from logs."
+  },
+  {
+   "fieldname": "section_sources",
+   "fieldtype": "Section Break",
+   "label": "What Triggers This Event"
+  },
+  {
+   "fieldname": "sources",
+   "fieldtype": "Table",
+   "label": "Sources",
+   "description": "Document changes that fire this event. Leave empty if an app fires it directly.",
+   "options": "Event Alias Source"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-11-21 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Huf",
+ "name": "Event Alias",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Huf Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "read": 1,
+   "report": 0,
+   "role": "Huf User"
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "label",
+ "track_changes": 1
+}
