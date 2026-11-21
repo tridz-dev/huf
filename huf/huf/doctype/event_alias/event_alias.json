@@ -16,7 +16,10 @@
   "payload_schema",
   "pii_fields",
   "section_sources",
-  "sources"
+  "sources",
+  "source_app",
+  "source_file",
+  "seed_snapshot"
  ],
  "fields": [
   {
@@ -106,6 +109,27 @@
    "label": "Sources",
    "description": "Document changes that fire this event. Leave empty if an app fires it directly.",
    "options": "Event Alias Source"
+  },
+  {
+   "fieldname": "source_app",
+   "fieldtype": "Data",
+   "label": "Source App",
+   "read_only": 1,
+   "hidden": 1
+  },
+  {
+   "fieldname": "source_file",
+   "fieldtype": "Data",
+   "label": "Source File",
+   "read_only": 1,
+   "hidden": 1
+  },
+  {
+   "fieldname": "seed_snapshot",
+   "fieldtype": "Long Text",
+   "label": "Seed Snapshot",
+   "read_only": 1,
+   "hidden": 1
   }
  ],
  "index_web_pages_for_search": 0,

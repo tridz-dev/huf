@@ -292,3 +292,41 @@ def deprecate_alias(name: str, replaced_by: str | None = None):
 	doc.version = (doc.version or 1) + 1
 	doc.save(ignore_permissions=True)
 	return doc
+
+
+# --------------------------------------------------------------------------
+# Python-defined aliases (``huf_event_aliases`` hook)
+# --------------------------------------------------------------------------
+
+
+def _hook_alias_definitions() -> list[dict]:
+	"""Collect alias dicts from every app's ``huf_event_aliases`` hook.
+
+	Each hook entry is a dict, a list of dicts, or a dotted path to a callable
+	returning either.
+	"""
+	found: list[dict] = []
+	for entry in frappe.get_hooks("huf_event_aliases") or []:
+		try:
+			value = frappe.get_attr(entry)() if isinstance(entry, str) else entry
+		except Exception:
+			record_failure(None, "hook_aliases")
+			continue
+		if isinstance(value, dict):
+			value = [value]
+		found.extend(v for v in value or [] if isinstance(v, dict))
+	return found
+
+
+def sync_hook_aliases() -> int:
+	"""Upsert aliases declared through the hook, with the same snapshot and admin-edit rules as seed files."""
+	from huf.ai.app_seeding.loaders import upsert_event_alias
+
+	count = 0
+	for definition in _hook_alias_definitions():
+		ok, error = upsert_event_alias(definition, definition.get("app"), "hooks:huf_event_aliases")
+		if ok:
+			count += 1
+		else:
+			frappe.logger("huf").warning(f"huf_event_aliases entry skipped: {error}")
+	return count
