@@ -102,12 +102,13 @@ class TestEventAlias(IntegrationTestCase):
 	def test_alias_error_never_fails_save(self):
 		_make_alias("bad", [_src("after_insert", condition="doc.nothing_here.x > 1")])
 		frappe.db.commit()
+		before = ea.get_error_count(f"{APP}.bad")  # the counter lives in cache and survives reruns
 		with patch("frappe.enqueue") as enq:
 			todo = _todo()  # must not raise
 			self.assertTrue(frappe.db.exists("ToDo", todo.name))
 			frappe.db.commit()
 			self.assertEqual(self._fires(enq), [])
-		self.assertEqual(ea.get_error_count(f"{APP}.bad"), 1)
+		self.assertEqual(ea.get_error_count(f"{APP}.bad"), before + 1)
 		self.assertTrue(frappe.db.exists("Error Log", {"method": ["like", f"Event Alias error: {APP}.bad%"]}))
 
 	# 3. zero cost on doctypes without aliases
