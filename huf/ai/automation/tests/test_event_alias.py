@@ -38,11 +38,13 @@ def _todo():
 
 class TestEventAlias(IntegrationTestCase):
 	def setUp(self):
+		frappe.db.delete("Event Alias Source", {"parent": ["like", f"{APP}.%"]})
 		frappe.db.delete("Event Alias", {"app": APP})
 		ea.clear_alias_cache()
 
 	def tearDown(self):
 		frappe.db.rollback()
+		frappe.db.delete("Event Alias Source", {"parent": ["like", f"{APP}.%"]})
 		frappe.db.delete("Event Alias", {"app": APP})
 		frappe.db.delete("ToDo", {"description": "event alias test"})
 		frappe.db.commit()
