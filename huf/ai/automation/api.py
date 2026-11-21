@@ -401,6 +401,8 @@ def list_triggers(automation: str) -> list[dict]:
             "execution_mode",
             "reference_doctype",
             "doc_event",
+            "app_name",
+            "event_name",
             "condition",
             "prompt_field",
             "prompt_field_mode",
