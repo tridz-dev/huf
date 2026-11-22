@@ -41,6 +41,14 @@ ALIAS_DOC_EVENTS = (
 	"after_delete",
 )
 
+# Doctypes the wildcard hook never dispatches for: our own housekeeping doctypes
+# and Error Log (record_failure() inserts one). Everything else, including
+# Communication or Comment, is a legitimate alias source. Recursion safety
+# comes from the re-entrancy flag, not from this list.
+IGNORED_DOCTYPES = frozenset({"Event Alias", "Event Alias Source", "Error Log"})
+
+_REENTRY_FLAG = "huf_event_alias_dispatching"
+
 
 # --------------------------------------------------------------------------
 # Authoring helpers (used by the Event Alias controller)
@@ -114,11 +122,22 @@ def _build_map() -> dict:
 	return {"sources": sources, "aliases": aliases}
 
 
+def _tables_ready() -> bool:
+	try:
+		return bool(frappe.db.table_exists("Event Alias") and frappe.db.table_exists("Event Alias Source"))
+	except Exception:
+		return False
+
+
 def get_alias_map() -> dict:
 	"""Return the cached map, building it on first use. An empty map is cached too."""
 	cached = frappe.cache().get_value(MAP_CACHE_KEY)
 	if cached is not None:
 		return cached
+	if not _tables_ready():
+		# Doctype not migrated yet (first migrate after upgrade): empty map,
+		# deliberately not cached so the real map is built once the table exists.
+		return {"sources": {}, "aliases": {}}
 	built = _build_map()
 	frappe.cache().set_value(MAP_CACHE_KEY, built)
 	return built
@@ -134,11 +153,21 @@ def get_sources(doctype: str, event: str) -> list:
 
 
 def record_failure(alias: str | None, where: str):
-	"""Log to Error Log and count against the alias. Must never raise."""
+	"""Log to Error Log and count against the alias. Must never raise.
+
+	Runs with the re-entrancy flag set so the Error Log insert cannot fire
+	``dispatch_doc_event`` again.
+	"""
+	previous = getattr(frappe.local, _REENTRY_FLAG, False)
+	setattr(frappe.local, _REENTRY_FLAG, True)
 	try:
-		frappe.log_error(title=f"Event Alias error: {alias or 'unknown'} ({where})", message=frappe.get_traceback())
+		frappe.log_error(
+			title=f"Event Alias error: {alias or 'unknown'} ({where})", message=frappe.get_traceback()
+		)
 	except Exception:
 		pass
+	finally:
+		setattr(frappe.local, _REENTRY_FLAG, previous)
 	try:
 		raw = frappe.cache().hget(HEALTH_CACHE_KEY, alias or "unknown")
 		count = int(raw or 0) + 1
@@ -164,30 +193,42 @@ def dispatch_doc_event(doc, method=None, *args, **kwargs):
 
 	Never raises. Returns immediately (no queries) for doctypes without aliases.
 	"""
+	previous = getattr(frappe.local, _REENTRY_FLAG, False)
+	if previous:
+		return
+	setattr(frappe.local, _REENTRY_FLAG, True)
 	try:
-		if method not in ALIAS_DOC_EVENTS:
-			return
-		if frappe.flags.in_import or frappe.flags.in_patch or frappe.flags.in_install:
-			return
-
-		sources = get_sources(doc.doctype, method)
-		if not sources:
-			return
-
-		if not automation_runtime_is_new():
-			_log_legacy_once()
-			return
-
-		user = frappe.session.user
-		for source in sources:
-			try:
-				prepared = _prepare(doc, method, source)
-				if prepared:
-					_schedule(source["alias"], prepared["payload"], prepared["dedupe"], user)
-			except Exception:
-				record_failure(source.get("alias"), "dispatch")
+		_dispatch(doc, method)
 	except Exception:
 		record_failure(None, "dispatch")
+	finally:
+		setattr(frappe.local, _REENTRY_FLAG, previous)
+
+
+def _dispatch(doc, method):
+	if method not in ALIAS_DOC_EVENTS:
+		return
+	if doc.doctype in IGNORED_DOCTYPES:
+		return
+	if frappe.flags.in_import or frappe.flags.in_patch or frappe.flags.in_install or frappe.flags.in_migrate:
+		return
+
+	sources = get_sources(doc.doctype, method)
+	if not sources:
+		return
+
+	if not automation_runtime_is_new():
+		_log_legacy_once()
+		return
+
+	user = frappe.session.user
+	for source in sources:
+		try:
+			prepared = _prepare(doc, method, source)
+			if prepared:
+				_schedule(source["alias"], prepared["payload"], prepared["dedupe"], user)
+		except Exception:
+			record_failure(source.get("alias"), "dispatch")
 
 
 def _prepare(doc, method: str, source: dict) -> dict | None:
@@ -233,7 +274,7 @@ def claim_dedupe(alias: str, dedupe: str) -> bool:
 	"""True the first time (alias, dedupe) is seen inside the TTL window."""
 	key = f"{DEDUPE_PREFIX}{alias}:{dedupe}"
 	cache = frappe.cache()
-	if cache.get_value(key):
+	if cache.get_value(key, expires=True):
 		return False
 	cache.set_value(key, 1, expires_in_sec=DEDUPE_TTL_SECONDS)
 	return True
