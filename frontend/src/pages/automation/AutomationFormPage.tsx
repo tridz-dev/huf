@@ -627,7 +627,7 @@ export function AutomationFormPage() {
               <TriggerEditor
                 trigger={row}
                 onChange={(patch) => handleTriggerChange(row._localId, patch)}
-                permissions={{ canEdit: true }} automationStatus={automation?.status}
+                permissions={{ canEdit: true }} automationStatus={isNew ? 'Draft' : automation?.status}
               />
             </div>
           ))}

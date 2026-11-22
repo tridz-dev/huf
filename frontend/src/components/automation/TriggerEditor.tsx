@@ -50,7 +50,7 @@ export interface TriggerEditorProps {
   trigger: EditableAutomationTrigger;
   onChange: (patch: Partial<EditableAutomationTrigger>) => void;
   permissions: TriggerEditorPermissions;
-  /** Status of the parent automation; a new or Draft automation never fires App Event triggers. */
+  /** Status of the parent automation; undefined while still loading; any status other than Active never fires App Event triggers. */
   automationStatus?: string;
 }
 
@@ -174,7 +174,7 @@ export function TriggerEditor({ trigger, onChange, permissions, automationStatus
           disabled={disabled}
         />
       )}
-      {trigger.trigger_type === 'App Event' && (!automationStatus || automationStatus === 'Draft') && (
+      {trigger.trigger_type === 'App Event' && automationStatus !== undefined && automationStatus !== 'Active' && (
         <DraftAutomationNotice />
       )}
 

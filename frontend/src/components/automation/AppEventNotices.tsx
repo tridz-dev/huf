@@ -32,34 +32,24 @@ interface AliasStatusNoticeProps {
   appName?: string;
   eventName?: string;
   aliases: EventAliasSummary[];
-  /** True when the author chose "Something else" on purpose in this session. */
-  deliberateCustom: boolean;
   disabled?: boolean;
   onSwitch: (alias: EventAliasSummary) => void;
 }
 
 /**
- * Warns when the saved event is phased out or no longer defined. Never rewrites
+ * Warns when the saved event is phased out. A saved pair that matches no alias is
+ * shown as a neutral note, since it may be a deliberate custom event. Never rewrites
  * the trigger on its own: switching to the replacement is an explicit button.
  */
-export function AliasStatusNotice({
-  appName,
-  eventName,
-  aliases,
-  deliberateCustom,
-  disabled,
-  onSwitch,
-}: AliasStatusNoticeProps) {
+export function AliasStatusNotice({ appName, eventName, aliases, disabled, onSwitch }: AliasStatusNoticeProps) {
   if (!appName || !eventName) return null;
   const matched = aliases.find((a) => a.app === appName && a.key === eventName);
 
   if (!matched) {
-    if (deliberateCustom) return null;
     return (
-      <p role="status" className="text-xs text-warning">
-        &quot;{appName} / {eventName}&quot; is not in the list of business events. It may have been
-        renamed or removed, so this automation might never fire. Pick a current event, or keep it if
-        your app reports it another way.
+      <p role="note" className="text-xs text-steel-soft">
+        Custom event &quot;{appName} / {eventName}&quot;. It is not in the list of business events, so
+        make sure your app reports it with exactly these names.
       </p>
     );
   }

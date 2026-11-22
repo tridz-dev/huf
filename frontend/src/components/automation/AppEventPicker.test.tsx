@@ -68,11 +68,43 @@ describe('AppEventPicker', () => {
     await waitFor(() => expect(onCustomModeChange).toHaveBeenLastCalledWith(true));
   });
 
-  it('warns about an event that is no longer defined, without rewriting it', async () => {
+  it('shows only a neutral note, never a warning, for a reopened custom trigger', async () => {
     listImpl = async () => [alias({})];
     const { onChange } = renderPicker({ appName: 'shop', eventName: 'gone' });
-    expect(await screen.findByText(/not in the list of business events/)).toBeTruthy();
+    const note = await screen.findByText(/Custom event/);
+    expect(note.getAttribute('role')).toBe('note');
+    expect(note.className).not.toContain('text-warning');
+    expect(screen.queryByText(/might never fire/)).toBeNull();
+    expect(screen.queryByRole('alert')).toBeNull();
     expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('gives the loading placeholder an accessible name', () => {
+    listImpl = () => new Promise(() => {});
+    renderPicker();
+    expect(screen.getByRole('status', { name: 'Business event' })).toBeTruthy();
+    expect(screen.getByText('Loading business events')).toBeTruthy();
+  });
+
+  it('shows the error alert and typed fields when loading the list rejects', async () => {
+    listImpl = () => Promise.reject(new Error('denied'));
+    render(
+      <TriggerEditor trigger={{ trigger_type: 'App Event' }} onChange={vi.fn()} permissions={{ canEdit: true }} />,
+    );
+    expect(await screen.findByRole('alert')).toBeTruthy();
+    expect(await screen.findByText('App name')).toBeTruthy();
+  });
+
+  it('hides the manual fields in TriggerEditor while the list is loading', async () => {
+    let resolve!: (rows: EventAliasSummary[]) => void;
+    listImpl = () => new Promise((r) => (resolve = r));
+    render(
+      <TriggerEditor trigger={{ trigger_type: 'App Event' }} onChange={vi.fn()} permissions={{ canEdit: true }} />,
+    );
+    expect(screen.queryByText('App name')).toBeNull();
+    resolve([alias({})]);
+    await screen.findByLabelText('Business event');
+    expect(screen.queryByText('App name')).toBeNull();
   });
 
   it('offers an explicit switch to the replacement of a deprecated event', async () => {
@@ -101,11 +133,24 @@ describe('TriggerEditor App Event draft notice', () => {
     listImpl = async () => [alias({})];
   });
 
-  it.each([[undefined], ['Draft']])('warns when the automation status is %s', async (status) => {
+  it.each([['Draft']])('warns when the automation status is %s', async (status) => {
     render(
       <TriggerEditor trigger={trigger} onChange={vi.fn()} permissions={{ canEdit: true }} automationStatus={status} />,
     );
     expect(await screen.findByText(/This automation is a draft/)).toBeTruthy();
+  });
+
+  it.each([['Paused'], ['Archived']])('warns when the automation status is %s', async (status) => {
+    render(
+      <TriggerEditor trigger={trigger} onChange={vi.fn()} permissions={{ canEdit: true }} automationStatus={status} />,
+    );
+    expect(await screen.findByText(/This automation is a draft/)).toBeTruthy();
+  });
+
+  it('does not warn while the automation is still loading', async () => {
+    render(<TriggerEditor trigger={trigger} onChange={vi.fn()} permissions={{ canEdit: true }} />);
+    await screen.findByLabelText('Business event');
+    expect(screen.queryByText(/This automation is a draft/)).toBeNull();
   });
 
   it('does not warn once active', async () => {

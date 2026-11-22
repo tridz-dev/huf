@@ -61,8 +61,14 @@ export function AppEventPicker({
   if (state === 'loading') {
     return (
       <div className="space-y-1.5" aria-busy="true">
-        <Label>Business event</Label>
-        <div className="h-9 animate-pulse rounded-md border bg-muted" />
+        <Label id={`${selectId}-loading`}>Business event</Label>
+        <div
+          role="status"
+          aria-labelledby={`${selectId}-loading`}
+          className="h-9 animate-pulse rounded-md border bg-muted"
+        >
+          <span className="sr-only">Loading business events</span>
+        </div>
       </div>
     );
   }
@@ -115,7 +121,6 @@ export function AppEventPicker({
         appName={appName}
         eventName={eventName}
         aliases={aliases}
-        deliberateCustom={custom}
         disabled={disabled}
         onSwitch={switchTo}
       />
