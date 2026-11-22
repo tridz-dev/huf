@@ -137,14 +137,15 @@ describe('TriggerEditor App Event draft notice', () => {
     render(
       <TriggerEditor trigger={trigger} onChange={vi.fn()} permissions={{ canEdit: true }} automationStatus={status} />,
     );
-    expect(await screen.findByText(/This automation is a draft/)).toBeTruthy();
+    expect(await screen.findByText(/This automation is a draft\./)).toBeTruthy();
   });
 
   it.each([['Paused'], ['Archived']])('warns when the automation status is %s', async (status) => {
     render(
       <TriggerEditor trigger={trigger} onChange={vi.fn()} permissions={{ canEdit: true }} automationStatus={status} />,
     );
-    expect(await screen.findByText(/This automation is a draft/)).toBeTruthy();
+    expect(await screen.findByText(new RegExp(`This automation is ${status.toLowerCase()}`))).toBeTruthy();
+    expect(screen.queryByText(/is a draft/)).toBeNull();
   });
 
   it('does not warn while the automation is still loading', async () => {

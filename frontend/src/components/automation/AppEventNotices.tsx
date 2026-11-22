@@ -72,11 +72,14 @@ export function AliasStatusNotice({ appName, eventName, aliases, disabled, onSwi
 }
 
 /** Reminder that App Event triggers do nothing until the automation is active. */
-export function DraftAutomationNotice() {
+export function DraftAutomationNotice({ status = 'Draft' }: { status?: string }) {
+  const lead =
+    status === 'Draft'
+      ? 'This automation is a draft.'
+      : `This automation is ${status.toLowerCase()}.`;
   return (
     <p role="status" className="text-xs text-warning">
-      This automation is a draft. Business events will not start it until you activate it
-      {' '}after saving.
+      {lead} Business events will not start it until it is active.
     </p>
   );
 }

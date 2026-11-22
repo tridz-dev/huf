@@ -175,7 +175,7 @@ export function TriggerEditor({ trigger, onChange, permissions, automationStatus
         />
       )}
       {trigger.trigger_type === 'App Event' && automationStatus !== undefined && automationStatus !== 'Active' && (
-        <DraftAutomationNotice />
+        <DraftAutomationNotice status={automationStatus} />
       )}
 
       {(trigger.trigger_type === 'Schedule' ||
