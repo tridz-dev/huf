@@ -17,14 +17,13 @@ HUF is a complete, self-hosted AI layer built on open standards. It gives teams 
 
 > **Note:** HUF is under active development.
 
-## What's new in beta.8
+## What's new in beta.9
 
-- **Data Tables, redesigned:** a fast spreadsheet-style grid with inline editing and paste, server-side sort and filters, and bulk edit/delete with undo. Import shows a mapping preview and a clear result summary, and export is formula-safe.
-- **Agent form, redesigned:** create an agent from one card, then set it up across 5 tabs (Setup, Abilities, Channels, Access, Advanced). It autosaves, warns you when someone else changed the agent, and has a built-in **Try it** panel that leaves no test conversations behind.
-- **Design system:** new reusable data-grid and builder-form patterns (DESIGN.md §6.11, §6.12).
-- **Security hardening** for table import, restore and bulk operations, and for agent Try it.
+- **Event Aliases:** give document events business names, such as `shop.customer_purchase` for a Sales Invoice being submitted, and use them as App Event triggers in automations. Events fire once, after commit, and never fail the save.
+- **Business event picker:** pick the event from a list in the trigger editor, with clear loading, error, empty and phased-out states, and a note when a draft automation will not fire yet.
+- **Agent create card:** type instructions first, with optional examples and a searchable gallery of 15 starting points.
 
-Upgrade with `bench migrate`. Full notes: [v1.0.0-beta.8](./docs/releases/v1.0.0-beta.8.md).
+Upgrade with `bench migrate`. Full notes: [v1.0.0-beta.9](./docs/releases/v1.0.0-beta.9.md).
 
 ---
 
@@ -381,7 +380,8 @@ Upstream incident thread: https://github.com/BerriAI/litellm/issues/24518
 
 - [**Full Documentation**](https://docs.huf.ai/) — Guides, tutorials, and API reference
 - [**Feature guides**](./docs/features/README.md) — Knowledge, Agents, Tables, Flows, WhatsApp, with screenshots
-- [**Release notes: v1.0.0-beta.8**](./docs/releases/v1.0.0-beta.8.md)
+- [**Release notes: v1.0.0-beta.9**](./docs/releases/v1.0.0-beta.9.md)
+- [Release notes: v1.0.0-beta.8](./docs/releases/v1.0.0-beta.8.md)
 - [Release notes: v1.0.0-beta.7](./docs/releases/v1.0.0-beta.7.md)
 - [**Bulk ingestion contract**](./docs/bulk-ingestion-contract.md), [**Flow docs**](./docs/flow/USER_GUIDE.md), [**WhatsApp docs**](./docs/whatsapp/README.md)
 - [**Bruno API Collection**](./api-docs/bruno/) — Ready-to-use API collection for testing and exploration
