@@ -227,3 +227,33 @@ class TestEventAliasMigrateSafety(IntegrationTestCase):
 	def test_record_failure_never_raises(self):
 		with patch("frappe.log_error", side_effect=RuntimeError("log broke")):
 			ea.record_failure("a.b", "dispatch")
+
+
+class _FakeCache:
+	"""Mimics frappe's RedisWrapper: a miss without expires=True is memoised locally,
+	and set_value with an expiry writes only to the backend."""
+
+	def __init__(self):
+		self.local, self.backend = {}, {}
+
+	def get_value(self, key, expires=False, **kw):
+		if key in self.local:
+			return self.local[key]
+		val = self.backend.get(key)
+		if not expires:
+			self.local[key] = val
+		return val
+
+	def set_value(self, key, val, expires_in_sec=None, **kw):
+		self.backend[key] = val
+		if not expires_in_sec:
+			self.local[key] = val
+
+
+class TestClaimDedupe(IntegrationTestCase):
+	def test_claim_dedupe_only_first_wins(self):
+		with patch("frappe.cache", return_value=_FakeCache()):
+			self.assertTrue(ea.claim_dedupe("a.b", "k"))
+			self.assertFalse(ea.claim_dedupe("a.b", "k"))
+			self.assertFalse(ea.claim_dedupe("a.b", "k"))
+			self.assertTrue(ea.claim_dedupe("a.b", "other"))

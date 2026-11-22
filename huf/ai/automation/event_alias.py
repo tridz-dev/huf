@@ -296,7 +296,7 @@ def claim_dedupe(alias: str, dedupe: str) -> bool:
 	"""True the first time (alias, dedupe) is seen inside the TTL window."""
 	key = f"{DEDUPE_PREFIX}{alias}:{dedupe}"
 	cache = frappe.cache()
-	if cache.get_value(key):
+	if cache.get_value(key, expires=True):
 		return False
 	cache.set_value(key, 1, expires_in_sec=DEDUPE_TTL_SECONDS)
 	return True
