@@ -17,13 +17,12 @@ HUF is a complete, self-hosted AI layer built on open standards. It gives teams 
 
 > **Note:** HUF is under active development.
 
-## What's new in beta.9
+## What's new in beta.10
 
-- **Event Aliases:** give document events business names, such as `shop.customer_purchase` for a Sales Invoice being submitted, and use them as App Event triggers in automations. Events fire once, after commit, and never fail the save.
-- **Business event picker:** pick the event from a list in the trigger editor, with clear loading, error, empty and phased-out states, and a note when a draft automation will not fire yet.
-- **Agent create card:** type instructions first, with optional examples and a searchable gallery of 15 starting points.
+- **Event Alias fix:** the Event Alias hook could recurse when the `Event Alias` table did not exist yet, for example on the first `bench migrate` after upgrading to beta.9. It is now inert until migrated, and it no longer skips legitimate events.
+- **Duplicate-event protection:** the dedupe for repeated events did not work in beta.9 and could fire an automation twice. It now works.
 
-Upgrade with `bench migrate`. Full notes: [v1.0.0-beta.9](./docs/releases/v1.0.0-beta.9.md).
+Upgrade with `bench migrate`. Full notes: [v1.0.0-beta.10](./docs/releases/v1.0.0-beta.10.md).
 
 ---
 
@@ -380,7 +379,8 @@ Upstream incident thread: https://github.com/BerriAI/litellm/issues/24518
 
 - [**Full Documentation**](https://docs.huf.ai/) — Guides, tutorials, and API reference
 - [**Feature guides**](./docs/features/README.md) — Knowledge, Agents, Tables, Flows, WhatsApp, with screenshots
-- [**Release notes: v1.0.0-beta.9**](./docs/releases/v1.0.0-beta.9.md)
+- [**Release notes: v1.0.0-beta.10**](./docs/releases/v1.0.0-beta.10.md)
+- [Release notes: v1.0.0-beta.9](./docs/releases/v1.0.0-beta.9.md)
 - [Release notes: v1.0.0-beta.8](./docs/releases/v1.0.0-beta.8.md)
 - [Release notes: v1.0.0-beta.7](./docs/releases/v1.0.0-beta.7.md)
 - [**Bulk ingestion contract**](./docs/bulk-ingestion-contract.md), [**Flow docs**](./docs/flow/USER_GUIDE.md), [**WhatsApp docs**](./docs/whatsapp/README.md)
