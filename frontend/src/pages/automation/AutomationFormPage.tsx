@@ -392,7 +392,7 @@ export function AutomationFormPage() {
 
       toast.success(isNew ? 'Automation created' : 'Automation saved');
       if (isNew) {
-        navigate(agent ? `/agents/${encodeURIComponent(agent)}#triggers` : '/automations', { replace: true });
+        navigate(`/automations/${encodeURIComponent(automationName_)}`, { replace: true });
       }
     } catch {
       // createAutomation/updateAutomation/createTrigger/updateTrigger
@@ -627,7 +627,7 @@ export function AutomationFormPage() {
               <TriggerEditor
                 trigger={row}
                 onChange={(patch) => handleTriggerChange(row._localId, patch)}
-                permissions={{ canEdit: true }}
+                permissions={{ canEdit: true }} automationStatus={isNew ? 'Draft' : automation?.status}
               />
             </div>
           ))}

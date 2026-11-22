@@ -391,13 +391,10 @@ export interface EventAliasSummary {
 
 /**
  * List Event Aliases the current user can read, ordered by app then label.
- * Returns an empty list when none exist or the request fails.
+ * Returns an empty list when none exist. Rejects when the request fails (for
+ * example no read permission) so callers can tell "none yet" from "could not load".
  */
 export async function listEventAliases(): Promise<EventAliasSummary[]> {
-  try {
-    const result = await call.get('huf.api.events.list_aliases', {});
-    return (result?.message ?? result ?? []) as EventAliasSummary[];
-  } catch {
-    return [];
-  }
+  const result = await call.get('huf.api.events.list_aliases', {});
+  return (result?.message ?? result ?? []) as EventAliasSummary[];
 }

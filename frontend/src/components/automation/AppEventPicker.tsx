@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import { Label } from '@/components/ui/label';
 import {
   Select,
@@ -9,7 +9,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { listEventAliases, type EventAliasSummary } from '@/services/automationApi';
+import type { EventAliasSummary } from '@/services/automationApi';
+import { useEventAliases } from './useEventAliases';
+import { AliasLoadError, AliasStatusNotice, EmptyAliasHint } from './AppEventNotices';
 
 const CUSTOM_VALUE = '__custom__';
 
@@ -26,7 +28,7 @@ export interface AppEventPickerProps {
  * Lists named business events (Event Aliases) by label, grouped by app, so an
  * author picks "Customer purchase" instead of typing an app and event name.
  * Choosing one fills `app_name` and `event_name`. "Something else" falls back
- * to typing both by hand. Renders nothing when no aliases exist.
+ * to typing both by hand. Shows a loading placeholder while the list loads, and a hint when none exist.
  */
 export function AppEventPicker({
   appName,
@@ -35,18 +37,9 @@ export function AppEventPicker({
   disabled,
   onCustomModeChange,
 }: AppEventPickerProps) {
-  const [aliases, setAliases] = useState<EventAliasSummary[]>([]);
+  const { aliases, state } = useEventAliases();
   const [custom, setCustom] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    listEventAliases().then((rows) => {
-      if (!cancelled) setAliases(rows);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const selectId = useId();
 
   const grouped = useMemo(() => {
     const groups = new Map<string, EventAliasSummary[]>();
@@ -61,10 +54,31 @@ export function AppEventPicker({
   const selectValue = custom || hasManualValue ? CUSTOM_VALUE : matched?.name ?? '';
 
   useEffect(() => {
-    onCustomModeChange(aliases.length === 0 || custom || hasManualValue);
-  }, [aliases.length, custom, hasManualValue, onCustomModeChange]);
+    // While loading, keep the typed fields hidden so they do not flash before the list arrives.
+    onCustomModeChange(state === 'loading' ? false : aliases.length === 0 || custom || hasManualValue);
+  }, [state, aliases.length, custom, hasManualValue, onCustomModeChange]);
 
-  if (aliases.length === 0) return null;
+  if (state === 'loading') {
+    return (
+      <div className="space-y-1.5" aria-busy="true">
+        <Label id={`${selectId}-loading`}>Business event</Label>
+        <div
+          role="status"
+          aria-labelledby={`${selectId}-loading`}
+          className="h-9 animate-pulse rounded-md border bg-muted"
+        >
+          <span className="sr-only">Loading business events</span>
+        </div>
+      </div>
+    );
+  }
+  if (state === 'error') return <AliasLoadError />;
+  if (aliases.length === 0) return <EmptyAliasHint canManage />;
+
+  const switchTo = (alias: EventAliasSummary) => {
+    setCustom(false);
+    onChange({ app_name: alias.app, event_name: alias.key });
+  };
 
   const handleSelect = (value: string) => {
     if (value === CUSTOM_VALUE) {
@@ -79,9 +93,9 @@ export function AppEventPicker({
 
   return (
     <div className="space-y-1.5">
-      <Label>Business event</Label>
+      <Label htmlFor={selectId}>Business event</Label>
       <Select onValueChange={handleSelect} value={selectValue} disabled={disabled}>
-        <SelectTrigger>
+        <SelectTrigger id={selectId} aria-label="Business event">
           <SelectValue placeholder="Choose an event" />
         </SelectTrigger>
         <SelectContent>
@@ -103,6 +117,13 @@ export function AppEventPicker({
         {matched?.description ||
           'Pick the event that should start this automation. Events are grouped by the app that reports them.'}
       </p>
+      <AliasStatusNotice
+        appName={appName}
+        eventName={eventName}
+        aliases={aliases}
+        disabled={disabled}
+        onSwitch={switchTo}
+      />
     </div>
   );
 }
