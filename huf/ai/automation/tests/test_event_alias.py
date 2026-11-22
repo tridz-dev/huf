@@ -95,7 +95,9 @@ class TestEventAlias(IntegrationTestCase):
 			frappe.get_doc({"doctype": "ToDo", "description": "event alias test", "priority": "Low"}).insert()
 			frappe.db.commit()
 			self.assertEqual(self._fires(enq), [])
-			frappe.get_doc({"doctype": "ToDo", "description": "event alias test", "priority": "High"}).insert()
+			frappe.get_doc(
+				{"doctype": "ToDo", "description": "event alias test", "priority": "High"}
+			).insert()
 			frappe.db.commit()
 			self.assertEqual(self._fires(enq), [f"{APP}.cm"])
 			self.assertEqual(enq.call_args.kwargs["payload"]["p"], "High")
@@ -159,8 +161,69 @@ class TestEventAlias(IntegrationTestCase):
 	def test_legacy_runtime_noop(self):
 		_make_alias("leg", [_src("after_insert")])
 		frappe.db.commit()
-		with patch("frappe.enqueue") as enq, patch.object(ea, "automation_runtime_is_new", return_value=False):
+		with (
+			patch("frappe.enqueue") as enq,
+			patch.object(ea, "automation_runtime_is_new", return_value=False),
+		):
 			_todo()
 			frappe.db.commit()
 			self.assertEqual(self._fires(enq), [])
 			self.assertEqual(ea.fire_alias(f"{APP}.leg")["skipped"], "legacy_runtime")
+
+
+class TestEventAliasMigrateSafety(IntegrationTestCase):
+	"""The wildcard hook must be inert before the Event Alias table exists."""
+
+	def setUp(self):
+		ea.clear_alias_cache()
+
+	def tearDown(self):
+		ea.clear_alias_cache()
+
+	def test_missing_table_is_noop(self):
+		doc = frappe.get_doc({"doctype": "ToDo", "description": "event alias test"})
+		with (
+			patch.object(frappe.db, "table_exists", return_value=False),
+			patch("frappe.get_all", side_effect=RuntimeError("table missing")),
+			patch("frappe.log_error") as log_error,
+		):
+			ea.dispatch_doc_event(doc, "on_update")
+			ea.dispatch_doc_event(doc, "after_insert")
+		log_error.assert_not_called()
+		self.assertEqual(ea.get_alias_map(), {"sources": {}, "aliases": {}})
+
+	def test_ignored_doctypes_skip_lookup(self):
+		for dt in ("Error Log", "Event Alias", "Event Alias Source", "Comment", "Version", "Activity Log"):
+			with patch.object(ea, "get_sources", side_effect=AssertionError("looked up")):
+				ea.dispatch_doc_event(frappe._dict(doctype=dt, name="x"), "after_insert")
+
+	def test_migrate_flag_skips(self):
+		frappe.flags.in_migrate = True
+		try:
+			with patch.object(ea, "get_sources", side_effect=AssertionError("looked up")):
+				ea.dispatch_doc_event(frappe._dict(doctype="ToDo", name="x"), "on_update")
+		finally:
+			frappe.flags.in_migrate = False
+
+	def test_failure_does_not_recurse(self):
+		"""log_error inserting an Error Log re-fires the hook: calls stay bounded."""
+		doc = frappe._dict(doctype="ToDo", name="x")
+		hook_calls = []
+
+		def fake_log_error(*a, **kw):
+			# What a real Error Log insert does: run wildcard doc-event hooks.
+			hook_calls.append(1)
+			assert len(hook_calls) < 10, "runaway recursion"
+			ea.dispatch_doc_event(frappe._dict(doctype="Note", name="y"), "after_insert")
+
+		with (
+			patch.object(ea, "get_sources", side_effect=RuntimeError("boom")),
+			patch("frappe.log_error", side_effect=fake_log_error),
+		):
+			ea.dispatch_doc_event(doc, "on_update")
+		self.assertEqual(len(hook_calls), 1)
+		self.assertFalse(getattr(frappe.local, ea._REENTRY_FLAG, False))
+
+	def test_record_failure_never_raises(self):
+		with patch("frappe.log_error", side_effect=RuntimeError("log broke")):
+			ea.record_failure("a.b", "dispatch")
