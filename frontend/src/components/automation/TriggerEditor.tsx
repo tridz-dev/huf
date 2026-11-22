@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button';
 import { getDocTypes } from '@/services/agentApi';
 import { TriggerFieldsRenderer } from './TriggerFieldsRenderer';
 import { TriggerDocEventExtras } from './TriggerDocEventExtras';
+import { AppEventPicker } from './AppEventPicker';
 import { AUTOMATION_TRIGGER_TYPES, triggerTypeHelpText } from './TriggerFieldsConfig';
 import type {
   AutomationTrigger,
@@ -64,6 +65,7 @@ const WEBHOOK_ENDPOINT_PATH = '/api/method/huf.ai.automation.webhook.handle_auto
 export function TriggerEditor({ trigger, onChange, permissions }: TriggerEditorProps) {
   const [docTypes, setDocTypes] = useState<Array<{ name: string }>>([]);
   const [loadingDocTypes, setLoadingDocTypes] = useState(false);
+  const [manualAppEvent, setManualAppEvent] = useState(true);
   const disabled = !permissions.canEdit;
 
   useEffect(() => {
@@ -160,8 +162,18 @@ export function TriggerEditor({ trigger, onChange, permissions }: TriggerEditorP
         </div>
       )}
 
+      {trigger.trigger_type === 'App Event' && (
+        <AppEventPicker
+          appName={trigger.app_name}
+          eventName={trigger.event_name}
+          onChange={(patch) => onChange(patch)}
+          onCustomModeChange={setManualAppEvent}
+          disabled={disabled}
+        />
+      )}
+
       {(trigger.trigger_type === 'Schedule' ||
-        trigger.trigger_type === 'App Event' ||
+        (trigger.trigger_type === 'App Event' && manualAppEvent) ||
         trigger.trigger_type === 'Doc Event') && (
         <TriggerFieldsRenderer
           triggerType={trigger.trigger_type}

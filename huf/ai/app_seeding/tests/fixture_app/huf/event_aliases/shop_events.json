@@ -1,0 +1,17 @@
+[
+	{
+		"app": "ea_fixture_shop",
+		"key": "customer_purchase",
+		"label": "Customer purchase",
+		"description": "A customer bought something.",
+		"payload_schema": "{\"invoice\": \"string\"}",
+		"sources": [
+			{
+				"reference_doctype": "ToDo",
+				"doc_event": "after_insert",
+				"payload_mapping": "{\"invoice\": \"doc.name\"}",
+				"enabled": 1
+			}
+		]
+	}
+]
