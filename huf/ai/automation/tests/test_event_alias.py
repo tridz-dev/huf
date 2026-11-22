@@ -193,17 +193,39 @@ class TestEventAliasMigrateSafety(IntegrationTestCase):
 		self.assertEqual(ea.get_alias_map(), {"sources": {}, "aliases": {}})
 
 	def test_ignored_doctypes_skip_lookup(self):
-		for dt in ("Error Log", "Event Alias", "Event Alias Source", "Comment", "Version", "Activity Log"):
-			with patch.object(ea, "get_sources", side_effect=AssertionError("looked up")):
+		for dt in ("Error Log", "Event Alias", "Event Alias Source"):
+			with (
+				patch.object(ea, "get_sources", return_value=[]) as lookup,
+				patch("frappe.log_error") as log_error,
+			):
 				ea.dispatch_doc_event(frappe._dict(doctype=dt, name="x"), "after_insert")
+			lookup.assert_not_called()
+			log_error.assert_not_called()
 
 	def test_migrate_flag_skips(self):
 		frappe.flags.in_migrate = True
 		try:
-			with patch.object(ea, "get_sources", side_effect=AssertionError("looked up")):
+			with (
+				patch.object(ea, "get_sources", return_value=[]) as lookup,
+				patch("frappe.log_error") as log_error,
+			):
 				ea.dispatch_doc_event(frappe._dict(doctype="ToDo", name="x"), "on_update")
 		finally:
 			frappe.flags.in_migrate = False
+		lookup.assert_not_called()
+		log_error.assert_not_called()
+
+	def test_formerly_ignored_doctypes_still_dispatch(self):
+		src = {"alias": "a.b", "condition": "", "payload_mapping": {}, "dedupe_key": ""}
+		for dt in ("Communication", "Comment", "Notification Log", "Email Queue", "Integration Request"):
+			with (
+				patch.object(ea, "get_sources", return_value=[src]) as lookup,
+				patch.object(ea, "_schedule") as schedule,
+				patch.object(ea, "automation_runtime_is_new", return_value=True),
+			):
+				ea.dispatch_doc_event(frappe._dict(doctype=dt, name="x"), "after_insert")
+			lookup.assert_called_once_with(dt, "after_insert")
+			schedule.assert_called_once()
 
 	def test_failure_does_not_recurse(self):
 		"""log_error inserting an Error Log re-fires the hook: calls stay bounded."""

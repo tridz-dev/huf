@@ -41,34 +41,11 @@ ALIAS_DOC_EVENTS = (
 	"after_delete",
 )
 
-# Doctypes the wildcard hook must never dispatch for: our own housekeeping
-# doctypes plus framework log/audit doctypes. Error Log is the critical one:
-# record_failure() inserts one, which would otherwise fire this hook again.
-IGNORED_DOCTYPES = frozenset(
-	{
-		"Event Alias",
-		"Event Alias Source",
-		"Error Log",
-		"Comment",
-		"Version",
-		"Activity Log",
-		"Access Log",
-		"View Log",
-		"Route History",
-		"Scheduled Job Log",
-		"Email Queue",
-		"Email Queue Recipient",
-		"Deleted Document",
-		"Console Log",
-		"Document Follow",
-		"Notification Log",
-		"Communication",
-		"Prepared Report",
-		"RQ Job",
-		"Integration Request",
-		"Webhook Request Log",
-	}
-)
+# Doctypes the wildcard hook never dispatches for: our own housekeeping doctypes
+# and Error Log (record_failure() inserts one). Everything else, including
+# Communication or Comment, is a legitimate alias source. Recursion safety
+# comes from the re-entrancy flag, not from this list.
+IGNORED_DOCTYPES = frozenset({"Event Alias", "Event Alias Source", "Error Log"})
 
 _REENTRY_FLAG = "huf_event_alias_dispatching"
 
@@ -216,7 +193,8 @@ def dispatch_doc_event(doc, method=None, *args, **kwargs):
 
 	Never raises. Returns immediately (no queries) for doctypes without aliases.
 	"""
-	if getattr(frappe.local, _REENTRY_FLAG, False):
+	previous = getattr(frappe.local, _REENTRY_FLAG, False)
+	if previous:
 		return
 	setattr(frappe.local, _REENTRY_FLAG, True)
 	try:
@@ -224,7 +202,7 @@ def dispatch_doc_event(doc, method=None, *args, **kwargs):
 	except Exception:
 		record_failure(None, "dispatch")
 	finally:
-		setattr(frappe.local, _REENTRY_FLAG, False)
+		setattr(frappe.local, _REENTRY_FLAG, previous)
 
 
 def _dispatch(doc, method):
