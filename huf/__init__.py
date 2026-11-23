@@ -1,4 +1,4 @@
-__version__ = "1.0.0-beta.4"
+__version__ = "1.0.0-beta.10"
 
 import logging
 import frappe

@@ -374,3 +374,27 @@ export async function getAutomationRuntimeMode(): Promise<AutomationRuntimeModeR
     return { mode: 'new' };
   }
 }
+
+// ---------------------------------------------------------------------------
+// Event Aliases (named business events for the App Event trigger)
+// ---------------------------------------------------------------------------
+
+export interface EventAliasSummary {
+  name: string;
+  app: string;
+  key: string;
+  label: string;
+  description?: string;
+  status: 'Active' | 'Deprecated';
+  replaced_by?: string;
+}
+
+/**
+ * List Event Aliases the current user can read, ordered by app then label.
+ * Returns an empty list when none exist. Rejects when the request fails (for
+ * example no read permission) so callers can tell "none yet" from "could not load".
+ */
+export async function listEventAliases(): Promise<EventAliasSummary[]> {
+  const result = await call.get('huf.api.events.list_aliases', {});
+  return (result?.message ?? result ?? []) as EventAliasSummary[];
+}

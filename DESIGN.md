@@ -430,6 +430,9 @@ Reading order: **head (title + status pill + `AutosaveStatus` + one primary acti
 
 #### 6.12.5 Templates and suggestions (`TemplateChips`)
 - Outline pill buttons that **fill** the form (or the composer) — never submit. Used on the create card and as Try-panel empty-state suggestions.
+- **Free text leads.** Chips sit *after* the main input and are framed as optional shortcuts with a quiet `lead` (*Or start from an example:*). The input's placeholder carries a concrete, capability-rich example (*answer order questions from our Orders table and escalate refunds over $200*), so the chips never read as the full menu.
+- Show at most four featured chips plus a dashed **More examples…** chip (`onMore`) that opens **`TemplateGallery`**: a dialog with search (label, description, category, meta), cards grouped by category, 12–16 varied examples across functions and channels. Picking a card fills the form and closes; it never submits.
+- Each example says what it does (`description`, one sentence) and **what it sets up** (`meta`, 2–3 short tags joined with ` · `: *knowledge · Orders table · escalation*). Chips expose this as tooltip + `aria-description`; gallery cards show it inline. Only name capabilities the product has.
 
 #### 6.12.6 Autosave (`AutosaveStatus`)
 | State | Copy | Look |

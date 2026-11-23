@@ -26,6 +26,15 @@ def trigger_app_event(app_name: str, event_name: str, payload: dict | None = Non
 	if not app_name or not event_name:
 		frappe.throw(_("app_name and event_name are required."))
 
+	return fan_out_app_event(app_name, event_name, payload, frappe.session.user)
+
+
+def fan_out_app_event(app_name: str, event_name: str, payload: dict | None, initiating_user: str) -> dict:
+	"""Run every enabled App Event trigger for (app_name, event_name) as ``initiating_user``.
+
+	No permission check: callers (trigger_app_event, the Event Alias
+	dispatcher) decide who may fire the event and as whom automations run.
+	"""
 	triggers = frappe.get_all(
 		"Automation Trigger",
 		filters={
@@ -49,7 +58,7 @@ def trigger_app_event(app_name: str, event_name: str, payload: dict | None = Non
 					"event_name": event_name,
 					"payload": payload or {},
 				},
-				initiating_user=frappe.session.user,
+				initiating_user=initiating_user,
 			)
 			triggered_automations.append(t["automation"])
 		except Exception:

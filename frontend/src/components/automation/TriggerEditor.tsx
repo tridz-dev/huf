@@ -15,6 +15,8 @@ import { Button } from '@/components/ui/button';
 import { getDocTypes } from '@/services/agentApi';
 import { TriggerFieldsRenderer } from './TriggerFieldsRenderer';
 import { TriggerDocEventExtras } from './TriggerDocEventExtras';
+import { AppEventPicker } from './AppEventPicker';
+import { DraftAutomationNotice } from './AppEventNotices';
 import { AUTOMATION_TRIGGER_TYPES, triggerTypeHelpText } from './TriggerFieldsConfig';
 import type {
   AutomationTrigger,
@@ -48,6 +50,8 @@ export interface TriggerEditorProps {
   trigger: EditableAutomationTrigger;
   onChange: (patch: Partial<EditableAutomationTrigger>) => void;
   permissions: TriggerEditorPermissions;
+  /** Status of the parent automation; undefined while still loading; any status other than Active never fires App Event triggers. */
+  automationStatus?: string;
 }
 
 const WEBHOOK_ENDPOINT_PATH = '/api/method/huf.ai.automation.webhook.handle_automation_webhook';
@@ -61,9 +65,10 @@ const WEBHOOK_ENDPOINT_PATH = '/api/method/huf.ai.automation.webhook.handle_auto
  * in a page (not a modal), since `AutomationFormPage.tsx` edits 0-N triggers
  * inline rather than one trigger per dialog.
  */
-export function TriggerEditor({ trigger, onChange, permissions }: TriggerEditorProps) {
+export function TriggerEditor({ trigger, onChange, permissions, automationStatus }: TriggerEditorProps) {
   const [docTypes, setDocTypes] = useState<Array<{ name: string }>>([]);
   const [loadingDocTypes, setLoadingDocTypes] = useState(false);
+  const [manualAppEvent, setManualAppEvent] = useState(false);
   const disabled = !permissions.canEdit;
 
   useEffect(() => {
@@ -160,8 +165,21 @@ export function TriggerEditor({ trigger, onChange, permissions }: TriggerEditorP
         </div>
       )}
 
+      {trigger.trigger_type === 'App Event' && (
+        <AppEventPicker
+          appName={trigger.app_name}
+          eventName={trigger.event_name}
+          onChange={(patch) => onChange(patch)}
+          onCustomModeChange={setManualAppEvent}
+          disabled={disabled}
+        />
+      )}
+      {trigger.trigger_type === 'App Event' && automationStatus !== undefined && automationStatus !== 'Active' && (
+        <DraftAutomationNotice status={automationStatus} />
+      )}
+
       {(trigger.trigger_type === 'Schedule' ||
-        trigger.trigger_type === 'App Event' ||
+        (trigger.trigger_type === 'App Event' && manualAppEvent) ||
         trigger.trigger_type === 'Doc Event') && (
         <TriggerFieldsRenderer
           triggerType={trigger.trigger_type}

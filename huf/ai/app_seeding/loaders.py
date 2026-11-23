@@ -319,3 +319,12 @@ def upsert_knowledge(data: dict, source_app: str, source_file: str) -> tuple:
 
 def upsert_trigger(data: dict, source_app: str, source_file: str) -> tuple:
     return _upsert_doc("Agent Trigger", "trigger_name", data, source_app, source_file)
+
+
+def upsert_event_alias(data: dict, source_app: str, source_file: str) -> tuple:
+    """Seed an Event Alias. Name is `{app}.{key}`; admin edits survive re-seed (snapshot semantics)."""
+    data = data.copy()
+    if not data.get("app") or not data.get("key"):
+        return False, "Missing app or key"
+    data["name"] = f"{data['app']}.{data['key']}"
+    return _upsert_doc("Event Alias", "name", data, source_app, source_file)

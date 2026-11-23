@@ -17,13 +17,12 @@ HUF is a complete, self-hosted AI layer built on open standards. It gives teams 
 
 > **Note:** HUF is under active development.
 
-## What's new in beta.7
+## What's new in beta.10
 
-- **Bulk knowledge ingestion** from Upload, Zip, Folder, S3 (including Cloudflare R2) and SFTP, with live progress, retry and cancel, and zip-bomb / zip-slip / unsafe-file protection.
-- **New tabless Knowledge page** built on the new design-system resource-page pattern, with an ask box that shows the passages your agents would read.
-- **Reliability fixes** from live real-infrastructure testing, pgvector HNSW for embeddings above 2000 dimensions, and PDF page citations.
+- **Event Alias fix:** the Event Alias hook could recurse when the `Event Alias` table did not exist yet, for example on the first `bench migrate` after upgrading to beta.9. It is now inert until migrated, and it no longer skips legitimate events.
+- **Duplicate-event protection:** the dedupe for repeated events did not work in beta.9 and could fire an automation twice. It now works.
 
-Upgrade with `bench migrate`. Full notes: [v1.0.0-beta.7](./docs/releases/v1.0.0-beta.7.md).
+Upgrade with `bench migrate`. Full notes: [v1.0.0-beta.10](./docs/releases/v1.0.0-beta.10.md).
 
 ---
 
@@ -148,6 +147,8 @@ Organize AI capabilities into modular, reusable packages:
 - **Skills Catalog** — Combine system prompts, tools, knowledge sources, and MCP configurations into shareable skills
 - **Huf Apps** — Package complete agentic applications (agents, flows, data tables, skills) into installable Huf Apps
 - **App Discovery** — Automatically discover and register installed apps and skill dependencies
+- **Official Skills Catalog** — [`tridz-dev/huf-skills`](https://github.com/tridz-dev/huf-skills) is the curated, official collection of skills for Huf agents, and the default source in skill settings
+- **Coding Agent Skill** — [`tridz-dev/huf_app_skill`](https://github.com/tridz-dev/huf_app_skill) helps AI coding agents (Claude Code, Codex, Cursor, OpenCode, Kimi) build Huf Apps. Clone it and run `./install.sh` from the repo directory, as described in its README
 
 ### Multi-Channel Gateways
 
@@ -378,7 +379,10 @@ Upstream incident thread: https://github.com/BerriAI/litellm/issues/24518
 
 - [**Full Documentation**](https://docs.huf.ai/) — Guides, tutorials, and API reference
 - [**Feature guides**](./docs/features/README.md) — Knowledge, Agents, Tables, Flows, WhatsApp, with screenshots
-- [**Release notes: v1.0.0-beta.7**](./docs/releases/v1.0.0-beta.7.md)
+- [**Release notes: v1.0.0-beta.10**](./docs/releases/v1.0.0-beta.10.md)
+- [Release notes: v1.0.0-beta.9](./docs/releases/v1.0.0-beta.9.md)
+- [Release notes: v1.0.0-beta.8](./docs/releases/v1.0.0-beta.8.md)
+- [Release notes: v1.0.0-beta.7](./docs/releases/v1.0.0-beta.7.md)
 - [**Bulk ingestion contract**](./docs/bulk-ingestion-contract.md), [**Flow docs**](./docs/flow/USER_GUIDE.md), [**WhatsApp docs**](./docs/whatsapp/README.md)
 - [**Bruno API Collection**](./api-docs/bruno/) — Ready-to-use API collection for testing and exploration
 - [**AGENTS.md**](./AGENTS.md) — Technical context for AI agents. Adopts the [agents.md](https://agents.md) standard.

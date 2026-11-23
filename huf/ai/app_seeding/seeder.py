@@ -10,7 +10,8 @@ from .loaders import (
     upsert_tool,
     upsert_knowledge,
     upsert_agent,
-    upsert_trigger
+    upsert_trigger,
+    upsert_event_alias,
 )
 from .apps_loader import upsert_huf_app
 
@@ -27,6 +28,7 @@ class SeedResult:
 # Apps load last so a manifest may later reference agents/capabilities
 # seeded by the same provider app.
 LOAD_ORDER = [
+    ("event_aliases", upsert_event_alias),
     ("prompts", upsert_prompt),
     ("tools", upsert_tool),
     ("knowledge", upsert_knowledge),
@@ -124,6 +126,11 @@ def on_migrate():
 
     Admin edits to seed-owned fields are preserved (see loaders._upsert_doc).
     """
+    try:
+        from huf.ai.automation.event_alias import sync_hook_aliases
+        sync_hook_aliases()
+    except Exception as e:
+        frappe.log_error(title="App Seeding Error", message=f"Error syncing hook event aliases: {e}")
     try:
         for res in seed_all():
             if res.errors:
