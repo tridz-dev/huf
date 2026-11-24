@@ -54,7 +54,9 @@ from huf.ai.flow import member as flow_member
 from huf.ai.flow import node_registry
 from huf.ai.flow.nodes.member import exec_member_set
 from huf.ai.flow.nodes.docops import exec_doc_get, exec_doc_update
+from huf.ai.flow.nodes import subflow
 from huf.ai.flow.nodes.stop import exec_stop
+from huf.ai.flow.nodes.subflow import exec_flow_call
 from huf.ai.flow.nodes.switch import exec_switch
 from huf.ai.flow.nodes.retry import policy_of as retry_policy_of, run_with_retry
 from huf.ai.flow.nodes.wait import exec_wait
@@ -1599,6 +1601,11 @@ def _exec_doc_get(flow_run, node: dict, config: dict, settings: dict) -> dict:
 	return exec_doc_get(node, config, _context_of(flow_run, settings), _run_context(settings))
 
 
+def _exec_flow_call(flow_run, node: dict, config: dict, settings: dict) -> dict:
+	"""``flow.call``: start another published flow, optionally waiting for it, see ``nodes/subflow.py``."""
+	return exec_flow_call(flow_run, node, config, settings, _context_of(flow_run, settings))
+
+
 def _exec_doc_update(flow_run, node: dict, config: dict, settings: dict) -> dict:
 	"""``doc.update``: change fields of one document as the run user, see ``nodes/docops.py``."""
 	return exec_doc_update(node, config, _context_of(flow_run, settings), _run_context(settings))
@@ -2209,6 +2216,7 @@ _NODE_EXECUTORS = {
 	"member.set": _exec_member_set,
 	"doc.get": _exec_doc_get,
 	"doc.update": _exec_doc_update,
+	"flow.call": _exec_flow_call,
 }
 
 _NODE_TYPES = tuple(_NODE_EXECUTORS)
@@ -2447,6 +2455,7 @@ def _complete_flow_run(flow_run, reply_text: str | None = None) -> bool:
 		return False
 	commit_if_background()
 	_sync_gateway_event(flow_run, "Success", reply_text)
+	subflow.on_child_finished(flow_run, "Success")
 	return True
 
 
@@ -2466,6 +2475,7 @@ def _fail_flow_run(flow_run, error_msg: str) -> bool:
 	_sync_gateway_event(flow_run, "Failed", error=error_msg)
 	_publish_flow_event(flow_run, "flow_failed", {"error": error_msg})
 	flow_hooks.notify_failure(flow_run.name)
+	subflow.on_child_finished(flow_run, "Failed", error_msg)
 	return True
 
 
@@ -2485,6 +2495,8 @@ def _cancel_flow_run(flow_run, by: str) -> bool:
 		pass
 	_sync_gateway_event(flow_run, "Cancelled", error=message)
 	_publish_flow_event(flow_run, "flow_cancelled", {"error": message})
+	subflow.cancel_waited_child(flow_run, by)
+	subflow.on_child_finished(flow_run, "Cancelled", message)
 	return True
 
 
