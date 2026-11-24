@@ -1,0 +1,138 @@
+"""``flow.call`` node (flow/nodes/subflow.py): fire-and-forget, wait-for-child, failure, depth, cancel cascade."""
+
+import json
+from unittest.mock import patch
+
+import frappe
+from frappe.tests import IntegrationTestCase
+
+from huf.ai.flow import engine as flow_engine, park
+from huf.ai.flow.nodes.subflow import MAX_DEPTH, exec_flow_call
+from huf.ai.flow.tests.test_flow_draft_validation import finished_flow
+from huf.ai.graph.executor import GraphContext
+
+
+def _flow(prefix, status, definition):
+	doc = frappe.get_doc(
+		{
+			"doctype": "Flow Definition",
+			"flow_id": f"_test-{prefix}-{frappe.generate_hash(length=8)}",
+			"flow_name": f"Subflow {prefix}",
+			"status": status,
+			"definition_json": json.dumps(definition),
+		}
+	)
+	doc.flags.ignore_validate = True
+	return doc.insert(ignore_permissions=True)
+
+
+class TestSubflow(IntegrationTestCase):
+	def setUp(self):
+		frappe.set_user("Administrator")
+		self.parent_flow = _flow("parent", "Draft", {"nodes": [{"id": "c1", "type": "flow.call"}]})
+		self.child_flow = _flow("child", "Active", finished_flow())
+		self.draft_flow = _flow("draft", "Draft", finished_flow())
+		self.parent = self._run(self.parent_flow)
+		self.node = {"id": "c1", "type": "flow.call", "next": "n2"}
+
+	def tearDown(self):
+		frappe.set_user("Administrator")
+		for flow in (self.parent_flow, self.child_flow, self.draft_flow):
+			frappe.db.delete("Flow Member State", {"flow": flow.name})
+			frappe.db.delete("Flow Run", {"flow_id": flow.name})
+			frappe.delete_doc("Flow Definition", flow.name, ignore_permissions=True, force=True)
+		frappe.db.commit()
+
+	def _run(self, flow, status="Running", parent_run=None):
+		return frappe.get_doc(
+			{
+				"doctype": "Flow Run",
+				"flow_definition": flow.name,
+				"flow_id": flow.name,
+				"status": status,
+				"trigger_type": "Manual",
+				"parent_run": parent_run,
+			}
+		).insert(ignore_permissions=True)
+
+	def _call(self, run=None, **config):
+		node = {**self.node, "config": config}
+		return exec_flow_call(run or self.parent, node, config, {}, GraphContext({}))
+
+	def _children(self):
+		return frappe.get_all("Flow Run", filters={"parent_run": self.parent.name}, fields=["name", "status", "parent_node"])
+
+	def _wait_for_child(self):
+		with patch("frappe.enqueue") as enq:
+			out = self._call(flow_id=self.child_flow.name, mode="wait")
+		return out, self._children()[0]["name"], enq
+
+	def _reload(self):
+		return frappe.get_doc("Flow Run", self.parent.name)
+
+	def test_fire_and_forget_starts_child(self):
+		with patch("frappe.enqueue") as enq:
+			out = self._call(flow_id=self.child_flow.name, input={"n": 3})
+		self.assertEqual(out["status"], "success")
+		(child,) = self._children()
+		self.assertEqual(child["parent_node"], "c1")
+		self.assertEqual(out["output"]["run"], child["name"])
+		enq.assert_called_once()
+		self.assertEqual(self._reload().status, "Running")  # the parent carries on
+		# a fire-and-forget child never wakes anybody
+		with patch("frappe.enqueue"):
+			flow_engine._complete_flow_run(frappe.get_doc("Flow Run", child["name"]))
+		self.assertEqual(self._reload().status, "Running")
+
+	def test_wait_parks_until_child_done(self):
+		out, child, enq = self._wait_for_child()
+		self.assertEqual(out.status if hasattr(out, "status") else None, "paused")
+		parent = self._reload()
+		self.assertEqual(parent.status, "Waiting Timer")
+		self.assertEqual(json.loads(parent.waiting)["reason"], "child")
+		enq.assert_called_once()  # only the child was enqueued, after the parent parked
+		with patch("frappe.enqueue"):
+			flow_engine._complete_flow_run(frappe.get_doc("Flow Run", child))
+		parent = self._reload()
+		self.assertEqual(parent.status, "Running")
+		self.assertEqual(json.loads(parent.waiting)["woke"]["reason"], "child_done")
+		again = self._call(run=parent, flow_id=self.child_flow.name, mode="wait")
+		self.assertEqual(again["status"], "success")
+		self.assertIn("output", again)
+		self.assertEqual(len(self._children()), 1)  # re-entry never starts a second child
+
+	def test_child_failure_routes_on_error(self):
+		_out, child, _enq = self._wait_for_child()
+		with patch("frappe.enqueue"):
+			flow_engine._fail_flow_run(frappe.get_doc("Flow Run", child), "Child blew up")
+		again = self._call(run=self._reload(), flow_id=self.child_flow.name, mode="wait")
+		self.assertEqual(again["status"], "failed")
+		self.assertIn("Child blew up", again["error"])
+
+	def test_depth_limit(self):
+		run = self.parent
+		for _ in range(MAX_DEPTH):
+			run = self._run(self.parent_flow, parent_run=run.name)
+		out = self._call(run=run, flow_id=self.child_flow.name)
+		self.assertEqual(out["status"], "failed")
+		self.assertIn("levels deep", out["error"])
+		shallow = self._call(run=self._run(self.parent_flow, parent_run=self.parent.name), flow_id=self.child_flow.name)
+		self.assertEqual(shallow["status"], "success")
+
+	def test_unpublished_child_refused(self):
+		out = self._call(flow_id=self.draft_flow.name)
+		self.assertEqual(out["status"], "failed")
+		self.assertIn("not published", out["error"])
+		self.assertEqual(self._children(), [])
+
+	def test_self_call_refused(self):
+		out = self._call(flow_id=self.parent_flow.name)
+		self.assertEqual(out["status"], "failed")
+		self.assertIn("cannot run itself", out["error"])
+
+	def test_cancel_parent_cancels_child_waiting(self):
+		_out, child, _enq = self._wait_for_child()
+		self.assertEqual(frappe.db.get_value("Flow Run", child, "status"), "Queued")
+		self.assertTrue(park.cancel_run(self.parent.name, "Administrator"))
+		self.assertEqual(self._reload().status, "Cancelled")
+		self.assertEqual(frappe.db.get_value("Flow Run", child, "status"), "Cancelled")
