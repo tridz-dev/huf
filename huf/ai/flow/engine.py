@@ -260,6 +260,10 @@ def load_definition(flow_id: str) -> dict:
 	return defn
 
 
+class FlowDefinitionGone(Exception):
+	"""A run woke up after its Flow Definition was deleted and carries no pinned snapshot."""
+
+
 def _pinned_version(flow_run) -> PinnedVersion:
 	"""The exact graph this run executes, for the whole life of the run.
 
@@ -274,7 +278,10 @@ def _pinned_version(flow_run) -> PinnedVersion:
 	if pinned is not None:
 		return pinned
 
-	version = PinnedVersion.pin(load_definition(getattr(flow_run, "flow_id", None)))
+	flow_id = getattr(flow_run, "flow_id", None)
+	if not frappe.db.exists("Flow Definition", flow_id):
+		raise FlowDefinitionGone(_("This flow was deleted, so the run cannot continue."))
+	version = PinnedVersion.pin(load_definition(flow_id))
 	_store_pin(flow_run, version)
 	return version
 
@@ -579,7 +586,11 @@ def run_flow(flow_run_name: str):
 			# A queued job for a run that has since paused again: only approve / resume / expiry move a
 			# waiting run (they set it Running first). Re-entering here would run the paused step twice.
 			return
-		version = _pinned_version(flow_run)
+		try:
+			version = _pinned_version(flow_run)
+		except FlowDefinitionGone as e:
+			_fail_flow_run(flow_run, str(e))
+			return
 		defn = version.graph
 
 		nodes_map = {n["id"]: n for n in defn.get("nodes", [])}

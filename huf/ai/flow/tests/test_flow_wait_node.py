@@ -141,3 +141,110 @@ class TestWaitNode(IntegrationTestCase):
 		self.assertIsNone(self._row().resume_at)
 		self.assertTrue(self._wake("resumed"))
 		self.assertEqual(self._reenter(node)["next_node_id"], "n2")
+
+
+class TestWaitSweeper(IntegrationTestCase):
+	"""triggers.wake_due_waits: wakes only due ``Waiting Timer`` runs, enqueues (never runs inline)."""
+
+	NOW = datetime(2030, 6, 1, 12, 0, 0)
+
+	def setUp(self):
+		frappe.set_user("Administrator")
+		self.flow = frappe.get_doc(
+			{
+				"doctype": "Flow Definition",
+				"flow_id": f"_test-sweep-{frappe.generate_hash(length=8)}",
+				"flow_name": "Sweeper Flow",
+				"status": "Draft",
+				"definition_json": json.dumps({"nodes": [{"id": "w1", "type": "wait"}]}),
+			}
+		)
+		self.flow.flags.ignore_validate = True
+		self.flow.insert(ignore_permissions=True)
+		self.runs = []
+
+	def tearDown(self):
+		for name in self.runs:
+			frappe.delete_doc("Flow Run", name, ignore_permissions=True, force=True)
+		frappe.delete_doc("Flow Definition", self.flow.name, ignore_permissions=True, force=True)
+		frappe.db.commit()
+
+	def _parked(self, resume_at, status="Running"):
+		run = frappe.get_doc(
+			{
+				"doctype": "Flow Run",
+				"flow_definition": self.flow.name,
+				"flow_id": self.flow.flow_id,
+				"status": status,
+				"trigger_type": "Manual",
+			}
+		).insert(ignore_permissions=True)
+		self.runs.append(run.name)
+		park.park_run(run, {"id": "w1", "type": "wait"}, park.ParkRequest(reason="wait", resume_at=resume_at))
+		return run.name
+
+	def _status(self, name):
+		return frappe.db.get_value("Flow Run", name, "status")
+
+	def test_sweeper_wakes_due_only(self):
+		from huf.ai.flow.triggers import wake_due_waits
+
+		due = self._parked(self.NOW - timedelta(minutes=1))
+		later = self._parked(self.NOW + timedelta(hours=1))
+		with patch("frappe.enqueue"):
+			woken = wake_due_waits(now=self.NOW)
+		self.assertIn(due, woken)
+		self.assertNotIn(later, woken)
+		self.assertEqual(self._status(due), "Running")
+		self.assertEqual(self._status(later), "Waiting Timer")
+
+	def test_sweeper_limit_500(self):
+		import inspect
+
+		from huf.ai.flow.triggers import wake_due_waits
+
+		self.assertEqual(inspect.signature(wake_due_waits).parameters["limit"].default, 500)
+		first = self._parked(self.NOW - timedelta(minutes=2))
+		second = self._parked(self.NOW - timedelta(minutes=1))
+		with patch("frappe.enqueue"):
+			woken = wake_due_waits(now=self.NOW, limit=1)
+		self.assertEqual(len(woken), 1)
+		self.assertEqual(self._status(first if first in woken else second), "Running")
+		self.assertEqual(len(set(woken) & {first, second}), len(woken))
+
+	def test_sweeper_enqueues_not_inline(self):
+		from huf.ai.flow.triggers import wake_due_waits
+
+		name = self._parked(self.NOW - timedelta(minutes=1))
+		with patch("frappe.enqueue") as enq, patch("huf.ai.flow.engine.run_flow") as inline:
+			wake_due_waits(now=self.NOW)
+		inline.assert_not_called()
+		calls = [c for c in enq.call_args_list if c.kwargs.get("flow_run_name") == name]
+		self.assertEqual(len(calls), 1)
+		self.assertEqual(calls[0].kwargs["queue"], "short")
+
+	def test_stale_sweeper_ignores_waiting_timer(self):
+		name = self._parked(self.NOW)
+		frappe.db.set_value("Flow Run", name, "modified", datetime(2020, 1, 1), update_modified=False)
+		failed = flow_engine.sweep_stale_runs()
+		self.assertNotIn(name, failed)
+		self.assertEqual(self._status(name), "Waiting Timer")
+
+	def test_woken_run_fails_clearly_when_flow_was_deleted(self):
+		run = frappe.get_doc(
+			{
+				"doctype": "Flow Run",
+				"flow_definition": self.flow.name,
+				"flow_id": self.flow.flow_id,
+				"status": "Running",
+				"trigger_type": "Manual",
+			}
+		).insert(ignore_permissions=True)
+		self.runs.append(run.name)
+		frappe.db.set_value("Flow Run", run.name, "pinned_definition", None)
+		frappe.db.set_value("Flow Run", run.name, "flow_definition", None)
+		frappe.delete_doc("Flow Definition", self.flow.name, ignore_permissions=True, force=True)
+		flow_engine.run_flow(run.name)
+		row = frappe.db.get_value("Flow Run", run.name, ["status", "last_error"], as_dict=True)
+		self.assertEqual(row.status, "Failed")
+		self.assertIn("flow was deleted", row.last_error)
