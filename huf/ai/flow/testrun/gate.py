@@ -118,6 +118,11 @@ def simulate_node(node: dict, resolve: Callable[[Any], Any]) -> dict | None:
 		return _success(simulated_document(config.get("doctype")))
 	if ntype in ("state.set", "state.delete") and step_test_active():
 		return _success(simulated_state(ntype, config.get("key")))
+	if ntype == "wait":
+		# A test never sleeps: the step succeeds at once and says so.
+		result = _success({"waited_until": None, "woke_at": None, "reason": "simulated", "payload": None, "note": "Test run: the wait was skipped."})
+		result["next_node_id"] = node.get("next")
+		return result
 	if ntype == "code.run":
 		if code_profile_is_scratch(config.get("profile")):
 			return None

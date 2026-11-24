@@ -50,6 +50,7 @@ from frappe import _
 from frappe.utils import now_datetime
 
 from huf.ai.flow import create_doc as flow_create_doc, state as flow_state
+from huf.ai.flow.nodes.wait import exec_wait
 from huf.ai.flow.runs.outcome import record_outcome
 from huf.ai.flow.support.approval_card import waiting_fields
 from huf.ai.flow.support.approval_notifications import _clear_flow_notifications, _send_approval_notifications
@@ -120,6 +121,7 @@ NODE_ROUTING = {
 	"condition": RoutingMode.SELF_ROUTED,
 	"router.llm": RoutingMode.SELF_ROUTED,
 	"router.decision": RoutingMode.SELF_ROUTED,
+	"wait": RoutingMode.SELF_ROUTED,
 	# "output" is always terminal per spec/graph-ir.md section 2 ("next must be
 	# absent or null") -- true for both the Procedure and Flow profiles.
 	"output": RoutingMode.TERMINAL,
@@ -571,6 +573,8 @@ def run_flow(flow_run_name: str):
 
 	try:
 		flow_run = frappe.get_doc("Flow Run", flow_run_name)
+		if flow_run.status in TERMINAL_STATUSES:
+			return  # finished or cancelled while this job was queued: never revive it
 		if flow_run.status in WAITING_STATUSES:
 			# A queued job for a run that has since paused again: only approve / resume / expiry move a
 			# waiting run (they set it Running first). Re-entering here would run the paused step twice.
@@ -1809,6 +1813,8 @@ def _run_sub_chain(flow_run, settings: dict, node_ids: list) -> dict:
 			return {"status": "failed", "error": "A step inside this loop points at a step that no longer exists. Reconnect it."}
 		if node.get("type") == "human.approval":
 			return {"status": "failed", "error": f'{step_ref(node, True)} waits for approval, which a loop cannot do. Move it outside the loop.'}
+		if node.get("type") == "wait":
+			return {"status": "failed", "error": f'{step_ref(node, True)} is a wait step. Wait steps cannot be used inside a loop. Move it outside the loop.'}
 		if node.get("type") == "code.run":
 			return {"status": "failed", "error": f'{step_ref(node, True)} runs code, which a loop cannot do. Move it outside the loop.'}
 
@@ -2092,6 +2098,7 @@ _NODE_EXECUTORS = {
 	"state.delete": _exec_state_delete,
 	"doc.create": _exec_doc_create,
 	"code.run": _exec_code_run,
+	"wait": exec_wait,
 }
 
 _NODE_TYPES = tuple(_NODE_EXECUTORS)
