@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ChevronDown, Loader2 } from 'lucide-react';
+import { ChevronDown, Loader2, ShieldAlert } from 'lucide-react';
 import { Dialog, DialogDescription, DialogTitle } from '../ui/dialog';
 import {
   DialogScrollBody,
@@ -30,6 +30,7 @@ interface FlowSettingsModalProps {
 }
 
 const NEW_CATEGORY = '__new__';
+const OFF = '__off__';
 const BASE_CATEGORIES = ['Automation', 'Integration', 'Support', 'Sales'];
 const NAME_LIMIT = 140;
 
@@ -39,7 +40,7 @@ const NAME_LIMIT = 140;
  * only changes these details: it never saves the steps, so unfinished edits on the canvas cannot make it fail.
  */
 export function FlowSettingsModal({ open, onClose }: FlowSettingsModalProps) {
-  const { activeFlow, updateFlowMetadata, deleteFlow } = useFlowContext();
+  const { activeFlow, updateFlowMetadata, deleteFlow, setErrorHandler } = useFlowContext();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('');
@@ -284,6 +285,25 @@ export function FlowSettingsModal({ open, onClose }: FlowSettingsModalProps) {
                         steps (agents, AI choices) or approvals.
                       </p>
                     </div>
+                  </div>
+                  <div className="mt-4 grid gap-2" data-testid="flow-settings-error-handler">
+                    <Label htmlFor="error-handler" className="flex items-center gap-1.5 font-medium"><ShieldAlert className="h-3.5 w-3.5" aria-hidden />If any step fails</Label>
+                    <Select
+                      value={activeFlow?.errorHandler ?? OFF}
+                      onValueChange={(v) => setErrorHandler(v === OFF ? undefined : v)}
+                      disabled={waiting}
+                    >
+                      <SelectTrigger id="error-handler" data-testid="flow-settings-error-handler-select">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={OFF}>Off</SelectItem>
+                        {(activeFlow?.nodes ?? []).filter((n) => n.data.nodeType === 'action').map((n) => (
+                          <SelectItem key={n.id} value={n.id}>{n.data.label || n.id}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-sm text-muted-foreground">Runs once when a step fails and has no failure path of its own. The run still ends as failed.</p>
                   </div>
                 </CollapsibleContent>
               </Collapsible>

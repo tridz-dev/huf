@@ -35,6 +35,8 @@ interface FlowContextType {
   updateNodes: (nodes: FlowNode[]) => void;
   updateEdges: (edges: FlowEdge[]) => void;
   updateNodesAndEdges: (nodes: FlowNode[], edges: FlowEdge[]) => void;
+  /** Choose the step that runs when a step fails and has no failure path of its own (undefined = off). */
+  setErrorHandler: (nodeId: string | undefined) => void;
   addNode: (node: FlowNode) => void;
   updateNode: (nodeId: string, updates: Partial<FlowNode>) => void;
   /** Change a step's data from the latest committed value, so quick consecutive edits never overwrite each other. */
@@ -338,6 +340,18 @@ export function FlowProvider({ children }: { children: ReactNode }) {
     updateNode(nodeId, { data: update(current.data) });
   }, [updateNode]);
 
+  const setErrorHandler = useCallback((nodeId: string | undefined) => {
+    const prev = activeFlowRef.current;
+    if (!prev || prev.errorHandler === nodeId) return;
+    const updated: Flow = { ...prev, errorHandler: nodeId };
+    if (nodeId === undefined) delete updated.errorHandler;
+    activeFlowRef.current = updated;
+    lastSyncedFlowRef.current = updated;
+    setActiveFlowState(updated);
+    flowService.setErrorHandler(prev.id, nodeId);
+    markUnsaved();
+  }, [markUnsaved]);
+
   // Put a snapshot from the history back (layoutRevision makes the canvas re-read it; selection and live status are not part of it).
   const restoreSnapshot = useCallback((snapshot: GraphSnapshot) => {
     const current = activeFlowRef.current;
@@ -425,6 +439,7 @@ export function FlowProvider({ children }: { children: ReactNode }) {
     updateNodes,
     updateEdges,
     updateNodesAndEdges,
+    setErrorHandler,
     addNode,
     updateNode,
     updateNodeData,
@@ -465,6 +480,7 @@ export function FlowProvider({ children }: { children: ReactNode }) {
     updateNodes,
     updateEdges,
     updateNodesAndEdges,
+    setErrorHandler,
     addNode,
     updateNode,
     updateNodeData,

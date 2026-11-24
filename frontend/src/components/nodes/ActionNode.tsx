@@ -90,7 +90,7 @@ export const ActionNode = memo(({ id, data, selected }: ActionNodeProps) => {
             title={`${h.label}: drag from here to connect`}
           />
         ))
-      ) : (
+      ) : cfg?.type === 'stop' ? null : (
         <Handle id={isRouter ? ROUTER_HANDLE : undefined} type="source" position={Position.Bottom} className={NODE_HANDLE} data-testid={`flow-handle-${id}`} />
       )}
 

@@ -271,6 +271,11 @@ class FlowService {
    * Does NOT save to backend — used for local-only field updates
    * where the backend was already updated separately.
    */
+  /** The step that runs once after a failure no step routed (undefined = off); local until the flow is saved. */
+  setErrorHandler(id: string, next: string | undefined): Flow | null {
+    return this.updateFlowLocal(id, { errorHandler: next });
+  }
+
   private updateFlowLocal(id: string, updates: Partial<Flow>): Flow | null {
     const flow = this.flowCache.get(id);
     if (!flow) return null;

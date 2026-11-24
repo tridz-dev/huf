@@ -56,6 +56,10 @@ export const REQUIRED_CONFIG_KEYS: Partial<Record<string, string[]>> = {
     'state.set': ['key'],
     'state.delete': ['key'],
     'doc.create': ['doctype'],
+    'stop': ['message'],
+    'doc.get': ['doctype'],
+    'doc.update': ['doctype', 'name', 'values'],
+    'flow.call': ['flow_id'],
     'code.run': ['code', 'profile'],
     'transform': ['op'],
 };
@@ -84,6 +88,10 @@ export function getDefaultLabel(backendType: string): string {
         'state.set': 'Set state',
         'state.delete': 'Delete state',
         'doc.create': 'Create document',
+        'stop': 'Stop with error',
+        'doc.get': 'Find document',
+        'doc.update': 'Update document',
+        'flow.call': 'Run another flow',
         'code.run': 'Execute code',
         'output': 'End',
     };
@@ -114,6 +122,10 @@ export function getDefaultIcon(backendType: string): string {
         'state.set': 'Save',
         'state.delete': 'Trash2',
         'doc.create': 'FilePlus',
+        'stop': 'OctagonX',
+        'doc.get': 'FileSearch',
+        'doc.update': 'FilePen',
+        'flow.call': 'Workflow',
         'code.run': 'Terminal',
         'output': 'CheckCircle2',
     };

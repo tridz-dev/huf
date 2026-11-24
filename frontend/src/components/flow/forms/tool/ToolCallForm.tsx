@@ -11,6 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { SlackChannelField } from './SlackChannelField';
 import { TOOL_REQUIRED_INPUT } from '@/lib/flow-graph/flowValidation';
 import { ValueField } from '../fields';
+import { RetryPolicy } from '../RetryPolicy';
+import type { RetryPolicy as RetryConfig } from '../../../../types/flow.types';
 import { actionCardId } from '@/lib/flow/flowLabels';
 import { integrationForTool, toolLabel } from '@/lib/flow/flowIntegrations';
 import { registerToolSchemas } from '@/lib/flow/flowToolSchemas';
@@ -183,6 +185,7 @@ export function ToolCallForm({ nodeId, cfg, patch, f, Err, title }: ActionFormPr
       ) : toolId ? (
         <p className="text-xs text-muted-foreground" data-testid="flow-hint-tool-no-settings">This step needs no settings. It runs as soon as the step before it finishes.</p>
       ) : null}
+      {toolId && <RetryPolicy f={f} Err={Err} retry={cfg.retry as RetryConfig | undefined} onChange={(retry) => patch({ retry })} />}
     </Section>
   );
 }

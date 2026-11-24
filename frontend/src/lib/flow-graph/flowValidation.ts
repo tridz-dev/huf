@@ -60,6 +60,10 @@ export function nodeKind(node: NodeLike): string {
     case 'state-set': return 'state.set';
     case 'state-delete': return 'state.delete';
     case 'doc-create': return 'doc.create';
+    case 'stop': return 'stop';
+    case 'doc-get': return 'doc.get';
+    case 'doc-update': return 'doc.update';
+    case 'flow-call': return 'flow.call';
     case 'code-run': return 'code.run';
     default: return typeof t === 'string' ? t : 'unknown';
   }
@@ -155,6 +159,11 @@ export function validateNode(node: NodeLike, edges: EdgeLike[]): FlowIssue[] {
         add('tool_id', 'Choose what this step should do.');
         break;
       }
+      if (c.retry !== undefined) {
+        const r = asObj(c.retry);
+        if (typeof r.attempts !== 'number' || !Number.isInteger(r.attempts) || r.attempts < 2 || r.attempts > 10) add('retry.attempts', 'Tries must be between 2 and 10.');
+        if (typeof r.delay_seconds !== 'number' || r.delay_seconds < 60) add('retry.delay_seconds', 'The first wait must be at least 1 minute.');
+      }
       const input = asObj(c.input);
       const preset = TOOL_REQUIRED_INPUT[String(c.tool_id)];
       for (const [key, message] of preset ?? []) {
@@ -238,6 +247,21 @@ export function validateNode(node: NodeLike, edges: EdgeLike[]): FlowIssue[] {
       break;
     case 'doc.create':
       if (isBlank(c.doctype)) add('doctype', 'Choose the kind of record to create.');
+      break;
+    case 'stop':
+      if (isBlank(c.message)) add('message', 'Write the message to show when the flow stops.');
+      break;
+    case 'doc.get':
+      if (isBlank(c.doctype)) add('doctype', 'Choose a document type.');
+      else if (isBlank(c.name) && Object.keys(asObj(c.filters)).length === 0) add(c.filters !== undefined ? 'filters' : 'name', c.filters !== undefined ? 'Add at least one field to match.' : 'Choose which document to find.');
+      break;
+    case 'doc.update':
+      if (isBlank(c.doctype)) add('doctype', 'Choose a document type.');
+      if (isBlank(c.name)) add('name', 'Choose which document to update.');
+      if (Object.keys(asObj(c.values)).length === 0) add('values', 'Add at least one field to change.');
+      break;
+    case 'flow.call':
+      if (isBlank(c.flow_id)) add('flow_id', 'Choose a flow to run.');
       break;
     case 'code.run':
       if (isBlank(c.code)) add('code', 'Add the Python code to run.');

@@ -36,6 +36,11 @@ const CASES: Array<[string, BackendNode]> = [
   ['wait until a time', { id: 'n', type: 'wait', config: { mode: 'until', until: { $from: 'input.when' }, time_zone: 'Asia/Kolkata' }, next: 'o' }],
   ['wait until continued, no limit', { id: 'n', type: 'wait', config: { mode: 'resume' }, next: 'o' }],
   ['wait until continued, with a Timed out path', { id: 'n', type: 'wait', config: { mode: 'resume', resume: { timeout_ms: 3600000, timeout_next: 'o' } }, next: 'o' }],
+  ['doc.get by name', { id: 'n', type: 'doc.get', config: { doctype: 'ToDo', name: 'T-1', fields: ['status'], on_missing: 'empty' }, next: 'o' }],
+  ['doc.get by filters', { id: 'n', type: 'doc.get', config: { doctype: 'ToDo', filters: { status: 'Open' } }, next: 'o' }],
+  ['doc.update', { id: 'n', type: 'doc.update', config: { doctype: 'ToDo', name: 'T-1', values: { status: 'Closed' } }, next: 'o' }],
+  ['flow.call waiting', { id: 'n', type: 'flow.call', config: { flow_id: 'onboarding', input: { who: { $from: 'input.who' } }, mode: 'wait' }, next: 'o' }],
+  ['tool.call with retry', { id: 'n', type: 'tool.call', config: { tool_id: 'http_request', input: { url: 'https://x.test' }, retry: { attempts: 3, backoff: 'exponential', delay_seconds: 120, max_delay_seconds: 3600 } }, next: 'o' }],
   ['transform lower', { id: 'n', type: 'transform', config: { op: 'lower', input: { text: { $from: 'input.text' } } }, next: 'o' }],
   ['transform replace', { id: 'n', type: 'transform', config: { op: 'replace', input: { text: 'a', find: 'a', with: 'b', count: 1 } }, next: 'o' }],
   ['transform concat', { id: 'n', type: 'transform', config: { op: 'concat', input: { parts: ['a', { $from: 'x.y' }], separator: '-' } }, next: 'o' }],
@@ -78,5 +83,18 @@ describe('new node round trip', () => {
     expect(flow.nodes[1].data.configured).toBe(true);
     expect(flow.nodes[2].data.configured).toBe(false);
     expect(flow.nodes[3].data.configured).toBe(true);
+  });
+
+  it('stop has no next, and the flow-level error handler round-trips (and is dropped if its step is gone)', () => {
+    const g = graph([{ id: 'a', type: 'doc.get', config: { doctype: 'ToDo', name: 'T-1' }, next: 's' }, { id: 's', type: 'stop', config: { message: 'x' } }, { id: 'h', type: 'code.run', config: { code: 'result = 1', profile: 'Flow Scratch', inputs: {} } }]);
+    g.error_handler = { next: 'h' };
+    const flow = deserializeFlow('f1', 'F', 'Draft', g);
+    expect(flow.errorHandler).toBe('h');
+    const out = serializeFlow(flow);
+    expect(out.error_handler).toEqual({ next: 'h' });
+    expect(out.nodes.find((n) => n.id === 's')).not.toHaveProperty('next');
+    expect(out.contract.permission_envelope.read).toEqual([{ doctype: 'ToDo' }]);
+    expect(serializeFlow({ ...flow, errorHandler: 'gone' })).not.toHaveProperty('error_handler');
+    expect(serializeFlow({ ...flow, errorHandler: undefined })).not.toHaveProperty('error_handler');
   });
 });
