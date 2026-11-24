@@ -1,4 +1,5 @@
 import type { ActionConfig } from '../../types/flow.types';
+import { getAppNodeType } from '../flow-graph/appNodeTypes';
 import { CODE_RUN_ACTION, DEFAULT_CODE_PROFILE, DEFAULT_CODE_TIMEOUT_S } from '../flow-graph/codeFlow';
 
 /** What a freshly added step of this kind starts with (the "Add step" picker and the Cmd+K palette both use it). */
@@ -29,5 +30,7 @@ export function defaultActionConfig(actionId: string, defaultCodeProfile?: strin
     sheets: tool('gsheets_read'),
     file: tool('gdrive_list_files'),
   };
+  // A step an installed app added: kept as its own type, edited by the schema form.
+  if (getAppNodeType(actionId)) return { type: 'unknown', backend_type: actionId } as ActionConfig;
   return (configs[actionId] ?? { type: undefined }) as unknown as ActionConfig;
 }
