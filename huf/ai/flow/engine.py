@@ -51,6 +51,7 @@ from frappe.utils import now_datetime
 
 from huf.ai.flow import create_doc as flow_create_doc, state as flow_state
 from huf.ai.flow import member as flow_member
+from huf.ai.flow import node_registry
 from huf.ai.flow.nodes.member import exec_member_set
 from huf.ai.flow.nodes.docops import exec_doc_get, exec_doc_update
 from huf.ai.flow.nodes.stop import exec_stop
@@ -937,7 +938,7 @@ def _build_program(nodes_map: dict, edges_list: list, settings) -> GraphProgram:
 			id=node_id,
 			type=node_type,
 			config=config,
-			routing=NODE_ROUTING.get(node_type, RoutingMode.DEFAULT),
+			routing=node_registry.routing_for(node_type, NODE_ROUTING),
 			raw=node,
 		)
 	return GraphProgram(version, specs, _first_entry(version.graph), settings=dict(settings or {}))
@@ -1167,7 +1168,11 @@ def _execute_node(flow_run, node: dict, settings: dict) -> dict:
 	node_type = node.get("type")
 	config = node.get("config", {})
 
-	executor = _NODE_EXECUTORS.get(node_type) or frappe.throw(_("Unknown node type: {0}").format(node_type))
+	executor = _NODE_EXECUTORS.get(node_type) or node_registry.executor_for(node_type)
+	if executor is None:
+		if node_registry.is_app_type_id(node_type):
+			return {"status": "failed", "error": _("This step type is no longer available ({0}). The app that provided it may have been uninstalled.").format(node_type)}
+		frappe.throw(_("Unknown node type: {0}").format(node_type))
 
 	if is_turned_off(node):
 		return turned_off_result()
@@ -1873,7 +1878,7 @@ def _run_sub_chain(flow_run, settings: dict, node_ids: list) -> dict:
 			cursor = on_error
 			continue
 
-		if NODE_ROUTING.get(node.get("type")) == RoutingMode.SELF_ROUTED:
+		if node_registry.routing_for(node.get("type"), NODE_ROUTING) == RoutingMode.SELF_ROUTED:
 			cursor = last_result.get("next_node_id")
 		else:
 			cursor = node.get("next")

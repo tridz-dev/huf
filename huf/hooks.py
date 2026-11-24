@@ -473,6 +473,15 @@ huf_tools = [
     "huf.ai.tools.messaging.whatsapp_broadcast_tools.WHATSAPP_BROADCAST_TOOLS",
 ]
 
+# Flow step types from other apps: an app declares (in its own hooks.py) a dict, a list of dicts, or a dotted
+# path to either, under `huf_flow_nodes`. Huf declares none itself. Each entry is
+# {type: "<app>.<name>", label, category, icon, description, config_schema, handler: "app.mod.fn",
+#  routing: next|self_routed|terminal, outputs, can_wait, test_simulate: skip|run|<path>, validate: <path>?}.
+# Trust boundary: handlers are code that runs in the Flow worker, so they are trusted exactly like the app that
+# declares them. Flows store only the type id; handler paths are read only from these declarations. See
+# huf/ai/flow/node_registry.py.
+huf_flow_nodes = []
+
 # App-shipped runtime skills: {skill_name, function_path -> SKILL.md manifest},
 # upserted as "App Provided" Skills by huf.ai.skills.hooks.sync_app_skills.
 huf_skills = [{"skill_name": "huf_knowledge_skill", "function_path": "huf.ai.skills.builtin_knowledge.get_knowledge_skill_manifest"}]
