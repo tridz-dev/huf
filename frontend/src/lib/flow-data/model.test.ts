@@ -104,3 +104,19 @@ describe('chips in words', () => {
     expect(previewOf(gone, model).text).toBe('x [Missing: step deleted]');
   });
 });
+
+describe('picker model: this person', () => {
+  const chat = node('t', 'Message', 'trigger', { triggerConfig: { type: 'whatsapp' } });
+  const act = node('a', 'Reply', 'action', {}, 100);
+  it('a chat trigger offers what the flow knows about the person', () => {
+    const model = buildPickerModel([chat, act], [edge('t', 'a')], 'a', null);
+    const step = model.steps.find((s) => s.id === 'member');
+    expect(step?.fields.map((f) => f.path)).toEqual(['member.status', 'member.run_count']);
+    const info = describeChip(makeChip('member.status', 'Status'), model);
+    expect(info).toMatchObject({ label: 'Where they are in the flow', stepTitle: 'This person', missing: false });
+  });
+  it('other triggers do not', () => {
+    const model = buildPickerModel([node('t', 'Hook', 'trigger', { triggerConfig: { type: 'webhook' } }), act], [edge('t', 'a')], 'a', null);
+    expect(model.steps.some((s) => s.id === 'member')).toBe(false);
+  });
+});

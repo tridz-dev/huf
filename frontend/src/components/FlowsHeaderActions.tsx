@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Play, History, Upload, Loader2, Save, CheckCircle2, Circle, Settings, CircleOff } from 'lucide-react';
+import { Play, History, Upload, Loader2, Save, CheckCircle2, Circle, Settings, CircleOff, Users } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Button } from './ui/button';
 import { useFlowContext } from '../contexts/FlowContext';
 import { FlowRunHistory } from './FlowRunHistory';
+import { FlowMembersPanel } from './flow/members/FlowMembersPanel';
 import { FlowRunViewer } from './FlowRunViewer';
 import { FlowSettingsModal } from './modals/FlowSettingsModal';
 import { ConvertToProcedureDialog } from './ConvertToProcedureDialog';
@@ -59,6 +60,7 @@ export function FlowsHeaderActions() {
     codePublishBlockedReason(activeFlow?.nodes ?? [], codeStatus);
   const [showHistory, setShowHistory] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showMembers, setShowMembers] = useState(false);
   const [showConvert, setShowConvert] = useState(false);
   const [selectedRunId, setSelectedRunId] = useRunParam();
   useStepParam();
@@ -178,6 +180,10 @@ export function FlowsHeaderActions() {
             <History className="w-4 h-4" />
             <span className="hidden min-[1440px]:inline">Runs</span>
           </Button>
+          <Button variant="outline" size="sm" className={hit} data-testid="flow-members-open" aria-label="People" title="People: who has gone through this flow" onClick={() => setShowMembers(true)} disabled={!activeFlow}>
+            <Users className="w-4 h-4" />
+            <span className="hidden min-[1440px]:inline">People</span>
+          </Button>
           <Button
             variant="outline"
             size="sm"
@@ -243,6 +249,7 @@ export function FlowsHeaderActions() {
           hasSteps={(activeFlow?.nodes.length ?? 0) > 1}
           convertedProcedure={convertedProcedure}
           onOpenRuns={() => setShowHistory(true)}
+          onOpenMembers={() => setShowMembers(true)}
           onOpenSettings={() => setShowSettings(true)}
           onTidy={tidyLayout}
           onConvert={() => setShowConvert(true)}
@@ -274,6 +281,9 @@ export function FlowsHeaderActions() {
         onConfirm={() => void header.handleUnpublish()}
       />
 
+      {activeFlow && (
+        <FlowMembersPanel flowId={activeFlow.id} open={showMembers} onOpenChange={setShowMembers} stepName={(id) => activeFlow.nodes.find((n) => n.id === id)?.data.label} />
+      )}
       {activeFlow && (
         <FlowRunHistory flowId={activeFlow.id} open={showHistory} onOpenChange={setShowHistory} onSelectRun={setSelectedRunId} onRunTest={() => { setShowHistory(false); void header.handleRun(); }} />
       )}
