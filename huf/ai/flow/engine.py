@@ -50,6 +50,7 @@ from frappe import _
 from frappe.utils import now_datetime
 
 from huf.ai.flow import create_doc as flow_create_doc, state as flow_state
+from huf.ai.flow.nodes.switch import exec_switch
 from huf.ai.flow.nodes.wait import exec_wait
 from huf.ai.flow.runs.outcome import record_outcome
 from huf.ai.flow.support.approval_card import waiting_fields
@@ -1486,23 +1487,8 @@ def _exec_router_llm(flow_run, node: dict, config: dict, settings: dict) -> dict
 
 
 def _exec_router_decision(flow_run, node: dict, config: dict, settings: dict) -> dict:
-	"""Execute router.decision node (config: ``policy``, ``options``, ``default``).
-
-	Not offered by the UI and never activates a provider: it always routes to ``default``
-	(routing is total) and says so in its output.
-	"""
-	default = config.get("default")
-	if not default:
-		return {"status": "failed", "error": "Choose which path to take by default, then run again."}
-	valid_node_ids = {o["node_id"] for o in (config.get("options") or []) if isinstance(o, dict) and o.get("node_id")}
-	if not valid_node_ids:
-		return {"status": "failed", "error": "Add at least one path to choose from, then run again."}
-
-	return {
-		"status": "success",
-		"next_node_id": default,
-		"output": {"node_id": default, "reason": "Choosing a path by rule is not turned on, so the default path was taken."},
-	}
+	"""Execute router.decision node: the first matching option wins, else ``default`` (see ``nodes/switch.py``)."""
+	return exec_switch(flow_run, node, config, settings, _context_of(flow_run, settings))
 
 
 def _exec_human_approval(flow_run, node: dict, config: dict, settings: dict) -> dict:
