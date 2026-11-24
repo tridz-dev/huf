@@ -7,6 +7,7 @@ import { RouterForm } from './forms/RouterForm';
 import { ConditionForm } from './forms/ConditionForm';
 import { LoopForm } from './forms/LoopForm';
 import { ApprovalForm } from './forms/approval/ApprovalForm';
+import { WaitForm } from './forms/WaitForm';
 import { TransformForm } from './forms/data/TransformForm';
 import { StateForm } from './forms/data/StateForm';
 import { DocCreateForm } from './forms/data/DocCreateForm';
@@ -42,6 +43,8 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
       return <LoopForm {...common} />;
     case 'human.approval':
       return <ApprovalForm {...common} />;
+    case 'wait':
+      return <WaitForm {...common} />;
     case 'transform':
       return <TransformForm {...common} />;
     case 'state-get':

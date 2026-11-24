@@ -194,6 +194,18 @@ function serializeNode(node: FlowNode, outgoing: FlowEdge[], nextOf: Map<string,
             setIf('reject_next', first('reject'));
             setIf('timeout_next', config.timeout_ms ? first('timeout') : undefined); // a Timed out path exists only with a time limit
             break;
+        case 'wait': {
+            // The Timed out path of a "until continued" wait lives inside `resume`; it exists only with a time limit.
+            const resume: Record<string, unknown> = { ...(config.resume as Record<string, unknown> | undefined) };
+            delete resume.timeout_next;
+            if (config.mode === 'resume' && resume.timeout_ms) {
+                const target = first('timeout');
+                if (target !== undefined) resume.timeout_next = target;
+            }
+            if (config.mode === 'resume' && Object.keys(resume).length) config.resume = resume;
+            else delete config.resume;
+            break;
+        }
         case 'foreach': {
             const seen = new Set<string>();
             const body = byRoute('body').flatMap((e) => walkChain(e.target, nextOf, seen));
@@ -409,6 +421,10 @@ function deserializeEdgesForNode(node: BackendNode, byId: Map<string, BackendNod
             push(cfg.approve_next, 'approve');
             push(cfg.reject_next, 'reject');
             push(cfg.timeout_next, 'timeout');
+            break;
+        case 'wait':
+            push((cfg.resume as { timeout_next?: string } | undefined)?.timeout_next, 'timeout');
+            push(node.next, 'next');
             break;
         case 'foreach':
             heads((cfg.body as string[] | undefined) ?? []).forEach((id, index) => push(id, 'body', { index }));

@@ -54,6 +54,7 @@ export function nodeKind(node: NodeLike): string {
     case 'condition': return 'condition';
     case 'foreach': return 'foreach';
     case 'human.approval': return 'human.approval';
+    case 'wait': return 'wait';
     case 'transform': return 'transform';
     case 'state-get': return 'state.get';
     case 'state-set': return 'state.set';
@@ -95,6 +96,10 @@ export function recipientProblem(value: unknown): string | null {
     ? 'Enter a valid email address, like name@example.com.'
     : `"${bad[0]}" is not a valid email address. Separate several addresses with commas.`;
 }
+
+/** The longest a flow may wait (the server's default limit). */
+export const MAX_WAIT_DAYS = 365;
+const WAIT_UNIT_DAYS: Record<string, number> = { minutes: 1 / 1440, hours: 1 / 24, days: 1 };
 
 const asObj = (v: unknown): Cfg => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Cfg) : {});
 
@@ -197,6 +202,22 @@ export function validateNode(node: NodeLike, edges: EdgeLike[]): FlowIssue[] {
       if (Array.isArray(c.details) && c.details.some((d) => typeof asObj(d).label === 'string' && String(asObj(d).label).length > 60)) add('details', 'A label is too long. Keep each label under 60 characters.');
       missingBranches(node, out, c, add);
       break;
+    case 'wait': {
+      const mode = c.mode;
+      if (mode === 'duration') {
+        const d = asObj(c.duration);
+        if (typeof d.value !== 'number' || !Number.isFinite(d.value) || d.value < 1) add('duration.value', 'Enter how long to wait.');
+        else if (d.value * (WAIT_UNIT_DAYS[String(d.unit)] ?? 1) > MAX_WAIT_DAYS) add('duration.value', `A wait can be at most ${MAX_WAIT_DAYS} days.`);
+      } else if (mode === 'until') {
+        if (isBlank(c.until)) add('until', 'Choose when to continue.');
+      } else if (mode === 'resume') {
+        const r = asObj(c.resume);
+        if (typeof r.timeout_ms === 'number' && r.timeout_ms > MAX_WAIT_DAYS * 86_400_000) add('resume.timeout_ms', `A wait can be at most ${MAX_WAIT_DAYS} days.`);
+        if (!r.timeout_ms && out.some((e) => edgeRoute(e as FlowEdge) === 'timeout')) add('resume.timeout_ms', 'Choose how long to wait before giving up.');
+      }
+      missingBranches(node, out, c, add);
+      break;
+    }
     case 'transform': {
       const spec = getTransformOp(c.op as string | undefined);
       if (!spec) {

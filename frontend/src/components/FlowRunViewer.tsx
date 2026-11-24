@@ -137,6 +137,17 @@ export function FlowRunViewer({ runId, onClose, onBack }: FlowRunViewerProps) {
         }
     };
 
+    const handleContinueNow = async () => {
+        if (!runId) return;
+        try {
+            await flowService.continueWaitingRun(runId);
+            toast.success('Continuing the run.');
+            await refreshRun();
+        } catch (err) {
+            toast.error('Could not continue this run', { description: humanizeFlowError(err) });
+        }
+    };
+
     const handleResume = async () => {
         if (!runId) return;
         let parsed: Record<string, unknown> | undefined;
@@ -204,7 +215,7 @@ export function FlowRunViewer({ runId, onClose, onBack }: FlowRunViewerProps) {
                             <RunError reason={plainRunError(run.last_error)} canManage={canManage} />
                         )}
 
-                        <RunStatusBanner run={run} canManage={canManage} onStop={handleStop} onCancel={handleCancel} />
+                        <RunStatusBanner run={run} canManage={canManage} onStop={handleStop} onCancel={handleCancel} onContinue={handleContinueNow} />
 
                         <RunWaitingCard
                             run={run}

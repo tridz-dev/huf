@@ -70,7 +70,7 @@ export type ActionType =
 export type WaitMode = 'duration' | 'until' | 'resume';
 export interface WaitNodeConfig {
   mode: WaitMode;
-  duration?: { value: number; unit: 'minutes' | 'hours' | 'days' };
+  duration?: { value?: number; unit: 'minutes' | 'hours' | 'days' };
   until?: FlowValue;
   time_zone?: string;
   resume?: { timeout_ms?: number; timeout_next?: string; message?: string };
@@ -225,6 +225,9 @@ export interface DocCreateActionConfig {
   fields?: Record<string, FlowValue>;
 }
 
+/** Wait (graph-IR `wait`): the canvas config is the node config plus its discriminator. */
+export type WaitActionConfig = { type: 'wait' } & WaitNodeConfig;
+
 /** Execute code (graph-IR `code.run`): sandboxed Python run under an Execution Profile. */
 export interface CodeRunActionConfig {
   type: 'code-run';
@@ -261,6 +264,7 @@ export type ActionConfig =
   | StateDeleteActionConfig
   | DocCreateActionConfig
   | CodeRunActionConfig
+  | WaitActionConfig
   | UnknownActionConfig
   | { type: undefined };
 

@@ -22,6 +22,8 @@ export function actionHasConfiguredContent(data: Pick<FlowNodeData, 'actionConfi
       return has(config.prompt);
     case 'human.approval':
       return has(config.message) || has(config.approver_role) || Boolean(config.approver_users && config.approver_users.length > 0);
+    case 'wait':
+      return config.mode === 'resume' || (config.mode === 'until' ? Boolean(config.until) : Boolean(config.duration?.value));
     case 'condition':
       return has(config.expression);
     case 'foreach':
