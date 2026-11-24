@@ -1,0 +1,140 @@
+"""Park / resume contract for Flow nodes that wait (timers, replies, child flows).
+
+A node returns ``park_run(...)`` to put its run to sleep; something else later calls ``wake_run`` (timer sweeper,
+resume endpoint, child completion) or ``cancel_run``. Nothing here ever sleeps in a worker.
+
+Invariants: every wake / cancel is a conditional ``_transition_run`` under the run lock, so a loser no-ops; the
+continuation is always enqueued (``queue="short"``), never run inline; a token is stored only as a hash.
+The caller persists the run context (``_persist_context``) before parking, as the approval node does.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import hmac
+import json
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+
+import frappe
+
+from huf.ai.graph.executor import Outcome, PauseRequest
+from huf.ai.transaction import commit_if_background
+
+WAIT_STATUS = "Waiting Timer"
+MAX_WAIT_DAYS_DEFAULT = 365
+MAX_PAYLOAD_BYTES = 64 * 1024
+
+
+@dataclass
+class ParkRequest:
+	"""What a node returns to park."""
+
+	reason: str  # "wait" | "retry" | "reply" | "timeout" | "child" | app-defined
+	resume_at: datetime | None  # naive UTC; None = wait for an external resume only
+	token: bool = False  # generate a single-use resume token
+	member_key: str | None = None
+	extra: dict = field(default_factory=dict)  # stored in ``waiting``
+
+
+def max_wait_days() -> int:
+	return int(frappe.conf.get("huf_flow_wait_max_days") or MAX_WAIT_DAYS_DEFAULT)
+
+
+def hash_token(token: str) -> str:
+	return hashlib.sha256(str(token).encode()).hexdigest()
+
+
+def _waiting(flow_run) -> dict:
+	raw = getattr(flow_run, "waiting", None)
+	if isinstance(raw, dict):
+		return raw
+	try:
+		data = json.loads(raw or "{}")
+	except (TypeError, ValueError):
+		return {}
+	return data if isinstance(data, dict) else {}
+
+
+def park_run(flow_run, node: dict, req: ParkRequest) -> Outcome:
+	"""Put the run to sleep at ``node``. The raw token (if asked for) is in ``outcome.extra["token"]``, once."""
+	from huf.ai.flow.engine import TERMINAL_STATUSES, _transition_run
+
+	raw_token = frappe.generate_hash(length=40) if req.token else None
+	resume_at = req.resume_at
+	waiting = {
+		"type": "timer",
+		"node_id": node.get("id"),
+		"reason": req.reason,
+		"resume_at": resume_at.isoformat() if resume_at else None,
+		"mode": "timed" if resume_at else "external",
+		"extra": req.extra or {},
+	}
+	if raw_token:
+		waiting["token_hash"] = hash_token(raw_token)
+	if _transition_run(
+		flow_run,
+		{
+			"status": WAIT_STATUS,
+			"resume_at": resume_at,
+			"member_key": req.member_key,
+			"waiting": json.dumps(waiting, default=str),
+		},
+		not_from_statuses=TERMINAL_STATUSES,
+	):
+		commit_if_background()
+	extra = {"token": raw_token} if raw_token else {}
+	return Outcome.paused(PauseRequest(kind="timer", status_label=WAIT_STATUS), extra=extra)
+
+
+def is_reentry(flow_run, node: dict) -> dict | None:
+	"""The waiting record for THIS node, only once the run was woken (status Running); never while still parked."""
+	if getattr(flow_run, "status", None) != "Running":
+		return None
+	waiting = _waiting(flow_run)
+	if waiting.get("node_id") != node.get("id") or not waiting.get("woke"):
+		return None
+	return waiting
+
+
+def verify_token(flow_run, token: str) -> bool:
+	stored = _waiting(flow_run).get("token_hash")
+	return bool(stored and token) and hmac.compare_digest(stored, hash_token(token))
+
+
+def wake_run(flow_run_name: str, reason: str, payload=None, *, enqueue: bool = True) -> bool:
+	"""Move a ``Waiting Timer`` run back to Running and continue it. True only for the single winner."""
+	from huf.ai.flow.engine import _acquire_run_lock, _release_run_lock, _transition_run, run_flow
+
+	if payload is not None and len(json.dumps(payload, default=str).encode()) > MAX_PAYLOAD_BYTES:
+		frappe.throw(f"Wake payload is larger than {MAX_PAYLOAD_BYTES // 1024} KB.")
+	if not _acquire_run_lock(flow_run_name):
+		return False
+	try:
+		flow_run = frappe.get_doc("Flow Run", flow_run_name)
+		if flow_run.status != WAIT_STATUS:
+			return False
+		waiting = _waiting(flow_run)
+		waiting["woke"] = {"reason": reason, "payload": payload, "at": datetime.now(timezone.utc).isoformat()}
+		if not _transition_run(
+			flow_run,
+			{"status": "Running", "resume_at": None, "waiting": json.dumps(waiting, default=str)},
+			from_statuses=(WAIT_STATUS,),
+		):
+			return False
+		commit_if_background()
+	finally:
+		_release_run_lock(flow_run_name)
+	if enqueue:
+		frappe.enqueue("huf.ai.flow.engine.run_flow", queue="short", flow_run_name=flow_run_name)
+	else:
+		run_flow(flow_run_name)
+	return True
+
+
+def cancel_run(flow_run_name: str, by: str) -> bool:
+	"""Cancel a Queued or waiting run. True only when this call moved it."""
+	from huf.ai.flow.engine import _cancel_flow_run
+
+	flow_run = frappe.get_doc("Flow Run", flow_run_name)
+	return _cancel_flow_run(flow_run, by)

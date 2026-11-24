@@ -132,6 +132,7 @@ FLOW_ONLY_NODE_TYPES: frozenset[str] = frozenset(
 		"state.delete",
 		"doc.create",
 		"code.run",
+		"wait",
 	}
 ) | {"trigger.gateway", "trigger.whatsapp", "trigger.telegram"}  # chat triggers: huf/ai/flow/gateways
 
@@ -349,6 +350,8 @@ def _control_flow_targets(node: dict) -> list[tuple[str, str | None]]:
 		targets.append(("config.approve_next", config.get("approve_next")))
 		targets.append(("config.reject_next", config.get("reject_next")))
 		targets.append(("config.timeout_next", config.get("timeout_next")))
+	elif ntype == "wait":
+		targets.append(("config.resume.timeout_next", (config.get("resume") or {}).get("timeout_next")))
 	elif ntype == "foreach":
 		for i, body_id in enumerate(config.get("body", []) or []):
 			targets.append((f"config.body[{i}]", body_id))

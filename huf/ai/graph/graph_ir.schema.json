@@ -1244,6 +1244,9 @@
           "$ref": "#/$defs/RouterDecisionNode"
         },
         {
+          "$ref": "#/$defs/WaitNode"
+        },
+        {
           "$ref": "#/$defs/HumanApprovalNode"
         },
         {
@@ -1424,6 +1427,111 @@
                   "minLength": 1
                 }
               }
+            }
+          }
+        }
+      ]
+    },
+    "WaitNode": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/NodeCommon"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "wait"
+            },
+            "config": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "mode"
+              ],
+              "properties": {
+                "mode": {
+                  "enum": [
+                    "duration",
+                    "until",
+                    "resume"
+                  ]
+                },
+                "duration": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "value",
+                    "unit"
+                  ],
+                  "properties": {
+                    "value": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "unit": {
+                      "enum": [
+                        "minutes",
+                        "hours",
+                        "days"
+                      ]
+                    }
+                  }
+                },
+                "until": {
+                  "$ref": "#/$defs/Value",
+                  "description": "The date and time to continue at: a literal, a reference, or a template."
+                },
+                "time_zone": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "resume": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "timeout_ms": {
+                      "type": "integer",
+                      "minimum": 60000
+                    },
+                    "timeout_next": {
+                      "$ref": "#/$defs/NodeId"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "allOf": [
+                {
+                  "if": {
+                    "properties": {
+                      "mode": {
+                        "const": "duration"
+                      }
+                    }
+                  },
+                  "then": {
+                    "required": [
+                      "duration"
+                    ]
+                  }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "mode": {
+                        "const": "until"
+                      }
+                    }
+                  },
+                  "then": {
+                    "required": [
+                      "until"
+                    ]
+                  }
+                }
+              ]
             }
           }
         }

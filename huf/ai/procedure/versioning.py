@@ -28,6 +28,7 @@ FLOW_ONLY_NODE_TYPES = frozenset(
 		"trigger.webhook",
 		"trigger.schedule",
 		"trigger.doc-event",
+		"wait",
 	}
 )
 

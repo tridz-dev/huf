@@ -108,7 +108,7 @@ DEFAULT_MAX_HOPS = 100
 RUN_LOCK_TTL_SECONDS = 600
 """How long a run lock survives if its holder dies mid-execution."""
 
-WAITING_STATUSES = ("Waiting User", "Waiting Approval", "Waiting Code")
+WAITING_STATUSES = ("Waiting User", "Waiting Approval", "Waiting Code", "Waiting Timer")
 
 ADVANCEABLE_STATUSES = ("Running", "Queued")
 
@@ -2349,6 +2349,25 @@ def _fail_flow_run(flow_run, error_msg: str) -> bool:
 	_sync_gateway_event(flow_run, "Failed", error=error_msg)
 	_publish_flow_event(flow_run, "flow_failed", {"error": error_msg})
 	flow_hooks.notify_failure(flow_run.name)
+	return True
+
+
+def _cancel_flow_run(flow_run, by: str) -> bool:
+	"""Mark a queued or waiting flow run as cancelled by ``by``. A run that already finished is left alone (False)."""
+	message = f"Cancelled by {by}."
+	if not _transition_run(
+		flow_run,
+		{"status": "Cancelled", "last_error": message, "completed_at": now_datetime()},
+		from_statuses=("Queued", *WAITING_STATUSES),
+	):
+		return False
+	commit_if_background()
+	try:
+		_clear_flow_notifications(flow_run)  # best effort: approvers stop seeing a request that no longer exists
+	except Exception:
+		pass
+	_sync_gateway_event(flow_run, "Cancelled", error=message)
+	_publish_flow_event(flow_run, "flow_cancelled", {"error": message})
 	return True
 
 

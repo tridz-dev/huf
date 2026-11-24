@@ -21,6 +21,7 @@ _NODE_DISPLAY = {
 	"router.llm": ("LLM Router", "GitBranch", "control"),
 	"router.decision": ("Decision Router", "GitBranch", "control"),
 	"human.approval": ("Human Approval", "UserCheck", "control"),
+	"wait": ("Wait", "Hourglass", "control"),
 	"condition": ("Condition (IF)", "GitFork", "control"),
 	"foreach": ("Loop", "RotateCw", "control"),
 	"validate": ("Validate", "ShieldCheck", "control"),
