@@ -5,7 +5,7 @@ import type { FlowRunDetail } from '@/services/flowApi';
 
 describe('runCanStillChange', () => {
   it('keeps refreshing while a run is queued, running or waiting for anyone', () => {
-    for (const s of ['Queued', 'Running', 'Waiting Code', 'Waiting Approval', 'Waiting User']) expect(runCanStillChange(s)).toBe(true);
+    for (const s of ['Queued', 'Running', 'Waiting Code', 'Waiting Approval', 'Waiting User', 'Waiting Timer']) expect(runCanStillChange(s)).toBe(true);
   });
   it('stops once the run ended or is unknown', () => {
     for (const s of ['Success', 'Failed', 'Stopped', 'Cancelled', '', null, undefined]) expect(runCanStillChange(s)).toBe(false);

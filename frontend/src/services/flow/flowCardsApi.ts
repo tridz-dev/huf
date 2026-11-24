@@ -20,7 +20,7 @@ export interface FlowCardStep {
 }
 
 export interface FlowCardLastRun {
-    /** Stored run status: Queued, Running, Waiting Approval, Waiting User, Waiting Code, Success, Failed. */
+    /** Stored run status: Queued, Running, Waiting Approval, Waiting User, Waiting Code, Waiting Timer, Cancelled, Success, Failed. */
     status: string;
     stale: boolean;
     /** UTC ISO time the run finished (or started, or last changed). */

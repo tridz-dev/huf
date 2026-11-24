@@ -29,6 +29,10 @@ export function runStatusPill({ status, stale, lapsed }: RunStatusInput): RunSta
       return { kind: 'waiting_approval' };
     case 'Waiting Code':
       return { kind: 'waiting_review' };
+    case 'Waiting Timer':
+      return { kind: 'waiting_timer' };
+    case 'Cancelled':
+      return { kind: 'cancelled' };
     case 'Waiting User':
       return { kind: 'waiting_approval', label: 'Waiting for your reply' };
     default:
@@ -44,8 +48,10 @@ export const RUN_STATUS_FILTERS = [
   { label: 'Waiting for approval', value: 'Waiting Approval' },
   { label: 'Waiting for your reply', value: 'Waiting User' },
   { label: 'Waiting for code review', value: 'Waiting Code' },
+  { label: 'Waiting for a timer', value: 'Waiting Timer' },
   { label: 'Finished', value: 'Success' },
   { label: 'Failed', value: 'Failed' },
+  { label: 'Cancelled', value: 'Cancelled' },
 ];
 
 /** A run that can still change on its own (so the lists keep refreshing). */
@@ -57,8 +63,8 @@ export const whoWords = (by: string, currentUser?: string | null) => (currentUse
 /** Whether a stopped run was ended by a person ("Marked as failed by ..." / "Cancelled by ...") rather than failing by itself. */
 export function stoppedByPerson(lastError: string | null | undefined): { by: string; why: string } | null {
   const text = (lastError ?? '').trim();
-  const cancelled = /^Cancelled by (.+?) before it started\.?$/s.exec(text);
-  if (cancelled) return { by: cancelled[1], why: 'It was cancelled before it started.' };
+  const cancelled = /^Cancelled by (.+?)(?: before it started)?\.?$/s.exec(text);
+  if (cancelled) return { by: cancelled[1], why: text.includes('before it started') ? 'It was cancelled before it started.' : 'It stopped where it was and will not continue.' };
   const stopped = /^(?:Marked as failed|Stopped) by (.+?): the run was stuck in (\w+)\.?$/s.exec(text);
   if (stopped) return { by: stopped[1], why: `It had been stuck while ${stopped[2].toLowerCase()} and was ended by hand.` };
   return null;

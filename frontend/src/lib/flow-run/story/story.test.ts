@@ -239,3 +239,18 @@ describe('ux30 lapsed approval', () => {
     expect(_rh({ status: 'Waiting Code', approval_lapsed: true } as never).headline).toBe('The approval expired');
   });
 });
+
+describe('Waiting Timer and Cancelled run status', () => {
+  it('maps Waiting Timer to a waiting pill and Cancelled to a cancelled pill', () => {
+    expect(_rsp({ status: 'Waiting Timer' }).kind).toBe('waiting_timer');
+    expect(_rsp({ status: 'Cancelled' }).kind).toBe('cancelled');
+  });
+  it('words the Cancelled headline by the person who cancelled', () => {
+    expect(_rh({ status: 'Cancelled', last_error: 'Cancelled by ana@example.com.' } as never).headline).toBe('Cancelled by ana@example.com');
+    expect(_rh({ status: 'Cancelled', last_error: 'Cancelled by ana@example.com before it started.' } as never).headline).toBe('Cancelled by ana@example.com');
+  });
+  it('keeps the Cancelled text non-empty and a Waiting Timer run still changing', () => {
+    expect(_rh({ status: 'Waiting Timer' } as never).headline).toBe('Waiting for a timer');
+    expect(stoppedByPerson('Cancelled by ana@example.com.')?.why).toBe('It stopped where it was and will not continue.');
+  });
+});

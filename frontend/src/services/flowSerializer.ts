@@ -45,6 +45,7 @@ export const ACTION_TO_BACKEND_TYPE: Record<ActionType, BackendNodeType> = {
     'state-delete': 'state.delete',
     'doc-create': 'doc.create',
     'code-run': 'code.run',
+    'wait': 'wait',
 };
 
 const BACKEND_TO_ACTION_TYPE: Record<string, ActionType> = Object.fromEntries(

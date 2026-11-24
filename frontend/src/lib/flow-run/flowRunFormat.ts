@@ -53,7 +53,9 @@ export function withoutFailureKeys(output: unknown): unknown {
 
 /** Run status as people read it: "Waiting Code" is "Waiting for code"; every other status is shown as stored. */
 export function flowRunStatusLabel(status: string | null | undefined): string {
-    return status === 'Waiting Code' ? 'Waiting for code' : status || '';
+    if (status === 'Waiting Code') return 'Waiting for code';
+    if (status === 'Waiting Timer') return 'Waiting';
+    return status || '';
 }
 
 /** What an Execute code step records as its output. */

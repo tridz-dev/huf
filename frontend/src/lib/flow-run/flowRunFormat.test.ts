@@ -113,3 +113,10 @@ describe('Execute code step output', () => {
         expect(flowRunStatusLabel('Waiting Approval')).toBe('Waiting Approval');
     });
 });
+
+describe('Waiting Timer and Cancelled run statuses', () => {
+    it('words the Waiting Timer and Cancelled statuses in one plain word each', () => {
+        expect(flowRunStatusLabel('Waiting Timer')).toBe('Waiting');
+        expect(flowRunStatusLabel('Cancelled')).toBe('Cancelled');
+    });
+});
