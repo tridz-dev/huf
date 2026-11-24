@@ -17,6 +17,8 @@ import { TransformForm } from './forms/data/TransformForm';
 import { StateForm } from './forms/data/StateForm';
 import { DocCreateForm } from './forms/data/DocCreateForm';
 import { Section } from './forms/formKit';
+import { SchemaNodeForm } from './forms/SchemaNodeForm';
+import { getAppNodeType, useAppNodeTypes } from '@/lib/flow-graph/appNodeTypes';
 import { CodeRunFields } from './CodeRunForm';
 
 export { TriggerConfigForm };
@@ -24,6 +26,7 @@ export { TriggerConfigForm };
 /** The settings form of one action step: picks the form for the step's type. */
 export function ActionConfigForm({ nodeId }: { nodeId: string }) {
   const { node, cfg, patch, kind, shell } = useNodeForm(nodeId, 'actionConfig');
+  const { loaded } = useAppNodeTypes();
   if (!node) return null;
   const type = str(cfg.type);
   const common = {
@@ -75,6 +78,8 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
         </Section>
       );
     case 'unknown':
+      // Until the app step types load, keep the plain note; then an app's step gets its schema form (or the not-installed card).
+      if (loaded) return <SchemaNodeForm {...common} />;
       return (
         <div className="text-xs text-muted-foreground p-2 bg-muted/30 rounded-md">
           This step type cannot be edited here. It is kept as it is and saved unchanged.

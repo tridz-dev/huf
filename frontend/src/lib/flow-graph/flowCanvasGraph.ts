@@ -5,7 +5,7 @@ import { actionLabel } from '../flow/flowLabels';
 import { CARD_WIDTH, COLUMN_GAP, ROW_GAP } from '../flow/flowLayout';
 import { unreachableNodeIds } from '../flow/flowEdit';
 import { makeFlowEdge, edgeRoute } from '../../services/flowSerializer';
-import { actionOptions } from '../../data/actions';
+import { findActionOption } from './appNodeTypes';
 import type { ActionConfig, FlowEdgeRoute, FlowNodeData } from '../../types/flow.types';
 
 /** Ids of cards and lines that exist only on screen; they are never written back to the flow. */
@@ -206,7 +206,7 @@ export function addActionStep(
   if (!sourceNode) return null;
 
   const newNodeId = `node_${Date.now()}`;
-  const option = actionOptions.find((a) => a.id === actionId);
+  const option = findActionOption(actionId);
   const isEnd = actionId === 'end';
   // Fan branch targets out sideways (True/False, approve/reject, router paths) so they never stack on one spot.
   const sourceCfg = sourceNode.data.actionConfig as StepCfg;

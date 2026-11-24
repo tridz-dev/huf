@@ -32,7 +32,7 @@ import {
   Zap,
   type LucideIcon,
 } from 'lucide-react';
-import { actionOptions } from '../../data/actions';
+import { findActionOption } from '../../lib/flow-graph/appNodeTypes';
 import { triggerOptions } from '../../data/triggers';
 import { actionCardId } from '../../lib/flow/flowLabels';
 import type { FlowNodeData } from '../../types/flow.types';
@@ -90,7 +90,7 @@ export function cardIcon(data: FlowNodeData): LucideIcon {
     return paletteIcon(t ? triggerOptions.find((o) => o.id === t)?.icon : 'CircleDashed');
   }
   if (data.nodeType === 'end') return paletteIcon('Flag');
-  const id = actionCardId(data.actionConfig as { type?: unknown; tool_id?: unknown } | undefined);
-  const fromPalette = actionOptions.find((o) => o.id === id)?.icon;
+  const id = actionCardId(data.actionConfig as { type?: unknown; tool_id?: unknown; backend_type?: unknown } | undefined);
+  const fromPalette = findActionOption(id)?.icon;
   return paletteIcon(fromPalette ?? data.icon);
 }
