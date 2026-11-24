@@ -24,6 +24,10 @@ const DONE: Record<string, string> = {
   'state.delete': 'Removed saved data',
   'doc.create': 'Created a document',
   'code.run': 'Ran code',
+  stop: 'Stopped the flow',
+  'doc.get': 'Found a document',
+  'doc.update': 'Updated a document',
+  'flow.call': 'Ran another flow',
 };
 
 const WAITING: Record<string, string> = {

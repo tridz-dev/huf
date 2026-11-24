@@ -104,6 +104,9 @@ export function stepPaletteId(step: FlowCardStep): string {
     case 'state.delete': return 'state-delete';
     case 'doc.create': return 'doc-create';
     case 'code.run': return 'code-run';
+    case 'doc.get': return 'doc-get';
+    case 'doc.update': return 'doc-update';
+    case 'flow.call': return 'flow-call';
     default: return step.type; // condition, human.approval, transform, validate
   }
 }

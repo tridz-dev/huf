@@ -85,4 +85,31 @@ describe('flowValidation', () => {
     expect(fields({ mode: 'resume' })).toEqual([]);
     expect(fields({ mode: 'resume' }, [{ source: 'w', target: 'x', sourceHandle: 'timeout', data: { route: 'timeout' } }])).toEqual([['resume.timeout_ms', 'Choose how long to wait before giving up.']]);
   });
+
+  const check = (cfg: Record<string, unknown>) => validateNode(action('n', cfg), []).map((i) => [i.field, i.message]);
+
+  it('retry: tries 2 to 10 and a first wait of at least a minute', () => {
+    const tool = (retry: unknown) => check({ type: 'tool-call', tool_id: 'http_request', input: { url: 'https://x.test' }, retry });
+    expect(tool(undefined)).toEqual([]);
+    expect(tool({ attempts: 3, backoff: 'fixed', delay_seconds: 60 })).toEqual([]);
+    expect(tool({ attempts: 1, backoff: 'fixed', delay_seconds: 60 })).toEqual([['retry.attempts', 'Tries must be between 2 and 10.']]);
+    expect(tool({ attempts: 11, backoff: 'fixed', delay_seconds: 60 })).toEqual([['retry.attempts', 'Tries must be between 2 and 10.']]);
+    expect(tool({ attempts: 3, backoff: 'fixed', delay_seconds: 30 })).toEqual([['retry.delay_seconds', 'The first wait must be at least 1 minute.']]);
+  });
+
+  it('stop, find, update and run-another-flow ask for their required fields', () => {
+    expect(check({ type: 'stop', message: '' })).toEqual([['message', 'Write the message to show when the flow stops.']]);
+    expect(check({ type: 'stop', message: 'No stock' })).toEqual([]);
+    expect(check({ type: 'doc-get' })).toEqual([['doctype', 'Choose a document type.']]);
+    expect(check({ type: 'doc-get', doctype: 'ToDo' })).toEqual([['name', 'Choose which document to find.']]);
+    expect(check({ type: 'doc-get', doctype: 'ToDo', filters: {} })).toEqual([['filters', 'Add at least one field to match.']]);
+    expect(check({ type: 'doc-get', doctype: 'ToDo', filters: { status: 'Open' } })).toEqual([]);
+    expect(check({ type: 'doc-update', doctype: 'ToDo', name: '', values: {} })).toEqual([
+      ['name', 'Choose which document to update.'],
+      ['values', 'Add at least one field to change.'],
+    ]);
+    expect(check({ type: 'doc-update', doctype: 'ToDo', name: 'T-1', values: { status: 'Closed' } })).toEqual([]);
+    expect(check({ type: 'flow-call', flow_id: '' })).toEqual([['flow_id', 'Choose a flow to run.']]);
+    expect(check({ type: 'flow-call', flow_id: 'onboarding' })).toEqual([]);
+  });
 });

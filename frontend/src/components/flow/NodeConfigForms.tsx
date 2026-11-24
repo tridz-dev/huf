@@ -9,6 +9,10 @@ import { ConditionForm } from './forms/ConditionForm';
 import { LoopForm } from './forms/LoopForm';
 import { ApprovalForm } from './forms/approval/ApprovalForm';
 import { WaitForm } from './forms/WaitForm';
+import { StopForm } from './forms/StopForm';
+import { FlowCallForm } from './forms/FlowCallForm';
+import { DocGetForm } from './forms/data/DocGetForm';
+import { DocUpdateForm } from './forms/data/DocUpdateForm';
 import { TransformForm } from './forms/data/TransformForm';
 import { StateForm } from './forms/data/StateForm';
 import { DocCreateForm } from './forms/data/DocCreateForm';
@@ -48,6 +52,14 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
       return <ApprovalForm {...common} />;
     case 'wait':
       return <WaitForm {...common} />;
+    case 'stop':
+      return <StopForm {...common} />;
+    case 'flow-call':
+      return <FlowCallForm {...common} />;
+    case 'doc-get':
+      return <DocGetForm {...common} />;
+    case 'doc-update':
+      return <DocUpdateForm {...common} />;
     case 'transform':
       return <TransformForm {...common} />;
     case 'state-get':

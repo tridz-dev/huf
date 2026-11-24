@@ -100,6 +100,7 @@ export interface ConnectionRequest {
 /** Routes a step can start a connection from. */
 function allowedRoutes(node: FlowNode): FlowEdgeRoute[] {
   if (node.data.nodeType === 'end') return [];
+  if ((node.data.actionConfig as { type?: string } | undefined)?.type === 'stop') return [];
   if (node.data.nodeType === 'trigger') return ['next'];
   const cfg = node.data.actionConfig as ({ type?: string } & Record<string, unknown>) | undefined;
   if (cfg?.type === 'router') return ['option'];
@@ -114,7 +115,7 @@ export function connectionProblem(graph: FlowGraphLike, req: ConnectionRequest):
   if (!source || !target) return "That step doesn't exist any more.";
   if (source.id === target.id) return "A step can't connect to itself.";
   if (target.data.nodeType === 'trigger') return "Nothing can lead into the trigger. Connect from the trigger to a step instead.";
-  if (source.data.nodeType === 'end') return "A step that ends the flow can't lead to another step.";
+  if (source.data.nodeType === 'end' || (source.data.actionConfig as { type?: string } | undefined)?.type === 'stop') return "A step that ends the flow can't lead to another step.";
   if (!allowedRoutes(source).includes(req.route)) return "That connection point can't start a connection on this step.";
   if (graph.edges.some((e) => e.source === req.source && e.target === req.target && edgeRoute(e) === req.route)) {
     return 'These two steps are already connected.';

@@ -46,6 +46,10 @@ export const ACTION_TO_BACKEND_TYPE: Record<ActionType, BackendNodeType> = {
     'doc-create': 'doc.create',
     'code-run': 'code.run',
     'wait': 'wait',
+    'stop': 'stop',
+    'doc-get': 'doc.get',
+    'doc-update': 'doc.update',
+    'flow-call': 'flow.call',
 };
 
 const BACKEND_TO_ACTION_TYPE: Record<string, ActionType> = Object.fromEntries(
@@ -62,7 +66,7 @@ const ROUTING_KEYS: Partial<Record<BackendNodeType, string[]>> = {
 };
 
 /** Node types with no `next` key at all. */
-const NO_NEXT_TYPES = new Set<string>(['condition', 'router.llm', 'router.decision', 'human.approval', 'output']);
+const NO_NEXT_TYPES = new Set<string>(['condition', 'router.llm', 'router.decision', 'human.approval', 'output', 'stop']);
 
 /** Valid values of a handle id / edge route other than 'next'. */
 export const FLOW_EDGE_ROUTES: readonly FlowEdgeRoute[] = [
@@ -149,6 +153,7 @@ export function serializeFlow(flow: Flow): BackendFlowGraph {
         fingerprint: placeholderFingerprint(JSON.stringify(nodes.map((n) => [n.id, n.type, n.config, n.next, n.on_error]))),
         entry: triggerIds.length ? triggerIds : flow.nodes[0]?.id ?? '',
         nodes,
+        ...(flow.errorHandler && ids.has(flow.errorHandler) ? { error_handler: { next: flow.errorHandler } } : {}),
         contract: deriveContract(nodes),
     };
 }
@@ -321,6 +326,7 @@ export function deserializeFlow(
         status: mapBackendStatusToFrontend(status),
         nodes: layoutWhenUnplaced(graph.nodes.map((node, index) => deserializeNode(node, index)), edges, graph.nodes.some((n) => !n._position)),
         edges,
+        ...(graph.error_handler?.next ? { errorHandler: graph.error_handler.next } : {}),
         createdAt: new Date(),
         updatedAt: new Date(),
         // Version lives on the Flow Definition doctype record, not in the graph.

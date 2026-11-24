@@ -50,6 +50,8 @@ export interface BackendFlowGraph {
     /** One node id, or (when the graph starts from one or more triggers) an array of trigger node ids. */
     entry: string | string[];
     nodes: BackendNode[];
+    /** Optional flow-level handler: the step chain run once after a failure no step routed. */
+    error_handler?: { next: string };
     contract: BackendContract;
 }
 
@@ -57,7 +59,8 @@ export type BackendNodeType =
     | 'trigger.webhook' | 'trigger.schedule' | 'trigger.doc-event' | 'trigger.unset' | 'trigger.gateway' | 'trigger.whatsapp' | 'trigger.telegram'
     | 'agent.run' | 'tool.call' | 'router.llm' | 'router.decision' | 'wait' | 'human.approval'
     | 'condition' | 'transform' | 'foreach' | 'validate' | 'output'
-    | 'state.get' | 'state.set' | 'state.delete' | 'doc.create' | 'code.run';
+    | 'state.get' | 'state.set' | 'state.delete' | 'doc.create' | 'code.run'
+    | 'stop' | 'doc.get' | 'doc.update' | 'flow.call';
 
 export interface BackendNode {
     id: string;

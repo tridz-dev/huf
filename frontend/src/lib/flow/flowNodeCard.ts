@@ -162,7 +162,7 @@ export function actionSubtitle(cfg: ActionConfig | undefined): string {
       return agent ? `Ask ${agent}` : 'Ask an AI agent to do a task';
     }
     case 'tool-call':
-      return toolSubtitle(cfg);
+      return toolSubtitle(cfg) + (cfg.retry && cfg.retry.attempts >= 2 ? ` · tries up to ${cfg.retry.attempts} times` : '');
     case 'router':
       return 'AI picks the next path';
     case 'router-decision':
@@ -202,6 +202,20 @@ export function actionSubtitle(cfg: ActionConfig | undefined): string {
     }
     case 'code-run':
       return 'Run a Python snippet';
+    case 'stop': {
+      const msg = typed(cfg.message);
+      return msg ? `Stops the flow: ${msg}` : 'Stops the flow with an error';
+    }
+    case 'doc-get': {
+      const dt = typed(cfg.doctype);
+      return dt ? `Finds a ${dt}` : 'Find a document';
+    }
+    case 'doc-update': {
+      const dt = typed(cfg.doctype);
+      return dt ? `Updates a ${dt}` : 'Update a document';
+    }
+    case 'flow-call':
+      return cfg.mode === 'wait' ? 'Runs another flow and waits' : 'Starts another flow';
     default:
       return '';
   }

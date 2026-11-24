@@ -33,7 +33,7 @@ export interface OpenEnd {
 export function computeOpenEnds(nodes: Node<FlowNodeData>[], edges: Edge[]): OpenEnd[] {
   const ends: OpenEnd[] = [];
   for (const n of nodes) {
-    if (n.data.nodeType === 'end') continue;
+    if (n.data.nodeType === 'end' || (n.data.actionConfig as { type?: string } | undefined)?.type === 'stop') continue;
     const out = edges.filter((e) => e.source === n.id);
     const cfg = n.data.actionConfig as StepCfg;
     if (cfg?.type === 'router') {

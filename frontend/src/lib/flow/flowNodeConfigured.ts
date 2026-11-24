@@ -38,6 +38,14 @@ export function actionHasConfiguredContent(data: Pick<FlowNodeData, 'actionConfi
       return Boolean(config.doctype?.trim());
     case 'code-run':
       return has(config.code);
+    case 'stop':
+      return Boolean(config.message);
+    case 'doc-get':
+      return Boolean(config.doctype?.trim() && (config.name || Object.keys(config.filters ?? {}).length > 0));
+    case 'doc-update':
+      return Boolean(config.doctype?.trim() && config.name && Object.keys(config.values ?? {}).length > 0);
+    case 'flow-call':
+      return Boolean(config.flow_id);
     case 'unknown':
       return true;
     default:
