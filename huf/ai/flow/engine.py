@@ -50,6 +50,8 @@ from frappe import _
 from frappe.utils import now_datetime
 
 from huf.ai.flow import create_doc as flow_create_doc, state as flow_state
+from huf.ai.flow import member as flow_member
+from huf.ai.flow.nodes.member import exec_member_set
 from huf.ai.flow.nodes.docops import exec_doc_get, exec_doc_update
 from huf.ai.flow.nodes.stop import exec_stop
 from huf.ai.flow.nodes.switch import exec_switch
@@ -545,6 +547,10 @@ def create_flow_run(
 		fields["pinned_fingerprint"] = version.fingerprint
 		fields["pinned_definition"] = pinned_json(version)
 
+	member_key = flow_member.resolve_member_key(trigger_type, payload, frappe.session.user) if mode == "real" else None
+	if member_key:
+		fields["member_key"] = member_key
+
 	flow_run = frappe.get_doc(fields)
 	# Authenticated callers are already verified by the public API.
 	# Webhook triggers run as Guest after HMAC validation, so the internal
@@ -555,6 +561,8 @@ def create_flow_run(
 		if not frappe.has_permission("Flow Run", "create", doc=flow_run):
 			frappe.throw(_("You do not have permission to run flows. Ask an admin for access."), frappe.PermissionError)
 		flow_run.insert()
+	if member_key:
+		flow_member.upsert_member(flow_id, member_key, flow_run.name)
 	commit_if_background()
 
 	return flow_run
@@ -628,6 +636,17 @@ def _build_run_context(flow_run, version: PinnedVersion) -> FlowRunContext:
 			"fingerprint": version.fingerprint,
 		},
 	)
+	member_key = getattr(flow_run, "member_key", None)
+	if member_key:
+		row = flow_member.get_member(flow_run.flow_id, member_key)
+		if row:
+			context.member = {
+				"key": member_key,
+				"status": row.status,
+				"vars": row.vars,
+				"run_count": row.run_count,
+				"entered_at": row.entered_at,
+			}
 	return FlowRunContext(
 		{},
 		flow_run=flow_run,
@@ -1515,6 +1534,11 @@ def _exec_stop(flow_run, node: dict, config: dict, settings: dict) -> dict:
 	return exec_stop(flow_run, node, config, settings, _context_of(flow_run, settings))
 
 
+def _exec_member_set(flow_run, node: dict, config: dict, settings: dict) -> dict:
+	"""``member.set``: save values on the run's member, see ``nodes/member.py``."""
+	return exec_member_set(flow_run, node, config, _context_of(flow_run, settings))
+
+
 def _exec_doc_get(flow_run, node: dict, config: dict, settings: dict) -> dict:
 	"""``doc.get``: read one document as the run user, see ``nodes/docops.py``."""
 	return exec_doc_get(node, config, _context_of(flow_run, settings), _run_context(settings))
@@ -2011,12 +2035,17 @@ def _exec_output(flow_run, node: dict, config: dict, settings: dict) -> dict:
 
 def _state_node(flow_run, node: dict, config: dict, settings: dict, allowed: set, op):
 	"""Shared shell: validate config keys, resolve inputs, scope to the *running* flow."""
-	unknown = sorted(set(config) - allowed)
-	if unknown:
+	unknown = sorted(set(config) - allowed - {"scope"})
+	if unknown or config.get("scope") not in (None, "flow", "member"):
 		return {"status": "failed", "error": f'{step_ref(node, True)} has settings this step does not use. Remove them and save again.'}
 	flow_id = getattr(flow_run, "flow_id", None)
 	ctx = _context_of(flow_run, settings)
-	resolved = {k: ctx.resolve(v) for k, v in config.items()}
+	resolved = {k: ctx.resolve(v) for k, v in config.items() if k != "scope"}
+	if config.get("scope") == "member":  # one value per person, kept apart from every other person's
+		member_key = getattr(flow_run, "member_key", None)
+		if not member_key:
+			return {"status": "failed", "error": f'{step_ref(node, True)} is saved per person, but this run does not know who it is about.'}
+		resolved["key"] = f"member:{member_key}:{resolved.get('key')}"
 	try:
 		output = op(flow_id, resolved)
 	except flow_state.FlowStateError as exc:
@@ -2122,6 +2151,7 @@ _NODE_EXECUTORS = {
 	"code.run": _exec_code_run,
 	"wait": exec_wait,
 	"stop": _exec_stop,
+	"member.set": _exec_member_set,
 	"doc.get": _exec_doc_get,
 	"doc.update": _exec_doc_update,
 }

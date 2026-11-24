@@ -207,6 +207,7 @@ class GraphContext:
 		self.metadata: dict = dict(metadata or {})
 		self.node_outputs: dict = {}
 		self.foreach_frames: list[dict] = []
+		self.member: dict | None = None  # the run's member (key, status, vars, ...); None when the run has none
 		self.dirty = False
 
 	# -- construction -----------------------------------------------------
@@ -268,6 +269,8 @@ class GraphContext:
 			"context": self.data,
 		}
 		roots.update(self.node_outputs)
+		if self.member is not None:
+			roots["member"] = self.member
 		if self.foreach_frames:
 			roots["foreach"] = self.foreach_frames[-1]
 		return roots

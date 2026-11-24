@@ -358,6 +358,7 @@ scheduler_events = {
         "huf.ai.gateway_service.purge_old_rejected_gateway_events",
         "huf.ai.gateway_service.cleanup_stale_access_entries",
         "huf.ai.flow.state.purge_expired",
+        "huf.ai.flow.member.purge_inactive",
         # Leftover scratch folders of Execute code steps (a step removes its own; this is for killed workers).
         "huf.ai.flow.code_node.purge_scratch",
         "huf.ai.whatsapp.send_keys.purge_expired",

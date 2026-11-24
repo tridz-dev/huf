@@ -1,0 +1,47 @@
+{
+ "actions": [],
+ "creation": "2026-11-25 10:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "flow",
+  "member_key",
+  "status",
+  "current_node_id",
+  "active_flow_run",
+  "entered_at",
+  "last_event_at",
+  "completed_at",
+  "run_count",
+  "vars_json",
+  "history_json"
+ ],
+ "fields": [
+  {"fieldname": "flow", "fieldtype": "Link", "in_list_view": 1, "label": "Flow", "options": "Flow Definition", "read_only": 1, "reqd": 1, "search_index": 1},
+  {"fieldname": "member_key", "fieldtype": "Data", "in_list_view": 1, "label": "Member", "length": 140, "read_only": 1, "reqd": 1},
+  {"default": "Active", "fieldname": "status", "fieldtype": "Select", "in_list_view": 1, "label": "Status", "options": "Active\nWaiting\nCompleted\nExited", "read_only": 1},
+  {"fieldname": "current_node_id", "fieldtype": "Data", "label": "Current Step", "read_only": 1},
+  {"fieldname": "active_flow_run", "fieldtype": "Link", "label": "Active Run", "options": "Flow Run", "read_only": 1},
+  {"fieldname": "entered_at", "fieldtype": "Datetime", "label": "Entered At", "read_only": 1},
+  {"fieldname": "last_event_at", "fieldtype": "Datetime", "label": "Last Event At", "read_only": 1, "search_index": 1},
+  {"fieldname": "completed_at", "fieldtype": "Datetime", "label": "Completed At", "read_only": 1},
+  {"default": "0", "fieldname": "run_count", "fieldtype": "Int", "label": "Runs", "read_only": 1},
+  {"fieldname": "vars_json", "fieldtype": "JSON", "label": "Variables", "read_only": 1},
+  {"fieldname": "history_json", "fieldtype": "JSON", "label": "History", "read_only": 1}
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-11-25 10:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Huf",
+ "name": "Flow Member State",
+ "naming_rule": "By script",
+ "owner": "Administrator",
+ "permissions": [
+  {"create": 1, "delete": 1, "read": 1, "report": 1, "role": "System Manager", "write": 1},
+  {"create": 1, "delete": 1, "read": 1, "report": 1, "role": "Huf Manager", "write": 1}
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
