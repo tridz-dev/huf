@@ -1,7 +1,8 @@
 """``wait`` node: pause the run for a duration, until a moment, or until something resumes it.
 
 Config: ``mode`` (``duration`` | ``until`` | ``resume``), ``duration {value, unit}``, ``until`` (+ ``time_zone``),
-``resume {timeout_ms, timeout_next, message}``. The node parks the run (``park.park_run``); once woken the step
+``resume {wait_for, timeout_ms, timeout_next, message}`` (``wait_for``: ``token`` by default, or ``member_reply`` to
+wait for the next message from the person the run is about). The node parks the run (``park.park_run``); once woken the step
 is entered again and only emits its output, so nothing is repeated. It is always self-routed because a woken
 ``resume`` step may leave by its ``timeout_next`` edge.
 """
@@ -10,7 +11,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from huf.ai.flow import park
+from huf.ai.flow import member as flow_member, park
 from huf.ai.flow.park import ParkRequest
 
 _UNIT_SECONDS = {"minutes": 60, "hours": 3600, "days": 86400}
@@ -54,6 +55,8 @@ def exec_wait(flow_run, node: dict, config: dict, settings: dict):
 		woke = waiting.get("woke") or {}
 		extra = waiting.get("extra") or {}
 		_transition_run(flow_run, {"waiting": None}, from_statuses=("Running",))
+		if flow_run.member_key:
+			flow_member.set_status(flow_run.flow_id, flow_run.member_key, "Active")
 		reason = woke.get("reason")
 		timeout_next = extra.get("timeout_next")
 		# a resume-mode step that the timer (not a person or a call) woke has timed out
@@ -100,8 +103,14 @@ def exec_wait(flow_run, node: dict, config: dict, settings: dict):
 		resume = config.get("resume") or {}
 		timeout_ms = resume.get("timeout_ms")
 		resume_at = now + timedelta(milliseconds=int(timeout_ms)) if timeout_ms else None
-		token = True
+		wait_for = resume.get("wait_for") or "token"
+		if wait_for not in ("token", "member_reply"):
+			return _failed("Choose what resumes this step: a resume link or a reply from the person.")
+		if wait_for == "member_reply" and not flow_run.member_key:
+			return _failed("This run does not know who it is about, so it cannot wait for their reply. Start it from a message, or choose a resume link.")
+		token = wait_for == "token"
 		extra["mode"] = "resume"
+		extra["wait_for"] = wait_for
 		if resume.get("timeout_next"):
 			extra["timeout_next"] = resume["timeout_next"]
 		if resume.get("message"):
@@ -113,8 +122,10 @@ def exec_wait(flow_run, node: dict, config: dict, settings: dict):
 		return _failed(f"This wait is longer than the {park.max_wait_days()} days a flow may wait. Choose a shorter wait.")
 
 	_persist_context(flow_run, ctx, settings)
+	if flow_run.member_key:
+		flow_member.set_status(flow_run.flow_id, flow_run.member_key, "Waiting")
 	return park.park_run(
 		flow_run,
 		node,
-		ParkRequest(reason="wait", resume_at=resume_at, token=token, extra=extra),
+		ParkRequest(reason="wait", resume_at=resume_at, token=token, member_key=flow_run.member_key, extra=extra),
 	)

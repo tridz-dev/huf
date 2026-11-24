@@ -166,6 +166,28 @@ def gate_flow_start(event, gateway, payload: dict) -> tuple[str | None, bool]:
 	return None, trigger_wants_transcript(node)
 
 
+def apply_entry_policy(event, gateway, payload: dict) -> tuple[str | None, str | None]:
+	"""The trigger's entry policy for this sender. Returns ``(skip_note, resumed_run)``; both ``None`` means start a run."""
+	from huf.ai.flow import member
+	from huf.ai.flow.triggers import entry_decision, entry_policy_of
+
+	row = _flow_row(event.target_flow)
+	defn = _graph(row.get("definition_json")) if row else {}
+	entries, types = _entries_and_types(defn)
+	if not any(types.get(e) in GATEWAY_NODE_TYPES for e in entries):
+		return None, None
+	try:
+		node_id = pick_gateway_entry(defn, entries, types, payload)
+	except ValueError:
+		return None, None
+	node = next((n for n in defn.get("nodes", []) if isinstance(n, dict) and n.get("id") == node_id), {})
+	policy = entry_policy_of(node.get("config"))
+	decision = entry_decision(event.target_flow, policy, member.resolve_member_key("Gateway", payload, None), payload)
+	if decision["action"] == "skip":
+		return f"Skipped: {decision['reason']}", None
+	return None, decision.get("run")
+
+
 def wants_voice(params: dict) -> bool:
 	"""A trigger that asks for voice notes (or audio) wants them transcribed (Q7: opt-in)."""
 	kinds = params.get("message_kinds")

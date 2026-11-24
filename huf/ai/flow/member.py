@@ -91,6 +91,34 @@ def upsert_member(flow: str, key: str, run: str | None = None) -> str:
 	return name
 
 
+def set_status(flow: str, key: str, status: str) -> None:
+	frappe.db.set_value(DOCTYPE, member_name(flow, key), "status", status, update_modified=False)
+
+
+def find_waiting_reply_run(flow: str, key: str) -> str | None:
+	"""The run of this member parked on a ``member_reply`` wait, if any."""
+	rows = frappe.get_all(
+		"Flow Run",
+		filters={"flow_id": flow, "member_key": key, "status": "Waiting Timer"},
+		fields=["name", "waiting"],
+		order_by="creation desc",
+		limit=20,
+	)
+	for row in rows:
+		extra = _load_json(row.waiting, {}).get("extra") or {}
+		if extra.get("wait_for") == "member_reply":
+			return row.name
+	return None
+
+
+def has_active_run(flow: str, key: str) -> bool:
+	from huf.ai.flow.engine import TERMINAL_STATUSES
+
+	return bool(
+		frappe.db.exists("Flow Run", {"flow_id": flow, "member_key": key, "status": ["not in", list(TERMINAL_STATUSES)]})
+	)
+
+
 def get_vars(flow: str, key: str) -> dict:
 	raw = frappe.db.get_value(DOCTYPE, member_name(flow, key), "vars_json")
 	return _load_json(raw, {})
