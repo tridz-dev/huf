@@ -430,6 +430,17 @@ def _check_control_flow_targets(graph: dict, nodes_by_id: dict[str, dict]) -> li
 					)
 				)
 
+	handler_id = (graph.get("error_handler") or {}).get("next")
+	if handler_id and handler_id not in nodes_by_id:
+		errors.append(
+			ValidationError(
+				"DANGLING_TARGET",
+				None,
+				"error_handler.next",
+				f"error_handler.next points at node id {handler_id!r}, which does not exist in this graph",
+			)
+		)
+
 	for root in _entry_roots(graph):
 		if root not in nodes_by_id:
 			errors.append(
