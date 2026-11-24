@@ -98,7 +98,7 @@ class TestFlowUx4RunApi(IntegrationTestCase):
 	def test_cancel_only_a_queued_run(self):
 		queued = self._run(status="Queued", current="")
 		res = cancel_flow_run(queued)
-		self.assertEqual(res["status"], "Failed")
+		self.assertEqual(res["status"], "Cancelled")
 		self.assertIn("Cancelled by", frappe.db.get_value("Flow Run", queued, "last_error"))
 		with self.assertRaises(frappe.ValidationError):
 			cancel_flow_run(self._run(status="Success"))

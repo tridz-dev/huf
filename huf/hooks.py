@@ -372,6 +372,7 @@ scheduler_events = {
             "huf.ai.gateways.teams.outbox.retry_due",
             "huf.ai.flow.triggers.run_due_schedule_flows",
             "huf.ai.flow.triggers.expire_due_approvals",
+            "huf.ai.flow.triggers.wake_due_waits",
             # Flow runs parked on an Execute code step: continue finished ones, give up on lost ones.
             "huf.ai.flow.code_node.sweep_code_waits",
             "huf.ai.knowledge.bulk_recovery.recover_stalled_ingestions",  # bulk ingestion safety net

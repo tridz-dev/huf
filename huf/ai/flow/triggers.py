@@ -350,6 +350,32 @@ def expire_due_approvals(now: datetime | None = None, enqueue: bool = False) -> 
 	return expired
 
 
+def wake_due_waits(now: datetime | None = None, limit: int = 500) -> list[str]:
+	"""Scheduler entry (every minute): wake every ``Waiting Timer`` run whose ``resume_at`` has passed.
+
+	Each continuation is enqueued on the short queue, never run here, so a big tick cannot hold the scheduler.
+	"""
+	from frappe.utils import now_datetime
+
+	from huf.ai.flow.park import wake_run
+
+	names = frappe.get_all(
+		"Flow Run",
+		filters={"status": "Waiting Timer", "resume_at": ["<=", now or now_datetime()]},
+		order_by="resume_at asc",
+		limit_page_length=limit,
+		pluck="name",
+	)
+	woken: list[str] = []
+	for name in names:
+		try:
+			if wake_run(name, "elapsed"):
+				woken.append(name)
+		except Exception:
+			frappe.log_error(frappe.get_traceback(), f"Flow wait wake: {name}")
+	return woken
+
+
 # ---------------------------------------------------------------------------
 # Doc event
 # ---------------------------------------------------------------------------
