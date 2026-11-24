@@ -302,6 +302,8 @@ export type FlowEdgeRoute =
 
 export interface FlowEdgeData {
   route?: FlowEdgeRoute;
+  /** Switch rule check (route 'option' of router.decision); written to the option's `expression`. */
+  expression?: string;
 }
 
 export interface FlowNodeData {

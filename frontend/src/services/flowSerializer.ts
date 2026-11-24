@@ -18,7 +18,7 @@
  */
 
 import type {
-    ActionConfig, ActionType, Flow, FlowEdge, FlowEdgeRoute, FlowNode, FlowNodeData, FlowStatus, TriggerConfig,
+    ActionConfig, ActionType, Flow, FlowEdge, FlowEdgeData, FlowEdgeRoute, FlowNode, FlowNodeData, FlowStatus, TriggerConfig,
 } from '@/types/flow.types';
 import type { BackendFlowGraph, BackendNode, BackendNodeType } from './flowApi';
 import { layoutWhenUnplaced } from '../lib/flow/flowLayout';
@@ -93,13 +93,15 @@ export interface MakeFlowEdgeOptions {
     label?: string;
     /** position among same-route edges of the source (option/body). */
     index?: number;
+    /** router.decision rule check (route 'option'). */
+    expression?: string;
 }
 
 /** Build the canonical canvas edge for a route. Used by deserialize; WP-D should use it for new connections. */
 export function makeFlowEdge(source: string, target: string, route: FlowEdgeRoute, opts: MakeFlowEdgeOptions = {}): FlowEdge {
     const label = route === 'option' ? opts.label ?? target
         : ROUTE_LABELS[route];
-    const data: { route: FlowEdgeRoute } = { route };
+    const data: FlowEdgeData = opts.expression !== undefined ? { route, expression: opts.expression } : { route };
     const edge: FlowEdge = {
         id: makeFlowEdgeId(source, route, target, route === 'option' || route === 'body' ? opts.index ?? 0 : undefined),
         source,
@@ -180,6 +182,7 @@ function serializeNode(node: FlowNode, outgoing: FlowEdge[], nextOf: Map<string,
             const options = byRoute('option').map((e) => ({
                 label: typeof e.label === 'string' && e.label !== '' ? e.label : e.target,
                 node_id: e.target,
+                ...(typeof e.data?.expression === 'string' ? { expression: e.data.expression } : {}),
             }));
             config.options = options;
             // Recomputed from current edges: a default that is no longer a routed target is dropped.
@@ -412,8 +415,8 @@ function deserializeEdgesForNode(node: BackendNode, byId: Map<string, BackendNod
             break;
         case 'router.llm':
         case 'router.decision': {
-            const options = (cfg.options as Array<{ label: string; node_id: string }> | undefined) ?? [];
-            options.forEach((o, index) => push(o.node_id, 'option', { label: o.label, index }));
+            const options = (cfg.options as Array<{ label: string; node_id: string; expression?: string }> | undefined) ?? [];
+            options.forEach((o, index) => push(o.node_id, 'option', { label: o.label, index, expression: o.expression }));
             if (typeof cfg.default === 'string' && !options.some((o) => o.node_id === cfg.default)) push(cfg.default, 'default');
             break;
         }
