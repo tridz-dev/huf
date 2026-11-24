@@ -139,10 +139,15 @@ FLOW_ONLY_NODE_TYPES: frozenset[str] = frozenset(
 # ``parallel`` is a Procedure-only node: Flow has no concurrent branches.
 FLOW_NODE_TYPES: frozenset[str] = (PROCEDURE_NODE_TYPES - {"parallel"}) | FLOW_ONLY_NODE_TYPES
 
-_PROFILE_NODE_TYPES: dict[str, frozenset[str]] = {
-	"procedure": PROCEDURE_NODE_TYPES,
-	"flow": FLOW_NODE_TYPES,
-}
+def get_flow_node_types() -> frozenset[str]:
+	"""Built-in Flow step types plus those installed apps register through the ``huf_flow_nodes`` hook."""
+	from huf.ai.flow import node_registry
+
+	return FLOW_NODE_TYPES | frozenset(node_registry.registered_types())
+
+
+def _profile_node_types(profile: str) -> frozenset[str]:
+	return get_flow_node_types() if profile == "flow" else PROCEDURE_NODE_TYPES
 
 
 # Policy ceilings for contract.limits (requirement 6: "within policy", not merely "present").
@@ -231,6 +236,8 @@ def validate_graph(
 	errors.extend(_check_reachability(graph, nodes_by_id))
 	errors.extend(_check_acyclic(graph, nodes_by_id))
 	errors.extend(_check_tool_ids_literal(nodes))
+	if profile == "flow":
+		errors.extend(_check_app_node_validators(nodes))
 	errors.extend(_check_transform_ops(nodes))
 	errors.extend(_check_expressions(graph, nodes))
 	errors.extend(_check_references(nodes_by_id))
@@ -295,8 +302,20 @@ def _check_tool_ids_literal(nodes: list[dict]) -> list[ValidationError]:
 	return errors
 
 
+def _check_app_node_validators(nodes: list[dict]) -> list[ValidationError]:
+	"""Each app step type's own ``validate`` hook (publish only)."""
+	from huf.ai.flow import node_registry
+
+	return [
+		ValidationError("NODE_CONFIG", node.get("id"), "config", problem)
+		for node in nodes
+		if isinstance(node, dict)
+		for problem in node_registry.validate_node_config(node)
+	]
+
+
 def _check_profile_node_types(nodes: list[dict], profile: str) -> list[ValidationError]:
-	allowed = _PROFILE_NODE_TYPES[profile]
+	allowed = _profile_node_types(profile)
 	errors = []
 	for node in nodes:
 		if not isinstance(node, dict):
