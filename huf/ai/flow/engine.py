@@ -53,6 +53,7 @@ from huf.ai.flow import create_doc as flow_create_doc, state as flow_state
 from huf.ai.flow.nodes.docops import exec_doc_get, exec_doc_update
 from huf.ai.flow.nodes.stop import exec_stop
 from huf.ai.flow.nodes.switch import exec_switch
+from huf.ai.flow.nodes.retry import policy_of as retry_policy_of, run_with_retry
 from huf.ai.flow.nodes.wait import exec_wait
 from huf.ai.flow.runs.outcome import record_outcome
 from huf.ai.flow.support.approval_card import waiting_fields
@@ -1039,11 +1040,16 @@ def _make_node_handler(flow_run, settings):
 	"""Bridge one Flow node executor into the executor's handler contract."""
 
 	def handler(node: NodeSpec, context: GraphContext, state: ExecutionState):
-		try:
-			result = _execute_node(flow_run, node.raw, settings)
-		except Exception as exc:
-			frappe.log_error(frappe.get_traceback(), f"Flow node {node.id} raised")
-			result = {"status": "failed", "error": describe_exception(exc)}
+		def run_once():
+			try:
+				return _execute_node(flow_run, node.raw, settings)
+			except Exception as exc:
+				frappe.log_error(frappe.get_traceback(), f"Flow node {node.id} raised")
+				return {"status": "failed", "error": describe_exception(exc)}
+
+		result = run_with_retry(flow_run, node.raw, settings, run_once)
+		if isinstance(result, Outcome):  # parked for a retry
+			return result
 		outcome = Outcome.from_mapping(result)
 		if outcome.status == "failed":
 			outcome.output = failed_node_record(outcome)
@@ -1829,6 +1835,8 @@ def _run_sub_chain(flow_run, settings: dict, node_ids: list) -> dict:
 			return {"status": "failed", "error": f'{step_ref(node, True)} waits for approval, which a loop cannot do. Move it outside the loop.'}
 		if node.get("type") == "wait":
 			return {"status": "failed", "error": f'{step_ref(node, True)} is a wait step. Wait steps cannot be used inside a loop. Move it outside the loop.'}
+		if retry_policy_of(node):
+			return {"status": "failed", "error": f'{step_ref(node, True)} is set to try again if it fails, which a loop cannot do. Remove the retry setting or move the step outside the loop.'}
 		if node.get("type") == "code.run":
 			return {"status": "failed", "error": f'{step_ref(node, True)} runs code, which a loop cannot do. Move it outside the loop.'}
 
