@@ -135,6 +135,24 @@ export function toolSubtitle(cfg: Extract<ActionConfig, { type: 'tool-call' }>):
   }
 }
 
+function waitSubtitle(cfg: Extract<ActionConfig, { type: 'wait' }>): string {
+  if (cfg.mode === 'resume') return 'Waits until someone continues it';
+  if (cfg.mode === 'until') {
+    const until = cfg.until;
+    if (typeof until !== 'string' || !until.trim()) return until ? 'Waits until a date from your data' : 'Wait until a date and time';
+    const zone = cfg.time_zone ? ` (${cfg.time_zone})` : '';
+    const d = new Date(until);
+    const when = Number.isNaN(d.getTime())
+      ? until
+      : d.toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false, ...(cfg.time_zone ? { timeZone: cfg.time_zone } : {}) });
+    return `Waits until ${when}${zone}`;
+  }
+  const value = cfg.duration?.value;
+  if (typeof value !== 'number' || value < 1) return 'Pause for a while';
+  const unit = cfg.duration?.unit ?? 'hours';
+  return `Waits ${value} ${value === 1 ? unit.slice(0, -1) : unit}`;
+}
+
 /** One line saying what the step does, in the user's own values when they are plain text. */
 export function actionSubtitle(cfg: ActionConfig | undefined): string {
   if (!cfg) return '';
@@ -158,6 +176,8 @@ export function actionSubtitle(cfg: ActionConfig | undefined): string {
       if (cfg.approver_type === 'role' && role) return `Waits for ${role}`;
       return 'Waits for a person to decide';
     }
+    case 'wait':
+      return waitSubtitle(cfg);
     case 'validate':
       return 'Check the data is right';
     case 'transform': {

@@ -15,7 +15,7 @@ const UNITS: TimeUnit[] = ['minutes', 'hours', 'days'];
  * when a step is connected to it). Lives in the step's Settings tab; the Setup tab says what it is set to.
  */
 export function ApprovalTimeoutField({
-  nodeId, kind, timeoutMs, onChange, disabled,
+  nodeId, kind, timeoutMs, onChange, disabled, label = 'If nobody answers, stop waiting after',
 }: {
   nodeId: string;
   /** Contract type of the step, for test ids (`flow-field-<kind>-timeout_ms`). */
@@ -23,6 +23,7 @@ export function ApprovalTimeoutField({
   timeoutMs: number | undefined;
   onChange: (ms: number | undefined) => void;
   disabled?: boolean;
+  label?: string;
 }) {
   const { activeFlow, updateEdges } = useFlowContext();
   const timedOut = (activeFlow?.edges ?? []).filter((e) => e.source === nodeId && edgeRoute(e) === 'timeout');
@@ -47,7 +48,7 @@ export function ApprovalTimeoutField({
         key={redraw}
         id="approval-timeout"
         testId={`flow-field-${kind}-timeout_ms`}
-        label="If nobody answers, stop waiting after"
+        label={label}
         units={UNITS}
         perUnit={1000}
         placeholder="No limit"

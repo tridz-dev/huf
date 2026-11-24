@@ -44,6 +44,14 @@ export const actionOptions: ActionOption[] = [
     keywords: ['loop', 'foreach', 'each', 'list', 'repeat'],
   },
   {
+    id: 'wait',
+    name: 'Wait',
+    description: 'Pause for a while, until a time, or until resumed.',
+    icon: 'Hourglass',
+    category: 'control',
+    keywords: ['wait', 'delay', 'sleep', 'pause', 'timer', 'later', 'schedule', 'until', 'resume'],
+  },
+  {
     id: 'end',
     name: 'Finish',
     description: 'Ends the flow and gives back a result.',
@@ -198,6 +206,7 @@ export const ACTION_CARD_CONTRACT: Record<string, ActionCardContract> = {
   'condition': { configType: 'condition', backendType: 'condition' },
   'loop': { configType: 'foreach', backendType: 'foreach' },
   'human.approval': { configType: 'human.approval', backendType: 'human.approval' },
+  'wait': { configType: 'wait', backendType: 'wait' },
   'transform': { configType: 'transform', backendType: 'transform' },
   'state-get': { configType: 'state-get', backendType: 'state.get' },
   'state-set': { configType: 'state-set', backendType: 'state.set' },

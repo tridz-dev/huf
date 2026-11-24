@@ -11,6 +11,7 @@ export function defaultActionConfig(actionId: string, defaultCodeProfile?: strin
     router: { type: 'router', prompt: '' },
     loop: { type: 'foreach', items: { $from: '' }, max_iterations: 100, on_item_error: 'fail', collect: { $from: '' } },
     'human.approval': { type: 'human.approval', message: '' },
+    wait: { type: 'wait', mode: 'duration', duration: { unit: 'hours' } },
     end: { type: 'end' },
     'http-request': tool('http_request', { url: '', method: 'GET' }),
     transform: { type: 'transform', op: 'lower', input: {} },

@@ -79,7 +79,7 @@ describe('run banners', () => {
     expect(screen.getByTestId('flow-run-stale')).toHaveTextContent('A system manager can stop it');
   });
 
-  it('a queued run offers Cancel run to editors only', () => {
+  it('a queued run offers Cancel run to editors only (others see it disabled with the reason)', () => {
     const cancel = vi.fn();
     const queued = run({ status: 'Queued', stale: false });
     const { unmount } = render(<RunStatusBanner run={queued} canManage onStop={vi.fn()} onCancel={cancel} />);
@@ -88,7 +88,7 @@ describe('run banners', () => {
     expect(cancel).toHaveBeenCalled();
     unmount();
     render(<RunStatusBanner run={queued} canManage={false} onStop={vi.fn()} onCancel={cancel} />);
-    expect(screen.queryByTestId('flow-run-cancel')).toBeNull();
+    expect(screen.getByTestId('flow-run-cancel')).toHaveAttribute('aria-disabled', 'true');
   });
 });
 
@@ -108,5 +108,41 @@ describe('simulated output on a later step', () => {
     expect(screen.getByTestId('flow-run-summary-e1')).toHaveTextContent('Would send email to a@b.invalid (skipped in test)');
     expect(screen.queryByText('Thread ID')).toBeNull();
     expect(screen.queryByText('Label Ids')).toBeNull();
+  });
+});
+
+describe('waiting run actions', () => {
+  const waiting = (over: Partial<FlowRunDetail> = {}) => run({ status: 'Waiting Timer', stale: false, waiting: { resume_at: '2030-01-31T09:00:00' }, ...over });
+
+  it('a timer wait offers Continue now and Cancel run, each behind a confirm', () => {
+    const cancel = vi.fn();
+    const cont = vi.fn();
+    render(<RunStatusBanner run={waiting()} canManage onStop={vi.fn()} onCancel={cancel} onContinue={cont} />);
+    expect(screen.getByTestId('flow-run-waiting-until')).toHaveTextContent('Waiting until');
+    fireEvent.click(screen.getByTestId('flow-run-continue'));
+    expect(screen.getByText('Continue now?')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('flow-run-mark-failed-confirm'));
+    expect(cont).toHaveBeenCalled();
+    fireEvent.click(screen.getByTestId('flow-run-cancel'));
+    expect(screen.getByText('Cancel this run?')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('flow-run-mark-failed-confirm'));
+    expect(cancel).toHaveBeenCalled();
+  });
+
+  it('a wait with no time says it needs someone, and other waits can only be cancelled', () => {
+    const { unmount } = render(<RunStatusBanner run={waiting({ waiting: {} })} canManage onStop={vi.fn()} onCancel={vi.fn()} onContinue={vi.fn()} />);
+    expect(screen.getByTestId('flow-run-waiting-until')).toHaveTextContent('Waiting for someone to continue it');
+    unmount();
+    render(<RunStatusBanner run={waiting({ status: 'Waiting Approval' })} canManage onStop={vi.fn()} onCancel={vi.fn()} onContinue={vi.fn()} />);
+    expect(screen.getByTestId('flow-run-cancel')).toBeInTheDocument();
+    expect(screen.queryByTestId('flow-run-continue')).toBeNull();
+  });
+
+  it('people who cannot edit the flow get a disabled Cancel run', () => {
+    const cancel = vi.fn();
+    render(<RunStatusBanner run={waiting()} canManage={false} onStop={vi.fn()} onCancel={cancel} onContinue={vi.fn()} />);
+    expect(screen.getByTestId('flow-run-cancel')).toHaveAttribute('aria-disabled', 'true');
+    fireEvent.click(screen.getByTestId('flow-run-cancel'));
+    expect(screen.queryByText('Cancel this run?')).toBeNull();
   });
 });

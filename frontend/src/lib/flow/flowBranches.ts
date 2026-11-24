@@ -32,6 +32,11 @@ const FOREACH: BranchHandle[] = [
   { route: 'next', handleId: 'next', label: 'When done', optional: true },
 ];
 
+const WAIT_WITH_TIMEOUT: BranchHandle[] = [
+  { route: 'next', handleId: 'next', label: 'Continued', optional: true },
+  HUMAN_TIMEOUT,
+];
+
 /** Fixed branch handles of an action config (`type` is the canvas discriminator). */
 export function branchHandlesFor(actionType: string | undefined, config?: Record<string, unknown>): BranchHandle[] {
   switch (actionType) {
@@ -41,6 +46,11 @@ export function branchHandlesFor(actionType: string | undefined, config?: Record
       return config && config.timeout_ms ? [...HUMAN, HUMAN_TIMEOUT] : HUMAN;
     case 'foreach':
       return FOREACH;
+    case 'wait': {
+      // A Timed out path exists only while "until continued" has a time limit.
+      const resume = (config?.resume ?? {}) as { timeout_ms?: unknown };
+      return config?.mode === 'resume' && resume.timeout_ms ? WAIT_WITH_TIMEOUT : [];
+    }
     default:
       return [];
   }

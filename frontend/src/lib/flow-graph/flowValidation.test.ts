@@ -73,4 +73,16 @@ describe('flowValidation', () => {
     expect(humanizeFlowError(new Error("'prompt' is a required property"))).toMatch(/prompt/);
     expect(humanizeFlowError(new Error('<b>x</b>boom'))).toBe('xboom');
   });
+
+  it('wait: asks for the time, caps it, and checks the date and the give-up path', () => {
+    const fields = (cfg: Record<string, unknown>, edges: unknown[] = []) => validateNode(action('w', { type: 'wait', ...cfg }), edges as never).map((i) => [i.field, i.message]);
+    expect(fields({ mode: 'duration', duration: { unit: 'hours' } })).toEqual([['duration.value', 'Enter how long to wait.']]);
+    expect(fields({ mode: 'duration', duration: { value: 2, unit: 'days' } })).toEqual([]);
+    expect(fields({ mode: 'duration', duration: { value: 400, unit: 'days' } })).toEqual([['duration.value', 'A wait can be at most 365 days.']]);
+    expect(fields({ mode: 'duration', duration: { value: 9000, unit: 'hours' } })).toEqual([['duration.value', 'A wait can be at most 365 days.']]);
+    expect(fields({ mode: 'until' })).toEqual([['until', 'Choose when to continue.']]);
+    expect(fields({ mode: 'until', until: '2030-01-31 09:00' })).toEqual([]);
+    expect(fields({ mode: 'resume' })).toEqual([]);
+    expect(fields({ mode: 'resume' }, [{ source: 'w', target: 'x', sourceHandle: 'timeout', data: { route: 'timeout' } }])).toEqual([['resume.timeout_ms', 'Choose how long to wait before giving up.']]);
+  });
 });
