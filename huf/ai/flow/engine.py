@@ -952,7 +952,12 @@ def _first_entry(graph: dict) -> str | None:
 
 
 def _build_router(
-	flow_run, settings, edges_list: list, state: ExecutionState, unhandled_failures: list | None = None
+	flow_run,
+	settings,
+	edges_list: list,
+	state: ExecutionState,
+	unhandled_failures: list | None = None,
+	failed_node_ids: list | None = None,
 ) -> Router:
 	"""One routing path for every node type (structural knots 3 and 4).
 
@@ -970,6 +975,8 @@ def _build_router(
 			)
 			if not handled:
 				unhandled_failures.append(step_failed_sentence(step_title(node.raw), outcome.error))
+				if failed_node_ids is not None:
+					failed_node_ids.append(node.id)
 		return chosen
 
 	def _resolve_default(node: NodeSpec, outcome: Outcome, context: GraphContext):
@@ -1100,7 +1107,8 @@ def _execute_loop(flow_run, nodes_map: dict, edges_list: list, settings: dict):
 	program = _build_program(nodes_map, edges_list, settings)
 	state = _flow_state(flow_run)
 	unhandled_failures: list = []
-	router = _build_router(flow_run, settings, edges_list, state, unhandled_failures)
+	failed_node_ids: list = []
+	router = _build_router(flow_run, settings, edges_list, state, unhandled_failures, failed_node_ids)
 	handler = _make_node_handler(flow_run, settings)
 	handlers = {node_type: handler for node_type in _NODE_TYPES}
 
@@ -1137,6 +1145,10 @@ def _execute_loop(flow_run, nodes_map: dict, edges_list: list, settings: dict):
 
 	if result.status == ExecutionResult.FAILED:
 		_publish_flow_event(flow_run, "flow_error", {"error": result.error})
+		message = describe_run_error(result.error, {i: step_title(n.raw) for i, n in program.nodes.items()})
+		paused = _run_error_handler(flow_run, program, router, handlers, policy, settings, result.node_id, message)
+		if paused is not None:
+			return paused
 		_fail_flow_run(flow_run, describe_run_error(result.error, {i: step_title(n.raw) for i, n in program.nodes.items()}))
 		return result
 
@@ -1144,12 +1156,50 @@ def _execute_loop(flow_run, nodes_map: dict, edges_list: list, settings: dict):
 		# A failure no on_failure/on_error route handled: cleanup nodes may have run
 		# via an ``always`` edge, but the run is still Failed (first failure wins).
 		_publish_flow_event(flow_run, "flow_error", {"error": unhandled_failures[0]})
+		paused = _run_error_handler(
+			flow_run, program, router, handlers, policy, settings, failed_node_ids[0], unhandled_failures[0]
+		)
+		if paused is not None:
+			return paused
 		_fail_flow_run(flow_run, unhandled_failures[0])
 		return result
 
 	_complete_flow_run(flow_run, reply_text=_flow_reply_text(flow_run, settings, result))
 	_publish_flow_event(flow_run, "flow_completed", {"node_id": result.node_id, "status": "Success"})
 	return result
+
+
+def _run_error_handler(flow_run, program, router, handlers, policy, settings, node_id, message):
+	"""Run the flow's ``error_handler`` chain once after a failure the graph did not route.
+
+	Returns ``None`` when the caller should go on to fail the run (no handler, the failure came from
+	the handler chain itself, or the chain ended or failed): the run always ends ``Failed``, the handler
+	only gets to react first. Returns the executor result if the handler chain parked the run.
+	"""
+	run_ctx = _run_context(settings)
+	graph = run_ctx.version.graph if run_ctx is not None and run_ctx.version is not None else {}
+	handler_id = (graph.get("error_handler") or {}).get("next")
+	if not handler_id or handler_id not in program.nodes:
+		return None
+
+	context = _context_of(flow_run, settings)
+	if context.data.get("error"):
+		return None  # already inside the handler chain: no recursion
+	context.data["error"] = {"node_id": node_id, "message": message}
+	context.dirty = True
+
+	state = ExecutionState(cursor=handler_id, hop_count=getattr(flow_run, "hop_count", 0) or 0, status="running")
+	flow_run.db_set("current_node_id", handler_id)
+	result = GraphExecutor(
+		program,
+		handlers,
+		router=router,
+		policy=policy,
+		store=_FlowStateStore(flow_run),
+		listener=_FlowEventListener(flow_run),
+	).run(context, state)
+	_persist_context(flow_run, context, settings)
+	return result if result.status == ExecutionResult.PAUSED else None
 
 
 # ---------------------------------------------------------------------------

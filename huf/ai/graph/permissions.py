@@ -139,6 +139,7 @@ def iter_reachable_nodes(graph: dict) -> Iterator[dict]:
 	nodes_by_id = {node["id"]: node for node in graph.get("nodes", [])}
 	visited: set[str] = set()
 	worklist: list[str | None] = list(_entry_roots(graph))
+	worklist.append((graph.get("error_handler") or {}).get("next"))
 
 	while worklist:
 		node_id = worklist.pop()
