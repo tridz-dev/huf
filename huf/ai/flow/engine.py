@@ -50,6 +50,7 @@ from frappe import _
 from frappe.utils import now_datetime
 
 from huf.ai.flow import create_doc as flow_create_doc, state as flow_state
+from huf.ai.flow.nodes.stop import exec_stop
 from huf.ai.flow.nodes.switch import exec_switch
 from huf.ai.flow.nodes.wait import exec_wait
 from huf.ai.flow.runs.outcome import record_outcome
@@ -1502,6 +1503,11 @@ def _exec_router_decision(flow_run, node: dict, config: dict, settings: dict) ->
 	return exec_switch(flow_run, node, config, settings, _context_of(flow_run, settings))
 
 
+def _exec_stop(flow_run, node: dict, config: dict, settings: dict) -> dict:
+	"""Execute stop node: fail the run with its message (``as: error``) or end it (``as: success``), see ``nodes/stop.py``."""
+	return exec_stop(flow_run, node, config, settings, _context_of(flow_run, settings))
+
+
 def _exec_human_approval(flow_run, node: dict, config: dict, settings: dict) -> dict:
 	"""Execute human.approval node - pause for human decision.
 
@@ -2096,6 +2102,7 @@ _NODE_EXECUTORS = {
 	"doc.create": _exec_doc_create,
 	"code.run": _exec_code_run,
 	"wait": exec_wait,
+	"stop": _exec_stop,
 }
 
 _NODE_TYPES = tuple(_NODE_EXECUTORS)
