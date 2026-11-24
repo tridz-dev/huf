@@ -35,7 +35,7 @@
    "in_list_view": 1,
    "label": "Expires At",
    "read_only": 1,
-   "reqd": 1,
+   "reqd": 0,
    "search_index": 1
   },
   {

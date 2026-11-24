@@ -10,8 +10,10 @@ Rules:
   Manager, and rows are accessed internally with ``ignore_permissions`` because the flow's run-as
   user normally has no role on this internal store.
 * Keys: 1-140 chars (string or int). Values: any JSON, at most ``MAX_VALUE_BYTES`` encoded.
-* Every row expires (default 24h, max 30 days). Expired rows read as missing and are deleted lazily
-  on read; ``purge_expired`` (daily scheduler) removes the rest.
+* Every row expires (default 24h) unless the flow asks to keep it (ttl 0 = forever). The longest
+  allowed ttl is the site config ``huf_flow_state_max_ttl_days`` (default 365; 0 = unlimited, which
+  is the only setting that allows keep-forever). Expired rows read as missing and are deleted lazily
+  on read; ``purge_expired`` (daily scheduler) removes the rest. Rows with no expiry are never purged.
 """
 
 from __future__ import annotations
@@ -28,7 +30,7 @@ DOCTYPE = "Flow State"
 MAX_KEY_CHARS = 140
 MAX_VALUE_BYTES = 16 * 1024
 DEFAULT_TTL_SECONDS = 24 * 3600
-MAX_TTL_SECONDS = 30 * 24 * 3600
+DEFAULT_MAX_TTL_DAYS = 365
 
 
 class FlowStateError(ValueError):
@@ -44,11 +46,25 @@ def normalize_key(key: Any) -> str:
 	return text
 
 
-def normalize_ttl(ttl_seconds: Any) -> int:
+def max_ttl_seconds() -> int:
+	"""Ceiling for a ttl in seconds. ``0`` in site config means unlimited (returned as 0)."""
+	days = int(frappe.conf.get("huf_flow_state_max_ttl_days", DEFAULT_MAX_TTL_DAYS) or 0)
+	return days * 24 * 3600
+
+
+def normalize_ttl(ttl_seconds: Any) -> int | None:
+	"""Return seconds to keep the row, or ``None`` for keep-forever (ttl 0, only when unlimited)."""
 	if ttl_seconds is None:
 		return DEFAULT_TTL_SECONDS
-	if isinstance(ttl_seconds, bool) or not isinstance(ttl_seconds, int) or not 0 < ttl_seconds <= MAX_TTL_SECONDS:
-		raise FlowStateError(f"How long to keep this must be a whole number of seconds between 1 and {MAX_TTL_SECONDS}.")
+	if isinstance(ttl_seconds, bool) or not isinstance(ttl_seconds, int) or ttl_seconds < 0:
+		raise FlowStateError("How long to keep this must be a whole number of seconds, or 0 to keep it until deleted.")
+	ceiling = max_ttl_seconds()
+	if ttl_seconds == 0:
+		if ceiling:
+			raise FlowStateError("This site does not allow keeping saved data forever. Choose a shorter time.")
+		return None
+	if ceiling and ttl_seconds > ceiling:
+		raise FlowStateError(f"This site keeps saved data for at most {ceiling // 86400} days. Choose a shorter time.")
 	return ttl_seconds
 
 
@@ -89,7 +105,8 @@ def get_state(flow_id: str, key: Any) -> tuple[bool, Any]:
 def set_state(flow_id: str, key: Any, value: Any, ttl_seconds: Any = None) -> None:
 	flow_id, key, name = _scope(flow_id, key)
 	encoded = encode_value(value)
-	expires_at = add_to_date(now_datetime(), seconds=normalize_ttl(ttl_seconds))
+	ttl = normalize_ttl(ttl_seconds)
+	expires_at = add_to_date(now_datetime(), seconds=ttl) if ttl is not None else None
 	if frappe.db.exists(DOCTYPE, name):
 		frappe.db.set_value(
 			DOCTYPE, name, {"value_json": encoded, "expires_at": expires_at}, update_modified=True
