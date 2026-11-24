@@ -125,6 +125,8 @@ export function runStatusKind(run: Pick<FlowCardLastRun, 'status' | 'stale'>): S
     case 'Waiting Approval':
     case 'Waiting User': return 'waiting_approval';
     case 'Waiting Code': return 'waiting_review';
+    case 'Waiting Timer': return 'waiting_timer';
+    case 'Cancelled': return 'cancelled';
     default: return 'queued';
   }
 }
@@ -137,6 +139,8 @@ const RUN_WORD: Record<string, string> = {
   'Waiting Approval': 'Waiting for approval',
   'Waiting User': 'Waiting for you',
   'Waiting Code': 'Waiting for code review',
+  'Waiting Timer': 'Waiting',
+  Cancelled: 'Cancelled',
 };
 
 /** "Last run: Finished 2 mins ago", or "Not run yet". `ago` turns an ISO time into "2 mins ago". */

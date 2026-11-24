@@ -63,7 +63,18 @@ export type ActionType =
   | 'state-set'
   | 'state-delete'
   | 'doc-create'
-  | 'code-run';
+  | 'code-run'
+  | 'wait';
+
+/** Wait step config (graph-IR `WaitNode`). `until` is a literal, reference or template; the timeout branch is a routing pointer. */
+export type WaitMode = 'duration' | 'until' | 'resume';
+export interface WaitNodeConfig {
+  mode: WaitMode;
+  duration?: { value: number; unit: 'minutes' | 'hours' | 'days' };
+  until?: FlowValue;
+  time_zone?: string;
+  resume?: { timeout_ms?: number; timeout_next?: string; message?: string };
+}
 
 // ─── Trigger configs (field names == graph-IR config keys) ────────────
 

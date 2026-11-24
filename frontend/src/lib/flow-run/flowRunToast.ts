@@ -29,6 +29,10 @@ function showFlowRunToast(status: string, mode: 'test' | 'real', detail: string)
     toast.error('The flow ran but failed', { description: `${detail}. Open Runs to see what went wrong.` });
   } else if (status === 'Waiting Code') {
     toast.info('The flow is running your code', { description: `${detail}. It continues when the code finishes or is approved.` });
+  } else if (status === 'Cancelled') {
+    toast.info('Run cancelled.', { description: detail });
+  } else if (status === 'Waiting Timer') {
+    toast.info('The flow is waiting.', { description: `${detail}. It continues on its own.` });
   } else if (status.startsWith('Waiting')) {
     toast.info('The flow is waiting for approval', { description: `${detail}. It continues once someone responds.` });
   } else if (status === 'Completed' || status === 'Success') {

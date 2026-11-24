@@ -55,7 +55,7 @@ export interface BackendFlowGraph {
 
 export type BackendNodeType =
     | 'trigger.webhook' | 'trigger.schedule' | 'trigger.doc-event' | 'trigger.unset' | 'trigger.gateway' | 'trigger.whatsapp' | 'trigger.telegram'
-    | 'agent.run' | 'tool.call' | 'router.llm' | 'router.decision' | 'human.approval'
+    | 'agent.run' | 'tool.call' | 'router.llm' | 'router.decision' | 'wait' | 'human.approval'
     | 'condition' | 'transform' | 'foreach' | 'validate' | 'output'
     | 'state.get' | 'state.set' | 'state.delete' | 'doc.create' | 'code.run';
 
@@ -125,7 +125,7 @@ export interface FlowRunSummary extends RunStoryFields {
     flow_version: number;
     mode: string;
     run_mode?: 'Real' | 'Test';
-    status: 'Queued' | 'Running' | 'Waiting Approval' | 'Waiting User' | 'Waiting Code' | 'Success' | 'Failed';
+    status: 'Queued' | 'Running' | 'Waiting Approval' | 'Waiting User' | 'Waiting Code' | 'Waiting Timer' | 'Cancelled' | 'Success' | 'Failed';
     current_node_id: string;
     hop_count: number;
     trigger_type: string;
