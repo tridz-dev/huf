@@ -50,6 +50,7 @@ from frappe import _
 from frappe.utils import now_datetime
 
 from huf.ai.flow import create_doc as flow_create_doc, state as flow_state
+from huf.ai.flow.nodes.docops import exec_doc_get, exec_doc_update
 from huf.ai.flow.nodes.stop import exec_stop
 from huf.ai.flow.nodes.switch import exec_switch
 from huf.ai.flow.nodes.wait import exec_wait
@@ -1508,6 +1509,16 @@ def _exec_stop(flow_run, node: dict, config: dict, settings: dict) -> dict:
 	return exec_stop(flow_run, node, config, settings, _context_of(flow_run, settings))
 
 
+def _exec_doc_get(flow_run, node: dict, config: dict, settings: dict) -> dict:
+	"""``doc.get``: read one document as the run user, see ``nodes/docops.py``."""
+	return exec_doc_get(node, config, _context_of(flow_run, settings), _run_context(settings))
+
+
+def _exec_doc_update(flow_run, node: dict, config: dict, settings: dict) -> dict:
+	"""``doc.update``: change fields of one document as the run user, see ``nodes/docops.py``."""
+	return exec_doc_update(node, config, _context_of(flow_run, settings), _run_context(settings))
+
+
 def _exec_human_approval(flow_run, node: dict, config: dict, settings: dict) -> dict:
 	"""Execute human.approval node - pause for human decision.
 
@@ -2103,6 +2114,8 @@ _NODE_EXECUTORS = {
 	"code.run": _exec_code_run,
 	"wait": exec_wait,
 	"stop": _exec_stop,
+	"doc.get": _exec_doc_get,
+	"doc.update": _exec_doc_update,
 }
 
 _NODE_TYPES = tuple(_NODE_EXECUTORS)
