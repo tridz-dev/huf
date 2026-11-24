@@ -1,11 +1,11 @@
-import { FieldHint } from '../../FieldHint';
 import { MoreOptions } from '../../frame/MoreOptions';
 import { type ActionFormProps, Section, str } from '../formKit';
-import { DurationField, ValueField } from '../fields';
-import type { TimeUnit } from '@/lib/flow-data/flowUnits';
-
-const TTL_UNITS: TimeUnit[] = ['minutes', 'hours', 'days'];
-const MAX_TTL_SECONDS = 2592000;
+import { useEffect, useState } from 'react';
+import { Label } from '../../../ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../ui/select';
+import { ValueField } from '../fields';
+import { getFlowStateLimits } from '@/services/flow/flowMembersApi';
+import { KEEP_OPTIONS, keepAllowed, keepLimitReason, keepValueOf } from '@/lib/flow-data/stateKeep';
 
 const HINT = {
   'state-get': 'Looks up something this flow saved earlier, in this run or an earlier one. It becomes the result of this step. Saved data belongs to this flow only.',
@@ -16,7 +16,14 @@ const HINT = {
 export function StateForm({ nodeId, cfg, patch, f, Err, title }: ActionFormProps) {
   const type = str(cfg.type) as keyof typeof HINT;
   const keyLabel = type === 'state-get' ? 'Name it was saved under' : type === 'state-delete' ? 'Name of the saved data' : 'Save it under the name';
-  const ttlIsData = cfg.ttl_seconds !== undefined && typeof cfg.ttl_seconds !== 'number';
+  const [maxTtl, setMaxTtl] = useState<number | null>(null);
+  useEffect(() => {
+    if (type !== 'state-set') return;
+    let live = true;
+    getFlowStateLimits().then((l) => live && setMaxTtl(l.max_ttl_seconds)).catch(() => {});
+    return () => { live = false; };
+  }, [type]);
+  const foreverBlocked = maxTtl !== null && !keepAllowed(0, maxTtl);
   return (
     <Section title={title} hint={HINT[type] ?? HINT['state-set']}>
       <ValueField
@@ -50,25 +57,18 @@ export function StateForm({ nodeId, cfg, patch, f, Err, title }: ActionFormProps
         </MoreOptions>
       )}
       {type === 'state-set' && (
-        <MoreOptions defaultOpen={cfg.ttl_seconds !== undefined} testId="flow-more-options-state">
-          {ttlIsData ? (
-            <ValueField field="ttl_seconds" f={f} Err={Err} nodeId={nodeId} label="Keep it for (seconds)" kind="number" optional value={cfg.ttl_seconds} onChange={(v) => patch({ ttl_seconds: v === '' ? undefined : v })} />
-          ) : (
-            <div>
-              <DurationField
-                id="state-ttl"
-                testId={f('ttl_seconds')}
-                label="Keep it for"
-                units={TTL_UNITS}
-                placeholder="No limit"
-                value={typeof cfg.ttl_seconds === 'number' ? cfg.ttl_seconds : undefined}
-                onChange={(s) => patch({ ttl_seconds: s === undefined ? undefined : Math.min(s, MAX_TTL_SECONDS) })}
-                hint="After this long it is forgotten. Leave empty to keep it until a Forget saved data step removes it. The longest is 30 days."
-              />
-              <FieldHint testId="flow-hint-state-ttl-max">Examples: 30 minutes, 12 hours, 7 days.</FieldHint>
-            </div>
-          )}
-        </MoreOptions>
+        <div>
+          <Label htmlFor="state-keep">Keep saved data for</Label>
+          <Select value={keepValueOf(cfg.ttl_seconds) ?? undefined} onValueChange={(v) => { const o = KEEP_OPTIONS.find((k) => k.value === v)!; patch({ ttl_seconds: o.value === 'day' ? undefined : o.seconds }); }}>
+            <SelectTrigger id="state-keep" aria-label="Keep saved data for" data-testid={f('ttl_seconds')}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {KEEP_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value} disabled={!keepAllowed(o.seconds, maxTtl)}>{o.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          {foreverBlocked && <p className="mt-1.5 text-xs text-muted-foreground" data-testid="flow-state-keep-limit">{keepLimitReason(maxTtl!)}</p>}
+        </div>
       )}
     </Section>
   );
