@@ -4,6 +4,7 @@ import { TriggerConfigForm } from './forms/TriggerConfigForm';
 import { AgentRunForm } from './forms/AgentRunForm';
 import { ToolCallForm } from './forms/tool/ToolCallForm';
 import { RouterForm } from './forms/RouterForm';
+import { SwitchForm } from './forms/SwitchForm';
 import { ConditionForm } from './forms/ConditionForm';
 import { LoopForm } from './forms/LoopForm';
 import { ApprovalForm } from './forms/approval/ApprovalForm';
@@ -37,6 +38,8 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
       return <ToolCallForm {...common} />;
     case 'router':
       return <RouterForm {...common} />;
+    case 'router-decision':
+      return <SwitchForm {...common} />;
     case 'condition':
       return <ConditionForm {...common} />;
     case 'foreach':
