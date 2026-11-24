@@ -139,7 +139,14 @@ def delete_state(flow_id: str, key: Any) -> bool:
 
 def purge_expired() -> int:
 	"""Scheduler entry point (daily): delete every expired row. Returns the number removed."""
-	expired = frappe.get_all(DOCTYPE, filters={"expires_at": ["<=", now_datetime()]}, pluck="name", limit=10000)
+	# keep-forever rows have a NULL expires_at; Frappe's dict "<=" filter also matches NULL, so the
+	# "is set" condition is explicit and must stay.
+	expired = frappe.get_all(
+		DOCTYPE,
+		filters=[[DOCTYPE, "expires_at", "is", "set"], [DOCTYPE, "expires_at", "<=", now_datetime()]],
+		pluck="name",
+		limit=10000,
+	)
 	for name in expired:
 		frappe.db.delete(DOCTYPE, {"name": name})
 	return len(expired)
