@@ -77,7 +77,7 @@ export function getDefaultLabel(backendType: string): string {
         'agent.run': 'Run agent',
         'tool.call': 'Call tool',
         'router.llm': 'LLM router',
-        'router.decision': 'Decision router',
+        'router.decision': 'Choose by rules',
         'wait': 'Wait',
         'human.approval': 'Human approval',
         'condition': 'Condition (IF)',

@@ -19,7 +19,7 @@ _NODE_DISPLAY = {
 	"agent.run": ("Run Agent", "SquareAsterisk", "ai"),
 	"tool.call": ("Call Tool", "Wrench", "ai"),
 	"router.llm": ("LLM Router", "GitBranch", "control"),
-	"router.decision": ("Decision Router", "GitBranch", "control"),
+	"router.decision": ("Choose by rules", "Split", "control"),
 	"human.approval": ("Human Approval", "UserCheck", "control"),
 	"wait": ("Wait", "Hourglass", "control"),
 	"stop": ("Stop with error", "OctagonX", "control"),
