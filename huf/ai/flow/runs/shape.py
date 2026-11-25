@@ -166,7 +166,7 @@ def _full_name(user: str | None) -> str | None:
 
 def run_number(flow_id: str, creation) -> int:
 	"""1-based place of a run among all runs of its flow, oldest first."""
-	return frappe.db.count("Flow Run", {"flow_id": flow_id, "creation": ["<=", creation]})
+	return frappe.db.count("Agent Flow Run", {"flow_id": flow_id, "creation": ["<=", creation]})
 
 
 def extras_for_detail(doc, ctx: dict) -> dict:
@@ -221,7 +221,7 @@ def shape_list_rows(rows: list, names: dict, can_fail: bool) -> list:
 	for r in rows:
 		if r.flow_id not in by_flow:
 			created = frappe.get_all(
-				"Flow Run", filters={"flow_id": r.flow_id}, pluck="creation", order_by="creation asc", limit_page_length=0
+				"Agent Flow Run", filters={"flow_id": r.flow_id}, pluck="creation", order_by="creation asc", limit_page_length=0
 			)
 			by_flow[r.flow_id] = created
 			raw = frappe.db.get_value("Flow Definition", r.flow_id, "definition_json") if r.flow_id else None

@@ -27,7 +27,7 @@ class TestWaitGateway(IntegrationTestCase):
 		self.flow.insert(ignore_permissions=True)
 		self.run = frappe.get_doc(
 			{
-				"doctype": "Flow Run",
+				"doctype": "Agent Flow Run",
 				"flow_definition": self.flow.name,
 				"flow_id": self.flow.flow_id,
 				"status": "Running",
@@ -36,7 +36,7 @@ class TestWaitGateway(IntegrationTestCase):
 		).insert(ignore_permissions=True)
 
 	def tearDown(self):
-		frappe.delete_doc("Flow Run", self.run.name, ignore_permissions=True, force=True)
+		frappe.delete_doc("Agent Flow Run", self.run.name, ignore_permissions=True, force=True)
 		frappe.delete_doc("Flow Definition", self.flow.name, ignore_permissions=True, force=True)
 		frappe.db.commit()
 

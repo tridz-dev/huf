@@ -97,7 +97,7 @@ def conversation_is_busy(gateway: str, conversation_id: str, this_event: str) ->
 		order_by="creation desc",
 		limit=20,
 	)
-	return bool(runs) and bool(frappe.db.exists("Flow Run", {"name": ["in", runs], "status": "Running"}))
+	return bool(runs) and bool(frappe.db.exists("Agent Flow Run", {"name": ["in", runs], "status": "Running"}))
 
 
 def _requeue_count(event_name: str) -> int:

@@ -36,7 +36,7 @@ def _depth(flow_run) -> int:
 	while parent and parent not in seen:
 		seen.add(parent)
 		depth += 1
-		parent = frappe.db.get_value("Flow Run", parent, "parent_run")
+		parent = frappe.db.get_value("Agent Flow Run", parent, "parent_run")
 	return depth
 
 
@@ -106,8 +106,8 @@ def _child_output(child_run):
 	from huf.ai.flow.engine import PinnedVersion, load_context
 
 	try:
-		ctx = load_context(frappe.db.get_value("Flow Run", child_run.name, "context_json"))
-		graph = PinnedVersion.from_json(frappe.db.get_value("Flow Run", child_run.name, "pinned_definition")).graph
+		ctx = load_context(frappe.db.get_value("Agent Flow Run", child_run.name, "context_json"))
+		graph = PinnedVersion.from_json(frappe.db.get_value("Agent Flow Run", child_run.name, "pinned_definition")).graph
 		for n in graph.get("nodes", []):
 			if n.get("type") == "output" and n.get("id") in ctx.node_outputs:
 				return ctx.node_outputs[n["id"]]
@@ -117,7 +117,7 @@ def _child_output(child_run):
 
 
 def _child_result(child_name: str | None) -> dict:
-	row = frappe.db.get_value("Flow Run", child_name, ["name", "status", "last_error"], as_dict=True) if child_name else None
+	row = frappe.db.get_value("Agent Flow Run", child_name, ["name", "status", "last_error"], as_dict=True) if child_name else None
 	if not row:
 		return {"status": None}
 	return {"status": row.status, "error": row.last_error, "output": _child_output(row) if row.status == "Success" else None}
@@ -125,11 +125,11 @@ def _child_result(child_name: str | None) -> dict:
 
 def on_child_finished(child_run, status: str, error: str | None = None) -> None:
 	"""Called by the engine when a run reaches Success / Failed / Cancelled: wake the parent that waits for it."""
-	parent = getattr(child_run, "parent_run", None) or frappe.db.get_value("Flow Run", child_run.name, "parent_run")
+	parent = getattr(child_run, "parent_run", None) or frappe.db.get_value("Agent Flow Run", child_run.name, "parent_run")
 	if not parent:
 		return
 	try:
-		row = frappe.db.get_value("Flow Run", parent, ["status", "waiting"], as_dict=True)
+		row = frappe.db.get_value("Agent Flow Run", parent, ["status", "waiting"], as_dict=True)
 		if not row or row.status != park.WAIT_STATUS:
 			return
 		w = park._waiting(frappe._dict(waiting=row.waiting))
@@ -155,7 +155,7 @@ def on_child_finished(child_run, status: str, error: str | None = None) -> None:
 def cancel_waited_child(flow_run, by: str) -> None:
 	"""When a parent is cancelled while it waits for its child, cancel that child."""
 	child = (park._waiting(flow_run).get("extra") or {}).get("child") if park._waiting(flow_run).get("reason") == "child" else None
-	if not child or not frappe.db.exists("Flow Run", child):
+	if not child or not frappe.db.exists("Agent Flow Run", child):
 		return
 	try:
 		park.cancel_run(child, by)

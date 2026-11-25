@@ -90,7 +90,7 @@ class UX1Base(IntegrationTestCase):
 
 	def tearDown(self):
 		frappe.set_user("Administrator")
-		frappe.db.delete("Flow Run", {"flow_id": self.flow_id})
+		frappe.db.delete("Agent Flow Run", {"flow_id": self.flow_id})
 		if frappe.db.exists("Flow Definition", self.flow_id):
 			frappe.delete_doc("Flow Definition", self.flow_id, ignore_permissions=True, force=True)
 		for email in self._users:
@@ -180,7 +180,7 @@ class TestWebhookSecretIsHidden(UX1Base):
 	def test_the_snapshot_a_run_keeps_has_no_secret_but_the_trigger_check_still_works(self):
 		frappe.set_user("Administrator")
 		run = flow_engine.create_flow_run(self.flow_id, payload={}, trigger_type="Webhook")
-		pinned = frappe.db.get_value("Flow Run", run.name, "pinned_definition")
+		pinned = frappe.db.get_value("Agent Flow Run", run.name, "pinned_definition")
 		self.assertTrue(pinned)
 		self.assertNotIn(SECRET, pinned)
 		self.assertEqual(self._stored_secret(), SECRET)
@@ -191,7 +191,7 @@ class TestWebhookSecretIsHidden(UX1Base):
 		self.assertEqual(reason, "ok")
 		self.assertIsNotNone(node)
 		flow_engine.run_flow(run.name)
-		self.assertEqual(frappe.db.get_value("Flow Run", run.name, "status"), "Success")
+		self.assertEqual(frappe.db.get_value("Agent Flow Run", run.name, "status"), "Success")
 
 
 class TestReadersCannotChangeTheSecret(UX1Base):

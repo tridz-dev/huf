@@ -1682,7 +1682,7 @@ def run_agent_sync(
     if run_kind:
         run_doc_data["run_kind"] = run_kind
     if flow_run_id:
-        flow_id = frappe.db.get_value("Flow Run", flow_run_id, "flow_id")
+        flow_id = frappe.db.get_value("Agent Flow Run", flow_run_id, "flow_id")
         if flow_id:
             run_doc_data["flow_id"] = flow_id
 

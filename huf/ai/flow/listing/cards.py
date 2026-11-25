@@ -117,16 +117,16 @@ def summarize_definition(defn: dict) -> dict:
 
 def _last_runs(flow_ids: list[str], labels: dict[str, dict]) -> dict[str, dict]:
 	"""The most recent real run of each flow (a test run is not a result). Empty when the person may not read runs."""
-	if not flow_ids or not frappe.has_permission("Flow Run", "read"):
+	if not flow_ids or not frappe.has_permission("Agent Flow Run", "read"):
 		return {}
 	from huf.ai.flow.api import _is_stale, _utc_iso
 
 	rows = frappe.db.sql(
 		"""
 		select r.flow_id, r.status, r.started_at, r.completed_at, r.modified, r.current_node_id
-		from `tabFlow Run` r
+		from `tabAgent Flow Run` r
 		inner join (
-			select flow_id, max(creation) as latest from `tabFlow Run`
+			select flow_id, max(creation) as latest from `tabAgent Flow Run`
 			where flow_id in %(ids)s and run_mode != 'Test' group by flow_id
 		) m on m.flow_id = r.flow_id and m.latest = r.creation
 		""",

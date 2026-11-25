@@ -1,7 +1,7 @@
 // Copyright (c) 2024, Tridz and contributors
 // For license information, please see license.txt
 
-frappe.ui.form.on('Flow Run', {
+frappe.ui.form.on('Agent Flow Run', {
     refresh: function(frm) {
         if (frm.doc.status === 'Waiting Approval') {
             frm.add_custom_button('Approve', () => {

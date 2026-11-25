@@ -404,9 +404,9 @@ def sweep_code_waits(now=None) -> list[str]:
 
 	now = now or now_datetime()
 	touched: list[str] = []
-	for name in frappe.get_all("Flow Run", filters={"status": "Waiting Code"}, pluck="name", limit_page_length=200):
+	for name in frappe.get_all("Agent Flow Run", filters={"status": "Waiting Code"}, pluck="name", limit_page_length=200):
 		try:
-			waiting = engine._load_waiting(frappe.get_doc("Flow Run", name))
+			waiting = engine._load_waiting(frappe.get_doc("Agent Flow Run", name))
 			call_name = waiting.get("agent_tool_call")
 			if not call_name or not frappe.db.exists("Agent Tool Call", call_name):
 				engine.fail_waiting_code_run(name, str(_("The code step lost its record, so the run was stopped.")))

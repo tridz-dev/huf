@@ -66,7 +66,7 @@ class TestFlowWp1(IntegrationTestCase):
 	def tearDown(self):
 		frappe.set_user("Administrator")
 		for flow_id in self._flows:
-			frappe.db.delete("Flow Run", {"flow_id": flow_id})
+			frappe.db.delete("Agent Flow Run", {"flow_id": flow_id})
 			if frappe.db.exists("Flow Definition", flow_id):
 				frappe.delete_doc("Flow Definition", flow_id, ignore_permissions=True, force=True)
 		frappe.db.commit()
@@ -117,7 +117,7 @@ class TestFlowWp1(IntegrationTestCase):
 	def _expire_deadline(self, run):
 		waiting = json.loads(run.waiting)
 		waiting["timeout_at"] = (now_datetime() - timedelta(seconds=5)).isoformat()
-		frappe.db.set_value("Flow Run", run.name, "waiting", json.dumps(waiting))
+		frappe.db.set_value("Agent Flow Run", run.name, "waiting", json.dumps(waiting))
 		frappe.db.commit()
 
 	# -- approval expiry -------------------------------------------------
@@ -187,7 +187,7 @@ class TestFlowWp1(IntegrationTestCase):
 			first = triggers.run_due_schedule_flows(now)
 			second = triggers.run_due_schedule_flows(now + timedelta(seconds=30))
 		self.assertIn(flow_id, first)
-		runs = frappe.get_all("Flow Run", filters={"flow_id": flow_id, "trigger_type": "Schedule"}, pluck="name")
+		runs = frappe.get_all("Agent Flow Run", filters={"flow_id": flow_id, "trigger_type": "Schedule"}, pluck="name")
 		self.assertEqual(len(runs), 1, (runs, second))
 
 	# -- stale runs --------------------------------------------------------
@@ -199,10 +199,10 @@ class TestFlowWp1(IntegrationTestCase):
 		stuck = flow_engine.create_flow_run(flow_id, payload={}, trigger_type="Webhook")
 		fresh = flow_engine.create_flow_run(flow_id, payload={}, trigger_type="Webhook")
 		long_ago = add_to_date(now_datetime(), minutes=-45)
-		frappe.db.set_value("Flow Run", stuck.name, {"status": "Running"}, update_modified=False)
-		frappe.db.set_value("Flow Run", stuck.name, "modified", long_ago, update_modified=False)
+		frappe.db.set_value("Agent Flow Run", stuck.name, {"status": "Running"}, update_modified=False)
+		frappe.db.set_value("Agent Flow Run", stuck.name, "modified", long_ago, update_modified=False)
 		waiting = self._waiting_run()
-		frappe.db.set_value("Flow Run", waiting.name, "modified", long_ago, update_modified=False)
+		frappe.db.set_value("Agent Flow Run", waiting.name, "modified", long_ago, update_modified=False)
 		swept = flow_engine.sweep_stale_runs()
 		self.assertIn(stuck.name, swept)
 		self.assertNotIn(fresh.name, swept)

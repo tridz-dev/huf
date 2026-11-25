@@ -214,7 +214,7 @@ class TestDraftSaveOnBench(IntegrationTestCase):
 	def tearDown(self):
 		frappe.set_user("Administrator")
 		for flow_id in self._flows:
-			frappe.db.delete("Flow Run", {"flow_id": flow_id})
+			frappe.db.delete("Agent Flow Run", {"flow_id": flow_id})
 			if frappe.db.exists("Flow Definition", flow_id):
 				frappe.delete_doc("Flow Definition", flow_id, ignore_permissions=True, force=True)
 		frappe.db.commit()

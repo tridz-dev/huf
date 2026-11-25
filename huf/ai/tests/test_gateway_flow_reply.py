@@ -53,7 +53,7 @@ def _fx_world(self):
 	fake_frappe = SimpleNamespace(
 		db=SimpleNamespace(
 			get_value=w.get_value,
-			exists=lambda doctype, name=None: doctype == "Flow Run" and name in w.runs,
+			exists=lambda doctype, name=None: doctype == "Agent Flow Run" and name in w.runs,
 			set_value=lambda *a, **k: w.flagged.append(a),
 		),
 		get_doc=w.get_doc,
@@ -120,7 +120,7 @@ class TestModule(SupportCase):
 		out = json.loads(tool.handle_gateway_reply("hello", flow_run_id="FR-1"))
 		assert out["success"] is True
 		assert world.sent == [("GW-1", "C1", "T1", "hello")]
-		assert world.flagged == [("Flow Run", "FR-1", "replied_via_tool", 1)]
+		assert world.flagged == [("Agent Flow Run", "FR-1", "replied_via_tool", 1)]
 
 	def test_tool_resolves_via_agent_run(self):
 		world = self.use(_fx_world)

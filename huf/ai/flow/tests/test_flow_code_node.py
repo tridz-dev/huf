@@ -95,13 +95,13 @@ class CodeFlowBase(IntegrationTestCase):
 		frappe.db.set_single_value("Agent Settings", "allow_code_in_flows", self._setting_before or 0)
 		frappe.db.set_single_value("Agent Settings", "allow_self_approval", self._self_approval_before or 0)
 		for flow_id in self._flows:
-			for run in frappe.get_all("Flow Run", filters={"flow_id": flow_id}, pluck="name"):
+			for run in frappe.get_all("Agent Flow Run", filters={"flow_id": flow_id}, pluck="name"):
 				for agent_run in frappe.get_all("Agent Run", filters={"flow_run": run}, pluck="name"):
 					for call in frappe.get_all("Agent Tool Call", filters={"agent_run": agent_run}, pluck="name"):
 						frappe.db.delete("Agent Execution Approval", {"agent_tool_call": call})
 					frappe.db.delete("Agent Tool Call", {"agent_run": agent_run})
 				frappe.db.delete("Agent Run", {"flow_run": run})
-			frappe.db.delete("Flow Run", {"flow_id": flow_id})
+			frappe.db.delete("Agent Flow Run", {"flow_id": flow_id})
 			if frappe.db.exists("Flow Definition", flow_id):
 				frappe.delete_doc("Flow Definition", flow_id, ignore_permissions=True, force=True)
 		for email in self._users:
@@ -132,7 +132,7 @@ class CodeFlowBase(IntegrationTestCase):
 	def _run(self, flow_id, payload=None):
 		run = flow_engine.create_flow_run(flow_id, payload or {}, "Manual")
 		flow_engine.run_flow(run.name)
-		return frappe.get_doc("Flow Run", run.name)
+		return frappe.get_doc("Agent Flow Run", run.name)
 
 	def _outputs(self, run):
 		ctx = json.loads(run.context_json or "{}")
@@ -478,7 +478,7 @@ class TestApproval(CodeFlowBase):
 		_flow_id, run, waiting = self._parked()
 		with self.assertRaises(frappe.PermissionError):
 			approve_execution(waiting["approval"])
-		self.assertEqual(frappe.db.get_value("Flow Run", run.name, "status"), "Waiting Code")
+		self.assertEqual(frappe.db.get_value("Agent Flow Run", run.name, "status"), "Waiting Code")
 
 	def test_reject_fails_the_step_with_a_readable_reason(self):
 		from huf.huf.doctype.agent_execution_approval.agent_execution_approval import reject_execution
@@ -499,7 +499,7 @@ class TestApproval(CodeFlowBase):
 		_flow_id, run, waiting = self._parked()
 		frappe.db.set_value("Agent Execution Approval", waiting["approval"], "expires_on", "2020-01-01 00:00:00")
 		frappe.db.set_value(
-			"Flow Run", run.name, "waiting", json.dumps({**waiting, "timeout_at": "2020-01-01T00:00:00"})
+			"Agent Flow Run", run.name, "waiting", json.dumps({**waiting, "timeout_at": "2020-01-01T00:00:00"})
 		)
 		self.assertIn(run.name, code_node.sweep_code_waits())
 		run.reload()
@@ -513,7 +513,7 @@ class TestApproval(CodeFlowBase):
 		self.assertEqual(run.status, "Waiting Code")
 		waiting = json.loads(run.waiting)
 		frappe.db.set_value(
-			"Flow Run", run.name, "waiting", json.dumps({**waiting, "timeout_at": "2020-01-01T00:00:00"})
+			"Agent Flow Run", run.name, "waiting", json.dumps({**waiting, "timeout_at": "2020-01-01T00:00:00"})
 		)
 		code_node.sweep_code_waits()
 		run.reload()

@@ -298,7 +298,7 @@ def _store_pin(flow_run, version: PinnedVersion) -> None:
 	migrated yet simply keeps resolving the pin per run instead of erroring.
 	"""
 	try:
-		if not frappe.db.has_column("Flow Run", "pinned_definition"):
+		if not frappe.db.has_column("Agent Flow Run", "pinned_definition"):
 			return
 		flow_run.db_set({"pinned_fingerprint": version.fingerprint, "pinned_definition": pinned_json(version)})
 	except Exception:
@@ -329,7 +329,7 @@ def sweep_stale_runs(now=None, minutes: int | None = None) -> list[str]:
 
 	cutoff = (now or now_datetime()) - timedelta(minutes=minutes or STALE_RUN_SWEEP_MINUTES)
 	names = frappe.get_all(
-		"Flow Run",
+		"Agent Flow Run",
 		filters={"status": ["in", ["Queued", "Running"]], "modified": ["<", cutoff]},
 		pluck="name",
 		limit_page_length=200,
@@ -339,7 +339,7 @@ def sweep_stale_runs(now=None, minutes: int | None = None) -> list[str]:
 		try:
 			if frappe.cache().get(_run_lock_key(name)):
 				continue  # a worker is still advancing it
-			flow_run = frappe.get_doc("Flow Run", name)
+			flow_run = frappe.get_doc("Agent Flow Run", name)
 			if flow_run.status not in ("Queued", "Running"):
 				continue
 			_fail_flow_run(flow_run, STALE_RUN_SWEEP_REASON)
@@ -400,7 +400,7 @@ def _transition_run(
 	of the row each of them read before. Returns True when this call made the change; on success
 	the in-memory document is updated to match.
 	"""
-	table = frappe.qb.DocType("Flow Run")
+	table = frappe.qb.DocType("Agent Flow Run")
 	query = frappe.qb.update(table)
 	for field, value in values.items():
 		query = query.set(table[field], value)
@@ -526,7 +526,7 @@ def create_flow_run(
 	conversation = _create_flow_conversation(flow_id, entry_node)
 
 	fields = {
-		"doctype": "Flow Run",
+		"doctype": "Agent Flow Run",
 		"flow_definition": flow_id,
 		"flow_id": flow_id,
 		"flow_version": defn_doc.version,
@@ -557,7 +557,7 @@ def create_flow_run(
 	if ignore_permissions or frappe.session.user == "Guest":
 		flow_run.insert(ignore_permissions=True)
 	else:
-		if not frappe.has_permission("Flow Run", "create", doc=flow_run):
+		if not frappe.has_permission("Agent Flow Run", "create", doc=flow_run):
 			frappe.throw(_("You do not have permission to run flows. Ask an admin for access."), frappe.PermissionError)
 		flow_run.insert()
 	if member_key:
@@ -569,7 +569,7 @@ def create_flow_run(
 
 def _has_pin_columns() -> bool:
 	try:
-		return bool(frappe.db.has_column("Flow Run", "pinned_definition"))
+		return bool(frappe.db.has_column("Agent Flow Run", "pinned_definition"))
 	except Exception:
 		return False
 
@@ -590,7 +590,7 @@ def run_flow(flow_run_name: str):
 		return
 
 	try:
-		flow_run = frappe.get_doc("Flow Run", flow_run_name)
+		flow_run = frappe.get_doc("Agent Flow Run", flow_run_name)
 		if flow_run.status in TERMINAL_STATUSES:
 			return  # finished or cancelled while this job was queued: never revive it
 		if flow_run.status in WAITING_STATUSES:
@@ -666,7 +666,7 @@ def resume_flow_run(flow_run_name: str, user_input: dict | None = None):
 
 	complete = False
 	try:
-		flow_run = frappe.get_doc("Flow Run", flow_run_name)
+		flow_run = frappe.get_doc("Agent Flow Run", flow_run_name)
 
 		if flow_run.status not in WAITING_STATUSES:
 			frappe.throw(_("This run is not waiting for anything right now."))
@@ -752,7 +752,7 @@ def approve_flow_run(flow_run_name: str, decision: str, comment: str | None = No
 	next_node = None
 	flow_run = None
 	try:
-		flow_run = frappe.get_doc("Flow Run", flow_run_name)
+		flow_run = frappe.get_doc("Agent Flow Run", flow_run_name)
 
 		if flow_run.status != "Waiting Approval":
 			frappe.throw(_("This run is not waiting for approval any more."))
@@ -813,7 +813,7 @@ def _refuse_lost_claim(flow_run_name: str) -> None:
 	decided (or expired) the run, or the database refused the write itself (snapshot conflict) and the
 	run is still waiting. Either way the caller gets an error, never a success."""
 	frappe.db.rollback()  # nothing of this call is written yet; end the snapshot so the re-read is current
-	if frappe.db.get_value("Flow Run", flow_run_name, "status") == "Waiting Approval":
+	if frappe.db.get_value("Agent Flow Run", flow_run_name, "status") == "Waiting Approval":
 		frappe.throw(_(DECISION_NOT_SAVED))
 	frappe.throw(_("This approval was already decided"))
 
@@ -822,7 +822,7 @@ def _ensure_claim_durable(flow_run_name: str) -> None:
 	"""After the claim's commit the run must have left ``Waiting Approval``. The database can roll a
 	transaction back behind the code's back (deadlock victim, snapshot conflict); the commit then commits
 	nothing, so refuse instead of confirming a decision that was not recorded."""
-	if frappe.db.get_value("Flow Run", flow_run_name, "status") == "Waiting Approval":
+	if frappe.db.get_value("Agent Flow Run", flow_run_name, "status") == "Waiting Approval":
 		frappe.throw(_(DECISION_NOT_SAVED))
 
 
@@ -854,7 +854,7 @@ def expire_approval(flow_run_name: str, now=None, enqueue: bool = False) -> bool
 	if not _acquire_run_lock(flow_run_name):
 		return False  # another caller is advancing this run right now
 	try:
-		flow_run = frappe.get_doc("Flow Run", flow_run_name)
+		flow_run = frappe.get_doc("Agent Flow Run", flow_run_name)
 		if flow_run.status != "Waiting Approval":
 			return False
 		waiting = _load_waiting(flow_run)
@@ -1721,7 +1721,7 @@ def resume_code_node(flow_run_name: str) -> bool:
 	"""
 	import time
 
-	if frappe.db.get_value("Flow Run", flow_run_name, "status") != "Waiting Code":
+	if frappe.db.get_value("Agent Flow Run", flow_run_name, "status") != "Waiting Code":
 		return False  # nothing to continue (already moved on, or the step ran in-process)
 	for _attempt in range(50):
 		if _acquire_run_lock(flow_run_name):
@@ -1730,7 +1730,7 @@ def resume_code_node(flow_run_name: str) -> bool:
 	else:
 		return False
 	try:
-		flow_run = frappe.get_doc("Flow Run", flow_run_name)
+		flow_run = frappe.get_doc("Agent Flow Run", flow_run_name)
 		if flow_run.status != "Waiting Code":
 			return False
 		waiting = _load_waiting(flow_run)
@@ -1748,7 +1748,7 @@ def resume_code_node(flow_run_name: str) -> bool:
 
 def fail_waiting_code_run(flow_run_name: str, reason: str) -> bool:
 	"""Fail a run parked on a code step whose record is gone (operator / sweeper path)."""
-	flow_run = frappe.get_doc("Flow Run", flow_run_name)
+	flow_run = frappe.get_doc("Agent Flow Run", flow_run_name)
 	if flow_run.status != "Waiting Code":
 		return False
 	return _fail_flow_run(flow_run, reason)

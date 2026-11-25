@@ -66,7 +66,7 @@ class TestApprovalDecisionIsNotLost(WP11Base):
 	def tearDown(self):
 		frappe.db.rollback()
 		for name in self._runs:
-			frappe.db.delete("Notification Log", {"document_type": "Flow Run", "document_name": name})
+			frappe.db.delete("Notification Log", {"document_type": "Agent Flow Run", "document_name": name})
 		frappe.db.commit()
 		super().tearDown()
 
@@ -85,7 +85,7 @@ class TestApprovalDecisionIsNotLost(WP11Base):
 
 	def _status(self, run):
 		frappe.db.rollback()  # end this connection's snapshot: read what is really committed
-		return frappe.db.get_value("Flow Run", run.name, "status")
+		return frappe.db.get_value("Agent Flow Run", run.name, "status")
 
 	def _background_job_writes_notification(self, run):
 		"""What the ``create_notification_log`` job does a moment after a run pauses: a new unread row, committed on another connection."""
@@ -101,7 +101,7 @@ class TestApprovalDecisionIsNotLost(WP11Base):
 						"for_user": "Administrator",
 						"type": "Alert",
 						"subject": f"{self.marker} approval needed",
-						"document_type": "Flow Run",
+						"document_type": "Agent Flow Run",
 						"document_name": run.name,
 						"read": 0,
 					}
@@ -124,7 +124,7 @@ class TestApprovalDecisionIsNotLost(WP11Base):
 
 	def test_decision_holds_when_a_notification_row_appears_after_the_decision_began(self):
 		run = self._waiting_run()
-		self.assertEqual(frappe.db.get_value("Flow Run", run.name, "status"), "Waiting Approval")  # this connection's snapshot starts here
+		self.assertEqual(frappe.db.get_value("Agent Flow Run", run.name, "status"), "Waiting Approval")  # this connection's snapshot starts here
 		self._background_job_writes_notification(run)
 
 		flow_engine.approve_flow_run(run.name, "approved", "fast approver")
@@ -132,7 +132,7 @@ class TestApprovalDecisionIsNotLost(WP11Base):
 
 		self.assertEqual(self._status(run), "Success")
 		self.assertEqual(self._todos(), [f"{self.marker} approved"])  # the approved route ran once
-		record = json.loads(frappe.db.get_value("Flow Run", run.name, "context_json"))[flow_engine.NODE_OUTPUTS_KEY]["ask"]
+		record = json.loads(frappe.db.get_value("Agent Flow Run", run.name, "context_json"))[flow_engine.NODE_OUTPUTS_KEY]["ask"]
 		self.assertEqual(record["decision"], "approved")
 		self.assertEqual(record["comment"], "fast approver")
 		states = self._notification_read(run)  # the run's own approver notifications plus the late row: all cleared
@@ -140,7 +140,7 @@ class TestApprovalDecisionIsNotLost(WP11Base):
 
 	def test_reject_holds_the_same_way(self):
 		run = self._waiting_run()
-		self.assertEqual(frappe.db.get_value("Flow Run", run.name, "status"), "Waiting Approval")
+		self.assertEqual(frappe.db.get_value("Agent Flow Run", run.name, "status"), "Waiting Approval")
 		self._background_job_writes_notification(run)
 		flow_engine.approve_flow_run(run.name, "rejected")
 		frappe.db.commit()
@@ -149,11 +149,11 @@ class TestApprovalDecisionIsNotLost(WP11Base):
 
 	def test_timeout_holds_the_same_way(self):
 		run = self._waiting_run(timeout_ms=60000)
-		waiting = json.loads(frappe.db.get_value("Flow Run", run.name, "waiting"))
+		waiting = json.loads(frappe.db.get_value("Agent Flow Run", run.name, "waiting"))
 		waiting["timeout_at"] = (now_datetime() - timedelta(seconds=5)).isoformat()
-		frappe.db.set_value("Flow Run", run.name, "waiting", json.dumps(waiting))
+		frappe.db.set_value("Agent Flow Run", run.name, "waiting", json.dumps(waiting))
 		frappe.db.commit()
-		self.assertEqual(frappe.db.get_value("Flow Run", run.name, "status"), "Waiting Approval")
+		self.assertEqual(frappe.db.get_value("Agent Flow Run", run.name, "status"), "Waiting Approval")
 		self._background_job_writes_notification(run)
 
 		self.assertTrue(flow_engine.expire_approval(run.name))
@@ -163,7 +163,7 @@ class TestApprovalDecisionIsNotLost(WP11Base):
 
 	def test_api_answers_the_moved_run_when_a_notification_row_appears_late(self):
 		run = self._waiting_run()
-		self.assertEqual(frappe.db.get_value("Flow Run", run.name, "status"), "Waiting Approval")
+		self.assertEqual(frappe.db.get_value("Agent Flow Run", run.name, "status"), "Waiting Approval")
 		self._background_job_writes_notification(run)
 		answer = flow_api.approve_flow_run(run.name)
 		frappe.db.commit()
@@ -210,7 +210,7 @@ class TestApprovalDecisionIsNotLost(WP11Base):
 
 	def test_loser_of_two_decisions_is_told_it_was_already_decided(self):
 		run = self._waiting_run()
-		self.assertEqual(frappe.db.get_value("Flow Run", run.name, "status"), "Waiting Approval")  # stale snapshot
+		self.assertEqual(frappe.db.get_value("Agent Flow Run", run.name, "status"), "Waiting Approval")  # stale snapshot
 		site = frappe.local.site
 
 		def winner():

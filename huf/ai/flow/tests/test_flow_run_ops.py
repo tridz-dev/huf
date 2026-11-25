@@ -48,7 +48,7 @@ class TestFlowRunOps(IntegrationTestCase):
 	def _run(self, status="Running", minutes_ago=0):
 		run = frappe.get_doc(
 			{
-				"doctype": "Flow Run",
+				"doctype": "Agent Flow Run",
 				"flow_definition": self.flow_name_doc,
 				"flow_id": self.flow_id,
 				"status": status,
@@ -57,9 +57,9 @@ class TestFlowRunOps(IntegrationTestCase):
 			}
 		)
 		run.insert(ignore_permissions=True)
-		self._docs.append(("Flow Run", run.name))
+		self._docs.append(("Agent Flow Run", run.name))
 		stamp = add_to_date(now_datetime(), minutes=-minutes_ago)
-		frappe.db.set_value("Flow Run", run.name, "modified", stamp, update_modified=False)
+		frappe.db.set_value("Agent Flow Run", run.name, "modified", stamp, update_modified=False)
 		return run.name
 
 	def test_utc_iso_converts_site_time_to_utc(self):
@@ -108,7 +108,7 @@ class TestFlowRunOps(IntegrationTestCase):
 		fresh = self._run(status="Running", minutes_ago=1)
 		with self.assertRaises(frappe.ValidationError):
 			flow_api.mark_flow_run_failed(fresh)
-		self.assertEqual(frappe.db.get_value("Flow Run", fresh, "status"), "Running")
+		self.assertEqual(frappe.db.get_value("Agent Flow Run", fresh, "status"), "Running")
 
 		done = self._run(status="Success", minutes_ago=60)
 		with self.assertRaises(frappe.ValidationError):
@@ -122,7 +122,7 @@ class TestFlowRunOps(IntegrationTestCase):
 
 		res = flow_api.mark_flow_run_failed(stuck)
 		self.assertEqual(res["status"], "Failed")
-		doc = frappe.get_doc("Flow Run", stuck)
+		doc = frappe.get_doc("Agent Flow Run", stuck)
 		self.assertIn("Marked as failed", doc.last_error)
 		self.assertIsNotNone(doc.completed_at)
 
@@ -135,4 +135,4 @@ class TestFlowRunOps(IntegrationTestCase):
 		with self.assertRaises(frappe.PermissionError):
 			flow_api.mark_flow_run_failed(stuck)
 		frappe.set_user("Administrator")
-		self.assertEqual(frappe.db.get_value("Flow Run", stuck, "status"), "Queued")
+		self.assertEqual(frappe.db.get_value("Agent Flow Run", stuck, "status"), "Queued")

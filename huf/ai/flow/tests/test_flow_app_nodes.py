@@ -99,7 +99,7 @@ class TestAppNodes(IntegrationTestCase):
 		self.flow.insert(ignore_permissions=True)
 		self.run_doc = frappe.get_doc(
 			{
-				"doctype": "Flow Run",
+				"doctype": "Agent Flow Run",
 				"flow_definition": self.flow.name,
 				"flow_id": self.flow.flow_id,
 				"status": "Running",
@@ -108,7 +108,7 @@ class TestAppNodes(IntegrationTestCase):
 		).insert(ignore_permissions=True)
 
 	def tearDown(self):
-		frappe.delete_doc("Flow Run", self.run_doc.name, ignore_permissions=True, force=True)
+		frappe.delete_doc("Agent Flow Run", self.run_doc.name, ignore_permissions=True, force=True)
 		frappe.delete_doc("Flow Definition", self.flow.name, ignore_permissions=True, force=True)
 		frappe.db.commit()
 
@@ -151,7 +151,7 @@ class TestAppNodes(IntegrationTestCase):
 		node = self._node(text="x")
 		out = self._exec(node)
 		self.assertTrue(out.is_paused)
-		self.assertEqual(frappe.db.get_value("Flow Run", self.run_doc.name, "status"), "Waiting Timer")
+		self.assertEqual(frappe.db.get_value("Agent Flow Run", self.run_doc.name, "status"), "Waiting Timer")
 		with patch("frappe.enqueue"):
 			self.assertTrue(park.wake_run(self.run_doc.name, "resumed"))
 			self.assertFalse(park.wake_run(self.run_doc.name, "resumed"))

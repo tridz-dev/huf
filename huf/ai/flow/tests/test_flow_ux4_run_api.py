@@ -55,7 +55,7 @@ class TestFlowUx4RunApi(IntegrationTestCase):
 	def _run(self, status="Success", ctx=None, current="end"):
 		run = frappe.get_doc(
 			{
-				"doctype": "Flow Run",
+				"doctype": "Agent Flow Run",
 				"flow_definition": self.flow_doc,
 				"flow_id": self.flow_id,
 				"status": status,
@@ -66,7 +66,7 @@ class TestFlowUx4RunApi(IntegrationTestCase):
 			}
 		)
 		run.insert(ignore_permissions=True)
-		self._docs.append(("Flow Run", run.name))
+		self._docs.append(("Agent Flow Run", run.name))
 		return run.name
 
 	def test_detail_carries_the_story_fields(self):
@@ -99,6 +99,6 @@ class TestFlowUx4RunApi(IntegrationTestCase):
 		queued = self._run(status="Queued", current="")
 		res = cancel_flow_run(queued)
 		self.assertEqual(res["status"], "Cancelled")
-		self.assertIn("Cancelled by", frappe.db.get_value("Flow Run", queued, "last_error"))
+		self.assertIn("Cancelled by", frappe.db.get_value("Agent Flow Run", queued, "last_error"))
 		with self.assertRaises(frappe.ValidationError):
 			cancel_flow_run(self._run(status="Success"))

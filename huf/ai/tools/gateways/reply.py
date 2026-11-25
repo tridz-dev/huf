@@ -64,7 +64,7 @@ def resolve_origin(flow_run_id: str | None = None, agent_run_id: str | None = No
 		flow_run_id = frappe.db.get_value("Agent Run", agent_run_id, "flow_run")
 	if not flow_run_id:
 		return None
-	row = frappe.db.get_value("Flow Run", flow_run_id, ["trigger_payload"], as_dict=True)
+	row = frappe.db.get_value("Agent Flow Run", flow_run_id, ["trigger_payload"], as_dict=True)
 	if not row:
 		return None
 	try:
@@ -101,9 +101,9 @@ def handle_gateway_reply(
 		from huf.ai.gateway_webhook import send_gateway_reply
 
 		send_gateway_reply(gateway, event, body)
-		if _run and frappe.db.exists("Flow Run", _run):
+		if _run and frappe.db.exists("Agent Flow Run", _run):
 			# finish_flow_event reads this and does not send the End output a second time.
-			frappe.db.set_value("Flow Run", _run, "replied_via_tool", 1, update_modified=False)
+			frappe.db.set_value("Agent Flow Run", _run, "replied_via_tool", 1, update_modified=False)
 		return _result(True, gateway_event=event.name, sent_chars=len(body))
 	except Exception:
 		frappe.log_error(frappe.get_traceback(), "gateway_reply tool failed")

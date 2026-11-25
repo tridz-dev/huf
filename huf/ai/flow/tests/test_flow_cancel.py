@@ -38,18 +38,18 @@ class TestFlowCancel(IntegrationTestCase):
 	def _run(self, status):
 		run = frappe.get_doc(
 			{
-				"doctype": "Flow Run",
+				"doctype": "Agent Flow Run",
 				"flow_definition": self.flow.name,
 				"flow_id": self.flow.flow_id,
 				"status": status,
 				"trigger_type": "Manual",
 			}
 		).insert(ignore_permissions=True)
-		self._docs.append(("Flow Run", run.name))
+		self._docs.append(("Agent Flow Run", run.name))
 		return run.name
 
 	def _row(self, name):
-		return frappe.db.get_value("Flow Run", name, ["status", "last_error", "completed_at"], as_dict=True)
+		return frappe.db.get_value("Agent Flow Run", name, ["status", "last_error", "completed_at"], as_dict=True)
 
 	def test_cancel_waiting_timer_approval_code_user_sets_cancelled(self):
 		for status in ("Waiting Timer", "Waiting Approval", "Waiting Code", "Waiting User"):

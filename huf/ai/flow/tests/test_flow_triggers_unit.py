@@ -110,7 +110,7 @@ class TestDocEventIndex(unittest.TestCase):
 		self.assertNotIn("on_delete", idx["ToDo"])
 
 	def test_recursion_skip(self):
-		for dt in ("Flow Run", "Agent Run", "Flow Definition"):
+		for dt in ("Agent Flow Run", "Agent Run", "Flow Definition"):
 			self.assertTrue(T.is_recursion_skipped(dt))
 		self.assertTrue(T.is_recursion_skipped("Whatever", "Huf"))
 		self.assertFalse(T.is_recursion_skipped("ToDo", "Desk"))

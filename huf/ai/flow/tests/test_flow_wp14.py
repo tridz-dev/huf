@@ -84,7 +84,7 @@ class TestTriggerDoctypes(IntegrationTestCase):
 	def test_internal_tables_and_huf_bookkeeping_are_left_out(self):
 		frappe.set_user("Administrator")
 		names = {d["name"] for d in flow_api.get_trigger_doctypes()}
-		for hidden in ("Flow Run", "Flow Definition", "Agent Run", "Error Log", "Comment", "Version", "DocField", "System Settings"):
+		for hidden in ("Agent Flow Run", "Flow Definition", "Agent Run", "Error Log", "Comment", "Version", "DocField", "System Settings"):
 			self.assertNotIn(hidden, names)
 
 

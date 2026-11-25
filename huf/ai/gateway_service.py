@@ -2299,7 +2299,7 @@ def _flow_run_is_active(event_name: str) -> bool:
     run = frappe.db.get_value("Gateway Event", event_name, "flow_run")
     if not run:
         return False
-    status = frappe.db.get_value("Flow Run", run, "status")
+    status = frappe.db.get_value("Agent Flow Run", run, "status")
     return bool(status) and status not in _FLOW_RUN_TERMINAL
 
 
@@ -2555,7 +2555,7 @@ def finish_flow_event(flow_run_name: str, status: str, reply_text: str | None = 
         _commit_unless_testing()
         gateway = frappe.get_doc("Gateway", event.gateway)
         text = (reply_text or "").strip()
-        if text and frappe.db.get_value("Flow Run", flow_run_name, "replied_via_tool"):
+        if text and frappe.db.get_value("Agent Flow Run", flow_run_name, "replied_via_tool"):
             event.db_set({"status": "Succeeded", "reply_status": "suppressed", "error_message": "already replied"})
             return
         if not text or _is_no_reply(text):
