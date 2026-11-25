@@ -133,6 +133,11 @@ FLOW_ONLY_NODE_TYPES: frozenset[str] = frozenset(
 		"doc.create",
 		"code.run",
 		"wait",
+		"stop",
+		"doc.get",
+		"doc.update",
+		"flow.call",
+		"member.set",
 	}
 ) | {"trigger.gateway", "trigger.whatsapp", "trigger.telegram"}  # chat triggers: huf/ai/flow/gateways
 

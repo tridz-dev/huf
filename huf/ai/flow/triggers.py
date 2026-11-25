@@ -403,13 +403,11 @@ def wake_due_waits(now: datetime | None = None, limit: int = 500) -> list[str]:
 
 	Each continuation is enqueued on the short queue, never run here, so a big tick cannot hold the scheduler.
 	"""
-	from frappe.utils import now_datetime
-
 	from huf.ai.flow.park import wake_run
 
 	names = frappe.get_all(
 		"Flow Run",
-		filters={"status": "Waiting Timer", "resume_at": ["<=", now or now_datetime()]},
+		filters={"status": "Waiting Timer", "resume_at": ["<=", now or datetime.now(timezone.utc).replace(tzinfo=None)]},
 		order_by="resume_at asc",
 		limit_page_length=limit,
 		pluck="name",

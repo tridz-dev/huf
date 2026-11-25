@@ -423,6 +423,34 @@
                 },
                 "approved": {
                   "type": "boolean"
+                },
+                "retry": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "attempts"
+                  ],
+                  "properties": {
+                    "attempts": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 10
+                    },
+                    "backoff": {
+                      "enum": [
+                        "fixed",
+                        "exponential"
+                      ]
+                    },
+                    "delay_seconds": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "max_delay_seconds": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  }
                 }
               }
             }
@@ -1154,6 +1182,14 @@
           "type": "string",
           "maxLength": 140
         },
+        "entry_policy": {
+          "enum": [
+            "new_run_each_time",
+            "resume_if_waiting",
+            "once_per_member",
+            "one_active_per_member"
+          ]
+        },
         "params": {
           "type": "array",
           "maxItems": 40,
@@ -1284,6 +1320,21 @@
         },
         {
           "$ref": "#/$defs/CodeRunNode"
+        },
+        {
+          "$ref": "#/$defs/StopNode"
+        },
+        {
+          "$ref": "#/$defs/DocGetNode"
+        },
+        {
+          "$ref": "#/$defs/DocUpdateNode"
+        },
+        {
+          "$ref": "#/$defs/FlowCallNode"
+        },
+        {
+          "$ref": "#/$defs/MemberSetNode"
         }
       ]
     },
@@ -1373,7 +1424,9 @@
           "description": "Optional flow-level handler: the node chain run once, with the failure in context error.*, after a failure no step routed. The run still ends Failed.",
           "type": "object",
           "additionalProperties": false,
-          "required": ["next"],
+          "required": [
+            "next"
+          ],
           "properties": {
             "next": {
               "$ref": "#/$defs/NodeId"
@@ -1404,7 +1457,6 @@
               "type": "object",
               "additionalProperties": false,
               "required": [
-                "policy",
                 "options",
                 "default"
               ],
@@ -1426,6 +1478,9 @@
                       },
                       "node_id": {
                         "$ref": "#/$defs/NodeId"
+                      },
+                      "expression": {
+                        "type": "string"
                       }
                     }
                   }
@@ -1500,6 +1555,12 @@
                   "type": "object",
                   "additionalProperties": false,
                   "properties": {
+                    "wait_for": {
+                      "enum": [
+                        "token",
+                        "member_reply"
+                      ]
+                    },
                     "timeout_ms": {
                       "type": "integer",
                       "minimum": 60000
@@ -1719,6 +1780,191 @@
                   "type": "integer",
                   "minimum": 1,
                   "description": "Wall-clock limit for this step; at most the profile's own limit."
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "StopNode": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/NodeCommon"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "stop"
+            },
+            "config": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "message": {
+                  "type": "string"
+                },
+                "as": {
+                  "enum": [
+                    "error",
+                    "success"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "DocGetNode": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/NodeCommon"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "doc.get"
+            },
+            "config": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "doctype"
+              ],
+              "properties": {
+                "doctype": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "name": {
+                  "$ref": "#/$defs/Value"
+                },
+                "filters": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "$ref": "#/$defs/Value"
+                  }
+                },
+                "fields": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "on_missing": {
+                  "enum": [
+                    "error",
+                    "empty"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "DocUpdateNode": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/NodeCommon"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "doc.update"
+            },
+            "config": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "doctype",
+                "name",
+                "values"
+              ],
+              "properties": {
+                "doctype": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "name": {
+                  "$ref": "#/$defs/Value"
+                },
+                "values": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "$ref": "#/$defs/Value"
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "FlowCallNode": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/NodeCommon"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "flow.call"
+            },
+            "config": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "flow_id"
+              ],
+              "properties": {
+                "flow_id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "input": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "$ref": "#/$defs/Value"
+                  }
+                },
+                "mode": {
+                  "enum": [
+                    "fire_and_forget",
+                    "wait"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "MemberSetNode": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/NodeCommon"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "member.set"
+            },
+            "config": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "vars"
+              ],
+              "properties": {
+                "vars": {
+                  "type": "object",
+                  "minProperties": 1,
+                  "additionalProperties": {
+                    "$ref": "#/$defs/Value"
+                  }
                 }
               }
             }

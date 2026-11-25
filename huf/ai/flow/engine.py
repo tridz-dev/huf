@@ -1112,7 +1112,7 @@ def _execute_loop(flow_run, nodes_map: dict, edges_list: list, settings: dict):
 	failed_node_ids: list = []
 	router = _build_router(flow_run, settings, edges_list, state, unhandled_failures, failed_node_ids)
 	handler = _make_node_handler(flow_run, settings)
-	handlers = {node_type: handler for node_type in _NODE_TYPES}
+	handlers = {node_type: handler for node_type in (*_NODE_TYPES, *node_registry.registered_types())}
 
 	policy = ExecutionPolicy(
 		max_hops=getattr(flow_run, "max_hops", None) or DEFAULT_MAX_HOPS,
