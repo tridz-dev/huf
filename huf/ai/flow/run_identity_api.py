@@ -25,7 +25,23 @@ def get_flow_run_identity(flow_run_id: str) -> dict:
 		"run_number": run_number(run.flow_id, run.creation),
 		"started_by": run.owner,
 		"started_by_name": _full_name(run.owner),
+		"resume_at": _resume_at(flow_run_id),
 	}
+
+
+def _resume_at(flow_run_id: str) -> str | None:
+	"""When a run parked on a timed Wait continues (UTC, ``YYYY-MM-DDTHH:MM:SS``), else None."""
+	import json
+
+	raw = frappe.db.get_value("Flow Run", flow_run_id, "waiting")
+	try:
+		waiting = json.loads(raw) if isinstance(raw, str) and raw else raw
+	except ValueError:
+		return None
+	if not isinstance(waiting, dict) or waiting.get("type") != "timer" or waiting.get("mode") != "timed":
+		return None
+	at = waiting.get("resume_at")
+	return at if isinstance(at, str) and at else None
 
 
 def run_number(flow_id: str, creation) -> int:

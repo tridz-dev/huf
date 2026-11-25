@@ -168,3 +168,14 @@ class TestLoopBodyChecks(IntegrationTestCase):
 			],
 		)
 
+class TestRunIdentityResumeAt(IntegrationTestCase):
+	def test_resume_at_only_for_a_timed_wait(self):
+		import json
+		from unittest import mock
+
+		from huf.ai.flow import run_identity_api as ri
+
+		timed = json.dumps({"type": "timer", "mode": "timed", "resume_at": "2026-11-27T11:30:00"})
+		for raw, want in ((timed, "2026-11-27T11:30:00"), (json.dumps({"type": "timer", "mode": "resume"}), None), (None, None), ("not json", None)):
+			with mock.patch.object(ri.frappe.db, "get_value", return_value=raw):
+				self.assertEqual(ri._resume_at("x"), want)

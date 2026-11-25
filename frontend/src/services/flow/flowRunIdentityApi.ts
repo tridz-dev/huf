@@ -5,6 +5,8 @@ export interface FlowRunIdentity {
     run_number: number;
     started_by: string | null;
     started_by_name: string | null;
+    /** When a run parked on a timed Wait continues (UTC), else null. */
+    resume_at?: string | null;
 }
 
 /** Purely cosmetic: when it fails the title simply has no number or name, so errors are not reported to the user. */
