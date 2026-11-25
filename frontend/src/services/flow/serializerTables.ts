@@ -24,7 +24,7 @@ export const TRIGGER_CONFIG_KEYS: Record<string, string[]> = {
   'trigger.webhook': ['method', 'secret'],
   'trigger.schedule': ['cron', 'time_zone'],
   'trigger.doc-event': ['doctype', 'event'],
-  ...Object.fromEntries(GATEWAY_TRIGGER_KINDS.map((k) => [k.nodeType, ['gateway', 'params']])),
+  ...Object.fromEntries(GATEWAY_TRIGGER_KINDS.map((k) => [k.nodeType, ['gateway', 'entry_policy', 'params']])),
 };
 
 /** A chat trigger's saved config: the channel as typed, and `params` only while something is set. */
