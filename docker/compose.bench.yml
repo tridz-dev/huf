@@ -38,7 +38,7 @@ services:
   mariadb:
     container_name: fasterdocker-run-mariadb
     image: ${MARIADB_IMAGE:-mariadb:10.11.11}
-    platform: ${DOCKER_PLATFORM:-linux/arm64}
+    platform: ${DOCKER_PLATFORM:-}
     command:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci

@@ -4,24 +4,109 @@ on:
   push:
     branches:
       - develop
+    # Docs-only merges must not rebuild and republish images. Path filters are
+    # not evaluated for tag pushes, so releases are never skipped.
+    paths:
+      - 'docker/**'
+      - 'huf/**'
+      - 'frontend/**'
+      - 'pyproject.toml'
+      - 'package.json'
+      - 'yarn.lock'
+      - 'frontend/package-lock.json'
+      - 'frontend/yarn.lock'
+      - '.dockerignore'
+      - '.github/workflows/fasterdocker-publish.yml'
     tags:
       - 'v*'
   workflow_dispatch:
     inputs:
       huf_image_tag:
-        description: 'Tag for HUF demo image (e.g. 06655cf or v0.11.0)'
-        required: true
-        default: 'latest'
+        description: 'Tag for the HUF demo image (e.g. 06655cf or v0.11.0). Blank = short commit SHA'
+        required: false
+        default: ''
+      promote_latest:
+        description: 'Also move the "latest" tag to this build'
+        type: boolean
+        required: false
+        default: false
+
+# Serialize publishes per ref so an older run can never finish after a newer
+# one and move tags backwards. Never cancel: a half-finished publish could
+# leave per-arch tags without a manifest.
+concurrency:
+  group: fasterdocker-publish-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
 
 env:
   REGISTRY: ghcr.io
   HUF_DEMO_IMAGE: ghcr.io/tridz-dev/huf-demo
 
 jobs:
+  # Single source of truth for tag decisions, shared by build/smoke/manifest.
+  #   tag            primary tag; per-arch images are <tag>-amd64 / <tag>-arm64
+  #   manifest_tags  space-separated tags the final manifest list is published as
+  # develop pushes -> <sha> + develop (never "latest")
+  # v* tag pushes  -> v1.2.3 + 1.2.3 + latest
+  # dispatch       -> <input or sha>, plus latest only if promote_latest
+  meta:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tags.outputs.tag }}
+      manifest_tags: ${{ steps.tags.outputs.manifest_tags }}
+    steps:
+      - name: Determine tags
+        id: tags
+        env:
+          EVENT: ${{ github.event_name }}
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+          INPUT_TAG: ${{ github.event.inputs.huf_image_tag }}
+          PROMOTE_LATEST: ${{ github.event.inputs.promote_latest }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          short_sha="${SHA:0:7}"
+          if [ "${EVENT}" = "workflow_dispatch" ]; then
+            tag="${INPUT_TAG:-${short_sha}}"
+            if ! [[ "${tag}" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]]; then
+              echo "::error::Invalid image tag '${tag}'"
+              exit 1
+            fi
+            if [ "${tag}" = "latest" ]; then
+              echo "::error::Use the promote_latest input instead of tag 'latest'"
+              exit 1
+            fi
+            manifest_tags="${tag}"
+            if [ "${PROMOTE_LATEST}" = "true" ]; then
+              manifest_tags="${manifest_tags} latest"
+            fi
+          elif [ "${REF_TYPE}" = "tag" ]; then
+            tag="${REF_NAME}"
+            manifest_tags="${tag}"
+            if [[ "${tag}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              # Stable release: also publish the bare version and move latest.
+              manifest_tags="${tag} ${tag#v} latest"
+            elif [[ "${tag}" =~ ^v[0-9] ]]; then
+              # Pre-release (e.g. v1.0.0-rc1): never moves latest.
+              manifest_tags="${tag} ${tag#v}"
+            fi
+          else
+            tag="${short_sha}"
+            manifest_tags="${tag} develop"
+          fi
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "manifest_tags=${manifest_tags}" >> "$GITHUB_OUTPUT"
+          echo "Per-arch tag: ${tag}; manifest tags: ${manifest_tags}"
+
   # Physical MariaDB snapshots are architecture-specific, so we build the demo
   # image once per architecture on native runners and then assemble a manifest
   # list. Using QEMU for the snapshot generation would be fragile and slow.
   build:
+    needs: meta
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -42,6 +127,14 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+        with:
+          # The image chain (runtime -> huf-app -> bake -> seed -> huf-app ->
+          # demo) relies on locally built images being visible to later
+          # `docker build` steps, which only the "docker" driver guarantees.
+          # TODO: layer caching (type=gha) needs the docker-container driver
+          # plus --load/--build-context plumbing in build-demo.sh; left out on
+          # purpose so the build sequence is not put at risk.
+          driver: docker
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
@@ -54,15 +147,6 @@ jobs:
           # list was never populated and GITHUB_TOKEN gets permission_denied.
           # Use a PAT with write:packages that already has push rights instead.
           password: ${{ secrets.GHCR_PUSH_TOKEN }}
-
-      - name: Determine tags
-        id: tags
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "huf_tag=${{ github.event.inputs.huf_image_tag }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "huf_tag=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
-          fi
 
       - name: Build native Frappe runtime base image
         # build-demo.sh (via Dockerfile.huf) expects huf-frappe-runtime:16.25.0
@@ -80,7 +164,7 @@ jobs:
         # build-demo.sh runs. Mirrors the manual steps used to verify this
         # locally on arm64.
         env:
-          HUF_IMAGE_TAG: ${{ steps.tags.outputs.huf_tag }}
+          HUF_IMAGE_TAG: ${{ needs.meta.outputs.tag }}
         run: |
           set -euo pipefail
           docker build -f docker/fast/Dockerfile.huf -t "huf-app:${HUF_IMAGE_TAG}" .
@@ -106,27 +190,48 @@ jobs:
 
       - name: Build and push per-arch HUF demo image
         env:
-          HUF_IMAGE_TAG: ${{ steps.tags.outputs.huf_tag }}
+          HUF_IMAGE_TAG: ${{ needs.meta.outputs.tag }}
           HUF_DEMO_IMAGE: ${{ env.HUF_DEMO_IMAGE }}
           DOCKER_PLATFORM: ${{ matrix.platform }}
+          SUFFIX: ${{ matrix.suffix }}
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+          REVISION: ${{ github.sha }}
         run: |
           set -euo pipefail
           ./docker/fast/build-demo.sh
-          docker tag "huf-demo:${HUF_IMAGE_TAG}" "${HUF_DEMO_IMAGE}:${HUF_IMAGE_TAG}-${{ matrix.suffix }}"
-          docker push "${HUF_DEMO_IMAGE}:${HUF_IMAGE_TAG}-${{ matrix.suffix }}"
+          target="${HUF_DEMO_IMAGE}:${HUF_IMAGE_TAG}-${SUFFIX}"
+          # build-demo.sh does not set OCI labels; add them with a one-line
+          # FROM layer on top of the locally built image (no Dockerfile edit).
+          printf 'FROM huf-demo:%s\n' "${HUF_IMAGE_TAG}" | docker build \
+            --platform "${DOCKER_PLATFORM}" \
+            --label "org.opencontainers.image.source=${REPO_URL}" \
+            --label "org.opencontainers.image.revision=${REVISION}" \
+            --label "org.opencontainers.image.created=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --label "org.opencontainers.image.version=${HUF_IMAGE_TAG}" \
+            -t "${target}" -
+          docker push "${target}"
 
-  manifest:
-    needs: build
-    runs-on: ubuntu-latest
+  # Pull what was just pushed and boot the real demo compose on the same native
+  # arch. The manifest (and "latest") is only assembled if this passes.
+  smoke:
+    needs: [meta, build]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            suffix: amd64
+          - os: ubuntu-24.04-arm
+            suffix: arm64
     permissions:
       contents: read
-      packages: write
+      packages: read
+    timeout-minutes: 20
+    env:
+      HUF_IMAGE_TAG: ${{ needs.meta.outputs.tag }}-${{ matrix.suffix }}
     steps:
       - name: Checkout
-        # Without this, `git rev-parse --short HEAD` in "Determine tags"
-        # below has no repo to read. It fails silently (the echo/output write
-        # still "succeeds"), producing an empty huf_tag and
-        # "ERROR: invalid reference format" from imagetools create.
         uses: actions/checkout@v4
 
       - name: Log in to GitHub Container Registry
@@ -134,30 +239,62 @@ jobs:
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
-          # ghcr.io container packages have their own "Manage Actions access"
-          # list, separate from repo/org Actions permissions. This package
-          # was first created via a manual push (not GITHUB_TOKEN), so that
-          # list was never populated and GITHUB_TOKEN gets permission_denied.
-          # Use a PAT with write:packages that already has push rights instead.
           password: ${{ secrets.GHCR_PUSH_TOKEN }}
 
-      - name: Determine tags
-        id: tags
+      - name: Start demo stack
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "huf_tag=${{ github.event.inputs.huf_image_tag }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "huf_tag=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
-          fi
+          set -euo pipefail
+          docker compose -f docker/docker-compose.yml pull
+          docker compose -f docker/docker-compose.yml up -d --wait --wait-timeout 300
+
+      - name: Probe API and app
+        run: |
+          set -euo pipefail
+          port="${BENCH_WEB_PUBLISH_PORT:-8000}"
+          curl -fsS --retry 5 --retry-delay 3 --retry-connrefused \
+            -H 'Host: huf.localhost' "http://localhost:${port}/api/method/ping"
+          echo
+          curl -fsS -o /dev/null -w 'GET /huf -> %{http_code}\n' \
+            -H 'Host: huf.localhost' "http://localhost:${port}/huf"
+
+      - name: Dump logs on failure
+        if: failure()
+        run: docker compose -f docker/docker-compose.yml logs --no-color --tail 300
+
+      - name: Tear down
+        if: always()
+        run: docker compose -f docker/docker-compose.yml down -v --remove-orphans
+
+  manifest:
+    needs: [meta, build, smoke]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          # See the build job: the package's Actions access list is separate,
+          # so a PAT with write:packages is used instead of GITHUB_TOKEN.
+          password: ${{ secrets.GHCR_PUSH_TOKEN }}
 
       - name: Create and push manifest list
         env:
-          HUF_IMAGE_TAG: ${{ steps.tags.outputs.huf_tag }}
+          HUF_IMAGE_TAG: ${{ needs.meta.outputs.tag }}
+          MANIFEST_TAGS: ${{ needs.meta.outputs.manifest_tags }}
           HUF_DEMO_IMAGE: ${{ env.HUF_DEMO_IMAGE }}
         run: |
           set -euo pipefail
-          docker buildx imagetools create \
-            -t "${HUF_DEMO_IMAGE}:${HUF_IMAGE_TAG}" \
-            -t "${HUF_DEMO_IMAGE}:latest" \
+          args=()
+          for t in ${MANIFEST_TAGS}; do
+            args+=(-t "${HUF_DEMO_IMAGE}:${t}")
+          done
+          docker buildx imagetools create "${args[@]}" \
             "${HUF_DEMO_IMAGE}:${HUF_IMAGE_TAG}-amd64" \
             "${HUF_DEMO_IMAGE}:${HUF_IMAGE_TAG}-arm64"

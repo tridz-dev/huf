@@ -87,6 +87,37 @@ This keeps the source checkout clean, prevents unrelated local changes from leak
 -   Baselined files (`scripts/baselines/`) default to a growth budget of 0 (wiring allowance only); put new logic in new modules.
 -   Never raise a baseline to pass; `--update --force` needs reviewed owner approval.
 
+## Docker (running HUF locally)
+Canonical quick start (runs the published `ghcr.io/tridz-dev/huf-demo` image, NOT your local checkout):
+```bash
+./docker/try.sh up       # waits for health; ~1 min from a pulled image; HUF_WAIT_SECONDS (default 300) sets the timeout
+./docker/try.sh creds    # prints URL and Administrator password
+./docker/try.sh status   # containers, health, ports
+./docker/try.sh logs [service]
+./docker/try.sh down     # stop
+./docker/try.sh reset    # stop and remove volumes; next `up` re-seeds
+```
+-   URL: `http://localhost:8000/huf`, user `Administrator`. The password is random per first boot; always read it from `creds`. Never hardcode it or put credentials in env files or commits.
+-   Health checks (expect HTTP 200): `curl -fsS -H 'Host: huf.localhost' http://localhost:8000/api/method/ping` and `curl -fsS -H 'Host: huf.localhost' http://localhost:8000/huf`. Use the port printed by `try.sh` if it was remapped.
+-   Ports auto-remap on conflict (up to +99); pass `--no-port-remap` to fail instead.
+-   **Testing local code:** the default `demo` variant does not include your changes. Build images locally, then use the bench variant:
+    ```bash
+    export HUF_IMAGE_TAG=$(git rev-parse --short HEAD)
+    docker build -f docker/fast/Dockerfile.runtime -t huf-frappe-runtime:16.25.0 .
+    docker build -f docker/fast/Dockerfile.huf -t huf-app:${HUF_IMAGE_TAG} .
+    # Bake the site seed (a clean checkout has none), then rebuild with it:
+    mkdir -p docker/fast/.bake-output && chmod -R 0777 docker/fast/.bake-output
+    docker compose -p fasterdocker -f docker/compose.bake.yml up -d --build
+    docker wait fasterdocker-build-site-baker   # must print 0
+    docker compose -p fasterdocker -f docker/compose.bake.yml down -v --remove-orphans
+    ./docker/fast/bake-seed.sh sql
+    docker build -f docker/fast/Dockerfile.huf -t huf-app:${HUF_IMAGE_TAG} .
+    ./docker/try.sh --variant bench
+    ```
+    The `bench`, `fast` and `fast-physical` variants require these local images. This sequence mirrors `.github/workflows/fasterdocker-publish.yml`; see also `docker/fast/README.md`.
+-   Gotchas: the physical MariaDB snapshot is architecture specific, so never emulate another architecture. Set `DOCKER_PLATFORM` only to force the native arch. `docker-compose.legacy.yml` + `init.sh` are the superseded runtime bench-init path (clones Frappe develop; slow); do not use them. The Demo Assistant agent needs a Google AI provider API key added in the UI before it answers.
+-   Do not edit compose files or `try.sh` as a side effect of unrelated work; do not run `docker compose` from `docker/` directly, use `try.sh`.
+
 ## Security Considerations
 -   Do not commit secrets or API keys. The `AI Provider` DocType stores API keys in the database using the `Password` field type, which encrypts the value.
 -   Custom functions exposed to agents via `Agent Tool Function` must be carefully designed. They are executed with the permissions of the user running the agent. Always validate inputs and perform permission checks inside custom tool functions.

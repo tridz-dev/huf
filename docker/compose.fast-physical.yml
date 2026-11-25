@@ -28,7 +28,7 @@ services:
     container_name: fasterdocker-run-mariadb
     # Physical seed image is based on the exact MariaDB image used at bake time.
     image: ${SEED_IMAGE:-huf-site-seed-physical}:${HUF_IMAGE_TAG:-latest}
-    platform: ${DOCKER_PLATFORM:-linux/arm64}
+    platform: ${DOCKER_PLATFORM:-}
     entrypoint: ["/seed/physical-mariadb-entrypoint.sh"]
     command:
       - --character-set-server=utf8mb4

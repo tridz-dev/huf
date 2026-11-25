@@ -111,4 +111,4 @@ docker build \
   "${REPO_ROOT}"
 
 log "Built ${DEMO_IMAGE}:${HUF_IMAGE_TAG}"
-log "To run locally: cd ${REPO_ROOT}/docker && docker compose up"
+log "To run it locally: HUF_IMAGE_TAG=${HUF_IMAGE_TAG} HUF_DEMO_IMAGE=${DEMO_IMAGE} ./docker/try.sh up"

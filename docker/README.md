@@ -1,9 +1,3 @@
-<!--
-  Superseded notice: this README documents the current fasterdocker multi-service
-  compose stack. The legacy single-container setup still exists in this directory
-  as docker-compose.legacy.yml and init.sh, but is no longer the recommended path.
--->
-
 # HUF Docker quick start
 
 ## What is this?
@@ -25,30 +19,36 @@ at developers who want to build images locally or test specific boot strategies.
   runners**, not QEMU emulation. This is required because the demo image
   bakes a physical MariaDB snapshot, and MariaDB's on-disk data format is
   architecture-specific.
-  > **Current status:** `ghcr.io/tridz-dev/huf-demo:9c6817b-arm64` is a
-  > freshly rebuilt, locally-verified native arm64 image containing the
-  > credential-rotation and `common_site_config.json` fixes from this pass.
-  > The matching native amd64 build (via `.github/workflows/fasterdocker-publish.yml`
-  > on `ubuntu-latest`) has not run yet — that workflow only becomes
-  > dispatchable once this branch is merged to `develop` (GitHub requires
-  > `workflow_dispatch` workflows to exist on the default branch to be
-  > triggered remotely). Until the merge + manifest run happens, `:latest`
-  > still points at the older, pre-fix image; pin `--tag 9c6817b-arm64`
-  > explicitly on arm64 machines if you want the fixed image now.
-  `DOCKER_PLATFORM` can be set to force a specific architecture if your local
-  engine supports it.
+  Published tags are listed on the GHCR package page for `tridz-dev/huf-demo`.
+  CI publishes both `amd64` and `arm64`, each built on a native runner.
+  Never emulate the other architecture: the physical MariaDB snapshot is arch-specific.
+  Set `DOCKER_PLATFORM` only to force the native architecture.
 
 ## Quick start
 
 ```bash
-./docker/try.sh up
+git clone https://github.com/tridz-dev/huf.git && cd huf && ./docker/try.sh up
 ```
 
-Then open the URL printed by the script (default: `http://localhost:8000/huf`).
-Login credentials are shown in the banner and can be reprinted at any time with:
+`up` waits for the stack to be healthy (about a minute from a pulled image;
+timeout is `HUF_WAIT_SECONDS`, default 300). Then open
+`http://localhost:8000/huf` and sign in as `Administrator`. The password is
+random per first boot and is shown in the banner. Reprint it any time with:
 
 ```bash
 ./docker/try.sh creds
+```
+
+The demo and legacy paths run published GitHub code, not your local checkout.
+To test local changes, build the images locally and use `--variant bench`
+(see `docker/fast/README.md`).
+
+The demo ships a Demo Assistant agent; add a Google AI provider API key in the
+UI before it answers. Health checks:
+
+```bash
+curl -fsS -H 'Host: huf.localhost' http://localhost:8000/api/method/ping
+curl -fsS -H 'Host: huf.localhost' http://localhost:8000/huf
 ```
 
 ## Common commands
@@ -58,7 +58,7 @@ Login credentials are shown in the banner and can be reprinted at any time with:
 ./docker/try.sh --variant demo        # prebuilt single-image demo (default)
 ./docker/try.sh --variant fast        # production-parity SQL seed restore
 ./docker/try.sh --variant fast-physical  # fastest cold boot (physical snapshot)
-./docker/try.sh --variant bench       # single bench-start container
+./docker/try.sh --variant bench       # single bench-start container (needs local images)
 ./docker/try.sh down                  # stop the stack
 ./docker/try.sh reset                 # stop and remove volumes; next up re-seeds
 ./docker/try.sh logs                  # tail all logs
@@ -72,8 +72,8 @@ custom `.env` files, and `--dry-run`.
 
 ## Credentials & security model
 
-The demo image ships with **placeholder default credentials** baked in at build
-time so the container can boot without user input:
+The demo image has **placeholder build-time credentials** that exist only so the
+image can be built. They are never what you log in with:
 
 - MariaDB root password: `fasterdocker-mysql-root`
 - Frappe Administrator password: `fasterdocker-admin`
@@ -97,8 +97,10 @@ it rotates the baked defaults to fresh random values:
 On subsequent boots the existing volume is reused, the rotation step is skipped,
 and `try.sh creds` reads the persisted file from the running `frappe` container.
 
-If you explicitly set `ADMIN_PASSWORD` or `MARIADB_ROOT_PASSWORD`, the rotation
-logic honors your value instead of generating a new one.
+If you explicitly set `ADMIN_PASSWORD`, the rotation logic honors your value
+instead of generating a new one. Do not override `MARIADB_ROOT_PASSWORD` with the
+single-image demo: the baked database keeps its original root password, so a
+different value would not match.
 
 The entrypoint also refuses to run in a production context. If `HUF_PRODUCTION`
 is set to `1` or `true` and either password is still the baked default, the
@@ -122,7 +124,9 @@ Use `--no-port-remap` to fail instead of remapping.
 ## Variants
 
 - **demo** (`docker/docker-compose.yml`): pulls the prebuilt
-  `ghcr.io/tridz-dev/huf-demo` image. No local build required.
+  `ghcr.io/tridz-dev/huf-demo:${HUF_IMAGE_TAG:-latest}` image (`latest` is the most
+  recent promoted build: a stable `vX.Y.Z` release or a manual publish with `promote_latest`. The `develop` tag tracks the develop branch tip, so use
+  `--tag develop` for it. `<sha>`, `<sha>-amd64`, `<sha>-arm64` also exist). No local build required.
 - **bench** (`docker/compose.bench.yml`): a single `bench start` container plus
   MariaDB/Redis. Requires a local `huf-app` image.
 - **fast** (`docker/compose.fast.yml`): split services with SQL seed restore.
@@ -132,54 +136,21 @@ Use `--no-port-remap` to fail instead of remapping.
 For local builds and advanced fasterdocker techniques, see
 `docker/fast/README.md` and `docker/FASTERDOCKER_TECHNIQUES.md`.
 
-## Generator provenance
+## Generator reference config
 
-The `demo` variant's `docker-compose.yml`, `fast/demo-entrypoint.sh`, `try.sh`,
-and `fast/.env.example` are generated from `docker/ffast.yaml` by
-[ffast](https://github.com/OWNER/ffast), a standalone Frappe Docker/Compose
-generator extracted from this project's patterns. They are currently checked in
-directly (ffast is not yet published to PyPI); `docker/ffast.yaml` is kept in
-sync as the config that reproduces them. The `bench`/`fast`/`fast-physical`
-variants are not yet templatized and remain hand-maintained.
+`docker/ffast.yaml` is a reference config for `ffast`, a Frappe Docker/Compose
+generator that is not published yet. The demo files (`docker-compose.yml`,
+`fast/demo-entrypoint.sh`, `try.sh`) are checked in directly and maintained by
+hand; there is nothing to install. The `bench`/`fast`/`fast-physical` variants
+are hand-maintained too.
 
-### Installing ffast as a dev dependency
-
-`ffast` is a **developer tool**, not a runtime dependency of the HUF Frappe app.
-Install it once for local development with:
-
-```bash
-pip install ffast
-```
-
-It is intentionally **not** wired into `huf/hooks.py` as a `bench_commands`
-entry. Frappe eagerly imports every app's `bench_commands` module list on every
-`bench` invocation; adding an uninstalled package there would break `bench` for
-any user who has HUF installed but has not installed `ffast`. Keeping ffast as a
-standalone dev tool avoids that coupling.
-
-`ffast` works the same way for Docker-based and bare-metal bench setups: it only
-generates config files (Compose, entrypoint, helper scripts, and optionally a
-`.github/workflows/publish-demo-image.yml` template). Running `ffast generate`
-does not require Docker; building and pushing the generated image is a separate
-step performed by the generated workflow or by local `docker` commands.
-
-### GitHub Actions path
-
-A reusable workflow template is included in the ffast generator at
-`src/ffast/templates/demo/publish-demo-image.yml.j2`; when rendered it produces
-`.github/workflows/publish-demo-image.yml` in the target project. That generated
-workflow builds and pushes the demo image. HUF's own repository currently does
-**not** contain a file generated from that template under
-`.github/workflows/`; instead it contains a hand-maintained
-`.github/workflows/fasterdocker-publish.yml` that uses native `ubuntu-latest`
-(amd64) and `ubuntu-24.04-arm` (arm64) runners plus a manifest-list job, because
-the physical-snapshot demo image must not be built with QEMU emulation.
+CI publishes the demo image with `.github/workflows/fasterdocker-publish.yml`,
+using native `ubuntu-latest` (amd64) and `ubuntu-24.04-arm` (arm64) runners plus
+a manifest-list job, because the physical-snapshot image must not be built under
+QEMU.
 
 ## Legacy single-container setup
 
-The files `docker/docker-compose.legacy.yml` and `docker/init.sh` are the legacy
-single-container Docker setup. They are superseded by the fasterdocker
-multi-service compose stack documented in this file (see
-`docker/compose.fast.yml`). This legacy setup will be moved to a
-`backup/docker-single-container-legacy` branch and may be removed from `main` in the
-future.
+`docker/docker-compose.legacy.yml` and `docker/init.sh` are the superseded
+runtime bench-init path. They clone Frappe `develop` at startup and are slow
+(minutes, not seconds). Prefer `./docker/try.sh up`.

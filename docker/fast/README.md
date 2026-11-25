@@ -5,12 +5,11 @@ This directory contains the Docker assets for warm-booting HUF on Frappe v16.25.
 The fastest way for end users to **try** HUF is the single-image demo in [`docker/docker-compose.yml`](../docker-compose.yml). It is intended for demo/trial use only — it bundles a pre-seeded site and runs everything in one container.
 
 ```bash
-git clone https://github.com/tridz-dev/huf.git
-cd huf/docker
-docker compose up --wait
+git clone https://github.com/tridz-dev/huf.git && cd huf && ./docker/try.sh up
+./docker/try.sh creds
 ```
 
-Then open http://localhost:8000/huf.
+Then open http://localhost:8000/huf (user `Administrator`, password from `creds`).
 
 There is no local build, `bench init`, `new-site`, `install-app`, or seed step once the published image is available.
 
@@ -20,45 +19,29 @@ For local development or production-parity validation, see the other compose pro
 
 The demo image is published as a multi-arch manifest for `linux/amd64` (Intel/AMD Linux) and `linux/arm64` (Apple Silicon and ARM64 Linux). Docker pulls the correct architecture automatically.
 
-- **macOS with Apple Silicon**: tested locally with OrbStack.
-- **Intel/AMD Linux**: built for `linux/amd64` via Docker Rosetta on an Apple Silicon host and verified to boot and serve `/huf`. Runtime testing on native Intel hardware is pending.
-- **Windows**: not tested; WSL2 with Docker should pull the matching architecture.
+- amd64 and arm64 are both published by CI, each built on a native runner (never emulated, because the physical MariaDB snapshot is arch-specific).
+- Published tags are listed on the GHCR package page for `tridz-dev/huf-demo`.
 
-Override the platform explicitly if needed:
+Force the platform only if needed (native arch only):
 
 ```bash
-export DOCKER_PLATFORM=linux/amd64   # or linux/arm64
-docker compose up --wait
+export DOCKER_PLATFORM=linux/arm64   # or linux/amd64, matching your host
+./docker/try.sh up
 ```
 
 ## Prebuilt image
 
-The compose file uses:
-
-```text
-ghcr.io/tridz-dev/huf-demo:<sha>
-```
-
-Current published tags:
-
-- `ghcr.io/tridz-dev/huf-demo:latest` — multi-arch (`linux/amd64`, `linux/arm64`)
-- `ghcr.io/tridz-dev/huf-demo:976c22a` — multi-arch (`linux/amd64`, `linux/arm64`)
-- `ghcr.io/tridz-dev/huf-demo:976c22a-arm64` — `linux/arm64`
-- `ghcr.io/tridz-dev/huf-demo:976c22a-amd64` — `linux/amd64`
+The compose file uses `ghcr.io/tridz-dev/huf-demo:${HUF_IMAGE_TAG:-latest}`. `latest` is the most recent promoted build (a stable `vX.Y.Z` release, or a manual publish with `promote_latest`); the `develop` tag is the tip of the develop branch (use `--tag develop` for it); `<sha>` is multi-arch and `<sha>-amd64` / `<sha>-arm64` are per-arch. See the GHCR package page for `tridz-dev/huf-demo` for published tags.
 
 To build locally instead, see [Building locally](#building-locally).
 
 ## Quick start (single-image demo)
 
 ```bash
-cd huf/docker
-
-# If the prebuilt image is not yet published, point to a locally built image:
-export HUF_DEMO_IMAGE=huf-demo
-export HUF_IMAGE_TAG=$(git rev-parse --short HEAD)
-
-docker compose up --wait
+./docker/try.sh up
 ```
+
+This runs the published image, not your local checkout. To test local changes use the bench variant (see [Building locally](#building-locally)).
 
 Health checks:
 
@@ -70,21 +53,21 @@ curl -fsS -H 'Host: huf.localhost' http://localhost:8000/huf
 Log in at http://localhost:8000/huf:
 
 - **User:** `Administrator`
-- **Password:** `fasterdocker-admin`
+- **Password:** random per first boot; run `./docker/try.sh creds`
 
-The image ships with an enabled **Demo Assistant** agent (Google's `gemini-3.5-flash-lite`) and a **Demo Assistant Prompt** so you can see HUF's AI layer immediately. Add your Google AI Provider API key to start chatting.
+The image ships with an enabled **Demo Assistant** agent (Google's `gemini-3.5-flash-lite`) and a **Demo Assistant Prompt** so you can see HUF's AI layer immediately. Add a Google AI provider API key in the UI before it answers.
 
 Restart only the app (keeps the MariaDB volume):
 
 ```bash
-docker compose restart frappe
+docker compose -f docker/docker-compose.yml restart frappe
 ```
 
 Full reset (back to seeded first start):
 
 ```bash
-docker compose down -v --remove-orphans
-docker compose up --wait
+./docker/try.sh reset
+./docker/try.sh up
 ```
 
 ## Building locally
@@ -117,11 +100,18 @@ export DOCKER_PLATFORM=linux/amd64
 
 ### 4. Run it
 
+To test your local code, run the bench variant (uses the `huf-app` image from step 2):
+
 ```bash
-cd docker
+./docker/try.sh --variant bench
+```
+
+To run your locally built demo image instead:
+
+```bash
 export HUF_DEMO_IMAGE=huf-demo
 export HUF_IMAGE_TAG=$(git rev-parse --short HEAD)
-docker compose up --wait
+docker compose -f docker/docker-compose.yml up --wait
 ```
 
 ## Other profiles
@@ -186,8 +176,7 @@ docker compose -p fasterdocker -f docker/compose.fast.yml down -v --remove-orpha
 Single-image demo:
 
 ```bash
-cd docker
-docker compose down -v --remove-orphans
+./docker/try.sh reset
 ```
 
 ## Benchmark
@@ -223,6 +212,6 @@ cp docker/fast/.env.example .env
 
 ## Notes
 
-- Default credentials are demo-only and insecure: `Administrator` / `fasterdocker-admin`.
+- The Administrator password is random per first boot (`./docker/try.sh creds`); the demo is still for local trial use only.
 - Physical snapshots are pinned to the exact MariaDB image digest used at bake time.
 - On Apple Silicon, `pysqlite3` is built from source because the binary wheel is x86_64-only.

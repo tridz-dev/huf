@@ -1,37 +1,96 @@
+# HUF demo stack: runs the prebuilt single-image demo (ghcr.io/tridz-dev/huf-demo).
+#
+# Usage (recommended):
+#   ./docker/try.sh up
+#
+# or directly:
+#   docker compose -f docker/docker-compose.yml up --wait -d
+#
+# The image bundles the HUF app, a baked site and a physical MariaDB snapshot.
+# No local build, bench init or seed step runs. Redis runs inside the frappe
+# container; MariaDB is a separate service that shares the data volume with it.
+#
+# Credentials: the Administrator and database root passwords are generated
+# randomly on first boot. You can set ADMIN_PASSWORD to choose the
+# Administrator password; leave MARIADB_ROOT_PASSWORD unset (changing it after
+# the image's baked database exists does not change the database password).
+# Read them with: ./docker/try.sh creds
+#
+# This stack is for local trials and demos only. It runs the published image,
+# not your local checkout. The slower runtime-bootstrap variant is kept in
+# docker-compose.legacy.yml.
+
 name: huf
 
 services:
   mariadb:
-    image: docker.io/mariadb:10.11
+    container_name: fasterdocker-run-mariadb
+    image: ${MARIADB_IMAGE:-mariadb:10.11.11}
+    platform: ${DOCKER_PLATFORM:-}
+    # Hold off starting mysqld until the frappe container has copied the baked
+    # data snapshot into the shared volume and written the ready marker.
+    entrypoint:
+      - bash
+      - -c
+      - |
+        until [ -f /var/lib/mysql/.fasterdocker-snapshot-ready ]; do sleep 1; done
+        exec docker-entrypoint.sh "$$@"
+      - mariadb-wait
     command:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
       - --skip-character-set-client-handshake
       - --skip-innodb-read-only-compressed
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-huf_dev_mysql_root}
+      MYSQL_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:-fasterdocker-mysql-root}
+      MARIADB_AUTO_UPGRADE: "1"
     volumes:
       - mariadb-data:/var/lib/mysql
-
-  redis:
-    image: redis:alpine
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      start_period: 120s
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
 
   frappe:
-    image: frappe/bench:latest
-    command: bash /workspace/init.sh
+    container_name: fasterdocker-run-frappe
+    image: ${HUF_DEMO_IMAGE:-ghcr.io/tridz-dev/huf-demo}:${HUF_IMAGE_TAG:-latest}
+    platform: ${DOCKER_PLATFORM:-}
     environment:
-      - SHELL=/bin/bash
-      - HUF_BRANCH=develop
-      - UV_HTTP_TIMEOUT=300
-    working_dir: /home/frappe
+      SITE_NAME: ${SITE_NAME:-huf.localhost}
+      FRAPPE_SITE_NAME_HEADER: ${SITE_NAME:-huf.localhost}
+      APP_NAME: ${APP_NAME:-huf}
+      DB_HOST: mariadb
+      DB_PORT: "3306"
+      # The entrypoint reads DB_ROOT_PASSWORD; the user-facing name is
+      # MARIADB_ROOT_PASSWORD. Unset means "use the baked default, then rotate".
+      DB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:-fasterdocker-mysql-root}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-fasterdocker-admin}
+      BENCH_WEB_PUBLISH_PORT: ${BENCH_WEB_PUBLISH_PORT:-8000}
+      # Redis runs inside this container. bench-start.sh rewrites
+      # common_site_config.json from these, so they must not fall back to a
+      # separate "redis" host.
+      REDIS_CACHE: redis://localhost:6379/0
+      REDIS_QUEUE: redis://localhost:6379/1
+      REDIS_SOCKETIO: redis://localhost:6379/2
     volumes:
-      - .:/workspace
+      - mariadb-data:/var/lib/mysql
+      - sites:/home/frappe/frappe-bench/sites
+      - logs:/home/frappe/frappe-bench/logs
     ports:
-      - "8000:8000"
-      - "9000:9000"
-    depends_on:
-      - mariadb
-      - redis
+      - "${BENCH_WEB_PUBLISH_PORT:-8000}:8000"
+      - "${BENCH_SOCKETIO_PUBLISH_PORT:-9000}:9000"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-H", "Host: ${SITE_NAME:-huf.localhost}", "http://localhost:8000/api/method/ping"]
+      start_period: 120s
+      interval: 5s
+      timeout: 5s
+      retries: 60
+    restart: unless-stopped
 
 volumes:
   mariadb-data:
+  sites:
+  logs:

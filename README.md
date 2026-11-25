@@ -286,14 +286,15 @@ Upcoming capabilities in active development:
 ### Try with Docker
 
 ```bash
-git clone https://github.com/tridz-dev/huf.git
-cd huf/docker
-docker compose up
+git clone https://github.com/tridz-dev/huf.git && cd huf && ./docker/try.sh up
+./docker/try.sh creds    # prints your login details
 ```
 
-Open http://localhost:8000 and login:
-- **User:** Administrator
-- **Password:** admin
+It takes about a minute to start from a downloaded image. When it is ready, open http://localhost:8000/huf and sign in as `Administrator` with the password shown by the second command. The password is generated on first start and is different for every install.
+
+The demo includes a Demo Assistant agent. Add a Google AI API key under AI Providers to start chatting with it.
+
+To stop it, run `./docker/try.sh down`. To start over from scratch, run `./docker/try.sh reset`.
 
 ### Install on Existing Bench
 

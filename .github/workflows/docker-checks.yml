@@ -1,0 +1,63 @@
+name: Docker checks
+
+on:
+  pull_request:
+    paths:
+      - 'docker/**'
+      - '.github/workflows/fasterdocker-publish.yml'
+      - '.github/workflows/docker-checks.yml'
+      - '.dockerignore'
+
+permissions:
+  contents: read
+
+jobs:
+  compose-config:
+    name: Compose config (${{ matrix.file }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        file:
+          - docker-compose.yml
+          - docker-compose.legacy.yml
+          - compose.bench.yml
+          - compose.fast.yml
+          - compose.fast-physical.yml
+          - compose.bake.yml
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate compose file
+        run: docker compose -f "docker/${{ matrix.file }}" config -q
+
+  try-dry-run:
+    name: try.sh --dry-run (${{ matrix.variant }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [demo, bench, fast, fast-physical]
+    steps:
+      - uses: actions/checkout@v4
+      - run: ./docker/try.sh --variant "${{ matrix.variant }}" --dry-run
+
+  shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: shellcheck (errors only)
+        run: shellcheck --severity=error docker/try.sh docker/init.sh docker/fast/*.sh
+
+  hadolint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: hadolint (errors only)
+        run: |
+          set -euo pipefail
+          for f in docker/fast/Dockerfile.*; do
+            echo "::group::${f}"
+            docker run --rm -i hadolint/hadolint:v2.12.0 \
+              hadolint --failure-threshold error - < "${f}"
+            echo "::endgroup::"
+          done

@@ -84,7 +84,8 @@ huf/
 │       ├── config/               # Tool templates JSON
 │       └── utils/                # Helpers (socket, time, status, parsers)
 ├── docker/                       # Docker quick-try environment
-│   ├── docker-compose.yml        # MariaDB, Redis, Frappe services
+│   ├── docker-compose.yml        # Demo compose (prebuilt huf-demo image)
+│   ├── try.sh                    # up/down/reset/creds/logs/status wrapper
 │   └── init.sh                   # Automated setup script
 ├── docs/                         # PR screenshots and planning docs
 ├── .github/workflows/            # CI/CD definitions
@@ -153,10 +154,11 @@ yarn build-docs       # Build documentation
 ### Docker Quick-Try
 For quick evaluation without a full Frappe bench setup:
 ```bash
-cd docker
-docker compose up
+./docker/try.sh up      # pulls ghcr.io/tridz-dev/huf-demo and waits for health (~1 min)
+./docker/try.sh creds   # prints the Administrator password (random per first boot)
+./docker/try.sh down    # stop; `reset` also removes volumes
 ```
-This starts MariaDB, Redis, and Frappe with HUF pre-installed. Access at `http://localhost:8000` (admin/admin). First run takes 5-8 minutes for setup.
+Access at `http://localhost:8000/huf` as `Administrator`. The demo image is built from GitHub code, not your local checkout; see the Docker section in `AGENTS.md` and `docker/fast/README.md` to test local changes. `docker-compose.legacy.yml` + `init.sh` are the superseded runtime bench-init path (slow).
 
 ## Code Style and Conventions
 
@@ -549,7 +551,7 @@ Test files are located in:
     facing, write it as if the user has never heard of Frappe, doctypes, or REST/SSE.
 
 ### General
-22. **Docker Dev**: Use `docker/` for quick evaluation; use Frappe bench for full development
+22. **Docker Dev**: Use `./docker/try.sh up` for quick evaluation (runs published code, not your checkout); use `--variant bench` with locally built images or a Frappe bench for development
 
 ## Related Documentation
 

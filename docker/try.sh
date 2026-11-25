@@ -46,7 +46,8 @@ usage() {
 Usage: ./docker/try.sh [GLOBAL_FLAGS] [SUBCOMMAND] [ARGS]
 
 Subcommands (default: up):
-  up       Start the stack (detached, waits for healthy)
+  up       Start the stack (detached, waits for healthy; first demo boot can
+           take a few minutes)
   down     Stop the stack (add --volumes to remove volumes)
   reset    Stop and remove volumes (cold re-seed on next up)
   logs     Tail logs: ./docker/try.sh logs [service ...]
@@ -64,11 +65,31 @@ Global flags:
   --socketio-port PORT                        sets BENCH_SOCKETIO_PUBLISH_PORT
   --frontend-port PORT                        sets FRONTEND_PUBLISH_PORT
                                               (used by fast / fast-physical)
+  --timeout SECONDS                           how long 'up' waits for the site to
+                                              answer (default: 300, or
+                                              HUF_WAIT_SECONDS)
   --no-port-remap                             fail on port conflict instead of
                                               auto-remapping
   --dry-run                                   print resolved env/command, then
                                               exit without executing
   -h, --help                                  show this help
+
+Variants:
+  demo           Runs the published image (ghcr.io/tridz-dev/huf-demo). It does
+                 NOT use your local checkout. No local build needed.
+  bench          Runs local images; build them first (see below).
+  fast           Runs local images; build them first (see below).
+  fast-physical  Runs local images; build them first (see below).
+
+Building local images (needed for bench / fast / fast-physical; see
+docker/fast/README.md):
+  export HUF_IMAGE_TAG=\$(git rev-parse --short HEAD)
+  docker build -f docker/fast/Dockerfile.runtime -t huf-frappe-runtime:16.25.0 .
+  docker build -f docker/fast/Dockerfile.huf -t huf-app:\${HUF_IMAGE_TAG} .
+  ./docker/fast/build-demo.sh        # builds a local huf-demo image
+  The fast and fast-physical variants also need the seed images
+  (huf-site-seed-sql / huf-site-seed-physical); build them with
+  docker/fast/bake-seed.sh as described in docker/fast/README.md.
 
 Examples:
   ./docker/try.sh
@@ -131,6 +152,7 @@ parse_args() {
   frontend_port=""
   no_port_remap=""
   dry_run=""
+  wait_seconds=""
   volumes_flag=""
   rmi_flag=""
   extra_args=""
@@ -190,6 +212,11 @@ parse_args() {
         frontend_port="$2"
         shift 2
         ;;
+      --timeout)
+        [[ $# -ge 2 ]] || fatal "--timeout requires a value."
+        wait_seconds="$2"
+        shift 2
+        ;;
       --no-port-remap)
         no_port_remap=1
         shift
@@ -233,6 +260,10 @@ parse_args() {
   variant=${variant:-$DEFAULT_VARIANT}
   project=${project:-$DEFAULT_PROJECT}
   env_file=${env_file:-$DEFAULT_ENV}
+  wait_seconds=${wait_seconds:-${HUF_WAIT_SECONDS:-300}}
+  case "$wait_seconds" in
+    ''|*[!0-9]*) fatal "--timeout / HUF_WAIT_SECONDS must be a whole number of seconds." ;;
+  esac
 }
 
 # ---------------------------------------------------------------------------
@@ -247,7 +278,8 @@ load_env_file() {
     set +a
   else
     log "No .env found at $env_file; using compose defaults."
-    log "Copy docker/fast/.env.example to $REPO_ROOT/.env to customize."
+    log "Optional: copy docker/fast/.env.example to $REPO_ROOT/.env to customize"
+    log "(it leaves DOCKER_PLATFORM unset so Docker picks your host architecture)."
   fi
 }
 
@@ -392,10 +424,10 @@ parse_credential_value() {
 # ---------------------------------------------------------------------------
 
 wait_for_http_200() {
-  local url="$1" host="$2" port="$3"
+  local url="$1" host="$2" port="$3" timeout="${4:-300}"
   local i line
 
-  for (( i = 1; i <= 30; i++ )); do
+  for (( i = 1; i <= timeout; i++ )); do
     if command -v curl >/dev/null 2>&1; then
       if curl -fsS -H "Host: $host" "$url" >/dev/null 2>&1; then
         return 0
@@ -411,6 +443,9 @@ wait_for_http_200() {
       if [[ "$line" == *" 200 "* ]]; then
         return 0
       fi
+    fi
+    if (( i % 15 == 0 )); then
+      log "Still waiting for $url (${i}s of ${timeout}s)..."
     fi
     sleep 1
   done
@@ -493,9 +528,11 @@ cmd_up() {
   local compose_file user_port_env user_port url start_time elapsed
   local creds admin_user admin_pass boot_type up_out_file rc
 
-  require_command docker
-  if ! docker info >/dev/null 2>&1; then
-    fatal "Docker daemon is not running. Start Docker Desktop or run 'sudo systemctl start docker', then retry."
+  if [[ "$dry_run" != "1" ]]; then
+    require_command docker
+    if ! docker info >/dev/null 2>&1; then
+      fatal "Docker daemon is not running. Start Docker Desktop or run 'sudo systemctl start docker', then retry."
+    fi
   fi
 
   variant_to_compose "$variant"
@@ -508,7 +545,7 @@ cmd_up() {
   user_port_env=$(user_facing_port_env "$variant")
   user_port=${!user_port_env}
   url="http://localhost:${user_port}$(url_path)"
-  boot_type=$(detect_boot_type)
+  if [[ "$dry_run" == "1" ]]; then boot_type="unknown"; else boot_type=$(detect_boot_type); fi
 
   if [[ "$dry_run" == "1" ]]; then
     echo "Resolved environment:"
@@ -520,6 +557,7 @@ cmd_up() {
     echo "  BENCH_SOCKETIO_PUBLISH_PORT=${BENCH_SOCKETIO_PUBLISH_PORT:-9000}"
     echo "  FRONTEND_PUBLISH_PORT=${FRONTEND_PUBLISH_PORT:-8080}"
     echo "  $user_port_env=$user_port"
+    echo "  wait timeout=${wait_seconds}s"
     echo "Compose command:"
     echo "  docker compose -p $project -f $compose_file up --wait -d --remove-orphans"
     exit 0
@@ -534,8 +572,9 @@ cmd_up() {
     diagnose_failure "$variant" "$up_out_file" "$rc"
   fi
 
-  if ! wait_for_http_200 "$url" "${SITE_NAME:-huf.localhost}" "$user_port"; then
-    fatal "HUF endpoint $url did not respond. Run './docker/try.sh logs' for details."
+  log "Waiting up to ${wait_seconds}s for $url to respond (first boot is slower)..."
+  if ! wait_for_http_200 "$url" "${SITE_NAME:-huf.localhost}" "$user_port" "$wait_seconds"; then
+    fatal "HUF endpoint $url did not respond within ${wait_seconds}s. Run './docker/try.sh logs' for details, or retry with a larger --timeout."
   fi
 
   elapsed=$(($(date +%s) - start_time))
@@ -625,10 +664,12 @@ cmd_creds() {
 
   load_env_file
   apply_cli_overrides
-  resolve_ports_for_variant
-
+  # Do not remap ports here: the stack is already running and holds its ports.
   user_port_env=$(user_facing_port_env "$variant")
-  user_port=${!user_port_env}
+  user_port=${!user_port_env:-}
+  if [[ -z "$user_port" ]]; then
+    case "$variant" in fast|fast-physical) user_port=8080 ;; *) user_port=8000 ;; esac
+  fi
   url="http://localhost:${user_port}$(url_path)"
   site_name="${SITE_NAME:-huf.localhost}"
 
