@@ -87,6 +87,10 @@ This keeps the source checkout clean, prevents unrelated local changes from leak
 -   Baselined files (`scripts/baselines/`) default to a growth budget of 0 (wiring allowance only); put new logic in new modules.
 -   Never raise a baseline to pass; `--update --force` needs reviewed owner approval.
 
+## UI Verification Before Merge (agents)
+-   A UI-touching change (nodes, panels, forms, settings, list views) is not merge-ready on unit tests alone. Run it on a live bench in a real browser and check: every new backend field is reachable in the UI, defaults and labels are right, no placeholder or scaffold values are active, save and reload persists, status states render, and the console is clean.
+-   Record what you checked (screenshots or a short report) in the PR. If your environment has a UI-verification skill (for example `visual-bench-verify`), use it; otherwise do the same checks by hand. The skill is optional, the checks are not.
+
 ## Security Considerations
 -   Do not commit secrets or API keys. The `AI Provider` DocType stores API keys in the database using the `Password` field type, which encrypts the value.
 -   Custom functions exposed to agents via `Agent Tool Function` must be carefully designed. They are executed with the permissions of the user running the agent. Always validate inputs and perform permission checks inside custom tool functions.
