@@ -121,9 +121,9 @@ This is the **planned default** permission matrix to add in Frappe (via Role Per
 | **Flow Definition** | Huf Manager | 1 | 1 | 1 | 1 |
 | Flow Definition | Huf User | 0 | 1 | 0 | 0 |
 | Flow Definition | Huf Viewer | 0 | 1 | 0 | 0 |
-| **Flow Run** | Huf Manager | 1 | 1 | 1 | 0 |
-| Flow Run | Huf User | 1 | 1 | 0 | 0 |
-| Flow Run | Huf Viewer | 0 | 0 | 0 | 0 |
+| **Agent Flow Run** | Huf Manager | 1 | 1 | 1 | 0 |
+| Agent Flow Run | Huf User | 1 | 1 | 0 | 0 |
+| Agent Flow Run | Huf Viewer | 0 | 0 | 0 | 0 |
 | **Knowledge Source** | Huf Manager | 1 | 1 | 1 | 1 |
 | Knowledge Source | Huf User | 0 | 1 | 0 | 0 |
 | Knowledge Source | Huf Viewer | 0 | 0 | 0 | 0 |
@@ -162,7 +162,7 @@ Rely on **Frappe’s DocType permissions** (the matrix above) as the default. Us
    - Example: “user can submit this document only if they are in the document’s approver list.” Implement in the DocType’s `has_permission(permission_type, verbose)` and keep it there; APIs that load/save the doc will then get the same behavior.
 
 2. **Cross-doctype or workflow checks**
-   - Example: “allow starting a Flow Run only if the user has read on the Flow Definition and create on Flow Run.” A single API (e.g. `flow_api.run_flow`) can do one explicit check when the action doesn’t map to a single doc save (e.g. create Flow Run + update context). Prefer doing the minimal check (e.g. `frappe.has_permission("Flow Run", "create")`) and let the rest be enforced by DocType permissions on get_doc/insert/save.
+   - Example: “allow starting a Agent Flow Run only if the user has read on the Flow Definition and create on Agent Flow Run.” A single API (e.g. `flow_api.run_flow`) can do one explicit check when the action doesn’t map to a single doc save (e.g. create Agent Flow Run + update context). Prefer doing the minimal check (e.g. `frappe.has_permission("Agent Flow Run", "create")`) and let the rest be enforced by DocType permissions on get_doc/insert/save.
 
 3. **Feature/capability gating without a single owning DocType**
    - Example: “only users with `users.manage` can call `get_users`.” The API doesn’t read a single DocType that could be permission-controlled; use `has_capability("users.manage")` (or equivalent) in that API.
