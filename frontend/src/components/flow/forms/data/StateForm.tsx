@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { Label } from '../../../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../ui/select';
 import { ValueField } from '../fields';
-import { getFlowStateLimits } from '@/services/flow/flowMembersApi';
+import { getFlowStateLimits } from '@/services/flow/steps/flowMembersApi';
 import { KEEP_OPTIONS, keepAllowed, keepLimitReason, keepValueOf } from '@/lib/flow-data/stateKeep';
 
 const HINT = {

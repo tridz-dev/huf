@@ -2506,16 +2506,9 @@ def _start_flow_for_event(event, gateway) -> dict:
 
     attachments = _save_event_media(event, gateway)
     payload = _flow_trigger_payload(event, gateway, attachments)
-    skip_note, wants_voice = dispatch.gate_flow_start(event, gateway, payload)
-    if skip_note:
-        return dispatch.fall_through(event, gateway, skip_note)
-    skip_note, resumed = dispatch.apply_entry_policy(event, gateway, payload)
-    if skip_note:
-        return dispatch.fall_through(event, gateway, skip_note)
-    if resumed:
-        # the message answered a run that was waiting for it: no new run, nothing more to send for this event
-        event.db_set({"status": "Succeeded", "reply_status": "suppressed", "error_message": ""})
-        return {"event_name": event.name, "status": "Succeeded", "flow_run_id": resumed, "resumed": True}
+    early, wants_voice = dispatch.prepare_flow_start(event, gateway, payload)
+    if early:
+        return early
     if wants_voice:
         dispatch.add_transcript(payload, gateway)
     # Route authorisation already happened (enabled gateway, flow bound by an admin), so the run is

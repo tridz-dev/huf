@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useFlowContext } from '../../../contexts/FlowContext';
+import { useFlowContext } from '../../../../contexts/FlowContext';
 import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
 import { getFlowDefinitions, type FlowDefinitionListItem } from '@/services/flowApi';
-import { Combobox } from '../../ui/combobox';
-import { Label } from '../../ui/label';
-import { Switch } from '../../ui/switch';
-import { FieldHint } from '../FieldHint';
-import { KeyValueRows } from './fields';
-import { type ActionFormProps, Section } from './formKit';
+import { Combobox } from '../../../ui/combobox';
+import { Label } from '../../../ui/label';
+import { Switch } from '../../../ui/switch';
+import { FieldHint } from '../../FieldHint';
+import { KeyValueRows } from '../fields';
+import { type ActionFormProps, Section } from '../formKit';
 
 /** Run another flow: pick a published flow, give it values, and optionally wait for it to finish. */
 export function FlowCallForm({ nodeId, cfg, patch, f, Err, title }: ActionFormProps) {

@@ -12,7 +12,7 @@ import { latest, renderForm } from './formTestKit';
 import { appActionOptions, setAppNodeTypes } from '@/lib/flow-graph/appNodeTypes';
 import { validateNode } from '@/lib/flow-graph/flowValidation';
 import { defaultActionConfig } from '@/lib/flow-history/actionDefaults';
-import type { AppNodeType } from '@/services/flow/nodeTypesApi';
+import type { AppNodeType } from '@/services/flow/steps/nodeTypesApi';
 
 globalThis.ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {} } as unknown as typeof ResizeObserver;
 Element.prototype.scrollIntoView ??= () => {};

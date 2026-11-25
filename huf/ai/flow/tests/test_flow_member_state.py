@@ -5,7 +5,8 @@ import json
 import frappe
 from frappe.tests import IntegrationTestCase
 
-from huf.ai.flow import engine as flow_engine, member
+from huf.ai.flow import engine as flow_engine
+from huf.ai.flow.runs import member
 from huf.ai.flow.tests.test_flow_draft_validation import finished_flow
 from huf.ai.graph.executor import GraphContext
 

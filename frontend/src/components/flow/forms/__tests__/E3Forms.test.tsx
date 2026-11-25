@@ -15,11 +15,11 @@ vi.mock('@/services/flowApi', () => ({
   ]),
 }));
 
-import { StopForm } from '../StopForm';
+import { StopForm } from '../steps/StopForm';
 import { DocGetForm } from '../data/DocGetForm';
 import { DocUpdateForm } from '../data/DocUpdateForm';
-import { FlowCallForm } from '../FlowCallForm';
-import { RetryPolicy } from '../RetryPolicy';
+import { FlowCallForm } from '../steps/FlowCallForm';
+import { RetryPolicy } from '../steps/RetryPolicy';
 import { renderForm, latest } from './formTestKit';
 import type { ActionFormProps } from '../formKit';
 

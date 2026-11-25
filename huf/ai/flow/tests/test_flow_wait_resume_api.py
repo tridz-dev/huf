@@ -7,8 +7,9 @@ from unittest.mock import patch
 import frappe
 from frappe.tests import IntegrationTestCase
 
-from huf.ai.flow import api as flow_api, park
-from huf.ai.flow.park import ParkRequest
+from huf.ai.flow.runs import resume_api as flow_api
+from huf.ai.flow.runs import park
+from huf.ai.flow.runs.park import ParkRequest
 from huf.ai.flow.runs import actions
 from huf.testing.factories import make_user
 

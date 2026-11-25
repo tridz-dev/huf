@@ -5,7 +5,7 @@
 import { useEffect, useState } from 'react';
 import { actionOptions } from '@/data/actions';
 import type { ActionOption } from '@/types/modal.types';
-import { listNodeTypes, type AppNodeType, type SchemaProp } from '@/services/flow/nodeTypesApi';
+import { listNodeTypes, type AppNodeType, type SchemaProp } from '@/services/flow/steps/nodeTypesApi';
 
 let cached: AppNodeType[] | null = null;
 let inFlight: Promise<AppNodeType[]> | null = null;

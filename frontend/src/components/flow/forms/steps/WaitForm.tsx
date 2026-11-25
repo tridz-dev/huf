@@ -4,17 +4,18 @@ import { cn } from '@/lib/utils';
 import { allTimeZones, describeZone } from '@/lib/flow-run/flowTimeZone';
 import { useSiteTimezone } from '@/lib/serverTime';
 import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
-import { Combobox } from '../../ui/combobox';
-import { Input } from '../../ui/input';
-import { Label } from '../../ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select';
-import { FieldHint } from '../FieldHint';
-import { ApprovalTimeoutField } from './approval/ApprovalTimeoutField';
-import { ValueField } from './fields';
-import { type ActionFormProps, asObj, Section } from './formKit';
-import { useFlowContext } from '../../../contexts/FlowContext';
+import { Checkbox } from '../../../ui/checkbox';
+import { Combobox } from '../../../ui/combobox';
+import { Input } from '../../../ui/input';
+import { Label } from '../../../ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../ui/select';
+import { FieldHint } from '../../FieldHint';
+import { ApprovalTimeoutField } from '../approval/ApprovalTimeoutField';
+import { ValueField } from '../fields';
+import { type ActionFormProps, asObj, Section } from '../formKit';
+import { useFlowContext } from '../../../../contexts/FlowContext';
 import { isGatewayKindId } from '@/lib/flow-gateway/gatewayWords';
-import type { WaitMode } from '../../../types/flow.types';
+import type { WaitMode } from '../../../../types/flow.types';
 
 const MODES: Array<{ mode: WaitMode; label: string }> = [
   { mode: 'duration', label: 'For a while' },
@@ -161,16 +162,16 @@ export function WaitForm({ nodeId, cfg, patch, f, Err, title }: ActionFormProps)
             </p>
           )}
           {(hasMember || resume.wait_for === 'member_reply') && (
-            <label className="flex items-center gap-2 text-xs" data-testid={f('resume.wait_for')}>
-              <input
-                type="checkbox"
-                className="h-3.5 w-3.5"
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="wait-for-reply"
+                data-testid={f('resume.wait_for')}
                 disabled={!canManage}
                 checked={resume.wait_for === 'member_reply'}
-                onChange={(e) => setResume({ wait_for: e.target.checked ? 'member_reply' : undefined })}
+                onCheckedChange={(on) => setResume({ wait_for: on === true ? 'member_reply' : undefined })}
               />
-              Or when the person replies
-            </label>
+              <Label htmlFor="wait-for-reply" size="sm">Or when the person replies</Label>
+            </div>
           )}
           <ApprovalTimeoutField
             nodeId={nodeId}

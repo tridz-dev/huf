@@ -21,7 +21,7 @@ def cancel_flow_run(flow_run_id: str) -> dict:
 	# Edit rights on this run's own flow (not "can edit some flow"), and write on the run itself.
 	require_run_access(flow_run_id, "write", "write", _("Only people who can edit this flow can cancel its runs."))
 
-	from huf.ai.flow import park
+	from huf.ai.flow.runs import park
 
 	if not park.cancel_run(flow_run_id, frappe.session.user):
 		status = frappe.db.get_value("Flow Run", flow_run_id, "status")
@@ -36,7 +36,7 @@ def continue_waiting_run(flow_run_id: str) -> dict:
 	"""Skip the rest of a timed wait and carry on now. Needs permission to edit THE FLOW this run belongs to."""
 	require_run_access(flow_run_id, "write", "write", _("Only people who can edit this flow can continue its runs."))
 
-	from huf.ai.flow import park
+	from huf.ai.flow.runs import park
 
 	if not park.wake_run(flow_run_id, "continued"):
 		status = frappe.db.get_value("Flow Run", flow_run_id, "status")
@@ -53,11 +53,11 @@ def get_resume_link(flow_run_id: str) -> dict:
 
 	from frappe.utils import get_url
 
-	from huf.ai.flow import park
+	from huf.ai.flow.runs import park
 
 	run = frappe.get_doc("Flow Run", flow_run_id)
 	token = park.resume_token(run) if run.status == park.WAIT_STATUS else None
 	if not token:
 		frappe.throw(_("This run is not waiting for its resume link."))
 	query = urlencode({"flow_run": run.name, "token": token})
-	return {"url": get_url(f"/api/method/huf.ai.flow.api.resume_waiting_run?{query}")}
+	return {"url": get_url(f"/api/method/huf.ai.flow.runs.resume_api.resume_waiting_run?{query}")}

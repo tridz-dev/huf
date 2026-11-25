@@ -7,8 +7,8 @@ from unittest.mock import patch
 import frappe
 from frappe.tests import IntegrationTestCase
 
-from huf.ai.flow import park
-from huf.ai.flow.park import ParkRequest
+from huf.ai.flow.runs import park
+from huf.ai.flow.runs.park import ParkRequest
 
 
 class TestWaitGateway(IntegrationTestCase):

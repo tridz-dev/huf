@@ -168,8 +168,8 @@ def gate_flow_start(event, gateway, payload: dict) -> tuple[str | None, bool]:
 
 def apply_entry_policy(event, gateway, payload: dict) -> tuple[str | None, str | None]:
 	"""The trigger's entry policy for this sender. Returns ``(skip_note, resumed_run)``; both ``None`` means start a run."""
-	from huf.ai.flow import member
-	from huf.ai.flow.triggers import entry_decision, entry_policy_of
+	from huf.ai.flow.runs import member
+	from huf.ai.flow.runs.entry import entry_decision, entry_policy_of
 
 	row = _flow_row(event.target_flow)
 	defn = _graph(row.get("definition_json")) if row else {}
@@ -186,6 +186,22 @@ def apply_entry_policy(event, gateway, payload: dict) -> tuple[str | None, str |
 	if decision["action"] == "skip":
 		return f"Skipped: {decision['reason']}", None
 	return None, decision.get("run")
+
+
+def prepare_flow_start(event, gateway, payload: dict) -> tuple[dict | None, bool]:
+	"""The dispatch checks and the trigger's entry policy. Returns ``(early_result, wants_transcript)``: an early
+	result means the event is finished without a new run (skipped, or it answered a run that was waiting for it)."""
+	skip_note, wants_voice = gate_flow_start(event, gateway, payload)
+	if skip_note:
+		return fall_through(event, gateway, skip_note), wants_voice
+	skip_note, resumed = apply_entry_policy(event, gateway, payload)
+	if skip_note:
+		return fall_through(event, gateway, skip_note), wants_voice
+	if resumed:
+		# the message answered a run that was waiting for it: no new run, nothing more to send for this event
+		event.db_set({"status": "Succeeded", "reply_status": "suppressed", "error_message": ""})
+		return {"event_name": event.name, "status": "Succeeded", "flow_run_id": resumed, "resumed": True}, wants_voice
+	return None, wants_voice
 
 
 def wants_voice(params: dict) -> bool:

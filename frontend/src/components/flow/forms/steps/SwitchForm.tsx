@@ -1,18 +1,18 @@
 import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react';
-import { Button } from '../../ui/button';
-import { Input } from '../../ui/input';
-import { Label } from '../../ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select';
-import { FieldHint } from '../FieldHint';
-import { ConditionBuilder } from '../condition/ConditionBuilder';
-import { RawExpression } from '../condition/RawExpression';
-import { type ActionFormProps, Section } from './formKit';
-import { useFlowContext } from '../../../contexts/FlowContext';
+import { Button } from '../../../ui/button';
+import { Input } from '../../../ui/input';
+import { Label } from '../../../ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../ui/select';
+import { FieldHint } from '../../FieldHint';
+import { ConditionBuilder } from '../../condition/ConditionBuilder';
+import { RawExpression } from '../../condition/RawExpression';
+import { type ActionFormProps, Section } from '../formKit';
+import { useFlowContext } from '../../../../contexts/FlowContext';
 import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
 import { parseCondition } from '@/lib/flow-condition/parse';
 import { buildBranchOptionLabels, findUpstreamNodeIds } from '@/lib/flow/flowBranchTargets';
-import { edgeRoute, makeFlowEdge, makeFlowEdgeId } from '../../../services/flowSerializer';
-import type { FlowEdge } from '../../../types/flow.types';
+import { edgeRoute, makeFlowEdge, makeFlowEdgeId } from '../../../../services/flowSerializer';
+import type { FlowEdge } from '../../../../types/flow.types';
 
 /** Longest rule name shown as the branch label on the canvas. */
 export const RULE_NAME_MAX = 60;

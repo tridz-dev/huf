@@ -55,7 +55,7 @@ if isinstance(sys.modules.get("frappe"), MagicMock):
 from huf.ai.flow import engine as flow_engine  # noqa: E402
 from huf.ai.graph.executor import GraphContext, PinnedVersion  # noqa: E402
 from huf.ai.graph.validator import FLOW_NODE_TYPES, PROCEDURE_NODE_TYPES, get_flow_node_types  # noqa: E402
-from huf.ai.flow import node_registry  # noqa: E402
+from huf.ai.flow.catalog import node_registry  # noqa: E402
 
 
 class _FakeFlowRun:

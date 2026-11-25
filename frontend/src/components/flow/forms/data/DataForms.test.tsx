@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 vi.mock('@/contexts/FlowContext', async () => (await import('../__tests__/formTestKit')).contextMock());
 vi.mock('@/hooks/flow/useFlowPermissions', async () => (await import('../__tests__/formTestKit')).permissionsMock());
 vi.mock('@/services/flow/catalogApi', async () => (await import('../__tests__/formTestKit')).catalogMock());
-vi.mock('@/services/flow/flowMembersApi', () => ({ getFlowStateLimits: vi.fn().mockResolvedValue({ max_ttl_seconds: 31536000 }) }));
+vi.mock('@/services/flow/steps/flowMembersApi', () => ({ getFlowStateLimits: vi.fn().mockResolvedValue({ max_ttl_seconds: 31536000 }) }));
 vi.mock('@/services/flow/formOptionsApi', () => ({
   listCreateDocTypes: vi.fn().mockResolvedValue([{ name: 'ToDo', label: 'To-do' }, { name: 'Note', label: 'Note' }]),
   listCreateDocFields: vi.fn().mockImplementation(async (dt: string) =>

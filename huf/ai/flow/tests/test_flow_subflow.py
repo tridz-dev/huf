@@ -7,7 +7,8 @@ from unittest.mock import patch
 import frappe
 from frappe.tests import IntegrationTestCase
 
-from huf.ai.flow import engine as flow_engine, park
+from huf.ai.flow import engine as flow_engine
+from huf.ai.flow.runs import park
 from huf.ai.flow.nodes.subflow import MAX_DEPTH, exec_flow_call
 from huf.ai.flow.tests.test_flow_draft_validation import finished_flow
 from huf.ai.graph.executor import GraphContext
@@ -103,7 +104,7 @@ class TestSubflow(IntegrationTestCase):
 		self.assertEqual(len(self._children()), 1)  # re-entry never starts a second child
 
 	def test_child_done_while_parent_lock_held_is_not_lost(self):
-		from huf.ai.flow.triggers import wake_due_waits
+		from huf.ai.flow.runs.park import wake_due_waits
 
 		_out, child, _enq = self._wait_for_child()
 		with patch("frappe.enqueue"), patch("huf.ai.flow.engine._acquire_run_lock", return_value=False):

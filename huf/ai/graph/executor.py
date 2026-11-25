@@ -263,11 +263,7 @@ class GraphContext:
 	# -- the single reference mechanism (F-2) -----------------------------
 
 	def reference_roots(self) -> dict:
-		roots: dict = {
-			"input": self.data,
-			"trigger": self.data.get("trigger"),
-			"context": self.data,
-		}
+		roots: dict = {"input": self.data, "trigger": self.data.get("trigger"), "context": self.data}
 		roots.update(self.node_outputs)
 		if self.member is not None:
 			roots["member"] = self.member

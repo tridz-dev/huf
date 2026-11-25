@@ -1,8 +1,8 @@
 import { fromTextRefs, toTextRefs } from '@/lib/flow-data/textRefs';
 import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
-import { ValueField } from './fields';
-import { type ActionFormProps, Section } from './formKit';
-import { useAsValue } from './useAsValue';
+import { ValueField } from '../fields';
+import { type ActionFormProps, Section } from '../formKit';
+import { useAsValue } from '../useAsValue';
 
 /** Stop with error: ends the run as failed with a message. Has no outgoing path. */
 export function StopForm({ nodeId, cfg, patch, f, Err, title }: ActionFormProps) {

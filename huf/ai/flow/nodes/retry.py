@@ -14,8 +14,8 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from huf.ai.flow import park
-from huf.ai.flow.park import ParkRequest
+from huf.ai.flow.runs import park
+from huf.ai.flow.runs.park import ParkRequest
 
 RETRYABLE_TYPES = ("tool.call",)
 MIN_DELAY_SECONDS = 60

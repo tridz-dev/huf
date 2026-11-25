@@ -1,4 +1,4 @@
-"""App-registered Flow step types (``huf_flow_nodes``, flow/node_registry.py).
+"""App-registered Flow step types (``huf_flow_nodes``, flow/catalog/node_registry.py).
 
 Run with:
     bench --site <site> run-tests --app huf --module huf.ai.flow.tests.test_flow_app_nodes
@@ -10,7 +10,9 @@ from unittest.mock import patch
 import frappe
 from frappe.tests import IntegrationTestCase
 
-from huf.ai.flow import engine as flow_engine, node_registry, park
+from huf.ai.flow import engine as flow_engine
+from huf.ai.flow.catalog import node_registry
+from huf.ai.flow.runs import park
 from huf.ai.graph.validator import get_flow_node_types, validate_graph
 from huf.ai.flow.tests.test_flow_draft_validation import _graph, _trigger
 

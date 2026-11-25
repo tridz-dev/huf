@@ -358,9 +358,8 @@ scheduler_events = {
         "huf.ai.gateway_service.purge_old_rejected_gateway_events",
         "huf.ai.gateway_service.cleanup_stale_access_entries",
         "huf.ai.flow.state.purge_expired",
-        "huf.ai.flow.member.purge_inactive",
-        # Leftover scratch folders of Execute code steps (a step removes its own; this is for killed workers).
-        "huf.ai.flow.code_node.purge_scratch",
+        "huf.ai.flow.runs.member.purge_inactive",
+        "huf.ai.flow.code_node.purge_scratch",  # leftover Execute-code scratch folders (killed workers)
         "huf.ai.whatsapp.send_keys.purge_expired",
         "huf.ai.secrets.purge_expired",
         "huf.ai.channels.commerce.catalog.sync_all_catalogs",
@@ -373,9 +372,8 @@ scheduler_events = {
             "huf.ai.gateways.teams.outbox.retry_due",
             "huf.ai.flow.triggers.run_due_schedule_flows",
             "huf.ai.flow.triggers.expire_due_approvals",
-            "huf.ai.flow.triggers.wake_due_waits",
-            # Flow runs parked on an Execute code step: continue finished ones, give up on lost ones.
-            "huf.ai.flow.code_node.sweep_code_waits",
+            "huf.ai.flow.runs.park.wake_due_waits",
+            "huf.ai.flow.code_node.sweep_code_waits",  # runs parked on Execute code: continue finished, give up lost
             "huf.ai.knowledge.bulk_recovery.recover_stalled_ingestions",  # bulk ingestion safety net
         ],
         "*/10 * * * *": [
@@ -472,15 +470,6 @@ huf_tools = [
     "huf.ai.tools.gateways.handoff.GATEWAY_HANDOFF_TOOLS",
     "huf.ai.tools.messaging.whatsapp_broadcast_tools.WHATSAPP_BROADCAST_TOOLS",
 ]
-
-# Flow step types from other apps: an app declares (in its own hooks.py) a dict, a list of dicts, or a dotted
-# path to either, under `huf_flow_nodes`. Huf declares none itself. Each entry is
-# {type: "<app>.<name>", label, category, icon, description, config_schema, handler: "app.mod.fn",
-#  routing: next|self_routed|terminal, outputs, can_wait, test_simulate: skip|run|<path>, validate: <path>?}.
-# Trust boundary: handlers are code that runs in the Flow worker, so they are trusted exactly like the app that
-# declares them. Flows store only the type id; handler paths are read only from these declarations. See
-# huf/ai/flow/node_registry.py.
-huf_flow_nodes = []
 
 # App-shipped runtime skills: {skill_name, function_path -> SKILL.md manifest},
 # upserted as "App Provided" Skills by huf.ai.skills.hooks.sync_app_skills.

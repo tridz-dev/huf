@@ -6,7 +6,7 @@ Output ``{"saved": [names]}``.
 
 from __future__ import annotations
 
-from huf.ai.flow import member as flow_member
+from huf.ai.flow.runs import member as flow_member
 
 
 def exec_member_set(flow_run, node: dict, config: dict, context) -> dict:

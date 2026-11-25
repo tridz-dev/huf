@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 import frappe
+from frappe.utils import now_datetime
 
 from huf.ai.graph.executor import Outcome, PauseRequest
 from huf.ai.transaction import commit_if_background
@@ -143,8 +144,48 @@ def wake_run(flow_run_name: str, reason: str, payload=None, *, enqueue: bool = T
 
 
 def cancel_run(flow_run_name: str, by: str) -> bool:
-	"""Cancel a Queued or waiting run. True only when this call moved it."""
-	from huf.ai.flow.engine import _cancel_flow_run
+	"""Cancel a Queued or waiting run. True only when this call moved it (a run that already finished is left alone)."""
+	from huf.ai.flow import engine
+	from huf.ai.flow.nodes import subflow
+	from huf.ai.flow.support.approval_notifications import _clear_flow_notifications
 
 	flow_run = frappe.get_doc("Flow Run", flow_run_name)
-	return _cancel_flow_run(flow_run, by)
+	message = f"Cancelled by {by}."
+	if not engine._transition_run(
+		flow_run,
+		{"status": "Cancelled", "last_error": message, "completed_at": now_datetime()},
+		from_statuses=("Queued", *engine.WAITING_STATUSES),
+	):
+		return False
+	commit_if_background()
+	try:
+		_clear_flow_notifications(flow_run)  # best effort: approvers stop seeing a request that no longer exists
+	except Exception:
+		pass
+	engine._sync_gateway_event(flow_run, "Cancelled", error=message)
+	engine._publish_flow_event(flow_run, "flow_cancelled", {"error": message})
+	subflow.cancel_waited_child(flow_run, by)
+	subflow.on_child_finished(flow_run, "Cancelled", message)
+	return True
+
+
+def wake_due_waits(now: datetime | None = None, limit: int = 500) -> list[str]:
+	"""Scheduler entry (every minute): wake every ``Waiting Timer`` run whose ``resume_at`` has passed.
+
+	Each continuation is enqueued on the short queue, never run here, so a big tick cannot hold the scheduler.
+	"""
+	names = frappe.get_all(
+		"Flow Run",
+		filters={"status": "Waiting Timer", "resume_at": ["<=", now or datetime.now(timezone.utc).replace(tzinfo=None)]},
+		order_by="resume_at asc",
+		limit_page_length=limit,
+		pluck="name",
+	)
+	woken: list[str] = []
+	for name in names:
+		try:
+			if wake_run(name, "elapsed"):
+				woken.append(name)
+		except Exception:
+			frappe.log_error(frappe.get_traceback(), f"Flow wait wake: {name}")
+	return woken

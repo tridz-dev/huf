@@ -6,7 +6,7 @@ vi.mock('@/contexts/FlowContext', async () => (await import('./formTestKit')).co
 vi.mock('@/hooks/flow/useFlowPermissions', async () => (await import('./formTestKit')).permissionsMock());
 vi.mock('@/services/flow/catalogApi', async () => (await import('./formTestKit')).catalogMock());
 
-import { SwitchForm } from '../SwitchForm';
+import { SwitchForm } from '../steps/SwitchForm';
 import { flow, renderForm, updateEdges } from './formTestKit';
 
 globalThis.ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {} } as unknown as typeof ResizeObserver;

@@ -1,4 +1,4 @@
-"""Park / resume contract (flow/park.py): park, wake, cancel, re-entry, token hashing."""
+"""Park / resume contract (flow/runs/park.py): park, wake, cancel, re-entry, token hashing."""
 
 import json
 from datetime import datetime
@@ -7,8 +7,9 @@ from unittest.mock import patch
 import frappe
 from frappe.tests import IntegrationTestCase
 
-from huf.ai.flow import engine as flow_engine, park
-from huf.ai.flow.park import ParkRequest
+from huf.ai.flow import engine as flow_engine
+from huf.ai.flow.runs import park
+from huf.ai.flow.runs.park import ParkRequest
 
 NODE = {"id": "w1", "type": "wait"}
 

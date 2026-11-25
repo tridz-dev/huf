@@ -11,8 +11,9 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from huf.ai.flow import member as flow_member, park
-from huf.ai.flow.park import ParkRequest
+from huf.ai.flow.runs import member as flow_member
+from huf.ai.flow.runs import park
+from huf.ai.flow.runs.park import ParkRequest
 
 _UNIT_SECONDS = {"minutes": 60, "hours": 3600, "days": 86400}
 

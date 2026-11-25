@@ -7,7 +7,9 @@ from unittest.mock import patch
 import frappe
 from frappe.tests import IntegrationTestCase
 
-from huf.ai.flow import engine as flow_engine, member, park, triggers
+from huf.ai.flow import engine as flow_engine, triggers
+from huf.ai.flow.runs import member
+from huf.ai.flow.runs import entry, park
 from huf.ai.flow.nodes.wait import exec_wait
 
 KEY = "15550100100"
@@ -63,7 +65,7 @@ class TestFlowMemberEntry(IntegrationTestCase):
 
 	def _decide(self, policy):
 		with patch("frappe.enqueue"):
-			return triggers.entry_decision(self.flow_id, policy, KEY, {"text": "hi", "sender_id": KEY})
+			return entry.entry_decision(self.flow_id, policy, KEY, {"text": "hi", "sender_id": KEY})
 
 	def test_resume_if_waiting_wakes_existing_run(self):
 		run = self._run()

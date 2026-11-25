@@ -7,7 +7,7 @@ let canManage = true;
 vi.mock('@/hooks/flow/useFlowPermissions', () => ({ useFlowPermissions: () => ({ canManage, canExecuteCode: false }) }));
 const list = vi.fn();
 const remove = vi.fn();
-vi.mock('@/services/flow/flowMembersApi', () => ({ listFlowMembers: (...a: unknown[]) => list(...a), removeFlowMember: (...a: unknown[]) => remove(...a) }));
+vi.mock('@/services/flow/steps/flowMembersApi', () => ({ listFlowMembers: (...a: unknown[]) => list(...a), removeFlowMember: (...a: unknown[]) => remove(...a) }));
 
 import { FlowMembersPanel } from './FlowMembersPanel';
 

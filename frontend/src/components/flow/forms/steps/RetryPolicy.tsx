@@ -1,14 +1,14 @@
 import { RefreshCcw } from 'lucide-react';
 import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
 import type { TimeUnit } from '@/lib/flow-data/flowUnits';
-import { Input } from '../../ui/input';
-import { Label } from '../../ui/label';
-import { Checkbox } from '../../ui/checkbox';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select';
-import { FieldHint } from '../FieldHint';
-import { MoreOptions } from '../frame/MoreOptions';
-import { DurationField } from './fields';
-import type { RetryPolicy as RetryConfig } from '../../../types/flow.types';
+import { Input } from '../../../ui/input';
+import { Label } from '../../../ui/label';
+import { Checkbox } from '../../../ui/checkbox';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../ui/select';
+import { FieldHint } from '../../FieldHint';
+import { MoreOptions } from '../../frame/MoreOptions';
+import { DurationField } from '../fields';
+import type { RetryPolicy as RetryConfig } from '../../../../types/flow.types';
 
 const DEFAULT_RETRY: RetryConfig = { attempts: 3, backoff: 'fixed', delay_seconds: 60 };
 const UNITS: TimeUnit[] = ['minutes', 'hours'];

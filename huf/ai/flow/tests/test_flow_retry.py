@@ -7,7 +7,8 @@ from unittest.mock import patch
 import frappe
 from frappe.tests import IntegrationTestCase
 
-from huf.ai.flow import engine as flow_engine, park
+from huf.ai.flow import engine as flow_engine
+from huf.ai.flow.runs import park
 from huf.ai.flow.nodes import retry
 
 FAIL = {"status": "failed", "error": "boom"}

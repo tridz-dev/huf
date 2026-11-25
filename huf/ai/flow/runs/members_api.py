@@ -5,13 +5,16 @@ from __future__ import annotations
 import frappe
 from frappe import _
 
-from huf.ai.flow import member, state
+from huf.ai.api_support import require_permission
+from huf.ai.flow import state
+from huf.ai.flow.runs import member
 from huf.ai.flow.runs.access import require_flow_read
 
 
 @frappe.whitelist()
 def get_flow_state_limits() -> dict:
 	"""``max_ttl_seconds`` for saved data on this site; 0 means no ceiling (keeping data until removed is allowed)."""
+	require_permission(frappe.has_permission("Flow Definition", "read"), "Not permitted")
 	return {"max_ttl_seconds": state.max_ttl_seconds()}
 
 

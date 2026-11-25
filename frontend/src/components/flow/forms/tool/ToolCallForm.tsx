@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { SlackChannelField } from './SlackChannelField';
 import { TOOL_REQUIRED_INPUT } from '@/lib/flow-graph/flowValidation';
 import { ValueField } from '../fields';
-import { RetryPolicy } from '../RetryPolicy';
+import { RetryPolicy } from '../steps/RetryPolicy';
 import type { RetryPolicy as RetryConfig } from '../../../../types/flow.types';
 import { actionCardId } from '@/lib/flow/flowLabels';
 import { integrationForTool, toolLabel } from '@/lib/flow/flowIntegrations';

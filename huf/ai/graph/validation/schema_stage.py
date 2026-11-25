@@ -63,7 +63,7 @@ def _node_defs_by_type(profile: str) -> dict[str, str]:
 def _app_node_schema(ntype) -> dict | None:
 	"""Schema of a step type an installed app registered (``huf_flow_nodes``): the common node shape plus the
 	app's own JSON Schema for ``config``. ``None`` when no installed app declares ``ntype``."""
-	from huf.ai.flow import node_registry
+	from huf.ai.flow.catalog import node_registry
 
 	node_type = node_registry.get_type(ntype) if isinstance(ntype, str) else None
 	if node_type is None:

@@ -1,7 +1,8 @@
 import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
 import { fromTextRefs, toTextRefs } from '@/lib/flow-data/textRefs';
 import { appMissingMessage, getAppNodeType, missingAppStep } from '@/lib/flow-graph/appNodeTypes';
-import type { SchemaProp } from '@/services/flow/nodeTypesApi';
+import type { SchemaProp } from '@/services/flow/steps/nodeTypesApi';
+import { Checkbox } from '../../ui/checkbox';
 import { Input } from '../../ui/input';
 import { Label } from '../../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select';
@@ -71,10 +72,10 @@ function SchemaRow(props: RowProps) {
   if (prop.type === 'boolean') {
     return (
       <div>
-        <label htmlFor={id} className="flex items-center gap-2 text-sm">
-          <input id={id} type="checkbox" data-testid={f(path)} disabled={disabled} checked={value === true} onChange={(e) => onChange(e.target.checked)} />
-          {label}
-        </label>
+        <div className="flex items-center gap-2">
+          <Checkbox id={id} data-testid={f(path)} disabled={disabled} checked={value === true} onCheckedChange={(on) => onChange(on === true)} />
+          <Label htmlFor={id} size="sm">{label}</Label>
+        </div>
         {hint}
         <Err field={path} />
       </div>

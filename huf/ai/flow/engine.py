@@ -49,24 +49,20 @@ import frappe
 from frappe import _
 from frappe.utils import now_datetime
 
-from huf.ai.flow import create_doc as flow_create_doc, state as flow_state
-from huf.ai.flow import member as flow_member
-from huf.ai.flow import node_registry
-from huf.ai.flow.nodes.member import exec_member_set
-from huf.ai.flow.nodes.docops import exec_doc_get, exec_doc_update
-from huf.ai.flow.nodes import subflow
-from huf.ai.flow.nodes.stop import exec_stop
-from huf.ai.flow.nodes.subflow import exec_flow_call
-from huf.ai.flow.nodes.switch import exec_switch
+from huf.ai.flow import state as flow_state
+from huf.ai.flow.runs import member as flow_member
+from huf.ai.flow.catalog import node_registry
+from huf.ai.flow.nodes import adapters, subflow
+from huf.ai.flow.nodes.error_handler import run_error_handler
 from huf.ai.flow.nodes.retry import policy_of as retry_policy_of, run_with_retry
 from huf.ai.flow.nodes.wait import exec_wait
 from huf.ai.flow.runs.outcome import record_outcome
 from huf.ai.flow.support.approval_card import waiting_fields
+from huf.ai.flow.runs.edges import edges_from_nodes
 from huf.ai.flow.support.approval_notifications import _clear_flow_notifications, _send_approval_notifications
 from huf.ai.flow.support.approvers import approval_expired, check_approver
 from huf.ai.flow.integrations import friendly_tool_error
 from huf.ai.gateways.slack import flow_hooks
-from huf.ai.graph.permissions import envelope_declares
 from huf.ai.flow.support.router_text import (
 	build_router_llm_prompt,
 	choose_option,
@@ -550,7 +546,7 @@ def create_flow_run(
 		fields["pinned_fingerprint"] = version.fingerprint
 		fields["pinned_definition"] = pinned_json(version)
 
-	member_key = flow_member.resolve_member_key(trigger_type, payload, frappe.session.user) if mode == "real" else None
+	member_key = flow_member.key_for_new_run(trigger_type, payload, mode)
 	if member_key:
 		fields["member_key"] = member_key
 
@@ -639,17 +635,7 @@ def _build_run_context(flow_run, version: PinnedVersion) -> FlowRunContext:
 			"fingerprint": version.fingerprint,
 		},
 	)
-	member_key = getattr(flow_run, "member_key", None)
-	if member_key:
-		row = flow_member.get_member(flow_run.flow_id, member_key)
-		if row:
-			context.member = {
-				"key": member_key,
-				"status": row.status,
-				"vars": row.vars,
-				"run_count": row.run_count,
-				"entered_at": row.entered_at,
-			}
+	context.member = flow_member.run_member_context(flow_run)
 	return FlowRunContext(
 		{},
 		flow_run=flow_run,
@@ -1148,7 +1134,7 @@ def _execute_loop(flow_run, nodes_map: dict, edges_list: list, settings: dict):
 	if result.status == ExecutionResult.FAILED:
 		_publish_flow_event(flow_run, "flow_error", {"error": result.error})
 		message = describe_run_error(result.error, {i: step_title(n.raw) for i, n in program.nodes.items()})
-		paused = _run_error_handler(flow_run, program, router, handlers, policy, settings, result.node_id, message)
+		paused = run_error_handler(flow_run, program, router, handlers, policy, settings, result.node_id, message)
 		if paused is not None:
 			return paused
 		_fail_flow_run(flow_run, describe_run_error(result.error, {i: step_title(n.raw) for i, n in program.nodes.items()}))
@@ -1158,7 +1144,7 @@ def _execute_loop(flow_run, nodes_map: dict, edges_list: list, settings: dict):
 		# A failure no on_failure/on_error route handled: cleanup nodes may have run
 		# via an ``always`` edge, but the run is still Failed (first failure wins).
 		_publish_flow_event(flow_run, "flow_error", {"error": unhandled_failures[0]})
-		paused = _run_error_handler(
+		paused = run_error_handler(
 			flow_run, program, router, handlers, policy, settings, failed_node_ids[0], unhandled_failures[0]
 		)
 		if paused is not None:
@@ -1169,39 +1155,6 @@ def _execute_loop(flow_run, nodes_map: dict, edges_list: list, settings: dict):
 	_complete_flow_run(flow_run, reply_text=_flow_reply_text(flow_run, settings, result))
 	_publish_flow_event(flow_run, "flow_completed", {"node_id": result.node_id, "status": "Success"})
 	return result
-
-
-def _run_error_handler(flow_run, program, router, handlers, policy, settings, node_id, message):
-	"""Run the flow's ``error_handler`` chain once after a failure the graph did not route.
-
-	Returns ``None`` when the caller should go on to fail the run (no handler, the failure came from
-	the handler chain itself, or the chain ended or failed): the run always ends ``Failed``, the handler
-	only gets to react first. Returns the executor result if the handler chain parked the run.
-	"""
-	run_ctx = _run_context(settings)
-	graph = run_ctx.version.graph if run_ctx is not None and run_ctx.version is not None else {}
-	handler_id = (graph.get("error_handler") or {}).get("next")
-	if not handler_id or handler_id not in program.nodes:
-		return None
-
-	context = _context_of(flow_run, settings)
-	if context.data.get("error"):
-		return None  # already inside the handler chain: no recursion
-	context.data["error"] = {"node_id": node_id, "message": message}
-	context.dirty = True
-
-	state = ExecutionState(cursor=handler_id, hop_count=getattr(flow_run, "hop_count", 0) or 0, status="running")
-	flow_run.db_set("current_node_id", handler_id)
-	result = GraphExecutor(
-		program,
-		handlers,
-		router=router,
-		policy=policy,
-		store=_FlowStateStore(flow_run),
-		listener=_FlowEventListener(flow_run),
-	).run(context, state)
-	_persist_context(flow_run, context, settings)
-	return result if result.status == ExecutionResult.PAUSED else None
 
 
 # ---------------------------------------------------------------------------
@@ -1581,34 +1534,12 @@ def _exec_router_llm(flow_run, node: dict, config: dict, settings: dict) -> dict
 	}
 
 
-def _exec_router_decision(flow_run, node: dict, config: dict, settings: dict) -> dict:
-	"""Execute router.decision node: the first matching option wins, else ``default`` (see ``nodes/switch.py``)."""
-	return exec_switch(flow_run, node, config, settings, _context_of(flow_run, settings))
-
-
-def _exec_stop(flow_run, node: dict, config: dict, settings: dict) -> dict:
-	"""Execute stop node: fail the run with its message, see ``nodes/stop.py``."""
-	return exec_stop(flow_run, node, config, settings, _context_of(flow_run, settings))
-
-
-def _exec_member_set(flow_run, node: dict, config: dict, settings: dict) -> dict:
-	"""``member.set``: save values on the run's member, see ``nodes/member.py``."""
-	return exec_member_set(flow_run, node, config, _context_of(flow_run, settings))
-
-
-def _exec_doc_get(flow_run, node: dict, config: dict, settings: dict) -> dict:
-	"""``doc.get``: read one document as the run user, see ``nodes/docops.py``."""
-	return exec_doc_get(node, config, _context_of(flow_run, settings), _run_context(settings))
-
-
-def _exec_flow_call(flow_run, node: dict, config: dict, settings: dict) -> dict:
-	"""``flow.call``: start another published flow, optionally waiting for it, see ``nodes/subflow.py``."""
-	return exec_flow_call(flow_run, node, config, settings, _context_of(flow_run, settings))
-
-
-def _exec_doc_update(flow_run, node: dict, config: dict, settings: dict) -> dict:
-	"""``doc.update``: change fields of one document as the run user, see ``nodes/docops.py``."""
-	return exec_doc_update(node, config, _context_of(flow_run, settings), _run_context(settings))
+_exec_router_decision = adapters.exec_router_decision
+_exec_stop = adapters.exec_stop
+_exec_member_set = adapters.exec_member_set
+_exec_doc_get = adapters.exec_doc_get
+_exec_doc_update = adapters.exec_doc_update
+_exec_flow_call = adapters.exec_flow_call
 
 
 def _exec_human_approval(flow_run, node: dict, config: dict, settings: dict) -> dict:
@@ -2104,10 +2035,10 @@ def _state_node(flow_run, node: dict, config: dict, settings: dict, allowed: set
 	ctx = _context_of(flow_run, settings)
 	resolved = {k: ctx.resolve(v) for k, v in config.items() if k != "scope"}
 	if config.get("scope") == "member":  # one value per person, kept apart from every other person's
-		member_key = getattr(flow_run, "member_key", None)
-		if not member_key:
+		scoped = flow_member.scoped_state_key(flow_run, resolved.get("key"))
+		if not scoped:
 			return {"status": "failed", "error": f'{step_ref(node, True)} is saved per person, but this run does not know who it is about.'}
-		resolved["key"] = f"member:{member_key}:{resolved.get('key')}"
+		resolved["key"] = scoped
 	try:
 		output = op(flow_id, resolved)
 	except flow_state.FlowStateError as exc:
@@ -2153,41 +2084,7 @@ def _exec_state_delete(flow_run, node: dict, config: dict, settings: dict) -> di
 _WRITES_KEY = "_doc_create_count"
 
 
-def _exec_doc_create(flow_run, node: dict, config: dict, settings: dict) -> dict:
-	"""
-	``doc.create``: config ``doctype`` (literal) and ``fields`` (object of values / references).
-	Output ``{"doctype", "name"}`` so later nodes can use ``{"$from": "<node>.name"}``.
-
-	Policy lives in :mod:`huf.ai.flow.create_doc` (allow-list, field validation, no
-	``ignore_permissions``). Each created document also counts against the graph contract's
-	``limits.max_writes`` for the run (absent or 0 means no writes are allowed).
-	"""
-	unknown = sorted(set(config) - {"doctype", "fields"})
-	if unknown or "doctype" not in config or "fields" not in config:
-		return {"status": "failed", "error": f'{step_ref(node, True)} is missing its record type or fields, or has settings it does not use. Open the step and check it.'}
-	ctx = _context_of(flow_run, settings)
-	run_ctx = _run_context(settings)
-	limits = ((run_ctx.definition.get("contract") or {}).get("limits") or {}) if run_ctx is not None else {}
-	max_writes = limits.get("max_writes") or 0
-	envelope = ((run_ctx.definition.get("contract") or {}).get("permission_envelope") or {}) if run_ctx is not None else {}
-	doctype = config["doctype"]
-	try:  # the site allow-list first: its message is the clearer one for an unsupported doctype
-		flow_create_doc.check_doctype(doctype, flow_create_doc.allowed_doctypes(frappe.conf))
-	except flow_create_doc.CreateDocError as exc:
-		return {"status": "failed", "error": plain_error(str(exc))}
-	if not isinstance(doctype, str) or not envelope_declares(envelope, ptype="create", doctype=doctype):
-		return {"status": "failed", "error": f'{step_ref(node, True)} is not allowed to create "{doctype}" records. Ask an admin to allow it for this flow.'}
-	done = ctx.data.get(_WRITES_KEY) or 0
-	if done >= max_writes:
-		return {"status": "failed", "error": f'{step_ref(node, True)} would create more records than this flow is allowed to ({max_writes}). Ask an admin to raise the limit.'}
-	try:
-		result = flow_create_doc.create_document(config["doctype"], ctx.resolve(config["fields"]))
-	except flow_create_doc.CreateDocError as exc:
-		return {"status": "failed", "error": plain_error(str(exc))}
-	except frappe.PermissionError:
-		return {"status": "failed", "error": f'You do not have permission to create "{doctype}" records. Ask an admin for access.'}
-	ctx.set(_WRITES_KEY, done + 1)
-	return {"status": "success", "result": result, "output": result}
+_exec_doc_create = adapters.exec_doc_create
 
 
 _NODE_EXECUTORS = {
@@ -2234,62 +2131,6 @@ def effective_edges(defn: dict) -> list[dict]:
 	or one of its per-type routing fields. See :func:`edges_from_nodes`.
 	"""
 	return edges_from_nodes(defn.get("nodes", []))
-
-
-def edges_from_nodes(nodes: list) -> list[dict]:
-	"""Decode the graph IR's node-native routing pointers into ``{from, to, type, meta}`` edges.
-
-	``next`` and ``on_error`` apply to every node; the self-routing types carry their targets in
-	``config``: ``condition.on_true`` / ``on_false``, ``router.llm`` / ``router.decision``
-	``options[].node_id`` / ``default``, ``human.approval.approve_next`` / ``reject_next`` /
-	``timeout_next``. ``foreach.body`` is not an edge: the body is run inline by the loop and
-	``next`` is the loop's done edge. The edge list is what the router
-	and the approval flow route over.
-	"""
-	edges: list[dict] = []
-	for node in nodes:
-		if not isinstance(node, dict):
-			continue
-		node_id = node.get("id")
-		node_type = node.get("type")
-		config = node.get("config") or {}
-
-		if node_type == "condition":
-			if config.get("on_true"):
-				edges.append({"from": node_id, "to": config["on_true"], "type": "always", "meta": {"label": "true"}})
-			if config.get("on_false"):
-				edges.append({"from": node_id, "to": config["on_false"], "type": "always", "meta": {"label": "false"}})
-		elif node_type in ("router.llm", "router.decision"):
-			for option in config.get("options") or []:
-				to = (option or {}).get("node_id")
-				if to:
-					edges.append({"from": node_id, "to": to, "type": "always", "meta": {"label": (option or {}).get("label")}})
-			default = config.get("default")
-			if default:
-				edges.append({"from": node_id, "to": default, "type": "always", "meta": {"label": "default"}})
-		elif node_type == "human.approval":
-			if config.get("approve_next"):
-				edges.append(
-					{"from": node_id, "to": config["approve_next"], "type": "outcome", "meta": {"outcome": "approved"}}
-				)
-			if config.get("reject_next"):
-				edges.append(
-					{"from": node_id, "to": config["reject_next"], "type": "outcome", "meta": {"outcome": "rejected"}}
-				)
-			if config.get("timeout_next"):
-				edges.append(
-					{"from": node_id, "to": config["timeout_next"], "type": "outcome", "meta": {"outcome": "timeout"}}
-				)
-		else:
-			next_id = node.get("next")
-			if next_id:
-				edges.append({"from": node_id, "to": next_id, "type": "always"})
-
-		on_error = node.get("on_error")
-		if on_error:
-			edges.append({"from": node_id, "to": on_error, "type": "on_failure"})
-
-	return edges
 
 
 def _evaluate_edges(flow_run, node_id: str, node_result: dict, edges_list: list) -> str | None:
@@ -2476,27 +2317,6 @@ def _fail_flow_run(flow_run, error_msg: str) -> bool:
 	_publish_flow_event(flow_run, "flow_failed", {"error": error_msg})
 	flow_hooks.notify_failure(flow_run.name)
 	subflow.on_child_finished(flow_run, "Failed", error_msg)
-	return True
-
-
-def _cancel_flow_run(flow_run, by: str) -> bool:
-	"""Mark a queued or waiting flow run as cancelled by ``by``. A run that already finished is left alone (False)."""
-	message = f"Cancelled by {by}."
-	if not _transition_run(
-		flow_run,
-		{"status": "Cancelled", "last_error": message, "completed_at": now_datetime()},
-		from_statuses=("Queued", *WAITING_STATUSES),
-	):
-		return False
-	commit_if_background()
-	try:
-		_clear_flow_notifications(flow_run)  # best effort: approvers stop seeing a request that no longer exists
-	except Exception:
-		pass
-	_sync_gateway_event(flow_run, "Cancelled", error=message)
-	_publish_flow_event(flow_run, "flow_cancelled", {"error": message})
-	subflow.cancel_waited_child(flow_run, by)
-	subflow.on_child_finished(flow_run, "Cancelled", message)
 	return True
 
 

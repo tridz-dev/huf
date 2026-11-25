@@ -178,44 +178,6 @@ def is_recursion_skipped(doctype: str, module: str | None = None) -> bool:
 # ---------------------------------------------------------------------------
 
 
-ENTRY_POLICIES = ("new_run_each_time", "resume_if_waiting", "once_per_member", "one_active_per_member")
-
-
-def entry_policy_of(config) -> str:
-	"""The trigger's entry policy (flat ``entry_policy`` or a gateway ``params`` entry); unknown -> new run each time."""
-	from huf.ai.flow.gateways.gateway_triggers import param_map
-
-	config = config if isinstance(config, dict) else {}
-	value = config.get("entry_policy") or param_map(config).get("entry_policy")
-	return value if value in ENTRY_POLICIES else "new_run_each_time"
-
-
-def entry_decision(flow_id: str, policy: str, member_key: str | None, payload: dict | None = None) -> dict:
-	"""What a trigger firing for ``member_key`` should do: ``{"action": "start"}``, ``{"action": "skip", "reason"}``
-	or ``{"action": "resume", "run"}`` (a run waiting for this member's reply was woken)."""
-	from huf.ai.flow import member
-	from huf.ai.flow.park import wake_run
-
-	start = {"action": "start"}
-	if not member_key or policy == "new_run_each_time":
-		return start
-	if policy == "once_per_member":
-		if member.get_member(flow_id, member_key):
-			return {"action": "skip", "reason": "This person has already been through this flow."}
-	elif policy == "one_active_per_member":
-		if member.has_active_run(flow_id, member_key):
-			return {"action": "skip", "reason": "This person already has a run in progress."}
-	elif policy == "resume_if_waiting":
-		run = member.find_waiting_reply_run(flow_id, member_key)
-		if run:
-			p = payload or {}
-			reply = {k: p.get(k) for k in ("text", "message", "sender_id", "display_name") if p.get(k) is not None}
-			if wake_run(run, "reply", reply):
-				return {"action": "resume", "run": run}
-			return {"action": "skip", "reason": "This person's reply was already received."}
-	return start
-
-
 def start_flow_run(
 	flow_id: str,
 	payload: dict,
@@ -230,21 +192,19 @@ def start_flow_run(
 	The row is created for the trusted dispatcher (activation of the flow by its owner already
 	authorised the trigger); execution identity is ``user``. When the graph has several triggers the
 	run starts at the one that fired (``trigger_node_id``). The trigger's entry policy may instead resume the member's
-waiting run (that run is returned) or skip the start (``None``).
+	waiting run (that run is returned) or skip the start (``None``).
 	"""
-	from huf.ai.flow import engine, member
+	from huf.ai.flow import engine
+	from huf.ai.flow.runs import entry
 
 	if user:
 		frappe.set_user(user)
 	if trigger_node_id:
-		node = next((n for n in parse_definition(frappe.db.get_value("Flow Definition", flow_id, "definition_json")).get("nodes", []) if n.get("id") == trigger_node_id), {})
-		policy = entry_policy_of(node.get("config"))
-		if policy != "new_run_each_time":
-			decision = entry_decision(flow_id, policy, member.resolve_member_key(trigger_type, payload, frappe.session.user), payload)
-			if decision["action"] == "skip":
-				return None
-			if decision["action"] == "resume":
-				return frappe.get_doc("Flow Run", decision["run"])
+		early = entry.apply_entry_policy(flow_id, trigger_node_id, trigger_type, payload)
+		if early == "skip":
+			return None
+		if early:
+			return frappe.get_doc("Flow Run", early)
 	flow_run = engine.create_flow_run(
 		flow_id=flow_id, payload=payload, trigger_type=trigger_type, ignore_permissions=True
 	)
@@ -396,30 +356,6 @@ def expire_due_approvals(now: datetime | None = None, enqueue: bool = False) -> 
 		except Exception:
 			frappe.log_error(frappe.get_traceback(), f"Flow approval expiry: {name}")
 	return expired
-
-
-def wake_due_waits(now: datetime | None = None, limit: int = 500) -> list[str]:
-	"""Scheduler entry (every minute): wake every ``Waiting Timer`` run whose ``resume_at`` has passed.
-
-	Each continuation is enqueued on the short queue, never run here, so a big tick cannot hold the scheduler.
-	"""
-	from huf.ai.flow.park import wake_run
-
-	names = frappe.get_all(
-		"Flow Run",
-		filters={"status": "Waiting Timer", "resume_at": ["<=", now or datetime.now(timezone.utc).replace(tzinfo=None)]},
-		order_by="resume_at asc",
-		limit_page_length=limit,
-		pluck="name",
-	)
-	woken: list[str] = []
-	for name in names:
-		try:
-			if wake_run(name, "elapsed"):
-				woken.append(name)
-		except Exception:
-			frappe.log_error(frappe.get_traceback(), f"Flow wait wake: {name}")
-	return woken
 
 
 # ---------------------------------------------------------------------------

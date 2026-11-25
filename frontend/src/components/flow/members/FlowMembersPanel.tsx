@@ -7,7 +7,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
-import { listFlowMembers, removeFlowMember, type FlowMemberRow, type FlowMemberStatus } from '@/services/flow/flowMembersApi';
+import { listFlowMembers, removeFlowMember, type FlowMemberRow, type FlowMemberStatus } from '@/services/flow/steps/flowMembersApi';
 import { formatAbsoluteTime } from '@/lib/serverTime';
 import { DisabledReason } from '../DisabledReason';
 

@@ -8,7 +8,7 @@ from unittest.mock import patch
 import frappe
 from frappe.tests import IntegrationTestCase
 
-from huf.ai.flow import triggers
+from huf.ai.flow.runs import park
 from huf.ai.flow.tests.test_flow_draft_validation import _end, _graph, _trigger
 from huf.ai.graph.validator import validate_graph
 
@@ -72,7 +72,7 @@ class TestSweeperReadsUtc(unittest.TestCase):
 			return []
 
 		with patch("frappe.get_all", side_effect=spy):
-			triggers.wake_due_waits()
+			park.wake_due_waits()
 		cutoff = seen["filters"]["resume_at"][1]
 		utc_now = datetime.now(timezone.utc).replace(tzinfo=None)
 		self.assertLess(abs((cutoff - utc_now).total_seconds()), 5)

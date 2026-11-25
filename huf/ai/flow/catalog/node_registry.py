@@ -176,7 +176,7 @@ def executor_for(type_id: str | None):
 		return None
 
 	def execute(flow_run, node: dict, config: dict, settings: dict):
-		from huf.ai.flow import park
+		from huf.ai.flow.runs import park
 		from huf.ai.flow.engine import _context_of, _transition_run
 		from huf.ai.flow.testrun import gate as test_gate
 

@@ -5,7 +5,7 @@ resolved), ``mode`` (``fire_and_forget`` by default, or ``wait``).
 
 The child is an ordinary Flow Run linked to this run by ``parent_run`` / ``parent_node``. In ``wait`` mode the parent
 parks (``park.park_run``, reason ``child``) *before* the child is enqueued, and the engine's terminal functions
-(``_complete_flow_run`` / ``_fail_flow_run`` / ``_cancel_flow_run``) call :func:`on_child_finished`, which wakes the
+(``_complete_flow_run`` / ``_fail_flow_run`` / ``park.cancel_run``) call :func:`on_child_finished`, which wakes the
 parent with ``{status, error, output}``. A child that did not succeed makes this step fail, so ``on_error`` applies.
 Cancelling a parent that waits for a child cancels that child too.
 """
@@ -18,8 +18,8 @@ from types import SimpleNamespace
 
 import frappe
 
-from huf.ai.flow import park
-from huf.ai.flow.park import ParkRequest
+from huf.ai.flow.runs import park
+from huf.ai.flow.runs.park import ParkRequest
 
 MAX_DEPTH = 5
 KEYS = frozenset({"flow_id", "input", "mode"})
@@ -154,12 +154,10 @@ def on_child_finished(child_run, status: str, error: str | None = None) -> None:
 
 def cancel_waited_child(flow_run, by: str) -> None:
 	"""When a parent is cancelled while it waits for its child, cancel that child."""
-	from huf.ai.flow.engine import _cancel_flow_run
-
 	child = (park._waiting(flow_run).get("extra") or {}).get("child") if park._waiting(flow_run).get("reason") == "child" else None
 	if not child or not frappe.db.exists("Flow Run", child):
 		return
 	try:
-		_cancel_flow_run(frappe.get_doc("Flow Run", child), by)
+		park.cancel_run(child, by)
 	except Exception:
 		frappe.log_error(title="Flow sub-flow cancel cascade")

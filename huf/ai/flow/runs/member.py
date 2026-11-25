@@ -157,7 +157,7 @@ def record_history(flow: str, key: str, node: str, run: str | None = None) -> No
 
 def remove_member(flow: str, key: str) -> bool:
 	"""Forget a member: cancel their waiting run, then delete the row. True when a row existed."""
-	from huf.ai.flow.park import cancel_run
+	from huf.ai.flow.runs.park import cancel_run
 
 	name = member_name(flow, key)
 	run = frappe.db.get_value(DOCTYPE, name, "active_flow_run")
@@ -180,3 +180,29 @@ def purge_inactive(days: int | None = None) -> int:
 	for name in names:
 		frappe.db.delete(DOCTYPE, {"name": name})
 	return len(names)
+
+
+def run_member_context(flow_run) -> dict | None:
+	"""The ``member`` template root for a run (key, status, vars, run count, entry time); None when it has no member."""
+	member_key = getattr(flow_run, "member_key", None)
+	row = get_member(flow_run.flow_id, member_key) if member_key else None
+	if not row:
+		return None
+	return {
+		"key": member_key,
+		"status": row.status,
+		"vars": row.vars,
+		"run_count": row.run_count,
+		"entered_at": row.entered_at,
+	}
+
+
+def key_for_new_run(trigger_type: str | None, payload: dict | None, mode: str) -> str | None:
+	"""The member a new run is about (real runs only; a test run has none)."""
+	return resolve_member_key(trigger_type, payload, frappe.session.user) if mode == "real" else None
+
+
+def scoped_state_key(flow_run, key) -> str | None:
+	"""A flow-state key kept per person (``member:<key>:<key>``); None when the run does not know its member."""
+	member_key = getattr(flow_run, "member_key", None)
+	return f"member:{member_key}:{key}" if member_key else None

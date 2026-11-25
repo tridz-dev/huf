@@ -5,7 +5,8 @@ import json
 import frappe
 from frappe.tests import IntegrationTestCase
 
-from huf.ai.flow import member, members_api
+from huf.ai.flow.runs import member
+from huf.ai.flow.runs import members_api
 
 
 class TestFlowMembersApi(IntegrationTestCase):

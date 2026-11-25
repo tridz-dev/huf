@@ -7,7 +7,8 @@ from unittest.mock import patch
 import frappe
 from frappe.tests import IntegrationTestCase
 
-from huf.ai.flow import engine as flow_engine, park
+from huf.ai.flow import engine as flow_engine
+from huf.ai.flow.runs import park
 from huf.ai.flow.nodes.wait import exec_wait
 from huf.ai.flow.testrun import gate
 
@@ -145,7 +146,7 @@ class TestWaitNode(IntegrationTestCase):
 
 
 class TestWaitSweeper(IntegrationTestCase):
-	"""triggers.wake_due_waits: wakes only due ``Waiting Timer`` runs, enqueues (never runs inline)."""
+	"""park.wake_due_waits: wakes only due ``Waiting Timer`` runs, enqueues (never runs inline)."""
 
 	NOW = datetime(2030, 6, 1, 12, 0, 0)
 
@@ -188,7 +189,7 @@ class TestWaitSweeper(IntegrationTestCase):
 		return frappe.db.get_value("Flow Run", name, "status")
 
 	def test_sweeper_wakes_due_only(self):
-		from huf.ai.flow.triggers import wake_due_waits
+		from huf.ai.flow.runs.park import wake_due_waits
 
 		due = self._parked(self.NOW - timedelta(minutes=1))
 		later = self._parked(self.NOW + timedelta(hours=1))
@@ -202,7 +203,7 @@ class TestWaitSweeper(IntegrationTestCase):
 	def test_sweeper_limit_500(self):
 		import inspect
 
-		from huf.ai.flow.triggers import wake_due_waits
+		from huf.ai.flow.runs.park import wake_due_waits
 
 		self.assertEqual(inspect.signature(wake_due_waits).parameters["limit"].default, 500)
 		first = self._parked(self.NOW - timedelta(minutes=2))
@@ -214,7 +215,7 @@ class TestWaitSweeper(IntegrationTestCase):
 		self.assertEqual(len(set(woken) & {first, second}), len(woken))
 
 	def test_sweeper_enqueues_not_inline(self):
-		from huf.ai.flow.triggers import wake_due_waits
+		from huf.ai.flow.runs.park import wake_due_waits
 
 		name = self._parked(self.NOW - timedelta(minutes=1))
 		with patch("frappe.enqueue") as enq, patch("huf.ai.flow.engine.run_flow") as inline:

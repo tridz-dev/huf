@@ -5,7 +5,7 @@ import json
 import frappe
 from frappe.tests import IntegrationTestCase
 
-from huf.ai.flow import park
+from huf.ai.flow.runs import park
 from huf.ai.flow.runs import actions
 from huf.testing.factories import make_user
 
