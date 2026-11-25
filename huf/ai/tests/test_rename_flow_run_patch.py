@@ -26,6 +26,9 @@ def _drop():
 	for dt in (LINKER, LEG, NEWT):
 		if frappe.db.exists("DocType", dt):
 			frappe.delete_doc("DocType", dt, force=True)
+	# delete_doc keeps tables while in_test; drop leftovers so reruns start clean.
+	for dt in (LINKER, LEG, NEWT):
+		frappe.db.sql_ddl(f"DROP TABLE IF EXISTS `tab{dt}`")
 	frappe.db.commit()
 
 
