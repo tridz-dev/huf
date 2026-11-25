@@ -60,6 +60,7 @@ export const REQUIRED_CONFIG_KEYS: Partial<Record<string, string[]>> = {
     'doc.get': ['doctype'],
     'doc.update': ['doctype', 'name', 'values'],
     'flow.call': ['flow_id'],
+    'member.set': ['vars'],
     'code.run': ['code', 'profile'],
     'transform': ['op'],
 };
@@ -92,6 +93,7 @@ export function getDefaultLabel(backendType: string): string {
         'doc.get': 'Find document',
         'doc.update': 'Update document',
         'flow.call': 'Run another flow',
+        'member.set': 'Remember for this person',
         'code.run': 'Execute code',
         'output': 'End',
     };
@@ -111,7 +113,7 @@ export function getDefaultIcon(backendType: string): string {
         'agent.run': 'SquareAsterisk',
         'tool.call': 'Play',
         'router.llm': 'GitBranch',
-        'router.decision': 'GitBranch',
+        'router.decision': 'Split',
         'wait': 'Hourglass',
         'human.approval': 'UserCheck',
         'condition': 'GitBranch',
@@ -126,6 +128,7 @@ export function getDefaultIcon(backendType: string): string {
         'doc.get': 'FileSearch',
         'doc.update': 'FilePen',
         'flow.call': 'Workflow',
+        'member.set': 'UserPen',
         'code.run': 'Terminal',
         'output': 'CheckCircle2',
     };

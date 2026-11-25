@@ -52,6 +52,7 @@ export function nodeKind(node: NodeLike): string {
     case 'agent-run': return 'agent.run';
     case 'tool-call': return 'tool.call';
     case 'router': return 'router.llm';
+    case 'router-decision': return 'router.decision';
     case 'condition': return 'condition';
     case 'foreach': return 'foreach';
     case 'human.approval': return 'human.approval';
@@ -65,6 +66,7 @@ export function nodeKind(node: NodeLike): string {
     case 'doc-get': return 'doc.get';
     case 'doc-update': return 'doc.update';
     case 'flow-call': return 'flow.call';
+    case 'member-set': return 'member.set';
     case 'code-run': return 'code.run';
     default: return typeof t === 'string' ? t : 'unknown';
   }
@@ -191,6 +193,17 @@ export function validateNode(node: NodeLike, edges: EdgeLike[]): FlowIssue[] {
       }
       break;
     }
+    case 'router.decision': {
+      const rules = out.filter((e) => edgeRoute(e as FlowEdge) === 'option');
+      if (rules.length === 0) add('options', 'Add at least one rule.');
+      else {
+        if (rules.some((e) => isBlank(asObj((e as { data?: unknown }).data).expression))) add('options', 'Write the check for this rule.');
+        const names = rules.map((e) => (typeof e.label === 'string' ? e.label.trim().toLowerCase() : '')).filter((n) => n !== '');
+        if (new Set(names).size !== names.length) add('options', 'Give each rule a different name.');
+      }
+      if (!out.some((e) => edgeRoute(e as FlowEdge) === 'default')) add('default', 'Choose where to go when no rule matches.');
+      break;
+    }
     case 'condition':
       if (isBlank(c.expression)) add('expression', "Add at least one rule.");
       missingBranches(node, out, c, add);
@@ -260,6 +273,9 @@ export function validateNode(node: NodeLike, edges: EdgeLike[]): FlowIssue[] {
       if (isBlank(c.doctype)) add('doctype', 'Choose a document type.');
       if (isBlank(c.name)) add('name', 'Choose which document to update.');
       if (Object.keys(asObj(c.values)).length === 0) add('values', 'Add at least one field to change.');
+      break;
+    case 'member.set':
+      if (Object.keys(asObj(c.vars)).length === 0) add('vars', 'Add at least one value to remember.');
       break;
     case 'flow.call':
       if (isBlank(c.flow_id)) add('flow_id', 'Choose a flow to run.');

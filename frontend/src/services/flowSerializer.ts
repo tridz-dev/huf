@@ -50,6 +50,7 @@ export const ACTION_TO_BACKEND_TYPE: Record<ActionType, BackendNodeType> = {
     'doc-get': 'doc.get',
     'doc-update': 'doc.update',
     'flow-call': 'flow.call',
+    'member-set': 'member.set',
 };
 
 const BACKEND_TO_ACTION_TYPE: Record<string, ActionType> = Object.fromEntries(

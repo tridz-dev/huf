@@ -5,7 +5,7 @@
  */
 import type { FlowEdge, FlowEdgeRoute, FlowNode } from '../../types/flow.types';
 import { edgeRoute, makeFlowEdge } from '../../services/flowSerializer';
-import { branchHandlesFor } from './flowBranches';
+import { branchHandlesFor, isPathRouter } from './flowBranches';
 import { subtreeIds } from './flowEdgeLabels';
 
 export type RemoveStepMode = 'reconnect' | 'cascade';
@@ -103,7 +103,7 @@ function allowedRoutes(node: FlowNode): FlowEdgeRoute[] {
   if ((node.data.actionConfig as { type?: string } | undefined)?.type === 'stop') return [];
   if (node.data.nodeType === 'trigger') return ['next'];
   const cfg = node.data.actionConfig as ({ type?: string } & Record<string, unknown>) | undefined;
-  if (cfg?.type === 'router') return ['option'];
+  if (isPathRouter(cfg?.type)) return ['option'];
   const handles = branchHandlesFor(cfg?.type, cfg);
   return handles.length > 0 ? handles.map((h) => h.route) : ['next'];
 }

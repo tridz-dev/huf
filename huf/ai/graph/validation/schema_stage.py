@@ -38,7 +38,7 @@ MODE_DRAFT = "draft"
 MODE_PUBLISH = "publish"
 
 #: JSON-schema keywords that only say "this setting is missing or empty": fine in a draft, fatal on publish.
-_UNFINISHED_KEYWORDS: frozenset[str] = frozenset({"required", "minLength", "minItems", "pattern"})
+_UNFINISHED_KEYWORDS: frozenset[str] = frozenset({"required", "minLength", "minItems", "minProperties", "pattern"})
 
 
 # --------------------------------------------------------------------------------------
@@ -94,6 +94,8 @@ def _is_unfinished(err, prefix: list) -> bool:
 		return leaf.instance == ""
 	if leaf.validator == "minItems":
 		return leaf.instance == []
+	if leaf.validator == "minProperties":
+		return leaf.instance == {}
 	return True
 
 

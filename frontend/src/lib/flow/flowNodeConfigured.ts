@@ -46,6 +46,8 @@ export function actionHasConfiguredContent(data: Pick<FlowNodeData, 'actionConfi
       return Boolean(config.doctype?.trim() && config.name && Object.keys(config.values ?? {}).length > 0);
     case 'flow-call':
       return Boolean(config.flow_id);
+    case 'member-set':
+      return Object.keys(config.vars ?? {}).length > 0;
     case 'unknown':
       return true;
     default:

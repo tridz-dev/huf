@@ -12,6 +12,8 @@ import { FieldHint } from '../FieldHint';
 import { ApprovalTimeoutField } from './approval/ApprovalTimeoutField';
 import { ValueField } from './fields';
 import { type ActionFormProps, asObj, Section } from './formKit';
+import { useFlowContext } from '../../../contexts/FlowContext';
+import { isGatewayKindId } from '@/lib/flow-gateway/gatewayWords';
 import type { WaitMode } from '../../../types/flow.types';
 
 const MODES: Array<{ mode: WaitMode; label: string }> = [
@@ -29,6 +31,9 @@ const UNITS = [
 export function WaitForm({ nodeId, cfg, patch, f, Err, title }: ActionFormProps) {
   const { canManage } = useFlowPermissions();
   const siteZone = useSiteTimezone();
+  const { activeFlow } = useFlowContext();
+  const triggerType = activeFlow?.nodes.find((n) => n.data.nodeType === 'trigger')?.data.triggerConfig?.type;
+  const hasMember = isGatewayKindId(triggerType);
   const mode: WaitMode = cfg.mode === 'until' || cfg.mode === 'resume' ? cfg.mode : 'duration';
   const duration = asObj(cfg.duration);
   const resume = asObj(cfg.resume);
@@ -153,6 +158,18 @@ export function WaitForm({ nodeId, cfg, patch, f, Err, title }: ActionFormProps)
           <p className="rounded-md bg-muted/30 p-2 text-xs text-muted-foreground" data-testid="flow-wait-resume-info">
             Continue it from the run page, or send a request to its resume link (shown on the run once it is waiting).
           </p>
+          {(hasMember || resume.wait_for === 'member_reply') && (
+            <label className="flex items-center gap-2 text-xs" data-testid={f('resume.wait_for')}>
+              <input
+                type="checkbox"
+                className="h-3.5 w-3.5"
+                disabled={!canManage}
+                checked={resume.wait_for === 'member_reply'}
+                onChange={(e) => setResume({ wait_for: e.target.checked ? 'member_reply' : undefined })}
+              />
+              Or when the person replies
+            </label>
+          )}
           <ApprovalTimeoutField
             nodeId={nodeId}
             kind="wait"

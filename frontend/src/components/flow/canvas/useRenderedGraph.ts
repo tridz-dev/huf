@@ -1,6 +1,6 @@
 import { useMemo, useRef } from 'react';
 import { MarkerType, type Edge, type Node } from 'reactflow';
-import { branchHandlesFor, branchTone } from '@/lib/flow/flowBranches';
+import { branchHandlesFor, branchTone, isPathRouter } from '@/lib/flow/flowBranches';
 import { RENDER_ONLY_EDGE_PREFIX, RENDER_ONLY_NODE_PREFIX, branchPillText, endSubtitles, ghostSpots, loopBacks, type OpenEnd } from '@/lib/flow-graph/flowCanvasGraph';
 import { edgeRoute } from '@/services/flowSerializer';
 import type { FlowEdgeRoute, FlowNodeData } from '@/types/flow.types';
@@ -19,7 +19,7 @@ type StepCfg = ({ type?: string } & Record<string, unknown>) | undefined;
 /** The handle a connection leaves from: one per branch, so "When done" never shares the dot of "For each item". */
 function handleFor(edge: Edge, source: Node<FlowNodeData> | undefined): string | undefined {
   const cfg = source?.data.actionConfig as StepCfg;
-  if (cfg?.type === 'router') return 'option';
+  if (isPathRouter(cfg?.type)) return 'option';
   const route = edgeRoute(edge);
   return branchHandlesFor(cfg?.type, cfg).find((h) => h.route === route)?.handleId ?? (edge.sourceHandle ?? undefined);
 }

@@ -44,6 +44,7 @@ export function actionCardId(config: { type?: unknown; tool_id?: unknown; backen
   const type = typeof config?.type === 'string' ? config.type : '';
   // The canvas config type is `foreach`; the palette card is called `loop`.
   if (type === 'foreach') return 'loop';
+  if (type === 'router-decision') return 'switch';
   // A step an app added keeps its own type id, which is also its palette id.
   if (type === 'unknown') return typeof (config as { backend_type?: unknown }).backend_type === 'string' ? (config as { backend_type: string }).backend_type : type;
   if (type === 'tool-call' && typeof config?.tool_id === 'string' && TOOL_CARD[config.tool_id]) return TOOL_CARD[config.tool_id];

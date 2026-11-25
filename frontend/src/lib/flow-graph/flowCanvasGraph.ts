@@ -1,5 +1,5 @@
 import type { Connection, Edge, Node } from 'reactflow';
-import { branchHandlesFor } from '../flow/flowBranches';
+import { branchHandlesFor, isPathRouter } from '../flow/flowBranches';
 import { branchColumnShift, subtreeIds } from '../flow/flowEdgeLabels';
 import { actionLabel } from '../flow/flowLabels';
 import { CARD_WIDTH, COLUMN_GAP, ROW_GAP } from '../flow/flowLayout';
@@ -36,7 +36,7 @@ export function computeOpenEnds(nodes: Node<FlowNodeData>[], edges: Edge[]): Ope
     if (n.data.nodeType === 'end' || (n.data.actionConfig as { type?: string } | undefined)?.type === 'stop') continue;
     const out = edges.filter((e) => e.source === n.id);
     const cfg = n.data.actionConfig as StepCfg;
-    if (cfg?.type === 'router') {
+    if (isPathRouter(cfg?.type)) {
       if (!out.some((e) => edgeRoute(e) === 'option')) ends.push({ nodeId: n.id, route: 'option', handleId: 'option', label: 'Path', position: n.position, offset: 0 });
       continue;
     }
@@ -214,7 +214,7 @@ export function addActionStep(
   const routeIndex = sourceHandles.findIndex((h) => h.route === sourceRoute);
   const sideOffset = sourceHandles.length > 0 && routeIndex >= 0
     ? (routeIndex - (sourceHandles.length - 1) / 2) * COLUMN_GAP
-    : sourceCfg?.type === 'router'
+    : isPathRouter(sourceCfg?.type)
       ? edges.filter((e) => e.source === sourceId && edgeRoute(e) === 'option').length * COLUMN_GAP
       : 0;
   const newNode: Node<FlowNodeData> = {
@@ -251,7 +251,7 @@ export function addActionStep(
   const rest = edges.filter((e) => !moving.includes(e));
   const firstHandle = branchHandlesFor((config as { type?: string }).type)[0];
   const movedRoute: FlowEdgeRoute =
-    (config as { type?: string }).type === 'router' ? 'option'
+    isPathRouter((config as { type?: string }).type) ? 'option'
       : (config as { type?: string }).type === 'foreach' ? 'next'
         : firstHandle?.route ?? 'next';
 

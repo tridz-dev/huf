@@ -13,6 +13,7 @@ import { StopForm } from './forms/StopForm';
 import { FlowCallForm } from './forms/FlowCallForm';
 import { DocGetForm } from './forms/data/DocGetForm';
 import { DocUpdateForm } from './forms/data/DocUpdateForm';
+import { MemberSetForm } from './forms/data/MemberSetForm';
 import { TransformForm } from './forms/data/TransformForm';
 import { StateForm } from './forms/data/StateForm';
 import { DocCreateForm } from './forms/data/DocCreateForm';
@@ -63,6 +64,8 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
       return <DocGetForm {...common} />;
     case 'doc-update':
       return <DocUpdateForm {...common} />;
+    case 'member-set':
+      return <MemberSetForm {...common} />;
     case 'transform':
       return <TransformForm {...common} />;
     case 'state-get':

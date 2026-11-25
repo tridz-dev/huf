@@ -68,7 +68,8 @@ export type ActionType =
   | 'stop'
   | 'doc-get'
   | 'doc-update'
-  | 'flow-call';
+  | 'flow-call'
+  | 'member-set';
 
 /** Wait step config (graph-IR `WaitNode`). `until` is a literal, reference or template; the timeout branch is a routing pointer. */
 export type WaitMode = 'duration' | 'until' | 'resume';
@@ -77,7 +78,7 @@ export interface WaitNodeConfig {
   duration?: { value?: number; unit: 'minutes' | 'hours' | 'days' };
   until?: FlowValue;
   time_zone?: string;
-  resume?: { timeout_ms?: number; timeout_next?: string; message?: string };
+  resume?: { wait_for?: 'token' | 'member_reply'; timeout_ms?: number; timeout_next?: string; message?: string };
 }
 
 // ─── Trigger configs (field names == graph-IR config keys) ────────────
@@ -262,6 +263,12 @@ export interface DocUpdateActionConfig {
   values?: Record<string, FlowValue>;
 }
 
+/** Remember for this person (graph-IR `member.set`): values kept for the person the run is about. */
+export interface MemberSetActionConfig {
+  type: 'member-set';
+  vars?: Record<string, FlowValue>;
+}
+
 /** Run another flow (graph-IR `flow.call`). */
 export interface FlowCallActionConfig {
   type: 'flow-call';
@@ -314,6 +321,7 @@ export type ActionConfig =
   | DocGetActionConfig
   | DocUpdateActionConfig
   | FlowCallActionConfig
+  | MemberSetActionConfig
   | UnknownActionConfig
   | { type: undefined };
 
