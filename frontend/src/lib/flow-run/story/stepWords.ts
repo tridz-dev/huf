@@ -25,6 +25,8 @@ const DONE: Record<string, string> = {
   'doc.create': 'Created a document',
   'code.run': 'Ran code',
   stop: 'Stopped the flow',
+  wait: 'Waited',
+  'member.set': 'Remembered values for this person',
   'doc.get': 'Found a document',
   'doc.update': 'Updated a document',
   'flow.call': 'Ran another flow',
@@ -34,6 +36,8 @@ const WAITING: Record<string, string> = {
   'human.approval': 'Waiting for approval',
   'code.run': 'Waiting for code review',
   'agent.run': 'Waiting for an answer',
+  wait: 'Waiting',
+  'flow.call': 'Waiting for the other flow to finish',
 };
 
 const FAILED: Record<string, string> = {
@@ -48,6 +52,7 @@ const FAILED: Record<string, string> = {
   'code.run': 'The code did not run',
   'human.approval': 'The approval did not go through',
   output: 'Could not end properly',
+  stop: 'Stopped the flow',
 };
 
 export function stepPhrase(type: string | undefined, status: StepStatus, title: string): string {
