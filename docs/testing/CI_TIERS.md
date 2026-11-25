@@ -144,15 +144,22 @@ critical browser flows, security gates.
   `deploy-huf.sh` on the remote host, which is outside this repo and was not
   read as part of this task (it lives on the deploy target, not in
   `.github/workflows/`).
-- **`fasterdocker-publish.yml`** (163 lines): triggers on `push: branches:
-  [develop]` and `push: tags: ['v*']`, or manual `workflow_dispatch` (lines
-  3-14). Same shape: it builds a native runtime image, bakes a site, builds and
-  pushes a per-arch demo image (`build` job, lines 24-116), then assembles and
-  pushes a multi-arch manifest (`manifest` job, lines 118-163). **No `needs:`
-  referencing `server-tests.yml`/`frontend-tests.yml`, no `workflow_run` gate,
-  no test step of any kind** — it builds Docker images and pushes them to
-  `ghcr.io` purely off the same `push: develop` trigger frontend/server tests
-  also use, as a fully independent, ungated workflow.
+- **`fasterdocker-publish.yml`**: triggers on `push: branches: [develop]`
+  (with a `paths:` filter so docs-only merges do not rebuild images),
+  `push: tags: ['v*']`, or manual `workflow_dispatch`. Jobs: `meta` (computes
+  tags once), `build` (native amd64 and arm64 runners: runtime image, baked
+  site, per-arch demo image), `smoke` (boots the pushed per-arch image with
+  `docker/docker-compose.yml` and probes `/api/method/ping` and `/huf`), and
+  `manifest` (`needs: [meta, build, smoke]`, creates the multi-arch tags). A
+  `concurrency` group serializes publishes. `develop` pushes publish `<sha>`
+  and `develop`; only stable `vX.Y.Z` tags (or a manual dispatch with
+  `promote_latest`) move `latest`. The boot smoke test gates the manifest, but
+  **there is still no `needs:` on `server-tests.yml`/`frontend-tests.yml` and no
+  `workflow_run` gate**: images are still published off the same raw
+  `push: develop` trigger as the test workflows, independently of them.
+- **`docker-checks.yml`**: pull-request check for `docker/**`: `docker compose
+  config` for every compose file, `try.sh --dry-run` per variant, shellcheck
+  and hadolint.
 
 **Finding, stated precisely:** neither of the two workflows that touch
 release/deployment gates on tests passing first. Both trigger off the same
@@ -234,4 +241,4 @@ parity). What already works locally and fast today, and should be used as-is:
 | 0 | changed-file lint, TS, affected Vitest, affected Python tests, changed-file design parity | Partial — `.pre-commit-config.yaml` covers lint/format only |
 | 1 | lint, typecheck, unit, build, design parity, backend, API contracts, security static checks, mocked Playwright, full-stack Playwright, accessibility, visual regression | Partial — typecheck/unit/build/backend/mocked-Playwright/accessibility/visual-regression covered; lint, design parity, security static checks, and full-stack (non-mocked) Playwright are gaps |
 | 2 | all backend, all E2E, golden traces, cross-browser, larger security, dependency audits, migration/install, provider compat, mutation testing | Partial — `nightly-e2e.yml` covers cross-browser (mocked/offline only); golden traces, larger security, dependency audits, migration/install, mutation testing remain gaps |
-| 3 | clean install, migrate, build, production-like smoke, critical browser flows, security gates | Not gated as a release gate — `deploy-huf.yml`/`fasterdocker-publish.yml` still deploy/publish unconditionally on `push: develop`. `test:e2e:deployed` is now invoked, by `live-llm-e2e.yml`, but only via manual `workflow_dispatch` (opt-in, real-LLM smoke, never a release gate) |
+| 3 | clean install, migrate, build, production-like smoke, critical browser flows, security gates | Not gated as a release gate — `deploy-huf.yml` still deploys unconditionally on `push: develop`; `fasterdocker-publish.yml` publishes on `push: develop` gated only by its own boot smoke test. `test:e2e:deployed` is now invoked, by `live-llm-e2e.yml`, but only via manual `workflow_dispatch` (opt-in, real-LLM smoke, never a release gate) |

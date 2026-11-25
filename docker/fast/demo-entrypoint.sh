@@ -78,6 +78,13 @@ if [[ ! -f "${MARIADB_DATA_DIR}/ibdata1" ]]; then
   touch "${SNAPSHOT_MARKER}"
   log "Physical snapshot copied."
 else
+  # A previous boot may have stopped after copying the snapshot but before the
+  # credentials were rotated and saved. Treat a missing credentials file as an
+  # unfinished first boot so the baked defaults are never left live.
+  if [[ ! -f "${CREDENTIALS_FILE}" ]]; then
+    FIRST_BOOT=1
+    log "No saved credentials found; finishing first-boot setup."
+  fi
   log "Existing MariaDB data found; skipping snapshot copy."
   touch "${SNAPSHOT_MARKER}"
 fi
@@ -164,13 +171,19 @@ log "MariaDB is ready."
 if [[ "${FIRST_BOOT}" == "1" ]]; then
   if [[ "${DB_ROOT_PASSWORD}" == "${BAKED_DEFAULT_ROOT_PASSWORD}" ]]; then
     NEW_ROOT_PASSWORD="$(gen_secret)"
-    log "Rotating MariaDB root password..."
-    # The new password goes in on stdin, never in argv (visible in the process list).
-    MYSQL_PWD="${DB_ROOT_PASSWORD}" mysql -h "${DB_HOST}" -uroot <<EOF
+    # If an interrupted earlier boot already rotated the root password, the baked
+    # one no longer works; do not fail the whole boot in that case.
+    if MYSQL_PWD="${DB_ROOT_PASSWORD}" mysql -h "${DB_HOST}" -uroot -e 'SELECT 1' >/dev/null 2>&1; then
+      log "Rotating MariaDB root password..."
+      # The new password goes in on stdin, never in argv (visible in the process list).
+      MYSQL_PWD="${DB_ROOT_PASSWORD}" mysql -h "${DB_HOST}" -uroot <<EOF
 ALTER USER 'root'@'%' IDENTIFIED BY '${NEW_ROOT_PASSWORD}';
 FLUSH PRIVILEGES;
 EOF
-    DB_ROOT_PASSWORD="${NEW_ROOT_PASSWORD}"
+      DB_ROOT_PASSWORD="${NEW_ROOT_PASSWORD}"
+    else
+      log "WARNING: baked MariaDB root password no longer works (already rotated?); leaving it unchanged."
+    fi
   else
     log "MARIADB_ROOT_PASSWORD explicitly set; keeping caller-supplied value."
   fi

@@ -28,7 +28,10 @@ echo "This may take 3–6 minutes on first run..."
 export PATH="${NVM_DIR}/versions/node/v${NODE_VERSION_DEVELOP}/bin/:${PATH}"
 
 # Initialize bench (heavy step)
-bench init --skip-redis-config-generation frappe-bench
+# Pin the Frappe branch so this legacy path matches the supported version
+# (override with FRAPPE_BRANCH). Without it bench pulls Frappe develop.
+FRAPPE_BRANCH=${FRAPPE_BRANCH:-v16.25.0}
+bench init --skip-redis-config-generation --frappe-branch "${FRAPPE_BRANCH}" frappe-bench
 cd /home/frappe/frappe-bench
 
 # Configure container service hosts

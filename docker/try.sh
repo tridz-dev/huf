@@ -153,6 +153,7 @@ parse_args() {
   no_port_remap=""
   dry_run=""
   wait_seconds=""
+  cli_wait_seconds=""
   volumes_flag=""
   rmi_flag=""
   extra_args=""
@@ -260,7 +261,14 @@ parse_args() {
   variant=${variant:-$DEFAULT_VARIANT}
   project=${project:-$DEFAULT_PROJECT}
   env_file=${env_file:-$DEFAULT_ENV}
-  wait_seconds=${wait_seconds:-${HUF_WAIT_SECONDS:-300}}
+  cli_wait_seconds=$wait_seconds
+  resolve_wait_seconds
+}
+
+# Resolve the wait timeout: --timeout flag, then HUF_WAIT_SECONDS (environment
+# or .env file), then 300. Called again after the .env file is loaded.
+resolve_wait_seconds() {
+  wait_seconds=${cli_wait_seconds:-${HUF_WAIT_SECONDS:-300}}
   case "$wait_seconds" in
     ''|*[!0-9]*) fatal "--timeout / HUF_WAIT_SECONDS must be a whole number of seconds." ;;
   esac
@@ -425,9 +433,9 @@ parse_credential_value() {
 
 wait_for_http_200() {
   local url="$1" host="$2" port="$3" timeout="${4:-300}"
-  local i line
+  local i=0 line start=$SECONDS
 
-  for (( i = 1; i <= timeout; i++ )); do
+  while (( (i = SECONDS - start) < timeout )); do
     if command -v curl >/dev/null 2>&1; then
       if curl -fsS -H "Host: $host" "$url" >/dev/null 2>&1; then
         return 0
@@ -444,7 +452,7 @@ wait_for_http_200() {
         return 0
       fi
     fi
-    if (( i % 15 == 0 )); then
+    if (( i > 0 && i % 15 == 0 )); then
       log "Still waiting for $url (${i}s of ${timeout}s)..."
     fi
     sleep 1
@@ -539,6 +547,7 @@ cmd_up() {
   [[ -f "$compose_file" ]] || fatal "Compose file $compose_file not found. Run from repo root or ensure the fasterdocker assets are present."
 
   load_env_file
+  resolve_wait_seconds
   apply_cli_overrides
   resolve_ports_for_variant
 

@@ -1,0 +1,73 @@
+name: Clean up demo image tags
+
+# Manual only. Defaults to a dry run that lists what would be deleted.
+# Removes untagged versions and orphaned per-arch tags (a <sha>-amd64 or
+# <sha>-arm64 tag with no matching multi-arch <sha> tag), and old sha tags
+# beyond the newest N. Release tags (v*), latest and develop are never touched.
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'List only; do not delete'
+        type: boolean
+        default: true
+      keep_sha_tags:
+        description: 'Number of newest sha-tagged builds to keep'
+        default: '30'
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Plan and apply cleanup
+        env:
+          # Same token the publish workflow uses for this package.
+          GH_TOKEN: ${{ secrets.GHCR_PUSH_TOKEN }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          KEEP: ${{ inputs.keep_sha_tags }}
+        run: |
+          set -euo pipefail
+          [[ "${KEEP}" =~ ^[0-9]+$ ]] || { echo "keep_sha_tags must be a number"; exit 1; }
+          gh api --paginate "/orgs/tridz-dev/packages/container/huf-demo/versions?per_page=100" \
+            > versions.json
+          python3 - <<'PY' > plan.txt
+          import json, os, re
+          pages = json.load(open("versions.json"))
+          if pages and isinstance(pages[0], list):
+              pages = [v for p in pages for v in p]
+          keep = int(os.environ["KEEP"])
+          protected = lambda t: t in ("latest", "develop") or t.startswith("v") or re.match(r"^\d+\.\d+\.\d+", t)
+          sha = re.compile(r"^[0-9a-f]{7,40}$")
+          all_tags = {t for v in pages for t in v["metadata"]["container"]["tags"]}
+          drop = []
+          multi = sorted((v for v in pages if any(sha.match(t) for t in v["metadata"]["container"]["tags"])),
+                         key=lambda v: v["created_at"], reverse=True)
+          old_shas = set()
+          for v in multi[keep:]:
+              old_shas.update(t for t in v["metadata"]["container"]["tags"] if sha.match(t))
+          for v in pages:
+              tags = v["metadata"]["container"]["tags"]
+              if any(protected(t) for t in tags):
+                  continue
+              why = None
+              if not tags:
+                  why = "untagged"
+              else:
+                  base = [re.sub(r"-(amd64|arm64)$", "", t) for t in tags]
+                  if all(re.search(r"-(amd64|arm64)$", t) for t in tags) and not any(b in all_tags for b in base):
+                      why = "orphan per-arch tag"
+                  elif any(t in old_shas for t in base):
+                      why = "older than newest %d builds" % keep
+              if why:
+                  print(v["id"], ",".join(tags) or "-", why)
+          PY
+          echo "Planned deletions:"; cat plan.txt
+          if [ "${DRY_RUN}" = "true" ]; then echo "Dry run: nothing deleted."; exit 0; fi
+          while read -r id _; do
+            gh api -X DELETE "/orgs/tridz-dev/packages/container/huf-demo/versions/${id}"
+          done < plan.txt
