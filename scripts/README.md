@@ -18,9 +18,11 @@ Guard tests: `python3 -m unittest discover -s scripts/tests` (also run by the St
 
 - `check_file_size.py` (`file-size`): scans `frontend/src` (.ts/.tsx) and `huf/` (.py;
   migrations, patches, tests, fixtures, generated code skipped).
-  - a new file over 500 lines fails; a baselined file may not grow
+  - a new file over 500 lines fails; a baselined file may grow only by a
+    wiring allowance of min(10, 1% of baseline) raw lines per PR (registration lines, not logic;
+    new logic goes in new modules)
   - a new `services/*Api.ts` over 600 lines fails
-  - a directory with more than 15 source files fails if it is new or grew past its baseline
+  - a directory with more than 15 source files fails if it is new or grew past its baseline (a folder that merely stays over its baseline passes)
   - files over 300 lines only warn (`-v` lists them)
   - `--list` prints offenders, largest first
 - `check_repo_layout.py`: keeps workspace/agent files out of the repo (own workflow).
