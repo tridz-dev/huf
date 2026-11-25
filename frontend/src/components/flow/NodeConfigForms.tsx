@@ -18,7 +18,7 @@ import { StateForm } from './forms/data/StateForm';
 import { DocCreateForm } from './forms/data/DocCreateForm';
 import { Section } from './forms/formKit';
 import { SchemaNodeForm } from './forms/SchemaNodeForm';
-import { getAppNodeType, useAppNodeTypes } from '@/lib/flow-graph/appNodeTypes';
+import { useAppNodeTypes } from '@/lib/flow-graph/appNodeTypes';
 import { CodeRunFields } from './CodeRunForm';
 
 export { TriggerConfigForm };

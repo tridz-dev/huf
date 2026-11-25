@@ -18,6 +18,8 @@ export type StatusKind =
   | 'running'
   | 'waiting_approval'
   | 'waiting_review'
+  | 'waiting_timer'
+  | 'cancelled'
   | 'finished'
   | 'failed'
   | 'stuck'

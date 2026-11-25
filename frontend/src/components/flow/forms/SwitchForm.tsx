@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, Plus, Trash2, PencilLine } from 'lucide-react';
+import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react';
 import { Button } from '../../ui/button';
 import { Input } from '../../ui/input';
 import { Label } from '../../ui/label';
