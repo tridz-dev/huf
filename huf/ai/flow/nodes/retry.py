@@ -76,8 +76,10 @@ def run_with_retry(flow_run, node: dict, settings: dict, run_once):
 
 	result = run_once()
 	if result.get("status") != "failed":
-		if attempt > 1 and isinstance(result.get("output"), dict):
-			result["output"] = {**result["output"], "attempts": attempt}
+		# A tool answers in "result" (the engine records it as the step's output when "output" is absent).
+		key = next((k for k in ("output", "result") if isinstance(result.get(k), dict)), None)
+		if attempt > 1 and key:
+			result[key] = {**result[key], "attempts": attempt}
 		return result
 
 	if attempt < policy["attempts"]:

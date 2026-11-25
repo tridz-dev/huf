@@ -92,6 +92,13 @@ class TestFlowRetry(IntegrationTestCase):
 		out = self._go(node, [{"status": "success", "output": {"ok": 1}}])
 		self.assertEqual(out["output"], {"ok": 1, "attempts": 2})
 
+	def test_attempt_count_added_to_a_tool_result(self):
+		node = self._node(delay_seconds=60)
+		self._go(node, [dict(FAIL)])
+		self._wake()
+		out = self._go(node, [{"status": "success", "result": {"ok": 1}}])
+		self.assertEqual(out["result"], {"ok": 1, "attempts": 2})
+
 	def test_exhausted_attempts_follow_on_error(self):
 		node = self._node(attempts=2, delay_seconds=60)
 		self._go(node, [dict(FAIL)])
