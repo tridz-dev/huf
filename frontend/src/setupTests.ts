@@ -11,3 +11,19 @@ if (typeof document !== 'undefined') {
     cleanup();
   });
 }
+
+// Node >= 25 ships an experimental global Web Storage that shadows jsdom's
+// localStorage/sessionStorage (and is undefined without --localstorage-file).
+// Point the globals at the jsdom window's storage so tests behave the same on
+// any Node version.
+if (typeof document !== 'undefined') {
+  const jsdomWindow = (globalThis as { jsdom?: { window: Window } }).jsdom?.window;
+  if (jsdomWindow) {
+    for (const key of ['localStorage', 'sessionStorage'] as const) {
+      Object.defineProperty(globalThis, key, {
+        configurable: true,
+        get: () => jsdomWindow[key],
+      });
+    }
+  }
+}
