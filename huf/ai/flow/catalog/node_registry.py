@@ -32,6 +32,7 @@ from typing import Callable
 
 import frappe
 
+from huf.ai.graph.error_copy import describe_exception, step_failed_sentence
 from huf.ai.graph.executor import Outcome, RoutingMode
 
 HOOK = "huf_flow_nodes"
@@ -219,7 +220,7 @@ def executor_for(type_id: str | None):
 			result = frappe.get_attr(path)(call)
 		except Exception as exc:  # the app's code failed: fail this step, never the worker
 			frappe.log_error(frappe.get_traceback(), f"Flow app step {node_type.type} raised")
-			return {"status": "failed", "error": f"{node_type.label} failed: {exc}"}
+			return {"status": "failed", "error": step_failed_sentence(node_type.label, describe_exception(exc))}
 		if isinstance(result, (dict, Outcome)):
 			return result
 		return {"status": "success", "output": result}

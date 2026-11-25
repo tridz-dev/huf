@@ -53,7 +53,7 @@ from huf.ai.flow import state as flow_state
 from huf.ai.flow.runs import member as flow_member
 from huf.ai.flow.catalog import node_registry
 from huf.ai.flow.nodes import adapters, subflow
-from huf.ai.flow.nodes.error_handler import run_error_handler
+from huf.ai.flow.nodes.error_handler import first_error, run_error_handler
 from huf.ai.flow.nodes.retry import policy_of as retry_policy_of, run_with_retry
 from huf.ai.flow.nodes.wait import exec_wait
 from huf.ai.flow.runs.outcome import record_outcome
@@ -1137,7 +1137,7 @@ def _execute_loop(flow_run, nodes_map: dict, edges_list: list, settings: dict):
 		paused = run_error_handler(flow_run, program, router, handlers, policy, settings, result.node_id, message)
 		if paused is not None:
 			return paused
-		_fail_flow_run(flow_run, describe_run_error(result.error, {i: step_title(n.raw) for i, n in program.nodes.items()}))
+		_fail_flow_run(flow_run, first_error(flow_run, settings, message))
 		return result
 
 	if unhandled_failures:
@@ -1149,7 +1149,13 @@ def _execute_loop(flow_run, nodes_map: dict, edges_list: list, settings: dict):
 		)
 		if paused is not None:
 			return paused
-		_fail_flow_run(flow_run, unhandled_failures[0])
+		_fail_flow_run(flow_run, first_error(flow_run, settings, unhandled_failures[0]))
+		return result
+
+	handled = first_error(flow_run, settings, None)
+	if handled:  # the error handler parked, then resumed to its end: the run still ends Failed
+		_publish_flow_event(flow_run, "flow_error", {"error": handled})
+		_fail_flow_run(flow_run, handled)
 		return result
 
 	_complete_flow_run(flow_run, reply_text=_flow_reply_text(flow_run, settings, result))
