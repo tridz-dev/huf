@@ -18,6 +18,7 @@ import {
   MessageCircle,
   MessageSquare,
   OctagonX,
+  Puzzle,
   Repeat,
   RotateCw,
   Save,
@@ -63,6 +64,7 @@ export const NODE_ICONS: Record<string, LucideIcon> = {
   MessageCircle,
   MessageSquare,
   OctagonX,
+  Puzzle,
   Repeat,
   RotateCw,
   Save,
@@ -81,7 +83,10 @@ export const NODE_ICONS: Record<string, LucideIcon> = {
 
 /** Icon for a palette entry (`flow-card-*` tiles). */
 export function paletteIcon(name: string | undefined): LucideIcon {
-  return (name && NODE_ICONS[name]) || CircleDashed;
+  if (!name) return CircleDashed;
+  // An app writes its step icon as a lucide name in any common spelling (message-square, messageSquare); an unknown one is a Puzzle.
+  const pascal = name.replace(/(^|[-_ ]+)([a-zA-Z0-9])/g, (_m, _s, c: string) => c.toUpperCase());
+  return NODE_ICONS[name] ?? NODE_ICONS[pascal] ?? Puzzle;
 }
 
 /**
