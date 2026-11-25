@@ -29,6 +29,22 @@ def boom(ctx):
 	raise RuntimeError("kaboom")
 
 
+def boom_plain(ctx):
+	raise ValueError("boom")
+
+
+def boom_timeout(ctx):
+	raise TimeoutError("slow")
+
+
+def boom_validation(ctx):
+	raise frappe.ValidationError("Customer is required")
+
+
+def boom_empty(ctx):
+	raise RuntimeError()
+
+
 def waiter(ctx):
 	if ctx.is_resume:
 		CALLS.append("resumed")
@@ -155,6 +171,27 @@ class TestAppNodes(IntegrationTestCase):
 		out = self._exec(self._node(text="x"))
 		self.assertEqual(out["status"], "failed")
 		self.assertIn("kaboom", out["error"])
+
+	def _fail_text(self, fn):
+		self.entries = [_entry("huf.demo", handler=f"{M}.{fn}")]
+		return self._exec(self._node(text="x"))["error"]
+
+	def test_app_step_valueerror_plain(self):
+		err = self._fail_text("boom_plain")
+		self.assertEqual(err, "Demo failed: boom")
+		self.assertNotIn("ValueError", err)
+		self.assertTrue(frappe.db.exists("Error Log", {"method": "Flow app step huf.demo raised"}))
+
+	def test_app_step_timeout_standard_sentence(self):
+		self.assertIn("took too long", self._fail_text("boom_timeout"))
+
+	def test_app_step_validation_message_kept(self):
+		self.assertIn("Customer is required", self._fail_text("boom_validation"))
+
+	def test_app_step_empty_message_standard_sentence(self):
+		err = self._fail_text("boom_empty")
+		self.assertTrue(err.startswith("Demo failed:"))
+		self.assertNotIn("RuntimeError", err)
 
 	def test_self_routed_outputs(self):
 		self.entries = [_entry("huf.demo", routing="self_routed", outputs=["a", "b"]), _entry("huf.term", routing="terminal")]
