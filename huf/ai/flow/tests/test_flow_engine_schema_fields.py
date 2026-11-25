@@ -216,7 +216,7 @@ class TestRouterLlm(unittest.TestCase):
 
 class TestRouterDecision(unittest.TestCase):
 	def test_disabled_provider_routes_to_default(self):
-		cfg = {"policy": "p", "options": [{"label": "a", "node_id": "A"}], "default": "D"}
+		cfg = {"options": [{"label": "a", "node_id": "A"}], "default": "D"}
 		out = flow_engine._exec_router_decision(_Run(), {"id": "r"}, cfg, {})
 		self.assertEqual(out["next_node_id"], "D")
 

@@ -1,7 +1,7 @@
 """``wait`` node: pause the run for a duration, until a moment, or until something resumes it.
 
 Config: ``mode`` (``duration`` | ``until`` | ``resume``), ``duration {value, unit}``, ``until`` (+ ``time_zone``),
-``resume {wait_for, timeout_ms, timeout_next, message}`` (``wait_for``: ``token`` by default, or ``member_reply`` to
+``resume {wait_for, timeout_ms, timeout_next}`` (``wait_for``: ``token`` by default, or ``member_reply`` to
 wait for the next message from the person the run is about). The node parks the run (``park.park_run``); once woken the step
 is entered again and only emits its output, so nothing is repeated. It is always self-routed because a woken
 ``resume`` step may leave by its ``timeout_next`` edge.
@@ -113,8 +113,6 @@ def exec_wait(flow_run, node: dict, config: dict, settings: dict):
 		extra["wait_for"] = wait_for
 		if resume.get("timeout_next"):
 			extra["timeout_next"] = resume["timeout_next"]
-		if resume.get("message"):
-			extra["message"] = resume["message"]
 	else:
 		return _failed("Choose how this step waits: for a time, until a date, or until something resumes it.")
 

@@ -47,4 +47,9 @@ describe('Wait form', () => {
     fireEvent.change(screen.getByTestId('flow-field-wait-timeout_ms'), { target: { value: '' } });
     expect(latest.resume).toBeUndefined();
   });
+
+  it('the resume link text is hidden once "Or when the person replies" is chosen (the two are exclusive)', () => {
+    renderForm(WaitForm, { type: 'wait', mode: 'resume', resume: { wait_for: 'member_reply' } });
+    expect(screen.queryByTestId('flow-wait-resume-info')).toBeNull();
+  });
 });

@@ -1,4 +1,4 @@
-"""``stop`` node: ``as: error`` fails the run with the message, ``as: success`` ends it as finished."""
+"""``stop`` node: fails the run with the message."""
 
 import unittest
 
@@ -21,7 +21,7 @@ class TestStopNode(unittest.TestCase):
 		return flow_engine._exec_stop(_Run(), {"id": "stop"}, config, _settings(data or {}))
 
 	def test_stop_error_fails_run_with_message(self):
-		out = self._stop({"message": "Stock is short", "as": "error"})
+		out = self._stop({"message": "Stock is short"})
 		self.assertEqual(out["status"], "failed")
 		self.assertEqual(out["error"], "Stock is short")
 
@@ -31,17 +31,12 @@ class TestStopNode(unittest.TestCase):
 		self.assertEqual(out["error"], "Stopped")
 
 	def test_stop_error_without_message_asks_for_one(self):
-		out = self._stop({"as": "error"})
+		out = self._stop({})
 		self.assertEqual(out["status"], "failed")
 		self.assertIn("Write the message", out["error"])
 
-	def test_stop_success_ends_run(self):
-		out = self._stop({"message": "Nothing to do", "as": "success"})
-		self.assertEqual(out["status"], "success")
-		self.assertEqual(out["output"], {"message": "Nothing to do"})
-
 	def test_stop_has_no_next(self):
-		for config in ({"message": "x", "as": "error"}, {"message": "x", "as": "success"}):
+		for config in ({"message": "x"},):
 			out = self._stop(config)
 			self.assertNotIn("next_node_id", out)
 			self.assertNotIn("next", out)

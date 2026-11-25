@@ -1487,10 +1487,6 @@
                 },
                 "default": {
                   "$ref": "#/$defs/NodeId"
-                },
-                "policy": {
-                  "type": "string",
-                  "minLength": 1
                 }
               }
             }
@@ -1567,9 +1563,6 @@
                     },
                     "timeout_next": {
                       "$ref": "#/$defs/NodeId"
-                    },
-                    "message": {
-                      "type": "string"
                     }
                   }
                 }
@@ -1803,12 +1796,6 @@
               "properties": {
                 "message": {
                   "type": "string"
-                },
-                "as": {
-                  "enum": [
-                    "error",
-                    "success"
-                  ]
                 }
               }
             }

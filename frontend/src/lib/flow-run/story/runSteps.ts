@@ -82,12 +82,12 @@ function waitDoneSentence(output: Record<string, unknown>): string {
 }
 
 /** What a parked step is waiting for, in plain words. */
-function parkedSentence(type: string, waiting: Record<string, unknown> | undefined): string | undefined {
+function parkedSentence(type: string, waiting: Record<string, unknown> | undefined, tries?: number): string | undefined {
   if (!waiting) return undefined;
   const extra = (isObj(waiting.extra) ? waiting.extra : {}) as Record<string, unknown>;
   if (waiting.reason === 'retry' && type === 'tool.call') {
     const at = typeof waiting.resume_at === 'string' ? friendlyClock(`${waiting.resume_at}Z`) : '';
-    const attempt = typeof extra.attempt === 'number' ? ` (try ${extra.attempt})` : '';
+    const attempt = typeof extra.attempt === 'number' && tries ? ` (try ${extra.attempt + 1} of ${tries})` : '';
     return at ? `Failed, trying again at ${at}${attempt}` : 'Failed, trying again soon';
   }
   if (type !== 'wait') return undefined;
@@ -200,12 +200,22 @@ export function buildRunStory(run: FlowRunDetail, { titleOf, currentUser }: Buil
     if (failed) step.hideOutput = true;
     if (failed && reasonRaw) step.reason = plainRunError(reasonRaw, title);
     if (failed && type === 'stop' && reasonRaw) step.phrase = `Stopped the flow: ${reasonRaw}`;
+    const tries = meta[id]?.tries;
+    const flowName = meta[id]?.flow_name;
+    if (failed && tries && isObj(output) && typeof output.attempts === 'number' && output.attempts >= 2) step.phrase = `Failed after ${output.attempts} tries`;
+    if (status === 'done' && tries && isObj(output) && typeof output.attempts === 'number' && output.attempts >= 2) step.sentence = `Worked on try ${output.attempts} of ${tries}`;
+    if (type === 'flow.call' && flowName) {
+      if (status === 'waiting') step.phrase = `Waiting for ${flowName} to finish`;
+      else if (failed && step.reason) step.phrase = `${flowName} failed: ${step.reason}`;
+      else if (status === 'done' && isObj(output) && 'run' in output && 'flow_id' in output) step.phrase = `Started ${flowName}`;
+      else if (status === 'done') step.phrase = `${flowName} finished`;
+    }
     if (stopped && byPerson) {
       step.reason = `Stopped by ${whoWords(byPerson.by, currentUser)}. ${byPerson.why}`;
       step.output = undefined;
     }
     if (status === 'waiting') {
-      step.sentence = waitingFor(run.waiting) ?? parkedSentence(type, run.waiting);
+      step.sentence = waitingFor(run.waiting) ?? parkedSentence(type, run.waiting, meta[id]?.tries);
       step.output = undefined;
     }
     if (status === 'failed' && isObj(step.output) && Object.keys(step.output).length === 0) step.output = undefined;

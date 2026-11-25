@@ -155,9 +155,11 @@ export function WaitForm({ nodeId, cfg, patch, f, Err, title }: ActionFormProps)
 
       {mode === 'resume' && (
         <>
-          <p className="rounded-md bg-muted/30 p-2 text-xs text-muted-foreground" data-testid="flow-wait-resume-info">
-            Continue it from the run page, or send a request to its resume link (shown on the run once it is waiting).
-          </p>
+          {resume.wait_for !== 'member_reply' && (
+            <p className="rounded-md bg-muted/30 p-2 text-xs text-muted-foreground" data-testid="flow-wait-resume-info">
+              Continue it from the run page, or send a request to its resume link (shown on the run once it is waiting).
+            </p>
+          )}
           {(hasMember || resume.wait_for === 'member_reply') && (
             <label className="flex items-center gap-2 text-xs" data-testid={f('resume.wait_for')}>
               <input

@@ -159,7 +159,7 @@ def _minimal_examples():
 		extra=[{"id": "end2", "type": "output", "config": {"value": "d"}}],
 	)
 	ex["router.decision"] = _wrap(
-		{"type": "router.decision", "config": {"policy": "p1", "options": [{"label": "a", "node_id": "end"}], "default": "end2"}},
+		{"type": "router.decision", "config": {"options": [{"label": "a", "node_id": "end"}], "default": "end2"}},
 		extra=[{"id": "end2", "type": "output", "config": {"value": "d"}}],
 	)
 	ex["human.approval"] = _wrap(

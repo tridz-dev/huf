@@ -46,7 +46,6 @@ export const REQUIRED_CONFIG_KEYS: Partial<Record<string, string[]>> = {
     'agent.run': ['agent', 'prompt'],
     'tool.call': ['tool_id'],
     'router.llm': ['prompt'],
-    'router.decision': ['policy'],
     'wait': ['mode'],
     'human.approval': ['message'],
     'condition': ['expression'],

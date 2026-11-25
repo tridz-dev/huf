@@ -20,17 +20,16 @@ class _Run:
 		setattr(self, key, value)
 
 
-def _node(node_id, as_, message, nxt=None):
-	node = {"id": node_id, "type": "stop", "config": {"as": as_, "message": message}}
-	return node
+def _stop(node_id, message):
+	return {"id": node_id, "type": "stop", "config": {"message": message}}
 
 
-def _graph(handler_as="success", with_handler=True):
+def _graph(handler_ends="output", with_handler=True):
 	graph = {
 		"entry": "boom",
 		"nodes": [
-			_node("boom", "error", "Step blew up"),
-			_node("cleanup", handler_as, "Cleaned up"),
+			_stop("boom", "Step blew up"),
+			_stop("cleanup", "Cleaned up") if handler_ends == "stop" else {"id": "cleanup", "type": "output", "config": {"value": "Cleaned up"}},
 		],
 		"edges": [],
 	}
@@ -48,19 +47,22 @@ def _run(graph):
 	)
 	nodes_map = {n["id"]: n for n in graph["nodes"]}
 	calls = {"fail": [], "complete": 0, "seen_error": None}
-	orig = flow_engine._NODE_EXECUTORS["stop"]
+	origs = {t: flow_engine._NODE_EXECUTORS[t] for t in ("stop", "output")}
 
-	def spy(fr, node, config, settings):
-		if node["id"] == "cleanup":
-			calls["seen_error"] = settings.context.data.get("error")
-		return orig(fr, node, config, settings)
+	def spy_for(node_type):
+		def spy(fr, node, config, settings):
+			if node["id"] == "cleanup":
+				calls["seen_error"] = settings.context.data.get("error")
+			return origs[node_type](fr, node, config, settings)
+
+		return spy
 
 	with (
 		patch.object(flow_engine, "_fail_flow_run", lambda fr, msg: calls["fail"].append(msg)),
 		patch.object(flow_engine, "_complete_flow_run", lambda *a, **k: calls.__setitem__("complete", 1)),
 		patch.object(flow_engine, "_persist_context", lambda *a, **k: None),
 		patch.object(flow_engine, "_publish_flow_event", lambda *a, **k: None),
-		patch.dict(flow_engine._NODE_EXECUTORS, {"stop": spy}),
+		patch.dict(flow_engine._NODE_EXECUTORS, {"stop": spy_for("stop"), "output": spy_for("output")}),
 		patch.object(flow_engine, "_FlowEventListener", lambda fr: NullListener()),
 		patch.object(flow_engine, "_FlowStateStore", lambda fr: _MemStore()),
 	):
@@ -86,12 +88,12 @@ class TestFlowErrorHandler(unittest.TestCase):
 		self.assertIn("Step blew up", calls["seen_error"]["message"])
 
 	def test_run_status_failed_after_handler(self):
-		calls = _run(_graph("success"))
+		calls = _run(_graph("output"))
 		self.assertEqual(len(calls["fail"]), 1)
 		self.assertEqual(calls["complete"], 0)
 
 	def test_handler_failure_not_recursive(self):
-		calls = _run(_graph("error"))
+		calls = _run(_graph("stop"))
 		self.assertEqual(len(calls["fail"]), 1)
 		self.assertIn("Step blew up", calls["fail"][0])
 

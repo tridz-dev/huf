@@ -28,7 +28,7 @@ class TestNewStepsValidate(unittest.TestCase):
 	def test_new_node_types_are_valid(self):
 		env = {"read": [{"doctype": "ToDo"}], "write": [{"doctype": "ToDo"}], "http": "none", "code": "none"}
 		cases = {
-			"stop": {"message": "no", "as": "error"},
+			"stop": {"message": "no"},
 			"doc.get": {"doctype": "ToDo", "name": "x", "fields": ["description"]},
 			"doc.update": {"doctype": "ToDo", "name": "x", "values": {"description": "y"}},
 			"flow.call": {"flow_id": "other", "mode": "wait"},
@@ -39,7 +39,7 @@ class TestNewStepsValidate(unittest.TestCase):
 			result = _ok([_trigger("s"), node, _end()], envelope=env, writes=3)
 			self.assertTrue(result.ok, (node_type, [str(e) for e in result.errors]))
 
-	def test_switch_rules_without_policy(self):
+	def test_switch_rules(self):
 		node = {
 			"id": "s",
 			"type": "router.decision",
