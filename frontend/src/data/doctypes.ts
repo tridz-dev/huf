@@ -32,7 +32,7 @@ export const doctype = {
   "Groq Settings": "Groq Settings",
   "OpenAI Settings": "OpenAI Settings",
   "Flow Definition": "Flow Definition",
-  "Flow Run": "Flow Run",
+  "Agent Flow Run": "Agent Flow Run",
   "Agent Procedure": "Agent Procedure",
   "Agent Procedure Run": "Agent Procedure Run",
   "Agent Procedure Step": "Agent Procedure Step",
