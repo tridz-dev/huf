@@ -4,7 +4,8 @@ Guard: file-size and folder-size limits (standards D10).
 
 Rules (frontend/src: .ts/.tsx, huf/: .py):
   * a NEW file over 500 lines fails
-  * a file recorded in the baseline may not grow
+  * a file recorded in the baseline may grow by a wiring allowance of
+    min(10, 1% of its baseline lines) raw lines per PR, no more
   * a NEW services/*Api.ts over 600 lines fails
   * a directory with more than 15 source files fails if it is new or grew
     beyond its baseline count
@@ -28,6 +29,7 @@ HARD_LIMIT = 500
 WARN_LIMIT = 300
 API_LIMIT = 600
 FOLDER_LIMIT = 15
+WIRING_MAX = 10  # baselined files may grow by min(WIRING_MAX, 1% of baseline) raw lines
 
 SCAN = [
     ("frontend/src", {".ts", ".tsx"}),
@@ -90,8 +92,10 @@ def check(files, folders, base_files, base_folders):
     errors, warnings, stale = [], [], []
     for rel, n in sorted(files.items()):
         if rel in base_files:
-            if n > base_files[rel]:
-                errors.append(f"{rel}: {n} lines, grew past baseline {base_files[rel]}")
+            allowance = min(WIRING_MAX, base_files[rel] // 100)
+            if n > base_files[rel] + allowance:
+                errors.append(f"{rel}: {n} lines, grew past baseline {base_files[rel]} "
+                              f"(wiring allowance +{allowance})")
             elif n <= HARD_LIMIT:
                 stale.append(rel)
             continue
@@ -178,7 +182,9 @@ def main(argv=None) -> int:
         print("File size guard failed:")
         for e in errors:
             print("  " + e)
-        print("Split the file/folder instead of growing it (see scripts/README.md).")
+        print("Fix the code. Do not raise the baseline. Put new logic in a new module "
+              "(see scripts/README.md).")
+        print("A reviewed '--update --force' is only for genuine exceptions.")
         return 1
     print(f"file-size OK ({len(files)} files scanned, {len(warnings)} files over {WARN_LIMIT} lines, use -v to list)")
     return 0

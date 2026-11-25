@@ -34,10 +34,20 @@ class FileSizeTests(unittest.TestCase):
         write(self.root, "huf/big.py", 600)
         self.run_guard("--update")
         self.assertEqual(self.run_guard(), 0)
-        write(self.root, "huf/big.py", 601)
+        write(self.root, "huf/big.py", 606)  # +6 = 1% wiring allowance
+        self.assertEqual(self.run_guard(), 0)
+        write(self.root, "huf/big.py", 607)
         self.assertEqual(self.run_guard(), 1)
         write(self.root, "huf/big.py", 550)
         self.assertEqual(self.run_guard(), 0)
+
+    def test_wiring_allowance_capped_at_10(self):
+        write(self.root, "huf/big.py", 2000)
+        self.run_guard("--update")
+        write(self.root, "huf/big.py", 2010)
+        self.assertEqual(self.run_guard(), 0)
+        write(self.root, "huf/big.py", 2011)
+        self.assertEqual(self.run_guard(), 1)
 
     def test_new_service_api_over_600(self):
         write(self.root, "frontend/src/services/a.ts", 1)
