@@ -20,7 +20,11 @@ NEW = "Agent Flow Run"
 def execute():
 	if frappe.db.exists("DocType", NEW) or not frappe.db.exists("DocType", OLD):
 		return
-	if frappe.db.get_value("DocType", OLD, "module") != "Huf":
+	module = frappe.db.get_value("DocType", OLD, "module")
+	if module != "Huf":
+		# Core's Flow Run (or a clobbered row): never rename or delete it. Model sync creates
+		# "Agent Flow Run" fresh; any legacy Huf rows in tabFlow Run are left in place.
+		frappe.logger().info(f"rename_flow_run_to_agent_flow_run: '{OLD}' is owned by module {module}; skipped")
 		return
 
 	# DocType.before_rename refuses renames outside developer mode; this is a trusted data patch.
