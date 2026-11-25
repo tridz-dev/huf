@@ -4,7 +4,8 @@ A node returns ``park_run(...)`` to put its run to sleep; something else later c
 resume endpoint, child completion) or ``cancel_run``. Nothing here ever sleeps in a worker.
 
 Invariants: every wake / cancel is a conditional ``_transition_run`` under the run lock, so a loser no-ops; the
-continuation is always enqueued (``queue="short"``), never run inline; a token is stored only as a hash.
+continuation is always enqueued (``queue="short"``), never run inline; a resume token is never stored: it is an HMAC
+(site encryption key) of the run, the node and a per-park nonce, so editors can show it again and a re-park voids it.
 The caller persists the run context (``_persist_context``) before parking, as the approval node does.
 """
 
@@ -41,8 +42,19 @@ def max_wait_days() -> int:
 	return int(frappe.conf.get("huf_flow_wait_max_days") or MAX_WAIT_DAYS_DEFAULT)
 
 
-def hash_token(token: str) -> str:
-	return hashlib.sha256(str(token).encode()).hexdigest()
+def _token_for(run_name: str, waiting: dict) -> str | None:
+	from frappe.utils.password import get_encryption_key
+
+	nonce = waiting.get("token_nonce")
+	if not nonce:
+		return None
+	message = f"{run_name}:{waiting.get('node_id')}:{nonce}".encode()
+	return hmac.new(get_encryption_key().encode(), message, hashlib.sha256).hexdigest()
+
+
+def resume_token(flow_run) -> str | None:
+	"""The resume token of a run parked with ``token=True`` (None otherwise). Callers must check access first."""
+	return _token_for(flow_run.name, _waiting(flow_run))
 
 
 def _waiting(flow_run) -> dict:
@@ -57,10 +69,9 @@ def _waiting(flow_run) -> dict:
 
 
 def park_run(flow_run, node: dict, req: ParkRequest) -> Outcome:
-	"""Put the run to sleep at ``node``. The raw token (if asked for) is in ``outcome.extra["token"]``, once."""
+	"""Put the run to sleep at ``node``. With ``req.token`` the run can be woken by ``resume_token(flow_run)``."""
 	from huf.ai.flow.engine import TERMINAL_STATUSES, _transition_run
 
-	raw_token = frappe.generate_hash(length=40) if req.token else None
 	resume_at = req.resume_at
 	waiting = {
 		"type": "timer",
@@ -70,8 +81,8 @@ def park_run(flow_run, node: dict, req: ParkRequest) -> Outcome:
 		"mode": "timed" if resume_at else "external",
 		"extra": req.extra or {},
 	}
-	if raw_token:
-		waiting["token_hash"] = hash_token(raw_token)
+	if req.token:
+		waiting["token_nonce"] = frappe.generate_hash(length=20)
 	if _transition_run(
 		flow_run,
 		{
@@ -83,8 +94,7 @@ def park_run(flow_run, node: dict, req: ParkRequest) -> Outcome:
 		not_from_statuses=TERMINAL_STATUSES,
 	):
 		commit_if_background()
-	extra = {"token": raw_token} if raw_token else {}
-	return Outcome.paused(PauseRequest(kind="timer", status_label=WAIT_STATUS), extra=extra)
+	return Outcome.paused(PauseRequest(kind="timer", status_label=WAIT_STATUS))
 
 
 def is_reentry(flow_run, node: dict) -> dict | None:
@@ -98,8 +108,8 @@ def is_reentry(flow_run, node: dict) -> dict | None:
 
 
 def verify_token(flow_run, token: str) -> bool:
-	stored = _waiting(flow_run).get("token_hash")
-	return bool(stored and token) and hmac.compare_digest(stored, hash_token(token))
+	expected = resume_token(flow_run)
+	return bool(expected and token) and hmac.compare_digest(expected, str(token))
 
 
 def wake_run(flow_run_name: str, reason: str, payload=None, *, enqueue: bool = True) -> bool:

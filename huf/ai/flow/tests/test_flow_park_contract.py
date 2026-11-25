@@ -91,15 +91,24 @@ class TestParkContract(IntegrationTestCase):
 		self.assertEqual(self._row().status, "Cancelled")
 		self.assertIn("Cancelled by Administrator", frappe.db.get_value("Flow Run", self.run_doc.name, "last_error"))
 
-	def test_token_stored_hashed(self):
-		outcome = park.park_run(self.run_doc, NODE, ParkRequest(reason="wait", resume_at=None, token=True))
-		raw = outcome.extra["token"]
-		waiting = json.loads(self._row().waiting)
-		self.assertNotIn(raw, json.dumps(waiting))
-		self.assertEqual(waiting["token_hash"], park.hash_token(raw))
+	def test_token_never_stored(self):
+		park.park_run(self.run_doc, NODE, ParkRequest(reason="wait", resume_at=None, token=True))
 		self.run_doc.reload()
+		raw = park.resume_token(self.run_doc)
+		self.assertTrue(raw)
+		self.assertNotIn(raw, self._row().waiting)
 		self.assertTrue(park.verify_token(self.run_doc, raw))
 		self.assertFalse(park.verify_token(self.run_doc, "nope"))
+
+	def test_repark_voids_old_token(self):
+		park.park_run(self.run_doc, NODE, ParkRequest(reason="wait", resume_at=None, token=True))
+		self.run_doc.reload()
+		old = park.resume_token(self.run_doc)
+		self._wake()
+		self.run_doc.reload()
+		park.park_run(self.run_doc, NODE, ParkRequest(reason="wait", resume_at=None, token=True))
+		self.run_doc.reload()
+		self.assertFalse(park.verify_token(self.run_doc, old))
 
 	def test_is_reentry_matches_node_only(self):
 		self._park()

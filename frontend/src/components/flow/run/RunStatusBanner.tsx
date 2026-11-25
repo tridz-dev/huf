@@ -17,6 +17,8 @@ interface RunStatusBannerProps {
   onCancel: () => void;
   /** Waiting Timer only: skip the rest of the wait. */
   onContinue?: () => void;
+  /** Resume-link waits only: copy the run's single-use resume link. */
+  onCopyResumeLink?: () => void;
 }
 
 const CANCEL_DENIED = 'Only people who can edit this flow can cancel its runs.';
@@ -32,13 +34,15 @@ function waitingWords(run: FlowRunDetail): string {
  * A waiting run says what it waits for and can be cancelled (and, on a timer, continued now); a stuck run says for how
  * long and can be stopped; a queued run says it is waiting for a worker and can be cancelled.
  */
-export function RunStatusBanner({ run, canManage, onStop, onCancel, onContinue }: RunStatusBannerProps) {
+export function RunStatusBanner({ run, canManage, onStop, onCancel, onContinue, onCopyResumeLink }: RunStatusBannerProps) {
   const [confirm, setConfirm] = useState<'stop' | 'cancel' | 'continue' | null>(null);
   const waiting = run.status.startsWith('Waiting');
   const stuck = run.stale && !waiting;
   const queued = run.status === 'Queued' && !stuck;
   if (!stuck && !queued && !waiting) return null;
   const flow = run.flow_name || 'this flow';
+  const extra = (run.waiting?.extra ?? {}) as Record<string, unknown>;
+  const resumeLink = run.status === 'Waiting Timer' && extra.mode === 'resume' && extra.wait_for === 'token';
   return (
     <>
       {waiting ? (
@@ -51,6 +55,13 @@ export function RunStatusBanner({ run, canManage, onStop, onCancel, onContinue }
                 <DisabledReason reason={canManage ? null : 'Only people who can edit this flow can continue its runs.'}>
                   <Button size="sm" variant="outline" className="max-[1023px]:min-h-11" data-testid="flow-run-continue" onClick={() => setConfirm('continue')}>
                     Continue now
+                  </Button>
+                </DisabledReason>
+              )}
+              {resumeLink && onCopyResumeLink && (
+                <DisabledReason reason={canManage ? null : 'Only people who can edit this flow can see its resume link.'}>
+                  <Button size="sm" variant="outline" className="max-[1023px]:min-h-11" data-testid="flow-run-copy-resume-link" title="Anyone with this link can continue the run once." onClick={onCopyResumeLink}>
+                    Copy resume link
                   </Button>
                 </DisabledReason>
               )}

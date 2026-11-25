@@ -20,3 +20,13 @@ export async function continueWaitingRun(flowRunId: string): Promise<{ flow_run_
         handleFrappeError(error, `Error continuing flow run ${flowRunId}`);
     }
 }
+
+/** Editors: the single-use link that continues a run parked on a resume-mode wait. */
+export async function getResumeLink(flowRunId: string): Promise<{ url: string }> {
+    try {
+        const result = await call.post('huf.ai.flow.runs.actions.get_resume_link', { flow_run_id: flowRunId });
+        return result.message as { url: string };
+    } catch (error) {
+        handleFrappeError(error, `Error getting the resume link of flow run ${flowRunId}`);
+    }
+}

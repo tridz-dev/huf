@@ -1,5 +1,6 @@
 """``flow.call`` node (flow/nodes/subflow.py): fire-and-forget, wait-for-child, failure, depth, cancel cascade."""
 
+from datetime import datetime, timedelta, timezone
 import json
 from unittest.mock import patch
 
@@ -100,6 +101,20 @@ class TestSubflow(IntegrationTestCase):
 		self.assertEqual(again["status"], "success")
 		self.assertIn("output", again)
 		self.assertEqual(len(self._children()), 1)  # re-entry never starts a second child
+
+	def test_child_done_while_parent_lock_held_is_not_lost(self):
+		from huf.ai.flow.triggers import wake_due_waits
+
+		_out, child, _enq = self._wait_for_child()
+		with patch("frappe.enqueue"), patch("huf.ai.flow.engine._acquire_run_lock", return_value=False):
+			flow_engine._complete_flow_run(frappe.get_doc("Flow Run", child))
+		parent = self._reload()
+		self.assertEqual(parent.status, "Waiting Timer")
+		self.assertIsNotNone(parent.resume_at)  # handed to the sweeper
+		with patch("frappe.enqueue"):
+			self.assertIn(parent.name, wake_due_waits(now=datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(minutes=1)))
+		again = self._call(run=self._reload(), flow_id=self.child_flow.name, mode="wait")
+		self.assertEqual(again["status"], "success")
 
 	def test_child_failure_routes_on_error(self):
 		_out, child, _enq = self._wait_for_child()

@@ -39,10 +39,8 @@ class TestWaitResumeApi(IntegrationTestCase):
 			}
 		).insert(ignore_permissions=True)
 		self._docs.append(("Flow Run", self.run.name))
-		out = park.park_run(
-			self.run, {"id": "w1", "type": "wait"}, ParkRequest(reason="wait", resume_at=None, token=True)
-		)
-		self.token = out.extra["token"]
+		park.park_run(self.run, {"id": "w1", "type": "wait"}, ParkRequest(reason="wait", resume_at=None, token=True))
+		self.token = park.resume_token(self.run)
 
 	def tearDown(self):
 		frappe.set_user("Administrator")
@@ -115,3 +113,24 @@ class TestWaitResumeApi(IntegrationTestCase):
 		self.assertEqual(enq.call_args.kwargs["queue"], "short")
 		with self.assertRaises(frappe.ValidationError):
 			actions.continue_waiting_run(self.run.name)
+
+	def test_resume_link_for_editors_works_once(self):
+		link = actions.get_resume_link(self.run.name)
+		self.assertIn(self.token, link["url"])
+		self.assertIn("resume_waiting_run", link["url"])
+		out, _ = self._resume(token=self.token)
+		self.assertEqual(out, {"status": "resumed"})
+		with self.assertRaises(frappe.ValidationError):
+			actions.get_resume_link(self.run.name)
+
+	def test_resume_link_requires_write(self):
+		user = make_user(roles=("Huf User",))
+		self._docs.append(("User", user.name))
+		frappe.set_user(user.name)
+		with self.assertRaises(frappe.PermissionError):
+			actions.get_resume_link(self.run.name)
+
+	def test_refusal_copy(self):
+		with self.assertRaises(frappe.PermissionError) as cm:
+			self._resume(token="wrong")
+		self.assertIn("already been used or is not valid", str(cm.exception))

@@ -9,7 +9,7 @@
  */
 
 import { announceRunChanged } from '@/lib/flow-run/runChanged';
-import { cancelFlowRun as apiCancelFlowRun, continueWaitingRun as apiContinueWaitingRun } from './flow/flowRunActionsApi';
+import { cancelFlowRun as apiCancelFlowRun, continueWaitingRun as apiContinueWaitingRun, getResumeLink as apiGetResumeLink } from './flow/flowRunActionsApi';
 import { Flow, FlowMetadata, FlowNode, FlowEdge, FlowStatus } from '../types/flow.types';
 import {
   getFlowDefinitions,
@@ -262,6 +262,10 @@ class FlowService {
 
   async continueWaitingRun(flowRunId: string) {
     return apiContinueWaitingRun(flowRunId);
+  }
+
+  async getResumeLink(flowRunId: string) {
+    return apiGetResumeLink(flowRunId);
   }
 
   // ─── Local-only mutation helpers (update cache, notify) ────────────

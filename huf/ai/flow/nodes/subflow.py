@@ -13,6 +13,8 @@ Cancelling a parent that waits for a child cancels that child too.
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
+from types import SimpleNamespace
 
 import frappe
 
@@ -63,7 +65,10 @@ def exec_flow_call(flow_run, node: dict, config: dict, settings: dict, context) 
 	waiting = park.is_reentry(flow_run, node)
 	if waiting:
 		engine._transition_run(flow_run, {"waiting": None}, from_statuses=("Running",))
-		woke = (waiting.get("woke") or {}).get("payload") or {}
+		woke = waiting.get("woke") or {}
+		# woken by anything but the child itself (the sweeper fallback, "Continue now"): read the child's own row
+		woke = woke.get("payload") if woke.get("reason") == "child_done" else _child_result((waiting.get("extra") or {}).get("child"))
+		woke = woke or {}
 		if woke.get("status") != "Success":
 			return _failed(woke.get("error") or f"The flow this step ran did not finish ({woke.get('status') or 'unknown'}).")
 		return {"status": "success", "output": woke.get("output")}
@@ -111,6 +116,13 @@ def _child_output(child_run):
 	return None
 
 
+def _child_result(child_name: str | None) -> dict:
+	row = frappe.db.get_value("Flow Run", child_name, ["name", "status", "last_error"], as_dict=True) if child_name else None
+	if not row:
+		return {"status": None}
+	return {"status": row.status, "error": row.last_error, "output": _child_output(row) if row.status == "Success" else None}
+
+
 def on_child_finished(child_run, status: str, error: str | None = None) -> None:
 	"""Called by the engine when a run reaches Success / Failed / Cancelled: wake the parent that waits for it."""
 	parent = getattr(child_run, "parent_run", None) or frappe.db.get_value("Flow Run", child_run.name, "parent_run")
@@ -125,11 +137,17 @@ def on_child_finished(child_run, status: str, error: str | None = None) -> None:
 			return  # fire-and-forget, or the parent has moved on
 		payload = {"status": status, "error": error, "output": _child_output(child_run) if status == "Success" else None}
 		try:
-			park.wake_run(parent, "child_done", payload)
+			woken = park.wake_run(parent, "child_done", payload)
 		except frappe.ValidationError:  # output too large to carry
 			payload["output"] = None
 			payload["error"] = payload["error"] or "The other flow's result is too large to pass back."
-			park.wake_run(parent, "child_done", payload)
+			woken = park.wake_run(parent, "child_done", payload)
+		if not woken:
+			# the parent's worker still holds its run lock (a quick child can finish before the parent's worker lets
+			# go): leave the wake to the minute sweeper, which re-reads the child's result on re-entry
+			from huf.ai.flow.engine import _transition_run
+
+			_transition_run(SimpleNamespace(name=parent), {"resume_at": datetime.now(timezone.utc).replace(tzinfo=None)}, from_statuses=(park.WAIT_STATUS,))
 	except Exception:
 		frappe.log_error(title="Flow sub-flow completion hook")
 

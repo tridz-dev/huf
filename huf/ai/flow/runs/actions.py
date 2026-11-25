@@ -42,3 +42,22 @@ def continue_waiting_run(flow_run_id: str) -> dict:
 		status = frappe.db.get_value("Flow Run", flow_run_id, "status")
 		frappe.throw(_("This run is {0}, so it is not waiting on a timer.").format(status))
 	return {"flow_run_id": flow_run_id, "status": frappe.db.get_value("Flow Run", flow_run_id, "status")}
+
+
+@frappe.whitelist(methods=["POST"])
+def get_resume_link(flow_run_id: str) -> dict:
+	"""The single-use link that continues a run parked on a resume-mode wait. Needs permission to edit THE FLOW."""
+	require_run_access(flow_run_id, "write", "write", _("Only people who can edit this flow can see its resume link."))
+
+	from urllib.parse import urlencode
+
+	from frappe.utils import get_url
+
+	from huf.ai.flow import park
+
+	run = frappe.get_doc("Flow Run", flow_run_id)
+	token = park.resume_token(run) if run.status == park.WAIT_STATUS else None
+	if not token:
+		frappe.throw(_("This run is not waiting for its resume link."))
+	query = urlencode({"flow_run": run.name, "token": token})
+	return {"url": get_url(f"/api/method/huf.ai.flow.api.resume_waiting_run?{query}")}

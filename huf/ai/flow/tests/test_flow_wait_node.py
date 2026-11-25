@@ -131,7 +131,8 @@ class TestWaitNode(IntegrationTestCase):
 		node = self._node(mode="resume", resume={"timeout_ms": 60000, "timeout_next": "late"})
 		out = self._run(node)
 		self.assertTrue(out.is_paused)
-		self.assertIn("token", out.extra)
+		self.run_doc.reload()
+		self.assertTrue(park.resume_token(self.run_doc))
 		self.assertTrue(self._wake("elapsed"))
 		self.assertEqual(self._reenter(node)["next_node_id"], "late")
 

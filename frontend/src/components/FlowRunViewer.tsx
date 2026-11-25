@@ -6,6 +6,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '
 import { flowService } from '../services/flowService';
 import { Button } from './ui/button';
 import { toast } from '@/lib/toast';
+import { copyText } from '@/lib/clipboard';
 import { useOptionalFlowContext } from '../contexts/FlowContext';
 import { useSiteTimezone } from '@/lib/serverTime';
 import { useFlowRunDetail } from '@/hooks/flow/useFlowRunDetail';
@@ -137,6 +138,17 @@ export function FlowRunViewer({ runId, onClose, onBack }: FlowRunViewerProps) {
         }
     };
 
+    const handleCopyResumeLink = async () => {
+        if (!runId) return;
+        try {
+            const { url } = await flowService.getResumeLink(runId);
+            if (await copyText(url)) toast.success('Resume link copied.');
+            else toast.error('Could not copy the resume link');
+        } catch (err) {
+            toast.error('Could not copy the resume link', { description: humanizeFlowError(err) });
+        }
+    };
+
     const handleContinueNow = async () => {
         if (!runId) return;
         try {
@@ -215,7 +227,7 @@ export function FlowRunViewer({ runId, onClose, onBack }: FlowRunViewerProps) {
                             <RunError reason={plainRunError(run.last_error)} canManage={canManage} />
                         )}
 
-                        <RunStatusBanner run={run} canManage={canManage} onStop={handleStop} onCancel={handleCancel} onContinue={handleContinueNow} />
+                        <RunStatusBanner run={run} canManage={canManage} onStop={handleStop} onCancel={handleCancel} onContinue={handleContinueNow} onCopyResumeLink={handleCopyResumeLink} />
 
                         <RunWaitingCard
                             run={run}

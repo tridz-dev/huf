@@ -114,6 +114,17 @@ describe('simulated output on a later step', () => {
 describe('waiting run actions', () => {
   const waiting = (over: Partial<FlowRunDetail> = {}) => run({ status: 'Waiting Timer', stale: false, waiting: { resume_at: '2030-01-31T09:00:00' }, ...over });
 
+  it('a resume-link wait offers Copy resume link; other waits do not', () => {
+    const copy = vi.fn();
+    const linkWait = waiting({ waiting: { resume_at: null, extra: { mode: 'resume', wait_for: 'token' } } });
+    const { unmount } = render(<RunStatusBanner run={linkWait} canManage onStop={vi.fn()} onCancel={vi.fn()} onContinue={vi.fn()} onCopyResumeLink={copy} />);
+    fireEvent.click(screen.getByTestId('flow-run-copy-resume-link'));
+    expect(copy).toHaveBeenCalled();
+    unmount();
+    render(<RunStatusBanner run={waiting()} canManage onStop={vi.fn()} onCancel={vi.fn()} onContinue={vi.fn()} onCopyResumeLink={copy} />);
+    expect(screen.queryByTestId('flow-run-copy-resume-link')).toBeNull();
+  });
+
   it('a timer wait offers Continue now and Cancel run, each behind a confirm', () => {
     const cancel = vi.fn();
     const cont = vi.fn();
