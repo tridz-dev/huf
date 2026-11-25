@@ -44,6 +44,19 @@ export const appNodeTypesLoaded = (): boolean => cached !== null;
 export const getAppNodeType = (type: unknown): AppNodeType | undefined =>
   typeof type === 'string' ? cached?.find((t) => t.type === type) : undefined;
 
+const BUILTIN_STEP_PREFIXES = new Set(['agent', 'tool', 'router', 'doc', 'flow', 'state', 'code', 'member', 'trigger']);
+
+/** The words shown when a step's app is gone: `{app}` is the part of the step type before the dot. */
+export const appMissingMessage = (app: string): string =>
+  `This step comes from ${app}, which is not installed on this site. Remove the step or install the app.`;
+
+/** An app step whose type is not in the loaded catalog (its app was removed): the app's name, else null. */
+export function missingAppStep(backendType: unknown): { app: string } | null {
+  if (!appNodeTypesLoaded() || typeof backendType !== 'string' || getAppNodeType(backendType)) return null;
+  const app = backendType.split('.')[0];
+  return backendType.includes('.') && app && !BUILTIN_STEP_PREFIXES.has(app) ? { app } : null;
+}
+
 const BUILTIN_CATEGORIES = new Set<ActionOption['category']>(['agent', 'control', 'people', 'data', 'apps', 'advanced']);
 
 /** Palette entries for app step types: they sit in their own category when it matches one, else under Apps. */

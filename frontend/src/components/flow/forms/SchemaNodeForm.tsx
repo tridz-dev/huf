@@ -1,6 +1,6 @@
 import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
 import { fromTextRefs, toTextRefs } from '@/lib/flow-data/textRefs';
-import { getAppNodeType } from '@/lib/flow-graph/appNodeTypes';
+import { appMissingMessage, getAppNodeType, missingAppStep } from '@/lib/flow-graph/appNodeTypes';
 import type { SchemaProp } from '@/services/flow/nodeTypesApi';
 import { Input } from '../../ui/input';
 import { Label } from '../../ui/label';
@@ -139,7 +139,7 @@ export function SchemaNodeForm({ nodeId, cfg, patch, f, Err, title }: ActionForm
   if (!def) {
     return (
       <div role="alert" className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-xs text-destructive" data-testid="flow-schema-missing">
-        This step comes from an app that is not installed on this site. Remove the step or install the app.
+        {appMissingMessage(missingAppStep(cfg.backend_type)?.app ?? 'an app')}
       </div>
     );
   }

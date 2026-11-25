@@ -9,7 +9,7 @@ import { branchHandlesFor } from '../flow/flowBranches';
 import { cronProblem } from './flowSchedule';
 import { secretProblem } from './flowWebhookUi';
 import { requiredInputsFor } from '../flow/flowToolSchemas';
-import { getAppNodeType, schemaRequiredIssues } from './appNodeTypes';
+import { appMissingMessage, getAppNodeType, missingAppStep, schemaRequiredIssues } from './appNodeTypes';
 import { edgeRoute } from '../../services/flowSerializer';
 import { TRIGGER_TO_NODE_TYPE } from '../../services/flow/serializerTables';
 import { gatewayTriggerIssues } from '../flow-gateway/gatewayProblems';
@@ -294,6 +294,8 @@ export function validateNode(node: NodeLike, edges: EdgeLike[]): FlowIssue[] {
       const type = c.backend_type;
       const def = getAppNodeType(type);
       if (def) for (const i of schemaRequiredIssues(def.config_schema, c)) add(i.field, i.message);
+      const gone = missingAppStep(type);
+      if (gone) add('type', appMissingMessage(gone.app));
       break;
     }
     default:
