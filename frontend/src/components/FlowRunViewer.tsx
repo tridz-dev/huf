@@ -29,7 +29,7 @@ import { RunDetailsFold } from './flow/run/RunDetailsFold';
 import { RunInputBlocks } from './flow/run/RunInputBlocks';
 import { RunError } from './flow/run/RunError';
 import { plainRunError } from '@/lib/flow-run/story/runErrors';
-import { stoppedByPerson } from '@/lib/flow-run/story/runStatus';
+import { isResumeWait, stoppedByPerson } from '@/lib/flow-run/story/runStatus';
 
 interface FlowRunViewerProps {
     runId: string | null;
@@ -215,7 +215,7 @@ export function FlowRunViewer({ runId, onClose, onBack }: FlowRunViewerProps) {
                     <div className="space-y-5 pb-6">
                         <div data-testid="flow-run-headline">
                             <div className="flex flex-wrap items-center gap-2">
-                                <RunStatusPill status={run.status} stale={run.stale} lapsed={run.approval_lapsed} />
+                                <RunStatusPill status={run.status} stale={run.stale} lapsed={run.approval_lapsed} resumeWait={isResumeWait(run)} />
                                 {run.outcome && <OutcomeChip outcome={run.outcome} />}
                                 {run.run_mode === 'Test' && <TestRunChip label="Test run" testId="flow-run-test-pill" />}
                             </div>

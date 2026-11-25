@@ -6,7 +6,13 @@ export interface RunStatusInput {
   stale?: boolean;
   /** A code approval behind a Waiting Code run has passed its expiry. */
   lapsed?: boolean;
+  /** A Waiting Timer run parked on a Wait step that only a person or its resume link continues (no time set). */
+  resumeWait?: boolean;
 }
+
+/** Whether the run is parked on a Wait step in "until someone continues it" mode. */
+export const isResumeWait = (run: { status?: string | null; waiting?: Record<string, unknown> | null } | null | undefined): boolean =>
+  run?.status === 'Waiting Timer' && (run.waiting?.extra as { mode?: unknown } | undefined)?.mode === 'resume';
 
 export interface RunStatusPill {
   kind: StatusKind;
@@ -15,7 +21,7 @@ export interface RunStatusPill {
 }
 
 /** A stored run status in the one status set: Queued, Running, Waiting..., Finished, Failed, Stuck. */
-export function runStatusPill({ status, stale, lapsed }: RunStatusInput): RunStatusPill {
+export function runStatusPill({ status, stale, lapsed, resumeWait }: RunStatusInput): RunStatusPill {
   if (lapsed && status === 'Waiting Code') return { kind: 'expired' };
   if (stale && (status === 'Queued' || status === 'Running')) return { kind: 'stuck' };
   switch (status) {
@@ -30,7 +36,7 @@ export function runStatusPill({ status, stale, lapsed }: RunStatusInput): RunSta
     case 'Waiting Code':
       return { kind: 'waiting_review' };
     case 'Waiting Timer':
-      return { kind: 'waiting_timer' };
+      return resumeWait ? { kind: 'waiting_timer', label: 'Waiting to be continued' } : { kind: 'waiting_timer' };
     case 'Cancelled':
       return { kind: 'cancelled' };
     case 'Waiting User':
