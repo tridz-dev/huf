@@ -68,9 +68,15 @@ jobs:
       # 11-test setUpClass failure cluster (ConnectionRefusedError on
       # 127.0.0.1:13000) that looked like a fixture bug but was a missing
       # service.
+      # Frappe pin (stopgap): v16.61.0+ ships a core "Flow Run" DocType whose
+      # hooks collide with Huf's own "Flow Run" permission hooks, breaking
+      # flow-run access tests. Frappe 16.61 adds core DocType "Flow Run"; Huf
+      # Flow Run permission hooks collide; real fix = rename, tracked in track
+      # FlowChannelsTestFailures (Tracks/safwan-erooth.FlowChannelsTestFailures).
+      # Remove this pin once the rename lands.
       - name: Init bench
         run: |
-          bench init --skip-redis-config-generation --skip-assets --python "$(which python)" frappe-bench
+          bench init --skip-redis-config-generation --skip-assets --frappe-branch v16.60.2 --python "$(which python)" frappe-bench
           cd frappe-bench
           bench set-mariadb-host 127.0.0.1
           bench set-config -g db_password root
