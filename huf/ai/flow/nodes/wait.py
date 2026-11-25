@@ -123,7 +123,7 @@ def exec_wait(flow_run, node: dict, config: dict, settings: dict):
 
 	_persist_context(flow_run, ctx, settings)
 	if flow_run.member_key:
-		flow_member.set_status(flow_run.flow_id, flow_run.member_key, "Waiting")
+		flow_member.set_status(flow_run.flow_id, flow_run.member_key, "Waiting", node.get("id"))
 	return park.park_run(
 		flow_run,
 		node,

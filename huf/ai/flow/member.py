@@ -91,8 +91,14 @@ def upsert_member(flow: str, key: str, run: str | None = None) -> str:
 	return name
 
 
-def set_status(flow: str, key: str, status: str) -> None:
-	frappe.db.set_value(DOCTYPE, member_name(flow, key), "status", status, update_modified=False)
+def set_status(flow: str, key: str, status: str, node_id: str | None = None) -> None:
+	"""Set the person's status; ``node_id`` is the step they are waiting at (cleared for any other status)."""
+	frappe.db.set_value(
+		DOCTYPE,
+		member_name(flow, key),
+		{"status": status, "current_node_id": node_id if status == "Waiting" else None},
+		update_modified=False,
+	)
 
 
 def find_waiting_reply_run(flow: str, key: str) -> str | None:

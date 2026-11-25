@@ -71,6 +71,13 @@ class TestFlowMemberState(IntegrationTestCase):
 		with self.assertRaises(frappe.DuplicateEntryError):
 			frappe.get_doc({"doctype": "Flow Member State", "flow": self.flow_id, "member_key": "k1"}).insert(ignore_permissions=True)
 
+	def test_waiting_status_remembers_the_step_and_other_statuses_forget_it(self):
+		member.upsert_member(self.flow_id, "k1", None)
+		member.set_status(self.flow_id, "k1", "Waiting", "wait_step")
+		self.assertEqual(member.get_member(self.flow_id, "k1")["current_node_id"], "wait_step")
+		member.set_status(self.flow_id, "k1", "Active")
+		self.assertFalse(member.get_member(self.flow_id, "k1")["current_node_id"])
+
 	def test_member_root_resolves_in_templates(self):
 		member.upsert_member(self.flow_id, "k1", None)
 		member.set_vars(self.flow_id, "k1", {"plan": "gold"})
