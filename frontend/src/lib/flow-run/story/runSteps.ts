@@ -77,6 +77,7 @@ function waitDoneSentence(output: Record<string, unknown>): string {
     case 'continued':
     case 'resumed': return 'Continued by someone';
     case 'timeout': return 'Gave up waiting';
+    case 'simulated': return 'Skipped the wait in a test run';
     default: return at ? `Waited until ${at}` : 'Waited';
   }
 }

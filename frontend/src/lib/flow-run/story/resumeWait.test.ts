@@ -34,6 +34,7 @@ describe('step words for the new steps', () => {
     expect(out('reply')).toBe('Continued by a reply');
     expect(out('continued')).toBe('Continued by someone');
     expect(out('timeout')).toBe('Gave up waiting');
+    expect(out('simulated')).toBe('Skipped the wait in a test run');
   });
 
   it('a parked wait says what it waits for', () => {
