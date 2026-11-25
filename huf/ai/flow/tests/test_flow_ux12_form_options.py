@@ -103,3 +103,68 @@ class TestApproverCheckOnPublish(IntegrationTestCase):
 		without = validate_flow(defn, "publish", check_people=False)
 		self.assertTrue(any(i.code == "UNKNOWN_APPROVER" for i in with_people.issues))
 		self.assertFalse(any(i.code == "UNKNOWN_APPROVER" for i in without.issues))
+
+
+class TestUnknownFieldInUpdateDocument(IntegrationTestCase):
+	def _node(self, values):
+		return {"id": "u", "type": "doc.update", "config": {"doctype": "ToDo", "name": "x", "values": values}}
+
+	def test_typo_is_named_with_the_document_type(self):
+		from huf.ai.graph.validation.flow_validation import _unknown_field_issues
+
+		issues = _unknown_field_issues(self._node({"description": "ok", "nope_field": "1"}))
+		self.assertEqual([i.message for i in issues], ["nope_field is not a field of ToDo."])
+		self.assertEqual(issues[0].field, "config.values")
+
+	def test_real_fields_and_other_steps_pass(self):
+		from huf.ai.graph.validation.flow_validation import _unknown_field_issues
+
+		self.assertEqual(_unknown_field_issues(self._node({"description": "ok", "status": "Open"})), [])
+		self.assertEqual(_unknown_field_issues({"id": "g", "type": "doc.get", "config": {"doctype": "ToDo", "values": {"zz": 1}}}), [])
+
+
+class TestRunAnotherFlowChecks(IntegrationTestCase):
+	def _node(self, target):
+		return {"id": "c", "type": "flow.call", "config": {"flow_id": target, "input": {}, "mode": "wait"}}
+
+	def test_self_call_is_refused(self):
+		from huf.ai.graph.validation.flow_validation import _flow_call_issues
+
+		issues = _flow_call_issues(self._node("me"), "me")
+		self.assertEqual([i.message for i in issues], ["A flow cannot run itself."])
+
+	def test_unpublished_target_names_the_flow(self):
+		from huf.ai.graph.validation.flow_validation import _flow_call_issues
+
+		name = frappe.db.get_value("Flow Definition", {"status": ["!=", "Active"]}, "name")
+		if not name:
+			self.skipTest("no unpublished flow on this site")
+		label = frappe.db.get_value("Flow Definition", name, "flow_name")
+		issues = _flow_call_issues(self._node(name), "other")
+		self.assertEqual([i.message for i in issues], [f"Publish {label} before running it from here."])
+
+	def test_published_or_missing_target_passes(self):
+		from huf.ai.graph.validation.flow_validation import _flow_call_issues
+
+		self.assertEqual(_flow_call_issues(self._node("does-not-exist"), "other"), [])
+
+
+class TestLoopBodyChecks(IntegrationTestCase):
+	def test_wait_and_retry_inside_a_loop_are_refused_with_spec_words(self):
+		from huf.ai.graph.validation.flow_validation import _loop_body_issues
+
+		nodes = [
+			{"id": "l", "type": "foreach", "config": {"body": ["w", "t"]}},
+			{"id": "w", "type": "wait", "config": {}},
+			{"id": "t", "type": "tool.call", "config": {"retry": {"attempts": 3, "backoff": "fixed", "delay_seconds": 60}}},
+			{"id": "o", "type": "wait", "config": {}},
+		]
+		issues = _loop_body_issues(nodes)
+		self.assertEqual(
+			[(i.node_id, i.message) for i in issues],
+			[
+				("w", "A Wait step cannot be inside Repeat for each item. Move it outside the loop."),
+				("t", "Trying again is not available inside Repeat for each item."),
+			],
+		)
+

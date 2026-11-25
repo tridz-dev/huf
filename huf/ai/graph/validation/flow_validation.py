@@ -113,7 +113,7 @@ def _issue_field(err: ValidationError) -> str | None:
 	return err.field
 
 
-def _unset_and_blank_issues(defn: dict, check_people: bool = True) -> list[FlowIssue]:
+def _unset_and_blank_issues(defn: dict, check_people: bool = True, flow_id: str | None = None) -> list[FlowIssue]:
 	"""Things the schema cannot see: no trigger, a trigger nobody chose, a required text that is only spaces."""
 	from huf.huf.doctype.flow_definition.activation_rules import REQUIRED_CONFIG_KEYS, UNSET_TRIGGER_TYPE, _is_blank
 
@@ -121,6 +121,7 @@ def _unset_and_blank_issues(defn: dict, check_people: bool = True) -> list[FlowI
 	nodes = [n for n in (defn.get("nodes") or []) if isinstance(n, dict)]
 	if not any(str(n.get("type", "")).startswith("trigger.") for n in nodes):
 		issues.append(FlowIssue(None, "trigger", "NO_TRIGGER", _("Add a trigger so the flow knows when to start.")))
+	issues.extend(_loop_body_issues(nodes))
 	for n in nodes:
 		if n.get("type") == UNSET_TRIGGER_TYPE:
 			issues.append(FlowIssue(n.get("id"), "type", "UNSET_TRIGGER", _("Choose what starts this flow.")))
@@ -133,6 +134,30 @@ def _unset_and_blank_issues(defn: dict, check_people: bool = True) -> list[FlowI
 				)
 		if check_people:
 			issues.extend(_unknown_approver_issues(n))
+			issues.extend(_unknown_field_issues(n))
+			issues.extend(_flow_call_issues(n, flow_id))
+	return issues
+
+
+def _loop_body_issues(nodes: list[dict]) -> list[FlowIssue]:
+	"""A Wait step, or a step set to try again, cannot sit inside "Repeat for each item" (the loop runs its steps inline)."""
+	from huf.ai.flow.nodes.retry import policy_of
+
+	by_id = {n.get("id"): n for n in nodes}
+	issues: list[FlowIssue] = []
+	for loop in nodes:
+		if loop.get("type") != "foreach":
+			continue
+		config = loop.get("config") if isinstance(loop.get("config"), dict) else {}
+		body = config.get("body") if isinstance(config.get("body"), list) else []
+		for node_id in body:
+			node = by_id.get(node_id)
+			if not isinstance(node, dict):
+				continue
+			if node.get("type") == "wait":
+				issues.append(FlowIssue(node_id, "type", "WAIT_IN_LOOP", _("A Wait step cannot be inside Repeat for each item. Move it outside the loop.")))
+			elif policy_of(node):
+				issues.append(FlowIssue(node_id, "retry", "RETRY_IN_LOOP", _("Trying again is not available inside Repeat for each item.")))
 	return issues
 
 
@@ -157,7 +182,36 @@ def _unknown_approver_issues(node: dict) -> list[FlowIssue]:
 	return issues
 
 
-def validate_flow(defn, mode: str = MODE_PUBLISH, *, classify_tool=None, check_people: bool = True) -> FlowValidation:
+def _unknown_field_issues(node: dict) -> list[FlowIssue]:
+	"""An "Update document" step may only change fields the document type has (a typo would fail the run)."""
+	config = node.get("config") if isinstance(node.get("config"), dict) else {}
+	values = config.get("values")
+	doctype = config.get("doctype")
+	if node.get("type") != "doc.update" or not isinstance(values, dict) or not isinstance(doctype, str) or not frappe.db.exists("DocType", doctype):
+		return []
+	known = {f.fieldname for f in frappe.get_meta(doctype).fields}
+	return [
+		FlowIssue(node.get("id"), "config.values", "UNKNOWN_FIELD", _("{0} is not a field of {1}.").format(key, doctype))
+		for key in values
+		if key not in known
+	]
+
+
+def _flow_call_issues(node: dict, flow_id: str | None) -> list[FlowIssue]:
+	"""A "Run another flow" step cannot run its own flow, and the flow it runs must be published."""
+	config = node.get("config") if isinstance(node.get("config"), dict) else {}
+	target = config.get("flow_id")
+	if node.get("type") != "flow.call" or not isinstance(target, str) or not target:
+		return []
+	if flow_id and target == flow_id:
+		return [FlowIssue(node.get("id"), "config.flow_id", "FLOW_CALLS_ITSELF", _("A flow cannot run itself."))]
+	row = frappe.db.get_value("Flow Definition", target, ["flow_name", "status"], as_dict=True)
+	if row and row.status != "Active":
+		return [FlowIssue(node.get("id"), "config.flow_id", "FLOW_NOT_PUBLISHED", _("Publish {0} before running it from here.").format(row.flow_name or target))]
+	return []
+
+
+def validate_flow(defn, mode: str = MODE_PUBLISH, *, classify_tool=None, check_people: bool = True, flow_id: str | None = None) -> FlowValidation:
 	"""Check ``defn`` (a parsed flow definition) in ``mode`` (``"draft"`` or ``"publish"``).
 
 	Always returns a result; read ``result.ok`` for "passes in this mode", ``result.errors`` for the structural
@@ -182,7 +236,7 @@ def validate_flow(defn, mode: str = MODE_PUBLISH, *, classify_tool=None, check_p
 
 	for err in full.errors:
 		add(FlowIssue(err.node_id, _issue_field(err), err.code, describe_error(defn, err)))
-	for issue in _unset_and_blank_issues(defn, check_people):
+	for issue in _unset_and_blank_issues(defn, check_people, flow_id):
 		# The schema already reports an empty required setting; do not list it twice.
 		if issue.code == "BLANK" and (issue.node_id, _leaf(issue.field)) in seen:
 			continue
@@ -228,4 +282,4 @@ def validate_flow_definition(flow_id: str, mode: str = MODE_DRAFT) -> dict:
 	if not raw:
 		frappe.throw(_("This flow has no steps yet."))
 	defn = load_definition(raw)
-	return validate_flow(defn, mode).to_dict(defn)
+	return validate_flow(defn, mode, flow_id=flow_id).to_dict(defn)

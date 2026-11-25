@@ -269,7 +269,7 @@ class FlowDefinition(Document):
 			)
 		# Whatever else keeps the flow from running (a loop of links, a value from a step that has not run yet,
 		# a short secret): the same publish-mode check a run makes.
-		finished = validate_flow(defn, MODE_PUBLISH)
+		finished = validate_flow(defn, MODE_PUBLISH, flow_id=self.name)
 		if not finished.ok:
 			frappe.throw(
 				_("Flow cannot be Active: {0}").format(" ".join(finished.messages(defn))),
