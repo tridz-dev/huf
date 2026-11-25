@@ -3,7 +3,7 @@
  * "Add step" cards on the canvas; what used to follow the chosen spot moves down one row so the new card never sits on it.
  */
 import { addActionStep, computeOpenEnds } from '../flow-graph/flowCanvasGraph';
-import { branchHandlesFor } from '../flow/flowBranches';
+import { branchHandlesFor, isPathRouter } from '../flow/flowBranches';
 import type { ActionConfig, FlowEdgeRoute } from '../../types/flow.types';
 import type { Graph } from './cloneSteps';
 
@@ -25,7 +25,7 @@ export function insertSpot(graph: Graph, selectedId: string | null): InsertSpot 
     const free = ends.find((o) => o.nodeId === selected.id);
     if (free) return { sourceId: selected.id, route: free.route };
     const cfg = selected.data.actionConfig as Cfg;
-    if (cfg?.type === 'router') return { sourceId: selected.id, route: 'option' };
+    if (isPathRouter(cfg?.type)) return { sourceId: selected.id, route: 'option' };
     const first = branchHandlesFor(cfg?.type, cfg)[0];
     return { sourceId: selected.id, route: first?.route ?? 'next' };
   }

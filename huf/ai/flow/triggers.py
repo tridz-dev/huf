@@ -191,12 +191,20 @@ def start_flow_run(
 
 	The row is created for the trusted dispatcher (activation of the flow by its owner already
 	authorised the trigger); execution identity is ``user``. When the graph has several triggers the
-	run starts at the one that fired (``trigger_node_id``).
+	run starts at the one that fired (``trigger_node_id``). The trigger's entry policy may instead resume the member's
+	waiting run (that run is returned) or skip the start (``None``).
 	"""
 	from huf.ai.flow import engine
+	from huf.ai.flow.runs import entry
 
 	if user:
 		frappe.set_user(user)
+	if trigger_node_id:
+		early = entry.apply_entry_policy(flow_id, trigger_node_id, trigger_type, payload)
+		if early == "skip":
+			return None
+		if early:
+			return frappe.get_doc("Flow Run", early)
 	flow_run = engine.create_flow_run(
 		flow_id=flow_id, payload=payload, trigger_type=trigger_type, ignore_permissions=True
 	)

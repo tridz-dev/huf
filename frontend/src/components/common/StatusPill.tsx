@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, CircleDot, Clock, Loader2, XCircle, type LucideIcon } from 'lucide-react';
+import { AlertTriangle, Ban, CheckCircle2, CircleDot, Clock, Hourglass, Loader2, XCircle, type LucideIcon } from 'lucide-react';
 import { Badge, type BadgeProps } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import type { FlowStatus } from '@/types/flow.types';
@@ -18,6 +18,8 @@ export type StatusKind =
   | 'running'
   | 'waiting_approval'
   | 'waiting_review'
+  | 'waiting_timer'
+  | 'cancelled'
   | 'finished'
   | 'failed'
   | 'stuck'
@@ -41,8 +43,10 @@ export const STATUS_SPECS: Record<StatusKind, StatusSpec> = {
   running: { label: 'Running', variant: 'pill-info', icon: Loader2, spin: true },
   waiting_approval: { label: 'Waiting for approval', variant: 'pill-warning', icon: Clock },
   waiting_review: { label: 'Waiting for code review', variant: 'pill-warning', icon: Clock },
+  waiting_timer: { label: 'Waiting', variant: 'pill-warning', icon: Hourglass },
   finished: { label: 'Finished', variant: 'pill-success', icon: CheckCircle2 },
   failed: { label: 'Failed', variant: 'pill-danger', icon: XCircle },
+  cancelled: { label: 'Cancelled', variant: 'pill-neutral', icon: Ban },
   stuck: { label: 'Stuck', variant: 'pill-warning', icon: AlertTriangle },
   approved: { label: 'Approved', variant: 'pill-success', icon: null },
   rejected: { label: 'Rejected', variant: 'pill-danger', icon: null },

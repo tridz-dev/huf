@@ -9,7 +9,7 @@
  */
 
 import { announceRunChanged } from '@/lib/flow-run/runChanged';
-import { cancelFlowRun as apiCancelFlowRun } from './flow/flowRunActionsApi';
+import { cancelFlowRun as apiCancelFlowRun, continueWaitingRun as apiContinueWaitingRun, getResumeLink as apiGetResumeLink } from './flow/flowRunActionsApi';
 import { Flow, FlowMetadata, FlowNode, FlowEdge, FlowStatus } from '../types/flow.types';
 import {
   getFlowDefinitions,
@@ -260,6 +260,14 @@ class FlowService {
     return apiCancelFlowRun(flowRunId);
   }
 
+  async continueWaitingRun(flowRunId: string) {
+    return apiContinueWaitingRun(flowRunId);
+  }
+
+  async getResumeLink(flowRunId: string) {
+    return apiGetResumeLink(flowRunId);
+  }
+
   // ─── Local-only mutation helpers (update cache, notify) ────────────
 
   /**
@@ -267,6 +275,11 @@ class FlowService {
    * Does NOT save to backend — used for local-only field updates
    * where the backend was already updated separately.
    */
+  /** The step that runs once after a failure no step routed (undefined = off); local until the flow is saved. */
+  setErrorHandler(id: string, next: string | undefined): Flow | null {
+    return this.updateFlowLocal(id, { errorHandler: next });
+  }
+
   private updateFlowLocal(id: string, updates: Partial<Flow>): Flow | null {
     const flow = this.flowCache.get(id);
     if (!flow) return null;

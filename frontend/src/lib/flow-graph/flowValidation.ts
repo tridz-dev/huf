@@ -9,6 +9,7 @@ import { branchHandlesFor } from '../flow/flowBranches';
 import { cronProblem } from './flowSchedule';
 import { secretProblem } from './flowWebhookUi';
 import { requiredInputsFor } from '../flow/flowToolSchemas';
+import { appMissingMessage, getAppNodeType, missingAppStep, schemaRequiredIssues } from './appNodeTypes';
 import { edgeRoute } from '../../services/flowSerializer';
 import { TRIGGER_TO_NODE_TYPE } from '../../services/flow/serializerTables';
 import { gatewayTriggerIssues } from '../flow-gateway/gatewayProblems';
@@ -51,14 +52,21 @@ export function nodeKind(node: NodeLike): string {
     case 'agent-run': return 'agent.run';
     case 'tool-call': return 'tool.call';
     case 'router': return 'router.llm';
+    case 'router-decision': return 'router.decision';
     case 'condition': return 'condition';
     case 'foreach': return 'foreach';
     case 'human.approval': return 'human.approval';
+    case 'wait': return 'wait';
     case 'transform': return 'transform';
     case 'state-get': return 'state.get';
     case 'state-set': return 'state.set';
     case 'state-delete': return 'state.delete';
     case 'doc-create': return 'doc.create';
+    case 'stop': return 'stop';
+    case 'doc-get': return 'doc.get';
+    case 'doc-update': return 'doc.update';
+    case 'flow-call': return 'flow.call';
+    case 'member-set': return 'member.set';
     case 'code-run': return 'code.run';
     default: return typeof t === 'string' ? t : 'unknown';
   }
@@ -95,6 +103,10 @@ export function recipientProblem(value: unknown): string | null {
     ? 'Enter a valid email address, like name@example.com.'
     : `"${bad[0]}" is not a valid email address. Separate several addresses with commas.`;
 }
+
+/** The longest a flow may wait (the server's default limit). */
+export const MAX_WAIT_DAYS = 365;
+const WAIT_UNIT_DAYS: Record<string, number> = { minutes: 1 / 1440, hours: 1 / 24, days: 1 };
 
 const asObj = (v: unknown): Cfg => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Cfg) : {});
 
@@ -150,6 +162,11 @@ export function validateNode(node: NodeLike, edges: EdgeLike[]): FlowIssue[] {
         add('tool_id', 'Choose what this step should do.');
         break;
       }
+      if (c.retry !== undefined) {
+        const r = asObj(c.retry);
+        if (typeof r.attempts !== 'number' || !Number.isInteger(r.attempts) || r.attempts < 2 || r.attempts > 10) add('retry.attempts', 'Tries must be between 2 and 10.');
+        if (typeof r.delay_seconds !== 'number' || r.delay_seconds < 60) add('retry.delay_seconds', 'The first wait must be at least 1 minute.');
+      }
       const input = asObj(c.input);
       const preset = TOOL_REQUIRED_INPUT[String(c.tool_id)];
       for (const [key, message] of preset ?? []) {
@@ -176,6 +193,17 @@ export function validateNode(node: NodeLike, edges: EdgeLike[]): FlowIssue[] {
       }
       break;
     }
+    case 'router.decision': {
+      const rules = out.filter((e) => edgeRoute(e as FlowEdge) === 'option');
+      if (rules.length === 0) add('options', 'Add at least one rule.');
+      else {
+        if (rules.some((e) => isBlank(asObj((e as { data?: unknown }).data).expression))) add('options', 'Write the check for this rule.');
+        const names = rules.map((e) => (typeof e.label === 'string' ? e.label.trim().toLowerCase() : '')).filter((n) => n !== '');
+        if (new Set(names).size !== names.length) add('options', 'Give each rule a different name.');
+      }
+      if (!out.some((e) => edgeRoute(e as FlowEdge) === 'default')) add('default', 'Choose where to go when no rule matches.');
+      break;
+    }
     case 'condition':
       if (isBlank(c.expression)) add('expression', "Add at least one rule.");
       missingBranches(node, out, c, add);
@@ -197,6 +225,22 @@ export function validateNode(node: NodeLike, edges: EdgeLike[]): FlowIssue[] {
       if (Array.isArray(c.details) && c.details.some((d) => typeof asObj(d).label === 'string' && String(asObj(d).label).length > 60)) add('details', 'A label is too long. Keep each label under 60 characters.');
       missingBranches(node, out, c, add);
       break;
+    case 'wait': {
+      const mode = c.mode;
+      if (mode === 'duration') {
+        const d = asObj(c.duration);
+        if (typeof d.value !== 'number' || !Number.isFinite(d.value) || d.value < 1) add('duration.value', 'Enter how long to wait.');
+        else if (d.value * (WAIT_UNIT_DAYS[String(d.unit)] ?? 1) > MAX_WAIT_DAYS) add('duration.value', `A wait can be at most ${MAX_WAIT_DAYS} days.`);
+      } else if (mode === 'until') {
+        if (isBlank(c.until)) add('until', 'Choose when to continue.');
+      } else if (mode === 'resume') {
+        const r = asObj(c.resume);
+        if (typeof r.timeout_ms === 'number' && r.timeout_ms > MAX_WAIT_DAYS * 86_400_000) add('resume.timeout_ms', `A wait can be at most ${MAX_WAIT_DAYS} days.`);
+        if (!r.timeout_ms && out.some((e) => edgeRoute(e as FlowEdge) === 'timeout')) add('resume.timeout_ms', 'Choose how long to wait before giving up.');
+      }
+      missingBranches(node, out, c, add);
+      break;
+    }
     case 'transform': {
       const spec = getTransformOp(c.op as string | undefined);
       if (!spec) {
@@ -218,6 +262,24 @@ export function validateNode(node: NodeLike, edges: EdgeLike[]): FlowIssue[] {
     case 'doc.create':
       if (isBlank(c.doctype)) add('doctype', 'Choose the kind of record to create.');
       break;
+    case 'stop':
+      if (isBlank(c.message)) add('message', 'Write the message to show when the flow stops.');
+      break;
+    case 'doc.get':
+      if (isBlank(c.doctype)) add('doctype', 'Choose a document type.');
+      else if (isBlank(c.name) && Object.keys(asObj(c.filters)).length === 0) add(c.filters !== undefined ? 'filters' : 'name', c.filters !== undefined ? 'Add at least one field to match.' : 'Choose which document to find.');
+      break;
+    case 'doc.update':
+      if (isBlank(c.doctype)) add('doctype', 'Choose a document type.');
+      if (isBlank(c.name)) add('name', 'Choose which document to update.');
+      if (Object.keys(asObj(c.values)).length === 0) add('values', 'Add at least one field to change.');
+      break;
+    case 'member.set':
+      if (Object.keys(asObj(c.vars)).length === 0) add('vars', 'Add at least one value to remember.');
+      break;
+    case 'flow.call':
+      if (isBlank(c.flow_id)) add('flow_id', 'Choose a flow to run.');
+      break;
     case 'code.run':
       if (isBlank(c.code)) add('code', 'Add the Python code to run.');
       else if (typeof c.code === 'string' && new TextEncoder().encode(c.code).length > MAX_CODE_BYTES) add('code', 'The code is too long. Keep it under 64 KB.');
@@ -227,6 +289,15 @@ export function validateNode(node: NodeLike, edges: EdgeLike[]): FlowIssue[] {
       }
       if (Object.keys(asObj(c.inputs)).some((k) => k.trim() === '')) add('inputs', 'Give every input a name.');
       break;
+    case 'unknown': {
+      // A step an installed app added: its own settings schema says what is required.
+      const type = c.backend_type;
+      const def = getAppNodeType(type);
+      if (def) for (const i of schemaRequiredIssues(def.config_schema, c)) add(i.field, i.message);
+      const gone = missingAppStep(type);
+      if (gone) add('type', appMissingMessage(gone.app));
+      break;
+    }
     default:
       break;
   }

@@ -88,6 +88,17 @@ export function buildPickerModel(nodes: FlowNode[], edges: Edge[], nodeId: strin
       doctype: server?.doctype ?? (trigger.data.triggerConfig as { doctype?: string } | undefined)?.doctype ?? null,
     });
   }
+  // A chat trigger knows who the run is about: what the flow remembers for that person is data too.
+  if (trigger && isGatewayKindId((trigger.data.triggerConfig as { type?: string } | undefined)?.type)) {
+    steps.push({
+      id: 'member', title: 'This person', chipTitle: 'This person', kind: 'step',
+      fields: [
+        { path: 'member.status', label: 'Where they are in the flow', type: 'text', sample: null },
+        { path: 'member.run_count', label: 'How many times they started it', type: 'number', sample: null },
+      ],
+      hasSample: false, source: 'none', root: 'member', canFetchLast: false,
+    });
+  }
   if (scope === 'loop-body' && nodeId) {
     // A loop's "result to collect": what the steps inside this loop produce, and the item being worked on.
     const loopNode = nodes.find((n) => n.id === nodeId);
@@ -189,7 +200,7 @@ export function describeChip(chip: Chip, model: PickerModel): ChipInfo {
     else if (root.startsWith('foreach')) step = model.steps.find((s) => s.kind === 'loop');
     else step = model.steps.find((s) => s.id === root);
   }
-  const nodeGone = !root.startsWith('foreach') && root !== 'input' && root !== 'trigger' && root !== 'row' && !model.nodes.some((n) => n.id === root);
+  const nodeGone = !root.startsWith('foreach') && root !== 'input' && root !== 'trigger' && root !== 'row' && root !== 'member' && !model.nodes.some((n) => n.id === root);
   if (nodeGone) return { label: tailLabel(ref) || 'Data', stepTitle: 'step deleted', sample: '', missing: true, opaque: false };
   if (known) {
     const { field } = known;

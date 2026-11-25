@@ -38,7 +38,7 @@ MODE_DRAFT = "draft"
 MODE_PUBLISH = "publish"
 
 #: JSON-schema keywords that only say "this setting is missing or empty": fine in a draft, fatal on publish.
-_UNFINISHED_KEYWORDS: frozenset[str] = frozenset({"required", "minLength", "minItems", "pattern"})
+_UNFINISHED_KEYWORDS: frozenset[str] = frozenset({"required", "minLength", "minItems", "minProperties", "pattern"})
 
 
 # --------------------------------------------------------------------------------------
@@ -58,6 +58,17 @@ def _node_defs_by_type(profile: str) -> dict[str, str]:
 			if const:
 				out[const] = name
 	return out
+
+
+def _app_node_schema(ntype) -> dict | None:
+	"""Schema of a step type an installed app registered (``huf_flow_nodes``): the common node shape plus the
+	app's own JSON Schema for ``config``. ``None`` when no installed app declares ``ntype``."""
+	from huf.ai.flow.catalog import node_registry
+
+	node_type = node_registry.get_type(ntype) if isinstance(ntype, str) else None
+	if node_type is None:
+		return None
+	return {"allOf": [{"$ref": "#/$defs/NodeCommon"}, {"properties": {"config": node_type.config_schema}}]}
 
 
 def _leaf_error(err):
@@ -83,6 +94,8 @@ def _is_unfinished(err, prefix: list) -> bool:
 		return leaf.instance == ""
 	if leaf.validator == "minItems":
 		return leaf.instance == []
+	if leaf.validator == "minProperties":
+		return leaf.instance == {}
 	return True
 
 
@@ -100,7 +113,12 @@ def _check_schema(graph: dict, profile: str, draft: bool = False) -> list[Valida
 			# definition that matches the node's own type instead.
 			node = graph["nodes"][path[1]]
 			ntype = node.get("type") if isinstance(node, dict) else None
-			if ntype not in node_defs:
+			node_schema = None
+			if ntype in node_defs:
+				node_schema = {"$ref": f"#/$defs/{node_defs[ntype]}"}
+			elif profile == "flow":
+				node_schema = _app_node_schema(ntype)
+			if node_schema is None:
 				errors.append(
 					ValidationError(
 						code="SCHEMA",
@@ -110,7 +128,7 @@ def _check_schema(graph: dict, profile: str, draft: bool = False) -> list[Valida
 					)
 				)
 				continue
-			node_validator = Draft202012Validator({"$defs": GRAPH_IR_SCHEMA["$defs"], "$ref": f"#/$defs/{node_defs[ntype]}"})
+			node_validator = Draft202012Validator({"$defs": GRAPH_IR_SCHEMA["$defs"], **node_schema})
 			for sub in sorted(node_validator.iter_errors(node), key=lambda e: [str(p) for p in e.path]):
 				full = path + list(sub.absolute_path)
 				if draft and _is_unfinished(sub, path):

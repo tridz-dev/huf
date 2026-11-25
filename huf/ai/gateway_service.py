@@ -2506,9 +2506,9 @@ def _start_flow_for_event(event, gateway) -> dict:
 
     attachments = _save_event_media(event, gateway)
     payload = _flow_trigger_payload(event, gateway, attachments)
-    skip_note, wants_voice = dispatch.gate_flow_start(event, gateway, payload)
-    if skip_note:
-        return dispatch.fall_through(event, gateway, skip_note)
+    early, wants_voice = dispatch.prepare_flow_start(event, gateway, payload)
+    if early:
+        return early
     if wants_voice:
         dispatch.add_transcript(payload, gateway)
     # Route authorisation already happened (enabled gateway, flow bound by an admin), so the run is

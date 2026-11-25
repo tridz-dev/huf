@@ -358,8 +358,8 @@ scheduler_events = {
         "huf.ai.gateway_service.purge_old_rejected_gateway_events",
         "huf.ai.gateway_service.cleanup_stale_access_entries",
         "huf.ai.flow.state.purge_expired",
-        # Leftover scratch folders of Execute code steps (a step removes its own; this is for killed workers).
-        "huf.ai.flow.code_node.purge_scratch",
+        "huf.ai.flow.runs.member.purge_inactive",
+        "huf.ai.flow.code_node.purge_scratch",  # leftover Execute-code scratch folders (killed workers)
         "huf.ai.whatsapp.send_keys.purge_expired",
         "huf.ai.secrets.purge_expired",
         "huf.ai.channels.commerce.catalog.sync_all_catalogs",
@@ -372,8 +372,8 @@ scheduler_events = {
             "huf.ai.gateways.teams.outbox.retry_due",
             "huf.ai.flow.triggers.run_due_schedule_flows",
             "huf.ai.flow.triggers.expire_due_approvals",
-            # Flow runs parked on an Execute code step: continue finished ones, give up on lost ones.
-            "huf.ai.flow.code_node.sweep_code_waits",
+            "huf.ai.flow.runs.park.wake_due_waits",
+            "huf.ai.flow.code_node.sweep_code_waits",  # runs parked on Execute code: continue finished, give up lost
             "huf.ai.knowledge.bulk_recovery.recover_stalled_ingestions",  # bulk ingestion safety net
         ],
         "*/10 * * * *": [

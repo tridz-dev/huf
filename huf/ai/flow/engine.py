@@ -49,14 +49,20 @@ import frappe
 from frappe import _
 from frappe.utils import now_datetime
 
-from huf.ai.flow import create_doc as flow_create_doc, state as flow_state
+from huf.ai.flow import state as flow_state
+from huf.ai.flow.runs import member as flow_member
+from huf.ai.flow.catalog import node_registry
+from huf.ai.flow.nodes import adapters, subflow
+from huf.ai.flow.nodes.error_handler import run_error_handler
+from huf.ai.flow.nodes.retry import policy_of as retry_policy_of, run_with_retry
+from huf.ai.flow.nodes.wait import exec_wait
 from huf.ai.flow.runs.outcome import record_outcome
 from huf.ai.flow.support.approval_card import waiting_fields
+from huf.ai.flow.runs.edges import edges_from_nodes
 from huf.ai.flow.support.approval_notifications import _clear_flow_notifications, _send_approval_notifications
 from huf.ai.flow.support.approvers import approval_expired, check_approver
 from huf.ai.flow.integrations import friendly_tool_error
 from huf.ai.gateways.slack import flow_hooks
-from huf.ai.graph.permissions import envelope_declares
 from huf.ai.flow.support.router_text import (
 	build_router_llm_prompt,
 	choose_option,
@@ -108,7 +114,7 @@ DEFAULT_MAX_HOPS = 100
 RUN_LOCK_TTL_SECONDS = 600
 """How long a run lock survives if its holder dies mid-execution."""
 
-WAITING_STATUSES = ("Waiting User", "Waiting Approval", "Waiting Code")
+WAITING_STATUSES = ("Waiting User", "Waiting Approval", "Waiting Code", "Waiting Timer")
 
 ADVANCEABLE_STATUSES = ("Running", "Queued")
 
@@ -120,6 +126,7 @@ NODE_ROUTING = {
 	"condition": RoutingMode.SELF_ROUTED,
 	"router.llm": RoutingMode.SELF_ROUTED,
 	"router.decision": RoutingMode.SELF_ROUTED,
+	"wait": RoutingMode.SELF_ROUTED,
 	# "output" is always terminal per spec/graph-ir.md section 2 ("next must be
 	# absent or null") -- true for both the Procedure and Flow profiles.
 	"output": RoutingMode.TERMINAL,
@@ -258,6 +265,10 @@ def load_definition(flow_id: str) -> dict:
 	return defn
 
 
+class FlowDefinitionGone(Exception):
+	"""A run woke up after its Flow Definition was deleted and carries no pinned snapshot."""
+
+
 def _pinned_version(flow_run) -> PinnedVersion:
 	"""The exact graph this run executes, for the whole life of the run.
 
@@ -272,7 +283,10 @@ def _pinned_version(flow_run) -> PinnedVersion:
 	if pinned is not None:
 		return pinned
 
-	version = PinnedVersion.pin(load_definition(getattr(flow_run, "flow_id", None)))
+	flow_id = getattr(flow_run, "flow_id", None)
+	if not frappe.db.exists("Flow Definition", flow_id):
+		raise FlowDefinitionGone(_("This flow was deleted, so the run cannot continue."))
+	version = PinnedVersion.pin(load_definition(flow_id))
 	_store_pin(flow_run, version)
 	return version
 
@@ -532,6 +546,10 @@ def create_flow_run(
 		fields["pinned_fingerprint"] = version.fingerprint
 		fields["pinned_definition"] = pinned_json(version)
 
+	member_key = flow_member.key_for_new_run(trigger_type, payload, mode)
+	if member_key:
+		fields["member_key"] = member_key
+
 	flow_run = frappe.get_doc(fields)
 	# Authenticated callers are already verified by the public API.
 	# Webhook triggers run as Guest after HMAC validation, so the internal
@@ -542,6 +560,8 @@ def create_flow_run(
 		if not frappe.has_permission("Flow Run", "create", doc=flow_run):
 			frappe.throw(_("You do not have permission to run flows. Ask an admin for access."), frappe.PermissionError)
 		flow_run.insert()
+	if member_key:
+		flow_member.upsert_member(flow_id, member_key, flow_run.name)
 	commit_if_background()
 
 	return flow_run
@@ -571,11 +591,17 @@ def run_flow(flow_run_name: str):
 
 	try:
 		flow_run = frappe.get_doc("Flow Run", flow_run_name)
+		if flow_run.status in TERMINAL_STATUSES:
+			return  # finished or cancelled while this job was queued: never revive it
 		if flow_run.status in WAITING_STATUSES:
 			# A queued job for a run that has since paused again: only approve / resume / expiry move a
 			# waiting run (they set it Running first). Re-entering here would run the paused step twice.
 			return
-		version = _pinned_version(flow_run)
+		try:
+			version = _pinned_version(flow_run)
+		except FlowDefinitionGone as e:
+			_fail_flow_run(flow_run, str(e))
+			return
 		defn = version.graph
 
 		nodes_map = {n["id"]: n for n in defn.get("nodes", [])}
@@ -609,6 +635,7 @@ def _build_run_context(flow_run, version: PinnedVersion) -> FlowRunContext:
 			"fingerprint": version.fingerprint,
 		},
 	)
+	context.member = flow_member.run_member_context(flow_run)
 	return FlowRunContext(
 		{},
 		flow_run=flow_run,
@@ -899,7 +926,7 @@ def _build_program(nodes_map: dict, edges_list: list, settings) -> GraphProgram:
 			id=node_id,
 			type=node_type,
 			config=config,
-			routing=NODE_ROUTING.get(node_type, RoutingMode.DEFAULT),
+			routing=node_registry.routing_for(node_type, NODE_ROUTING),
 			raw=node,
 		)
 	return GraphProgram(version, specs, _first_entry(version.graph), settings=dict(settings or {}))
@@ -913,7 +940,12 @@ def _first_entry(graph: dict) -> str | None:
 
 
 def _build_router(
-	flow_run, settings, edges_list: list, state: ExecutionState, unhandled_failures: list | None = None
+	flow_run,
+	settings,
+	edges_list: list,
+	state: ExecutionState,
+	unhandled_failures: list | None = None,
+	failed_node_ids: list | None = None,
 ) -> Router:
 	"""One routing path for every node type (structural knots 3 and 4).
 
@@ -931,6 +963,8 @@ def _build_router(
 			)
 			if not handled:
 				unhandled_failures.append(step_failed_sentence(step_title(node.raw), outcome.error))
+				if failed_node_ids is not None:
+					failed_node_ids.append(node.id)
 		return chosen
 
 	def _resolve_default(node: NodeSpec, outcome: Outcome, context: GraphContext):
@@ -1021,11 +1055,16 @@ def _make_node_handler(flow_run, settings):
 	"""Bridge one Flow node executor into the executor's handler contract."""
 
 	def handler(node: NodeSpec, context: GraphContext, state: ExecutionState):
-		try:
-			result = _execute_node(flow_run, node.raw, settings)
-		except Exception as exc:
-			frappe.log_error(frappe.get_traceback(), f"Flow node {node.id} raised")
-			result = {"status": "failed", "error": describe_exception(exc)}
+		def run_once():
+			try:
+				return _execute_node(flow_run, node.raw, settings)
+			except Exception as exc:
+				frappe.log_error(frappe.get_traceback(), f"Flow node {node.id} raised")
+				return {"status": "failed", "error": describe_exception(exc)}
+
+		result = run_with_retry(flow_run, node.raw, settings, run_once)
+		if isinstance(result, Outcome):  # parked for a retry
+			return result
 		outcome = Outcome.from_mapping(result)
 		if outcome.status == "failed":
 			outcome.output = failed_node_record(outcome)
@@ -1056,9 +1095,10 @@ def _execute_loop(flow_run, nodes_map: dict, edges_list: list, settings: dict):
 	program = _build_program(nodes_map, edges_list, settings)
 	state = _flow_state(flow_run)
 	unhandled_failures: list = []
-	router = _build_router(flow_run, settings, edges_list, state, unhandled_failures)
+	failed_node_ids: list = []
+	router = _build_router(flow_run, settings, edges_list, state, unhandled_failures, failed_node_ids)
 	handler = _make_node_handler(flow_run, settings)
-	handlers = {node_type: handler for node_type in _NODE_TYPES}
+	handlers = {node_type: handler for node_type in (*_NODE_TYPES, *node_registry.registered_types())}
 
 	policy = ExecutionPolicy(
 		max_hops=getattr(flow_run, "max_hops", None) or DEFAULT_MAX_HOPS,
@@ -1093,6 +1133,10 @@ def _execute_loop(flow_run, nodes_map: dict, edges_list: list, settings: dict):
 
 	if result.status == ExecutionResult.FAILED:
 		_publish_flow_event(flow_run, "flow_error", {"error": result.error})
+		message = describe_run_error(result.error, {i: step_title(n.raw) for i, n in program.nodes.items()})
+		paused = run_error_handler(flow_run, program, router, handlers, policy, settings, result.node_id, message)
+		if paused is not None:
+			return paused
 		_fail_flow_run(flow_run, describe_run_error(result.error, {i: step_title(n.raw) for i, n in program.nodes.items()}))
 		return result
 
@@ -1100,6 +1144,11 @@ def _execute_loop(flow_run, nodes_map: dict, edges_list: list, settings: dict):
 		# A failure no on_failure/on_error route handled: cleanup nodes may have run
 		# via an ``always`` edge, but the run is still Failed (first failure wins).
 		_publish_flow_event(flow_run, "flow_error", {"error": unhandled_failures[0]})
+		paused = run_error_handler(
+			flow_run, program, router, handlers, policy, settings, failed_node_ids[0], unhandled_failures[0]
+		)
+		if paused is not None:
+			return paused
 		_fail_flow_run(flow_run, unhandled_failures[0])
 		return result
 
@@ -1124,7 +1173,11 @@ def _execute_node(flow_run, node: dict, settings: dict) -> dict:
 	node_type = node.get("type")
 	config = node.get("config", {})
 
-	executor = _NODE_EXECUTORS.get(node_type) or frappe.throw(_("Unknown node type: {0}").format(node_type))
+	executor = _NODE_EXECUTORS.get(node_type) or node_registry.executor_for(node_type)
+	if executor is None:
+		if node_registry.is_app_type_id(node_type):
+			return {"status": "failed", "error": _("This step type is no longer available ({0}). The app that provided it may have been uninstalled.").format(node_type)}
+		frappe.throw(_("Unknown node type: {0}").format(node_type))
 
 	if is_turned_off(node):
 		return turned_off_result()
@@ -1481,24 +1534,12 @@ def _exec_router_llm(flow_run, node: dict, config: dict, settings: dict) -> dict
 	}
 
 
-def _exec_router_decision(flow_run, node: dict, config: dict, settings: dict) -> dict:
-	"""Execute router.decision node (config: ``policy``, ``options``, ``default``).
-
-	Not offered by the UI and never activates a provider: it always routes to ``default``
-	(routing is total) and says so in its output.
-	"""
-	default = config.get("default")
-	if not default:
-		return {"status": "failed", "error": "Choose which path to take by default, then run again."}
-	valid_node_ids = {o["node_id"] for o in (config.get("options") or []) if isinstance(o, dict) and o.get("node_id")}
-	if not valid_node_ids:
-		return {"status": "failed", "error": "Add at least one path to choose from, then run again."}
-
-	return {
-		"status": "success",
-		"next_node_id": default,
-		"output": {"node_id": default, "reason": "Choosing a path by rule is not turned on, so the default path was taken."},
-	}
+_exec_router_decision = adapters.exec_router_decision
+_exec_stop = adapters.exec_stop
+_exec_member_set = adapters.exec_member_set
+_exec_doc_get = adapters.exec_doc_get
+_exec_doc_update = adapters.exec_doc_update
+_exec_flow_call = adapters.exec_flow_call
 
 
 def _exec_human_approval(flow_run, node: dict, config: dict, settings: dict) -> dict:
@@ -1809,6 +1850,10 @@ def _run_sub_chain(flow_run, settings: dict, node_ids: list) -> dict:
 			return {"status": "failed", "error": "A step inside this loop points at a step that no longer exists. Reconnect it."}
 		if node.get("type") == "human.approval":
 			return {"status": "failed", "error": f'{step_ref(node, True)} waits for approval, which a loop cannot do. Move it outside the loop.'}
+		if node.get("type") == "wait":
+			return {"status": "failed", "error": f'{step_ref(node, True)} is a wait step. Wait steps cannot be used inside a loop. Move it outside the loop.'}
+		if retry_policy_of(node):
+			return {"status": "failed", "error": f'{step_ref(node, True)} is set to try again if it fails, which a loop cannot do. Remove the retry setting or move the step outside the loop.'}
 		if node.get("type") == "code.run":
 			return {"status": "failed", "error": f'{step_ref(node, True)} runs code, which a loop cannot do. Move it outside the loop.'}
 
@@ -1821,7 +1866,7 @@ def _run_sub_chain(flow_run, settings: dict, node_ids: list) -> dict:
 			cursor = on_error
 			continue
 
-		if NODE_ROUTING.get(node.get("type")) == RoutingMode.SELF_ROUTED:
+		if node_registry.routing_for(node.get("type"), NODE_ROUTING) == RoutingMode.SELF_ROUTED:
 			cursor = last_result.get("next_node_id")
 		else:
 			cursor = node.get("next")
@@ -1983,12 +2028,17 @@ def _exec_output(flow_run, node: dict, config: dict, settings: dict) -> dict:
 
 def _state_node(flow_run, node: dict, config: dict, settings: dict, allowed: set, op):
 	"""Shared shell: validate config keys, resolve inputs, scope to the *running* flow."""
-	unknown = sorted(set(config) - allowed)
-	if unknown:
+	unknown = sorted(set(config) - allowed - {"scope"})
+	if unknown or config.get("scope") not in (None, "flow", "member"):
 		return {"status": "failed", "error": f'{step_ref(node, True)} has settings this step does not use. Remove them and save again.'}
 	flow_id = getattr(flow_run, "flow_id", None)
 	ctx = _context_of(flow_run, settings)
-	resolved = {k: ctx.resolve(v) for k, v in config.items()}
+	resolved = {k: ctx.resolve(v) for k, v in config.items() if k != "scope"}
+	if config.get("scope") == "member":  # one value per person, kept apart from every other person's
+		scoped = flow_member.scoped_state_key(flow_run, resolved.get("key"))
+		if not scoped:
+			return {"status": "failed", "error": f'{step_ref(node, True)} is saved per person, but this run does not know who it is about.'}
+		resolved["key"] = scoped
 	try:
 		output = op(flow_id, resolved)
 	except flow_state.FlowStateError as exc:
@@ -2034,41 +2084,7 @@ def _exec_state_delete(flow_run, node: dict, config: dict, settings: dict) -> di
 _WRITES_KEY = "_doc_create_count"
 
 
-def _exec_doc_create(flow_run, node: dict, config: dict, settings: dict) -> dict:
-	"""
-	``doc.create``: config ``doctype`` (literal) and ``fields`` (object of values / references).
-	Output ``{"doctype", "name"}`` so later nodes can use ``{"$from": "<node>.name"}``.
-
-	Policy lives in :mod:`huf.ai.flow.create_doc` (allow-list, field validation, no
-	``ignore_permissions``). Each created document also counts against the graph contract's
-	``limits.max_writes`` for the run (absent or 0 means no writes are allowed).
-	"""
-	unknown = sorted(set(config) - {"doctype", "fields"})
-	if unknown or "doctype" not in config or "fields" not in config:
-		return {"status": "failed", "error": f'{step_ref(node, True)} is missing its record type or fields, or has settings it does not use. Open the step and check it.'}
-	ctx = _context_of(flow_run, settings)
-	run_ctx = _run_context(settings)
-	limits = ((run_ctx.definition.get("contract") or {}).get("limits") or {}) if run_ctx is not None else {}
-	max_writes = limits.get("max_writes") or 0
-	envelope = ((run_ctx.definition.get("contract") or {}).get("permission_envelope") or {}) if run_ctx is not None else {}
-	doctype = config["doctype"]
-	try:  # the site allow-list first: its message is the clearer one for an unsupported doctype
-		flow_create_doc.check_doctype(doctype, flow_create_doc.allowed_doctypes(frappe.conf))
-	except flow_create_doc.CreateDocError as exc:
-		return {"status": "failed", "error": plain_error(str(exc))}
-	if not isinstance(doctype, str) or not envelope_declares(envelope, ptype="create", doctype=doctype):
-		return {"status": "failed", "error": f'{step_ref(node, True)} is not allowed to create "{doctype}" records. Ask an admin to allow it for this flow.'}
-	done = ctx.data.get(_WRITES_KEY) or 0
-	if done >= max_writes:
-		return {"status": "failed", "error": f'{step_ref(node, True)} would create more records than this flow is allowed to ({max_writes}). Ask an admin to raise the limit.'}
-	try:
-		result = flow_create_doc.create_document(config["doctype"], ctx.resolve(config["fields"]))
-	except flow_create_doc.CreateDocError as exc:
-		return {"status": "failed", "error": plain_error(str(exc))}
-	except frappe.PermissionError:
-		return {"status": "failed", "error": f'You do not have permission to create "{doctype}" records. Ask an admin for access.'}
-	ctx.set(_WRITES_KEY, done + 1)
-	return {"status": "success", "result": result, "output": result}
+_exec_doc_create = adapters.exec_doc_create
 
 
 _NODE_EXECUTORS = {
@@ -2092,6 +2108,12 @@ _NODE_EXECUTORS = {
 	"state.delete": _exec_state_delete,
 	"doc.create": _exec_doc_create,
 	"code.run": _exec_code_run,
+	"wait": exec_wait,
+	"stop": _exec_stop,
+	"member.set": _exec_member_set,
+	"doc.get": _exec_doc_get,
+	"doc.update": _exec_doc_update,
+	"flow.call": _exec_flow_call,
 }
 
 _NODE_TYPES = tuple(_NODE_EXECUTORS)
@@ -2109,62 +2131,6 @@ def effective_edges(defn: dict) -> list[dict]:
 	or one of its per-type routing fields. See :func:`edges_from_nodes`.
 	"""
 	return edges_from_nodes(defn.get("nodes", []))
-
-
-def edges_from_nodes(nodes: list) -> list[dict]:
-	"""Decode the graph IR's node-native routing pointers into ``{from, to, type, meta}`` edges.
-
-	``next`` and ``on_error`` apply to every node; the self-routing types carry their targets in
-	``config``: ``condition.on_true`` / ``on_false``, ``router.llm`` / ``router.decision``
-	``options[].node_id`` / ``default``, ``human.approval.approve_next`` / ``reject_next`` /
-	``timeout_next``. ``foreach.body`` is not an edge: the body is run inline by the loop and
-	``next`` is the loop's done edge. The edge list is what the router
-	and the approval flow route over.
-	"""
-	edges: list[dict] = []
-	for node in nodes:
-		if not isinstance(node, dict):
-			continue
-		node_id = node.get("id")
-		node_type = node.get("type")
-		config = node.get("config") or {}
-
-		if node_type == "condition":
-			if config.get("on_true"):
-				edges.append({"from": node_id, "to": config["on_true"], "type": "always", "meta": {"label": "true"}})
-			if config.get("on_false"):
-				edges.append({"from": node_id, "to": config["on_false"], "type": "always", "meta": {"label": "false"}})
-		elif node_type in ("router.llm", "router.decision"):
-			for option in config.get("options") or []:
-				to = (option or {}).get("node_id")
-				if to:
-					edges.append({"from": node_id, "to": to, "type": "always", "meta": {"label": (option or {}).get("label")}})
-			default = config.get("default")
-			if default:
-				edges.append({"from": node_id, "to": default, "type": "always", "meta": {"label": "default"}})
-		elif node_type == "human.approval":
-			if config.get("approve_next"):
-				edges.append(
-					{"from": node_id, "to": config["approve_next"], "type": "outcome", "meta": {"outcome": "approved"}}
-				)
-			if config.get("reject_next"):
-				edges.append(
-					{"from": node_id, "to": config["reject_next"], "type": "outcome", "meta": {"outcome": "rejected"}}
-				)
-			if config.get("timeout_next"):
-				edges.append(
-					{"from": node_id, "to": config["timeout_next"], "type": "outcome", "meta": {"outcome": "timeout"}}
-				)
-		else:
-			next_id = node.get("next")
-			if next_id:
-				edges.append({"from": node_id, "to": next_id, "type": "always"})
-
-		on_error = node.get("on_error")
-		if on_error:
-			edges.append({"from": node_id, "to": on_error, "type": "on_failure"})
-
-	return edges
 
 
 def _evaluate_edges(flow_run, node_id: str, node_result: dict, edges_list: list) -> str | None:
@@ -2330,6 +2296,7 @@ def _complete_flow_run(flow_run, reply_text: str | None = None) -> bool:
 		return False
 	commit_if_background()
 	_sync_gateway_event(flow_run, "Success", reply_text)
+	subflow.on_child_finished(flow_run, "Success")
 	return True
 
 
@@ -2349,6 +2316,7 @@ def _fail_flow_run(flow_run, error_msg: str) -> bool:
 	_sync_gateway_event(flow_run, "Failed", error=error_msg)
 	_publish_flow_event(flow_run, "flow_failed", {"error": error_msg})
 	flow_hooks.notify_failure(flow_run.name)
+	subflow.on_child_finished(flow_run, "Failed", error_msg)
 	return True
 
 

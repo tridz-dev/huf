@@ -59,11 +59,30 @@ class TestRules(unittest.TestCase):
 			flow_state.encode_value("x" * (flow_state.MAX_VALUE_BYTES + 1))
 
 	def test_ttl(self):
-		self.assertEqual(flow_state.normalize_ttl(None), flow_state.DEFAULT_TTL_SECONDS)
 		self.assertEqual(flow_state.normalize_ttl(60), 60)
-		for bad in (0, -1, flow_state.MAX_TTL_SECONDS + 1, "5", True):
+		for bad in (-1, "5", True, 1.5):
 			with self.assertRaises(flow_state.FlowStateError, msg=repr(bad)):
 				flow_state.normalize_ttl(bad)
+
+	def test_default_stays_24h(self):
+		with patch.dict(frappe.conf, {"huf_flow_state_max_ttl_days": 0}):
+			self.assertEqual(flow_state.normalize_ttl(None), 24 * 3600)
+
+	def test_ceiling_enforced(self):
+		with patch.dict(frappe.conf, {"huf_flow_state_max_ttl_days": 2}):
+			self.assertEqual(flow_state.normalize_ttl(2 * 86400), 2 * 86400)
+			with self.assertRaises(flow_state.FlowStateError):
+				flow_state.normalize_ttl(2 * 86400 + 1)
+
+	def test_ceiling_zero_unlimited(self):
+		with patch.dict(frappe.conf, {"huf_flow_state_max_ttl_days": 0}):
+			self.assertEqual(flow_state.normalize_ttl(10 * 365 * 86400), 10 * 365 * 86400)
+			self.assertIsNone(flow_state.normalize_ttl(0))
+
+	def test_forever_rejected_when_setting_forbids(self):
+		with patch.dict(frappe.conf, {"huf_flow_state_max_ttl_days": 365}):
+			with self.assertRaises(flow_state.FlowStateError):
+				flow_state.normalize_ttl(0)
 
 	def test_name_is_per_flow(self):
 		self.assertEqual(flow_state.state_name("f", "k"), flow_state.state_name("f", "k"))
@@ -164,6 +183,21 @@ class TestFlowStateStore(IntegrationTestCase):
 		frappe.db.set_value("Flow State", flow_state.state_name(self.flow, "k"), "expires_at", "2000-01-01 00:00:00")
 		self.assertEqual(flow_state.get_state(self.flow, "k"), (False, None))
 		self.assertFalse(frappe.db.exists("Flow State", flow_state.state_name(self.flow, "k")))
+
+	def test_ttl_none_forever_never_expires(self):
+		with patch.dict(frappe.conf, {"huf_flow_state_max_ttl_days": 0}):
+			flow_state.set_state(self.flow, "k", "keep", ttl_seconds=0)
+		name = flow_state.state_name(self.flow, "k")
+		self.assertIsNone(frappe.db.get_value("Flow State", name, "expires_at"))
+		self.assertEqual(flow_state.get_state(self.flow, "k"), (True, "keep"))
+		flow_state.purge_expired()
+		self.assertEqual(flow_state.get_state(self.flow, "k"), (True, "keep"))
+
+	def test_purge_skips_null_expires_at(self):
+		with patch.dict(frappe.conf, {"huf_flow_state_max_ttl_days": 0}):
+			flow_state.set_state(self.flow, "forever", 1, ttl_seconds=0)
+		flow_state.purge_expired()
+		self.assertTrue(frappe.db.exists("Flow State", flow_state.state_name(self.flow, "forever")))
 
 	def test_purge_expired(self):
 		flow_state.set_state(self.flow, "old", 1)

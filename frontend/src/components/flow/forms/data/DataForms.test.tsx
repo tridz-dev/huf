@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 vi.mock('@/contexts/FlowContext', async () => (await import('../__tests__/formTestKit')).contextMock());
 vi.mock('@/hooks/flow/useFlowPermissions', async () => (await import('../__tests__/formTestKit')).permissionsMock());
 vi.mock('@/services/flow/catalogApi', async () => (await import('../__tests__/formTestKit')).catalogMock());
+vi.mock('@/services/flow/steps/flowMembersApi', () => ({ getFlowStateLimits: vi.fn().mockResolvedValue({ max_ttl_seconds: 31536000 }) }));
 vi.mock('@/services/flow/formOptionsApi', () => ({
   listCreateDocTypes: vi.fn().mockResolvedValue([{ name: 'ToDo', label: 'To-do' }, { name: 'Note', label: 'Note' }]),
   listCreateDocFields: vi.fn().mockImplementation(async (dt: string) =>
@@ -88,15 +89,21 @@ describe('StateForm', () => {
     expect(document.body.textContent).not.toMatch(/\bKey\b|seconds|2592000|ttl/i);
   });
 
-  it('"keep it for" takes minutes, hours or days and stores seconds', async () => {
-    renderForm(StateForm, { type: 'state-set', key: 'cart', value: 'x', ttl_seconds: 7200 });
-    const amount = await screen.findByTestId('flow-field-test-ttl_seconds');
-    expect((amount as HTMLInputElement).value).toBe('2');
-    expect(screen.getByTestId('flow-field-test-ttl_seconds-unit').textContent).toContain('hours');
-    fireEvent.change(amount, { target: { value: '3' } });
-    expect(latest.ttl_seconds).toBe(10800);
-    fireEvent.change(amount, { target: { value: '' } });
-    expect(latest.ttl_seconds).toBeUndefined();
+  it('"Keep saved data for" is a select of 1 day, 30 days, 1 year or until removed', async () => {
+    renderForm(StateForm, { type: 'state-set', key: 'cart', value: 'x' });
+    const trigger = await screen.findByTestId('flow-field-test-ttl_seconds');
+    expect(trigger.textContent).toContain('1 day');
+    fireEvent.click(trigger);
+    fireEvent.click(await screen.findByRole('option', { name: '30 days' }));
+    expect(latest.ttl_seconds).toBe(2592000);
+  });
+
+  it('"Until removed" is off with a reason when the site has a ceiling', async () => {
+    renderForm(StateForm, { type: 'state-set', key: 'cart', value: 'x', ttl_seconds: 2592000 });
+    expect((await screen.findByTestId('flow-field-test-ttl_seconds')).textContent).toContain('30 days');
+    expect((await screen.findByTestId('flow-state-keep-limit')).textContent).toBe('Your site keeps saved data for at most 365 days.');
+    fireEvent.click(screen.getByTestId('flow-field-test-ttl_seconds'));
+    expect((await screen.findByRole('option', { name: 'Until removed' })).getAttribute('aria-disabled')).toBe('true');
   });
 
   it('look up and forget ask for the name only (and a fallback for look up, folded)', async () => {

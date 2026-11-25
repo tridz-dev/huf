@@ -68,7 +68,7 @@ def _clean_outcome(raw) -> dict | None:
 
 
 def step_meta_from(defn) -> dict:
-	"""``{node_id: {type, body?, outcome?}}`` for every step of a definition."""
+	"""``{node_id: {type, body?, outcome?, tries?, flow_id?}}`` for every step of a definition."""
 	meta: dict = {}
 	for n in _nodes_of(defn):
 		cfg = n.get("config") if isinstance(n.get("config"), dict) else {}
@@ -79,7 +79,20 @@ def step_meta_from(defn) -> dict:
 			outcome = _clean_outcome(cfg.get("outcome"))
 			if outcome:
 				entry["outcome"] = outcome
+		retry = cfg.get("retry")
+		if isinstance(retry, dict) and isinstance(retry.get("attempts"), int) and retry["attempts"] >= 2:
+			entry["tries"] = retry["attempts"]
+		if n.get("type") == "flow.call" and isinstance(cfg.get("flow_id"), str):
+			entry["flow_id"] = cfg["flow_id"]
 		meta[n["id"]] = entry
+	return meta
+
+
+def _with_flow_names(meta: dict) -> dict:
+	"""Name the flow each Run another flow step starts, for the run story."""
+	for entry in meta.values():
+		if entry.get("flow_id"):
+			entry["flow_name"] = frappe.db.get_value("Flow Definition", entry["flow_id"], "flow_name") or entry["flow_id"]
 	return meta
 
 
@@ -161,7 +174,7 @@ def extras_for_detail(doc, ctx: dict) -> dict:
 	defn = _load_json(doc.pinned_definition) if doc.pinned_definition else _load_json(
 		frappe.db.get_value("Flow Definition", doc.flow_id, "definition_json") if doc.flow_id else None
 	)
-	meta = step_meta_from(defn)
+	meta = _with_flow_names(step_meta_from(defn))
 	return {
 		"step_meta": meta,
 		"outcome": (stored_outcome(doc) if doc.status == "Success" else None) or compute_outcome(doc.status, doc.current_node_id, ctx, meta),

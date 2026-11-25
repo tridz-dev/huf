@@ -70,7 +70,7 @@ class TestRunAccess(IntegrationTestCase):
 	def test_cancel_works_on_a_run_of_a_flow_the_editor_may_edit(self):
 		frappe.set_user(self.editor)
 		out = actions.cancel_flow_run(self.run_a)
-		self.assertEqual(out["status"], "Failed")
+		self.assertEqual(out["status"], "Cancelled")
 
 	def test_cancel_is_refused_for_a_run_of_another_flow(self):
 		frappe.set_user(self.editor)

@@ -13,7 +13,9 @@ import json
 import frappe
 from frappe import _
 
+from huf.ai.api_support import require_permission
 from huf.ai.flow.catalog import fields as cat
+from huf.ai.flow.catalog import node_registry
 from huf.ai.flow.catalog import doc_fields, gateway_fields
 from huf.ai.flow.support.trigger_sample import redact_sample
 
@@ -198,3 +200,16 @@ def get_data_catalog(flow_id: str, node_id: str) -> dict:
 	if not isinstance(graph, dict):
 		return {"flow_id": flow_id, "node_id": node_id, "trigger": None, "steps": [], "loop": None}
 	return build_catalog(graph, node_id, flow_id, _latest_run(flow_id))
+
+
+@frappe.whitelist()
+def list_node_types() -> list[dict]:
+	"""Step types that installed apps add through ``huf_flow_nodes``, for the editor palette. Built-in types are not listed."""
+	require_permission(frappe.has_permission("Flow Definition", "read"), "Not permitted")
+	return [
+		{
+			"type": t.type, "label": t.label, "category": t.category, "icon": t.icon, "description": t.description,
+			"config_schema": t.config_schema, "routing": t.routing, "outputs": list(t.outputs), "app": t.app, "builtin": False,
+		}
+		for t in node_registry.registered_types().values()
+	]

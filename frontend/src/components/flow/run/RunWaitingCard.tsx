@@ -29,6 +29,8 @@ const withoutInternalKeys = (waiting: Record<string, unknown>) => Object.fromEnt
 export function RunWaitingCard({ run, names, titleOf, busy, phone, onDecide, resumePayload, onResumePayload, onResume }: RunWaitingCardProps) {
   const waiting = run.waiting ?? {};
   if (!run.status?.startsWith('Waiting') || Object.keys(waiting).length === 0) return null;
+  // A Wait step's own banner carries Continue now, Copy resume link and Cancel run; its park record is not a reply form.
+  if (run.status === 'Waiting Timer') return null;
   const since = run.modified_at ?? run.started_at;
   const sinceLine = since ? `Waiting since ${friendlyClock(since)} (${formatDuration(sinceMs(since))})` : '';
 

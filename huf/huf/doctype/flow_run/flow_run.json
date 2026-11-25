@@ -15,6 +15,10 @@
   "column_break_ov1",
   "mode",
   "status",
+  "resume_at",
+  "member_key",
+  "parent_run",
+  "parent_node",
   "trigger_type",
   "run_mode",
   "execution_section",
@@ -103,7 +107,37 @@
    "fieldtype": "Select",
    "in_list_view": 1,
    "label": "Status",
-   "options": "Queued\nRunning\nWaiting Approval\nWaiting User\nWaiting Code\nSuccess\nFailed",
+   "options": "Queued\nRunning\nWaiting Approval\nWaiting User\nWaiting Code\nWaiting Timer\nSuccess\nFailed\nCancelled",
+   "read_only": 1
+  },
+  {
+   "fieldname": "resume_at",
+   "fieldtype": "Datetime",
+   "label": "Resume At",
+   "read_only": 1,
+   "hidden": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "member_key",
+   "fieldtype": "Data",
+   "label": "Member Key",
+   "length": 140,
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "parent_run",
+   "fieldtype": "Link",
+   "label": "Parent Run",
+   "options": "Flow Run",
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "parent_node",
+   "fieldtype": "Data",
+   "label": "Parent Node",
    "read_only": 1
   },
   {

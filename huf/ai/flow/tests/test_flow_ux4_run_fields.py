@@ -27,6 +27,16 @@ class TestStepMeta(unittest.TestCase):
 		self.assertEqual(meta["bad"]["outcome"]["tone"], "neutral")
 		self.assertNotIn("outcome", meta["plain"])
 
+	def test_retry_tries_and_sub_flow_id(self):
+		meta = step_meta_from({"nodes": [
+			{"id": "t", "type": "tool.call", "config": {"retry": {"attempts": 3}}},
+			{"id": "u", "type": "tool.call", "config": {}},
+			{"id": "f", "type": "flow.call", "config": {"flow_id": "flow-1"}},
+		]})
+		self.assertEqual(meta["t"]["tries"], 3)
+		self.assertNotIn("tries", meta["u"])
+		self.assertEqual(meta["f"]["flow_id"], "flow-1")
+
 	def test_pinned_definition_wraps_the_graph(self):
 		self.assertIn("t", step_meta_from({"fingerprint": "x", "graph": DEFN}))
 

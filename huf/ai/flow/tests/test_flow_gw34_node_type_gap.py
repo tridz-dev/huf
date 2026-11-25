@@ -54,7 +54,8 @@ if isinstance(sys.modules.get("frappe"), MagicMock):
 
 from huf.ai.flow import engine as flow_engine  # noqa: E402
 from huf.ai.graph.executor import GraphContext, PinnedVersion  # noqa: E402
-from huf.ai.graph.validator import FLOW_NODE_TYPES, PROCEDURE_NODE_TYPES  # noqa: E402
+from huf.ai.graph.validator import FLOW_NODE_TYPES, PROCEDURE_NODE_TYPES, get_flow_node_types  # noqa: E402
+from huf.ai.flow.catalog import node_registry  # noqa: E402
 
 
 class _FakeFlowRun:
@@ -103,7 +104,9 @@ class TestNodeTypeAllowListMatchesSchemaIntent(unittest.TestCase):
 		self.assertNotIn("parallel", FLOW_NODE_TYPES)
 
 	def test_every_flow_node_type_has_an_executor(self):
-		missing = sorted(FLOW_NODE_TYPES - set(flow_engine._NODE_EXECUTORS))
+		# built-ins need an engine executor; app-registered types resolve through the registry
+		allowed = get_flow_node_types()
+		missing = sorted(t for t in allowed - set(flow_engine._NODE_EXECUTORS) if node_registry.executor_for(t) is None)
 		self.assertEqual(missing, [], f"FLOW_NODE_TYPES has no flow_engine executor for: {missing}")
 
 

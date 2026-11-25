@@ -4,13 +4,22 @@ import { TriggerConfigForm } from './forms/TriggerConfigForm';
 import { AgentRunForm } from './forms/AgentRunForm';
 import { ToolCallForm } from './forms/tool/ToolCallForm';
 import { RouterForm } from './forms/RouterForm';
+import { SwitchForm } from './forms/steps/SwitchForm';
 import { ConditionForm } from './forms/ConditionForm';
 import { LoopForm } from './forms/LoopForm';
 import { ApprovalForm } from './forms/approval/ApprovalForm';
+import { WaitForm } from './forms/steps/WaitForm';
+import { StopForm } from './forms/steps/StopForm';
+import { FlowCallForm } from './forms/steps/FlowCallForm';
+import { DocGetForm } from './forms/data/DocGetForm';
+import { DocUpdateForm } from './forms/data/DocUpdateForm';
+import { MemberSetForm } from './forms/data/MemberSetForm';
 import { TransformForm } from './forms/data/TransformForm';
 import { StateForm } from './forms/data/StateForm';
 import { DocCreateForm } from './forms/data/DocCreateForm';
 import { Section } from './forms/formKit';
+import { SchemaNodeForm } from './forms/SchemaNodeForm';
+import { useAppNodeTypes } from '@/lib/flow-graph/appNodeTypes';
 import { CodeRunFields } from './CodeRunForm';
 
 export { TriggerConfigForm };
@@ -18,6 +27,7 @@ export { TriggerConfigForm };
 /** The settings form of one action step: picks the form for the step's type. */
 export function ActionConfigForm({ nodeId }: { nodeId: string }) {
   const { node, cfg, patch, kind, shell } = useNodeForm(nodeId, 'actionConfig');
+  const { loaded } = useAppNodeTypes();
   if (!node) return null;
   const type = str(cfg.type);
   const common = {
@@ -36,12 +46,26 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
       return <ToolCallForm {...common} />;
     case 'router':
       return <RouterForm {...common} />;
+    case 'router-decision':
+      return <SwitchForm {...common} />;
     case 'condition':
       return <ConditionForm {...common} />;
     case 'foreach':
       return <LoopForm {...common} />;
     case 'human.approval':
       return <ApprovalForm {...common} />;
+    case 'wait':
+      return <WaitForm {...common} />;
+    case 'stop':
+      return <StopForm {...common} />;
+    case 'flow-call':
+      return <FlowCallForm {...common} />;
+    case 'doc-get':
+      return <DocGetForm {...common} />;
+    case 'doc-update':
+      return <DocUpdateForm {...common} />;
+    case 'member-set':
+      return <MemberSetForm {...common} />;
     case 'transform':
       return <TransformForm {...common} />;
     case 'state-get':
@@ -57,6 +81,8 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
         </Section>
       );
     case 'unknown':
+      // Until the app step types load, keep the plain note; then an app's step gets its schema form (or the not-installed card).
+      if (loaded) return <SchemaNodeForm {...common} />;
       return (
         <div className="text-xs text-muted-foreground p-2 bg-muted/30 rounded-md">
           This step type cannot be edited here. It is kept as it is and saved unchanged.

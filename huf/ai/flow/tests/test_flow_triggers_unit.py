@@ -126,7 +126,7 @@ class TestNodeSchemas(unittest.TestCase):
 		for entry in defs["FlowNode"]["oneOf"]:
 			expected.add(flow_api._node_config_schema(defs[entry["$ref"].rsplit("/", 1)[-1]])[0])
 		self.assertEqual(set(self.out), expected)
-		self.assertEqual(len(expected), 22)  # + the three chat triggers (gateway, whatsapp, telegram)
+		self.assertEqual(len(expected), 28)  # + the three chat triggers (gateway, whatsapp, telegram) + wait, stop, doc.get, doc.update, flow.call, member.set
 
 	def test_fields_match_schema_exactly(self):
 		for node_type, desc in self.out.items():

@@ -5,7 +5,7 @@ import { FlowNodeData } from '../../types/flow.types';
 import { DeleteStepDialog } from '../flow/DeleteStepDialog';
 import { NODE_HANDLE, getExecutionStatusClasses, handleSpread } from './nodeStyles';
 import { actionHasConfiguredContent } from '../../lib/flow/flowNodeConfigured';
-import { branchHandlesFor, ROUTER_HANDLE } from '../../lib/flow/flowBranches';
+import { branchHandlesFor, isPathRouter, ROUTER_HANDLE } from '../../lib/flow/flowBranches';
 import { connectPath, integrationForTool, useIntegrationStatus } from '../../lib/flow/flowIntegrations';
 import { actionSubtitle } from '../../lib/flow/flowNodeCard';
 import { cardIcon } from './nodeIcons';
@@ -22,7 +22,7 @@ export const ActionNode = memo(({ id, data, selected }: ActionNodeProps) => {
   const needsSetup = status.kind === 'needs-setup' || Boolean(facts?.firstIssue);
   const cfg = data.actionConfig as ({ type?: string } & Record<string, unknown>) | undefined;
   const handles = branchHandlesFor(cfg?.type, cfg);
-  const isRouter = cfg?.type === 'router';
+  const isRouter = isPathRouter(cfg?.type);
   const toolId = cfg?.type === 'tool-call' && typeof cfg.tool_id === 'string' && cfg.tool_id ? cfg.tool_id : undefined;
   const service = integrationForTool(toolId);
   const frameClass = getExecutionStatusClasses(data.status, selected, { unconfigured: needsSetup || Boolean(facts?.orphaned) });
@@ -90,7 +90,7 @@ export const ActionNode = memo(({ id, data, selected }: ActionNodeProps) => {
             title={`${h.label}: drag from here to connect`}
           />
         ))
-      ) : (
+      ) : cfg?.type === 'stop' ? null : (
         <Handle id={isRouter ? ROUTER_HANDLE : undefined} type="source" position={Position.Bottom} className={NODE_HANDLE} data-testid={`flow-handle-${id}`} />
       )}
 

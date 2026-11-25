@@ -4,12 +4,14 @@ import { Flow, FlowMetadata, FlowNode, FlowEdge } from '../types/flow.types';
 import { flowService } from '../services/flowService';
 import { useFlowHistory } from '../lib/flow-history/useFlowHistory';
 import { useHistoryStepper } from '../lib/flow-history/useHistoryStepper';
-import type { GraphChange, GraphSnapshot } from '../lib/flow-history/graphChange';
+import type { GraphChange } from '../lib/flow-history/graphChange';
 import { tidyPositions } from '../lib/flow/flowLayout';
 import { followRenamedTarget } from '../lib/flow/flowEdgeLabels';
 import { type RemoveStepMode } from '../lib/flow/flowEdit';
 import { flushPendingWrites } from '../lib/flow-graph/canvas/pendingWrites';
 import { useStepDeletion } from './useStepDeletion';
+import { useErrorHandlerSetting } from './useErrorHandlerSetting';
+import { useSnapshotRestore } from './useSnapshotRestore';
 import { announceConversion, flowsEqual } from '../lib/flow-graph/flowSync';
 import { useFlowRealtimeStatus } from '../hooks/flow/useFlowRealtimeStatus';
 
@@ -35,6 +37,7 @@ interface FlowContextType {
   updateNodes: (nodes: FlowNode[]) => void;
   updateEdges: (edges: FlowEdge[]) => void;
   updateNodesAndEdges: (nodes: FlowNode[], edges: FlowEdge[]) => void;
+  setErrorHandler: (nodeId: string | undefined) => void;
   addNode: (node: FlowNode) => void;
   updateNode: (nodeId: string, updates: Partial<FlowNode>) => void;
   /** Change a step's data from the latest committed value, so quick consecutive edits never overwrite each other. */
@@ -338,22 +341,9 @@ export function FlowProvider({ children }: { children: ReactNode }) {
     updateNode(nodeId, { data: update(current.data) });
   }, [updateNode]);
 
-  // Put a snapshot from the history back (layoutRevision makes the canvas re-read it; selection and live status are not part of it).
-  const restoreSnapshot = useCallback((snapshot: GraphSnapshot) => {
-    const current = activeFlowRef.current;
-    if (!activeFlowId || !current) return;
-    const liveStatus = new Map(current.nodes.map(n => [n.id, n.data.status]));
-    const nodes = snapshot.nodes.map(n => ({ ...n, selected: false, dragging: false, data: { ...n.data, status: liveStatus.get(n.id) ?? n.data.status } }));
-    const updated = { ...current, nodes, edges: snapshot.edges };
-    activeFlowRef.current = updated;
-    lastSyncedFlowRef.current = updated;
-    setActiveFlowState(updated);
-    flowService.updateNodesAndEdges(activeFlowId, nodes, snapshot.edges);
-    setSelectedNodeId(sel => (sel && nodes.some(n => n.id === sel) ? sel : null));
-    setSelectedEdgeId(sel => (sel && snapshot.edges.some(e => e.id === sel) ? sel : null));
-    setLayoutRevision(v => v + 1);
-    markUnsaved();
-  }, [activeFlowId, markUnsaved]);
+  const setErrorHandler = useErrorHandlerSetting({ activeFlowRef, lastSyncedFlowRef, setActiveFlowState, markUnsaved });
+
+  const restoreSnapshot = useSnapshotRestore({ activeFlowId, activeFlowRef, lastSyncedFlowRef, setActiveFlowState, setSelectedNodeId, setSelectedEdgeId, setLayoutRevision, markUnsaved });
 
   const { undo, redo } = useHistoryStepper({ getFlow, undoStep: undoHistory, redoStep: redoHistory, restore: restoreSnapshot });
 
@@ -425,6 +415,7 @@ export function FlowProvider({ children }: { children: ReactNode }) {
     updateNodes,
     updateEdges,
     updateNodesAndEdges,
+    setErrorHandler,
     addNode,
     updateNode,
     updateNodeData,
@@ -465,6 +456,7 @@ export function FlowProvider({ children }: { children: ReactNode }) {
     updateNodes,
     updateEdges,
     updateNodesAndEdges,
+    setErrorHandler,
     addNode,
     updateNode,
     updateNodeData,

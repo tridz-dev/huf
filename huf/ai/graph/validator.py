@@ -78,6 +78,7 @@ from typing import Any
 
 from huf.ai.graph import transforms
 from huf.ai.graph.expressions import ExpressionError, parse_expression
+from huf.ai.graph.validation import step_checks
 from huf.ai.graph.validation.result import GraphValidationError, ValidationError, ValidationResult
 from huf.ai.graph.validation.schema_stage import (  # noqa: F401 -- re-exported: other modules import these from here
 	GRAPH_IR_SCHEMA,
@@ -132,16 +133,16 @@ FLOW_ONLY_NODE_TYPES: frozenset[str] = frozenset(
 		"state.delete",
 		"doc.create",
 		"code.run",
+		"wait", "stop", "doc.get", "doc.update", "flow.call", "member.set",
 	}
 ) | {"trigger.gateway", "trigger.whatsapp", "trigger.telegram"}  # chat triggers: huf/ai/flow/gateways
 
 # ``parallel`` is a Procedure-only node: Flow has no concurrent branches.
 FLOW_NODE_TYPES: frozenset[str] = (PROCEDURE_NODE_TYPES - {"parallel"}) | FLOW_ONLY_NODE_TYPES
 
-_PROFILE_NODE_TYPES: dict[str, frozenset[str]] = {
-	"procedure": PROCEDURE_NODE_TYPES,
-	"flow": FLOW_NODE_TYPES,
-}
+def get_flow_node_types() -> frozenset[str]:
+	"""Built-in Flow step types plus those installed apps register through the ``huf_flow_nodes`` hook."""
+	return FLOW_NODE_TYPES | step_checks.registered_node_types()
 
 
 # Policy ceilings for contract.limits (requirement 6: "within policy", not merely "present").
@@ -229,7 +230,8 @@ def validate_graph(
 		return ValidationResult(ok=not errors, profile=profile, errors=tuple(errors))
 	errors.extend(_check_reachability(graph, nodes_by_id))
 	errors.extend(_check_acyclic(graph, nodes_by_id))
-	errors.extend(_check_tool_ids_literal(nodes))
+	errors.extend(step_checks.check_tool_ids_literal(nodes))
+	errors.extend(step_checks.check_app_node_validators(nodes, profile))
 	errors.extend(_check_transform_ops(nodes))
 	errors.extend(_check_expressions(graph, nodes))
 	errors.extend(_check_references(nodes_by_id))
@@ -269,33 +271,8 @@ def validate_flow_graph(graph: dict, **kwargs: Any) -> ValidationResult:
 # --------------------------------------------------------------------------------------
 
 
-def _check_tool_ids_literal(nodes: list[dict]) -> list[ValidationError]:
-	"""Reconfirms I3 with a dedicated message. The schema already makes this structurally
-	impossible to violate (``config.tool_id`` is ``$defs/ToolId``, a plain string, never a
-	``$defs/Reference`` -- see spec/graph-ir.md section 6), so this only ever fires if a future
-	schema change accidentally widens ``ToolId``; it exists so that regression shows up as this
-	module's own named check rather than a silent schema-only pass.
-	"""
-	errors = []
-	for node in nodes:
-		if not isinstance(node, dict) or node.get("type") != "tool.call":
-			continue
-		tool_id = (node.get("config") or {}).get("tool_id")
-		if not isinstance(tool_id, str) or not tool_id:
-			errors.append(
-				ValidationError(
-					"DYNAMIC_TOOL_DISPATCH",
-					node.get("id"),
-					"config.tool_id",
-					f"tool_id must be a literal string known at validation time, got {tool_id!r} "
-					"-- dynamic tool dispatch is forbidden (I3)",
-				)
-			)
-	return errors
-
-
 def _check_profile_node_types(nodes: list[dict], profile: str) -> list[ValidationError]:
-	allowed = _PROFILE_NODE_TYPES[profile]
+	allowed = get_flow_node_types() if profile == "flow" else PROCEDURE_NODE_TYPES
 	errors = []
 	for node in nodes:
 		if not isinstance(node, dict):
@@ -349,6 +326,8 @@ def _control_flow_targets(node: dict) -> list[tuple[str, str | None]]:
 		targets.append(("config.approve_next", config.get("approve_next")))
 		targets.append(("config.reject_next", config.get("reject_next")))
 		targets.append(("config.timeout_next", config.get("timeout_next")))
+	elif ntype == "wait":
+		targets.append(("config.resume.timeout_next", (config.get("resume") or {}).get("timeout_next")))
 	elif ntype == "foreach":
 		for i, body_id in enumerate(config.get("body", []) or []):
 			targets.append((f"config.body[{i}]", body_id))
@@ -407,6 +386,8 @@ def _check_control_flow_targets(graph: dict, nodes_by_id: dict[str, dict]) -> li
 						f"{field} points at node id {target!r}, which does not exist in this graph",
 					)
 				)
+
+	errors.extend(step_checks.check_error_handler_target(graph, nodes_by_id))
 
 	for root in _entry_roots(graph):
 		if root not in nodes_by_id:

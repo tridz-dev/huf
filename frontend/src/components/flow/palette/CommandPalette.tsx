@@ -7,6 +7,7 @@ import { useFlowContext } from '@/contexts/FlowContext';
 import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
 import { useShortcutsHelp } from '@/components/shortcuts/ShortcutsHelpContext';
 import { actionOptions } from '@/data/actions';
+import { appActionOptions, useAppNodeTypes } from '@/lib/flow-graph/appNodeTypes';
 import { paletteIcon, cardIcon } from '@/components/nodes/nodeIcons';
 import { CODE_RUN_ACTION } from '@/lib/flow-graph/codeFlow';
 import { useCodeFlowStatus } from '@/lib/flow-graph/useCodeFlowStatus';
@@ -61,7 +62,8 @@ export function FlowCommandPalette({ open, onOpenChange, getSelectedIds, onOpenH
   const spot = useMemo(() => (activeFlow ? insertSpot({ nodes: activeFlow.nodes, edges: activeFlow.edges }, afterId) : null), [activeFlow, afterId]);
   const afterNode = spot ? nodes.find((n) => n.id === spot.sourceId) : undefined;
   const codeAvailable = Boolean(codeStatus?.available) && canExecuteCode;
-  const addable = actionOptions.filter((a) => a.id !== CODE_RUN_ACTION || codeAvailable);
+  const { types: appTypes } = useAppNodeTypes();
+  const addable = [...actionOptions, ...appActionOptions(appTypes)].filter((a) => a.id !== CODE_RUN_ACTION || codeAvailable);
   const ordered = addable;
   const isLive = activeFlow?.status === 'active';
   const clip = open ? readClipboard() : null;

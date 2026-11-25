@@ -207,6 +207,7 @@ class GraphContext:
 		self.metadata: dict = dict(metadata or {})
 		self.node_outputs: dict = {}
 		self.foreach_frames: list[dict] = []
+		self.member: dict | None = None  # the run's member (key, status, vars, ...); None when the run has none
 		self.dirty = False
 
 	# -- construction -----------------------------------------------------
@@ -262,12 +263,10 @@ class GraphContext:
 	# -- the single reference mechanism (F-2) -----------------------------
 
 	def reference_roots(self) -> dict:
-		roots: dict = {
-			"input": self.data,
-			"trigger": self.data.get("trigger"),
-			"context": self.data,
-		}
+		roots: dict = {"input": self.data, "trigger": self.data.get("trigger"), "context": self.data}
 		roots.update(self.node_outputs)
+		if self.member is not None:
+			roots["member"] = self.member
 		if self.foreach_frames:
 			roots["foreach"] = self.foreach_frames[-1]
 		return roots

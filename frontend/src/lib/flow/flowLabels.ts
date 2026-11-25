@@ -1,4 +1,4 @@
-import { actionOptions } from '../../data/actions';
+import { findActionOption } from '../flow-graph/appNodeTypes';
 import { triggerOptions } from '../../data/triggers';
 import { triggerIsConfigured } from '../flow-gateway/gatewayDefaults';
 import type { TriggerConfig } from '../../types/flow.types';
@@ -8,7 +8,7 @@ import type { TriggerConfig } from '../../types/flow.types';
  * Derive it from the palette data so the three can never drift apart.
  */
 export function actionLabel(actionId: string): string {
-  return actionOptions.find((a) => a.id === actionId)?.name ?? 'Action';
+  return findActionOption(actionId)?.name ?? 'Action';
 }
 
 export function triggerLabel(triggerId: string | undefined): string {
@@ -40,10 +40,13 @@ const TOOL_CARD: Record<string, string> = {
 };
 
 /** Palette card id (data/actions.ts) that produced an action config, so titles can be derived from it. */
-export function actionCardId(config: { type?: unknown; tool_id?: unknown } | undefined): string {
+export function actionCardId(config: { type?: unknown; tool_id?: unknown; backend_type?: unknown } | undefined): string {
   const type = typeof config?.type === 'string' ? config.type : '';
   // The canvas config type is `foreach`; the palette card is called `loop`.
   if (type === 'foreach') return 'loop';
+  if (type === 'router-decision') return 'switch';
+  // A step an app added keeps its own type id, which is also its palette id.
+  if (type === 'unknown') return typeof (config as { backend_type?: unknown }).backend_type === 'string' ? (config as { backend_type: string }).backend_type : type;
   if (type === 'tool-call' && typeof config?.tool_id === 'string' && TOOL_CARD[config.tool_id]) return TOOL_CARD[config.tool_id];
   return type;
 }

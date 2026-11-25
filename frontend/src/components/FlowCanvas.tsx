@@ -422,7 +422,7 @@ export function FlowCanvas({
       case 'tool-call':
         return 'tool';
       case 'condition':
-      case 'router':
+      case 'router': case 'router-decision':
       case 'foreach':
         return 'condition';
       default:

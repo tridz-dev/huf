@@ -9,6 +9,10 @@ export interface RunStepMeta {
     type: string;
     body?: string[];
     outcome?: RunOutcome;
+    /** Most tries a step with "Try again if it fails" gets. */
+    tries?: number;
+    /** The flow a Run another flow step starts, by name. */
+    flow_name?: string;
 }
 
 /** Fields the run list and the run details both carry, for the run story. */

@@ -18,7 +18,7 @@
  */
 
 import type {
-    ActionConfig, ActionType, Flow, FlowEdge, FlowEdgeRoute, FlowNode, FlowNodeData, FlowStatus, TriggerConfig,
+    ActionConfig, ActionType, Flow, FlowEdge, FlowEdgeData, FlowEdgeRoute, FlowNode, FlowNodeData, FlowStatus, TriggerConfig,
 } from '@/types/flow.types';
 import type { BackendFlowGraph, BackendNode, BackendNodeType } from './flowApi';
 import { layoutWhenUnplaced } from '../lib/flow/flowLayout';
@@ -45,6 +45,12 @@ export const ACTION_TO_BACKEND_TYPE: Record<ActionType, BackendNodeType> = {
     'state-delete': 'state.delete',
     'doc-create': 'doc.create',
     'code-run': 'code.run',
+    'wait': 'wait',
+    'stop': 'stop',
+    'doc-get': 'doc.get',
+    'doc-update': 'doc.update',
+    'flow-call': 'flow.call',
+    'member-set': 'member.set',
 };
 
 const BACKEND_TO_ACTION_TYPE: Record<string, ActionType> = Object.fromEntries(
@@ -61,7 +67,7 @@ const ROUTING_KEYS: Partial<Record<BackendNodeType, string[]>> = {
 };
 
 /** Node types with no `next` key at all. */
-const NO_NEXT_TYPES = new Set<string>(['condition', 'router.llm', 'router.decision', 'human.approval', 'output']);
+const NO_NEXT_TYPES = new Set<string>(['condition', 'router.llm', 'router.decision', 'human.approval', 'output', 'stop']);
 
 /** Valid values of a handle id / edge route other than 'next'. */
 export const FLOW_EDGE_ROUTES: readonly FlowEdgeRoute[] = [
@@ -92,13 +98,15 @@ export interface MakeFlowEdgeOptions {
     label?: string;
     /** position among same-route edges of the source (option/body). */
     index?: number;
+    /** router.decision rule check (route 'option'). */
+    expression?: string;
 }
 
 /** Build the canonical canvas edge for a route. Used by deserialize; WP-D should use it for new connections. */
 export function makeFlowEdge(source: string, target: string, route: FlowEdgeRoute, opts: MakeFlowEdgeOptions = {}): FlowEdge {
     const label = route === 'option' ? opts.label ?? target
         : ROUTE_LABELS[route];
-    const data: { route: FlowEdgeRoute } = { route };
+    const data: FlowEdgeData = opts.expression !== undefined ? { route, expression: opts.expression } : { route };
     const edge: FlowEdge = {
         id: makeFlowEdgeId(source, route, target, route === 'option' || route === 'body' ? opts.index ?? 0 : undefined),
         source,
@@ -146,6 +154,7 @@ export function serializeFlow(flow: Flow): BackendFlowGraph {
         fingerprint: placeholderFingerprint(JSON.stringify(nodes.map((n) => [n.id, n.type, n.config, n.next, n.on_error]))),
         entry: triggerIds.length ? triggerIds : flow.nodes[0]?.id ?? '',
         nodes,
+        ...(flow.errorHandler && ids.has(flow.errorHandler) ? { error_handler: { next: flow.errorHandler } } : {}),
         contract: deriveContract(nodes),
     };
 }
@@ -179,6 +188,7 @@ function serializeNode(node: FlowNode, outgoing: FlowEdge[], nextOf: Map<string,
             const options = byRoute('option').map((e) => ({
                 label: typeof e.label === 'string' && e.label !== '' ? e.label : e.target,
                 node_id: e.target,
+                ...(typeof e.data?.expression === 'string' ? { expression: e.data.expression } : {}),
             }));
             config.options = options;
             // Recomputed from current edges: a default that is no longer a routed target is dropped.
@@ -193,6 +203,18 @@ function serializeNode(node: FlowNode, outgoing: FlowEdge[], nextOf: Map<string,
             setIf('reject_next', first('reject'));
             setIf('timeout_next', config.timeout_ms ? first('timeout') : undefined); // a Timed out path exists only with a time limit
             break;
+        case 'wait': {
+            // The Timed out path of a "until continued" wait lives inside `resume`; it exists only with a time limit.
+            const resume: Record<string, unknown> = { ...(config.resume as Record<string, unknown> | undefined) };
+            delete resume.timeout_next;
+            if (config.mode === 'resume' && resume.timeout_ms) {
+                const target = first('timeout');
+                if (target !== undefined) resume.timeout_next = target;
+            }
+            if (config.mode === 'resume' && Object.keys(resume).length) config.resume = resume;
+            else delete config.resume;
+            break;
+        }
         case 'foreach': {
             const seen = new Set<string>();
             const body = byRoute('body').flatMap((e) => walkChain(e.target, nextOf, seen));
@@ -305,6 +327,7 @@ export function deserializeFlow(
         status: mapBackendStatusToFrontend(status),
         nodes: layoutWhenUnplaced(graph.nodes.map((node, index) => deserializeNode(node, index)), edges, graph.nodes.some((n) => !n._position)),
         edges,
+        ...(graph.error_handler?.next ? { errorHandler: graph.error_handler.next } : {}),
         createdAt: new Date(),
         updatedAt: new Date(),
         // Version lives on the Flow Definition doctype record, not in the graph.
@@ -399,8 +422,8 @@ function deserializeEdgesForNode(node: BackendNode, byId: Map<string, BackendNod
             break;
         case 'router.llm':
         case 'router.decision': {
-            const options = (cfg.options as Array<{ label: string; node_id: string }> | undefined) ?? [];
-            options.forEach((o, index) => push(o.node_id, 'option', { label: o.label, index }));
+            const options = (cfg.options as Array<{ label: string; node_id: string; expression?: string }> | undefined) ?? [];
+            options.forEach((o, index) => push(o.node_id, 'option', { label: o.label, index, expression: o.expression }));
             if (typeof cfg.default === 'string' && !options.some((o) => o.node_id === cfg.default)) push(cfg.default, 'default');
             break;
         }
@@ -408,6 +431,10 @@ function deserializeEdgesForNode(node: BackendNode, byId: Map<string, BackendNod
             push(cfg.approve_next, 'approve');
             push(cfg.reject_next, 'reject');
             push(cfg.timeout_next, 'timeout');
+            break;
+        case 'wait':
+            push((cfg.resume as { timeout_next?: string } | undefined)?.timeout_next, 'timeout');
+            push(node.next, 'next');
             break;
         case 'foreach':
             heads((cfg.body as string[] | undefined) ?? []).forEach((id, index) => push(id, 'body', { index }));

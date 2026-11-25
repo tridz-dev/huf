@@ -38,6 +38,12 @@ NODE_TYPE_LABELS: dict[str, str] = {
 	"state.delete": "Delete State",
 	"doc.create": "Create Document",
 	"code.run": "Execute Code",
+	"wait": "Wait",
+	"stop": "Stop",
+	"doc.get": "Find Document",
+	"doc.update": "Update Document",
+	"flow.call": "Run Another Flow",
+	"member.set": "Remember for this Person",
 }
 
 FIELD_LABELS: dict[str, str] = {
@@ -101,6 +107,12 @@ TYPE_TITLES: dict[str, str] = {
 	"state.delete": "Forget saved data",
 	"doc.create": "Create a record",
 	"code.run": "Run code",
+	"wait": "Wait",
+	"stop": "Stop with error",
+	"doc.get": "Find a record",
+	"doc.update": "Update a record",
+	"flow.call": "Run another flow",
+	"member.set": "Remember for this person",
 }
 
 TOOL_TITLES: dict[str, str] = {

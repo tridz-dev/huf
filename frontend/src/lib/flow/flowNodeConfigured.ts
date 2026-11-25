@@ -22,6 +22,8 @@ export function actionHasConfiguredContent(data: Pick<FlowNodeData, 'actionConfi
       return has(config.prompt);
     case 'human.approval':
       return has(config.message) || has(config.approver_role) || Boolean(config.approver_users && config.approver_users.length > 0);
+    case 'wait':
+      return config.mode === 'resume' || (config.mode === 'until' ? Boolean(config.until) : Boolean(config.duration?.value));
     case 'condition':
       return has(config.expression);
     case 'foreach':
@@ -36,6 +38,16 @@ export function actionHasConfiguredContent(data: Pick<FlowNodeData, 'actionConfi
       return Boolean(config.doctype?.trim());
     case 'code-run':
       return has(config.code);
+    case 'stop':
+      return Boolean(config.message);
+    case 'doc-get':
+      return Boolean(config.doctype?.trim() && (config.name || Object.keys(config.filters ?? {}).length > 0));
+    case 'doc-update':
+      return Boolean(config.doctype?.trim() && config.name && Object.keys(config.values ?? {}).length > 0);
+    case 'flow-call':
+      return Boolean(config.flow_id);
+    case 'member-set':
+      return Object.keys(config.vars ?? {}).length > 0;
     case 'unknown':
       return true;
     default:

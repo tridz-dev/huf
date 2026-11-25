@@ -32,6 +32,11 @@ const FOREACH: BranchHandle[] = [
   { route: 'next', handleId: 'next', label: 'When done', optional: true },
 ];
 
+const WAIT_WITH_TIMEOUT: BranchHandle[] = [
+  { route: 'next', handleId: 'next', label: 'Continued', optional: true },
+  HUMAN_TIMEOUT,
+];
+
 /** Fixed branch handles of an action config (`type` is the canvas discriminator). */
 export function branchHandlesFor(actionType: string | undefined, config?: Record<string, unknown>): BranchHandle[] {
   switch (actionType) {
@@ -41,6 +46,11 @@ export function branchHandlesFor(actionType: string | undefined, config?: Record
       return config && config.timeout_ms ? [...HUMAN, HUMAN_TIMEOUT] : HUMAN;
     case 'foreach':
       return FOREACH;
+    case 'wait': {
+      // A Timed out path exists only while "until continued" has a time limit.
+      const resume = (config?.resume ?? {}) as { timeout_ms?: unknown };
+      return config?.mode === 'resume' && resume.timeout_ms ? WAIT_WITH_TIMEOUT : [];
+    }
     default:
       return [];
   }
@@ -48,6 +58,9 @@ export function branchHandlesFor(actionType: string | undefined, config?: Record
 
 /** Whether a node type keeps a single free-form fan-out handle (router: one 'option' edge per path). */
 export const ROUTER_HANDLE = 'option';
+
+/** Steps whose paths are free-form `option` connections from one handle: Choose with AI and Choose by rules. */
+export const isPathRouter = (type: string | undefined): boolean => type === 'router' || type === 'router-decision';
 
 /** Colour family of a branch name pill. */
 export type BranchTone = 'good' | 'bad' | 'warn' | 'loop' | 'neutral';
