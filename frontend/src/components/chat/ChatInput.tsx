@@ -315,7 +315,8 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                 // so the pending bubble never gets `runStatus` and the polling fallback never engages.
                 const queued =
                     msg?.queued === true || runAck?.queued === true;
-                if (!useStreaming && responseText && !queued) {
+                // Streaming too: a reply recovered after a gateway timeout sent no deltas.
+                if (responseText && !queued) {
                     trackActivity(responseText);
                 }
                 const agentMessageId =
