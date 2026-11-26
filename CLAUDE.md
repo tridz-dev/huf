@@ -254,7 +254,7 @@ toast.success("Agent created");
 | **MCP Server** | Model Context Protocol server configuration |
 | **Agent Settings** | Global application settings (singleton) |
 | **Flow Definition** | Graph-based flow definition stored as JSON |
-| **Flow Run** | Single execution instance of a flow |
+| **Agent Flow Run** | Single execution instance of a flow |
 
 ## Key Backend Files
 

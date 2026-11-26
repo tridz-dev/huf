@@ -34,7 +34,7 @@ class TestFlowRetry(IntegrationTestCase):
 		self.flow.insert(ignore_permissions=True)
 		self.run_doc = frappe.get_doc(
 			{
-				"doctype": "Flow Run",
+				"doctype": "Agent Flow Run",
 				"flow_definition": self.flow.name,
 				"flow_id": self.flow.flow_id,
 				"status": "Running",
@@ -43,7 +43,7 @@ class TestFlowRetry(IntegrationTestCase):
 		).insert(ignore_permissions=True)
 
 	def tearDown(self):
-		frappe.delete_doc("Flow Run", self.run_doc.name, ignore_permissions=True, force=True)
+		frappe.delete_doc("Agent Flow Run", self.run_doc.name, ignore_permissions=True, force=True)
 		frappe.delete_doc("Flow Definition", self.flow.name, ignore_permissions=True, force=True)
 		frappe.db.commit()
 
@@ -51,7 +51,7 @@ class TestFlowRetry(IntegrationTestCase):
 		return {"id": "t1", "type": "tool.call", "config": {"retry": {"attempts": 3, **policy}}}
 
 	def _row(self):
-		return frappe.db.get_value("Flow Run", self.run_doc.name, ["status", "resume_at", "waiting"], as_dict=True)
+		return frappe.db.get_value("Agent Flow Run", self.run_doc.name, ["status", "resume_at", "waiting"], as_dict=True)
 
 	def _go(self, node, results):
 		"""One handler pass: the step returns the next of ``results``."""

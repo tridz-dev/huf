@@ -424,7 +424,7 @@ def on_run_success(gateway, event, kind, response):
 		requester = link.user if link else frappe.session.user
 		if kind == "flow":
 			_record(
-				"Flow Run",
+				"Agent Flow Run",
 				getattr(response, "name", None),
 				{"gateway_event": event.name, "requester_external_id": meta.user_aad_id, "requester_user": requester},
 			)

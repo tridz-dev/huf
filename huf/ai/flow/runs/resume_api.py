@@ -26,9 +26,9 @@ def resume_waiting_run(flow_run: str | None = None, token: str | None = None, pa
 	from huf.ai.secrets import redact
 
 	refusal = _("This link has already been used or is not valid.")
-	if not flow_run or not token or not frappe.db.exists("Flow Run", flow_run):
+	if not flow_run or not token or not frappe.db.exists("Agent Flow Run", flow_run):
 		frappe.throw(refusal, frappe.PermissionError)
-	run = frappe.get_doc("Flow Run", flow_run)
+	run = frappe.get_doc("Agent Flow Run", flow_run)
 	if run.status != park.WAIT_STATUS or not park.verify_token(run, token):
 		frappe.throw(refusal, frappe.PermissionError)
 

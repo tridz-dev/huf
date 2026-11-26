@@ -24,11 +24,11 @@ def cancel_flow_run(flow_run_id: str) -> dict:
 	from huf.ai.flow.runs import park
 
 	if not park.cancel_run(flow_run_id, frappe.session.user):
-		status = frappe.db.get_value("Flow Run", flow_run_id, "status")
+		status = frappe.db.get_value("Agent Flow Run", flow_run_id, "status")
 		if status == "Running":
 			frappe.throw(_("This run is working right now, so it cannot be cancelled."))
 		frappe.throw(_("This run is {0}, so it cannot be cancelled.").format(status))
-	return {"flow_run_id": flow_run_id, "status": frappe.db.get_value("Flow Run", flow_run_id, "status")}
+	return {"flow_run_id": flow_run_id, "status": frappe.db.get_value("Agent Flow Run", flow_run_id, "status")}
 
 
 @frappe.whitelist(methods=["POST"])
@@ -39,9 +39,9 @@ def continue_waiting_run(flow_run_id: str) -> dict:
 	from huf.ai.flow.runs import park
 
 	if not park.wake_run(flow_run_id, "continued"):
-		status = frappe.db.get_value("Flow Run", flow_run_id, "status")
+		status = frappe.db.get_value("Agent Flow Run", flow_run_id, "status")
 		frappe.throw(_("This run is {0}, so it is not waiting on a timer.").format(status))
-	return {"flow_run_id": flow_run_id, "status": frappe.db.get_value("Flow Run", flow_run_id, "status")}
+	return {"flow_run_id": flow_run_id, "status": frappe.db.get_value("Agent Flow Run", flow_run_id, "status")}
 
 
 @frappe.whitelist(methods=["POST"])
@@ -55,7 +55,7 @@ def get_resume_link(flow_run_id: str) -> dict:
 
 	from huf.ai.flow.runs import park
 
-	run = frappe.get_doc("Flow Run", flow_run_id)
+	run = frappe.get_doc("Agent Flow Run", flow_run_id)
 	token = park.resume_token(run) if run.status == park.WAIT_STATUS else None
 	if not token:
 		frappe.throw(_("This run is not waiting for its resume link."))

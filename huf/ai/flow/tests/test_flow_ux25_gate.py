@@ -40,7 +40,7 @@ class TestGateFailsClosed(unittest.TestCase):
 
 	def test_a_run_that_is_not_a_test_still_runs_for_real(self):
 		def lookup(doctype, name, field):
-			return {"Agent Run": "FR-9", "Flow Run": "Real"}[doctype]
+			return {"Agent Run": "FR-9", "Agent Flow Run": "Real"}[doctype]
 
 		with patch.object(gate.frappe.db, "get_value", side_effect=lookup):
 			self.assertFalse(gate.agent_run_is_test("AR-4"))
@@ -49,7 +49,7 @@ class TestGateFailsClosed(unittest.TestCase):
 		self.assertFalse(gate.agent_run_is_test(None))
 
 	def test_a_test_flow_run_is_a_test(self):
-		with patch.object(gate.frappe.db, "get_value", side_effect=lambda dt, n, f: {"Agent Run": "FR-1", "Flow Run": "Test"}[dt]):
+		with patch.object(gate.frappe.db, "get_value", side_effect=lambda dt, n, f: {"Agent Run": "FR-1", "Agent Flow Run": "Test"}[dt]):
 			self.assertTrue(gate.agent_run_is_test("AR-6"))
 
 	def test_an_unreadable_step_test_flag_means_test(self):

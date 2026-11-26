@@ -48,7 +48,7 @@ class TestApprovalDecisionRights(IntegrationTestCase):
 	def _waiting_run(self, waiting):
 		run = frappe.get_doc(
 			{
-				"doctype": "Flow Run",
+				"doctype": "Agent Flow Run",
 				"flow_definition": self.flow_doc,
 				"flow_id": self.flow_id,
 				"status": "Waiting Approval",
@@ -58,7 +58,7 @@ class TestApprovalDecisionRights(IntegrationTestCase):
 			}
 		)
 		run.insert(ignore_permissions=True)
-		self._docs.append(("Flow Run", run.name))
+		self._docs.append(("Agent Flow Run", run.name))
 		return run.name
 
 	def _user(self, *roles):
@@ -92,7 +92,7 @@ class TestApprovalDecisionRights(IntegrationTestCase):
 
 	def test_a_finished_run_has_nothing_to_decide(self):
 		run = self._waiting_run({"type": "approval", "approver_type": "role", "approver_role": "Huf Manager"})
-		frappe.db.set_value("Flow Run", run, "status", "Success")
+		frappe.db.set_value("Agent Flow Run", run, "status", "Success")
 		frappe.set_user(self._user("Huf Manager"))
 		detail = flow_api.get_flow_run(run)
 		self.assertFalse(detail["can_decide"])

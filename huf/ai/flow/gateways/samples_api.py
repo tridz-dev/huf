@@ -93,7 +93,7 @@ def get_last_gateway_message(flow_id: str, node_id: str) -> dict:
 	if not frappe.has_permission("Gateway", "write", doc=gateway):
 		frappe.throw(_("Not permitted"), frappe.PermissionError)
 	rows = frappe.get_all(
-		"Flow Run",
+		"Agent Flow Run",
 		filters={"flow_id": flow_id, "trigger_type": "Gateway"},
 		fields=["trigger_payload", "creation"],
 		order_by="creation desc",

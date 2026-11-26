@@ -290,7 +290,7 @@ class TestApprovalMessagesOnBench(WP11Base):
 	def tearDown(self):
 		frappe.db.rollback()
 		for name in getattr(self, "_runs", []):
-			frappe.db.delete("Notification Log", {"document_type": "Flow Run", "document_name": name})
+			frappe.db.delete("Notification Log", {"document_type": "Agent Flow Run", "document_name": name})
 		super().tearDown()
 
 	def assertPlain(self, text):
@@ -329,7 +329,7 @@ class TestApprovalMessagesOnBench(WP11Base):
 
 	def test_old_waiting_without_new_keys_still_reads_well(self):
 		run = self._waiting_run()
-		frappe.db.set_value("Flow Run", run.name, "waiting", json.dumps({"type": "approval", "node_id": "ask", "message": "ok?", "approver_type": "role", "approver_role": "System Manager"}))
+		frappe.db.set_value("Agent Flow Run", run.name, "waiting", json.dumps({"type": "approval", "node_id": "ask", "message": "ok?", "approver_type": "role", "approver_role": "System Manager"}))
 		row = [r for r in flow_api.get_pending_approvals() if r["flow_run_id"] == run.name][0]
 		self.assertEqual(row["title"], "Approval needed: Refund review")
 		self.assertEqual(row["message"], "ok?")

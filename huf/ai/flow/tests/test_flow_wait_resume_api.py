@@ -32,14 +32,14 @@ class TestWaitResumeApi(IntegrationTestCase):
 		self._docs.append(("Flow Definition", flow.name))
 		self.run = frappe.get_doc(
 			{
-				"doctype": "Flow Run",
+				"doctype": "Agent Flow Run",
 				"flow_definition": flow.name,
 				"flow_id": flow.flow_id,
 				"status": "Running",
 				"trigger_type": "Manual",
 			}
 		).insert(ignore_permissions=True)
-		self._docs.append(("Flow Run", self.run.name))
+		self._docs.append(("Agent Flow Run", self.run.name))
 		park.park_run(self.run, {"id": "w1", "type": "wait"}, ParkRequest(reason="wait", resume_at=None, token=True))
 		self.token = park.resume_token(self.run)
 
@@ -51,7 +51,7 @@ class TestWaitResumeApi(IntegrationTestCase):
 		frappe.db.commit()
 
 	def _status(self):
-		return frappe.db.get_value("Flow Run", self.run.name, "status")
+		return frappe.db.get_value("Agent Flow Run", self.run.name, "status")
 
 	def _resume(self, **kw):
 		with patch("frappe.enqueue") as enq:
@@ -63,7 +63,7 @@ class TestWaitResumeApi(IntegrationTestCase):
 		self.assertEqual(out["status"], "resumed")
 		self.assertEqual(self._status(), "Running")
 		self.assertEqual(enq.call_args.kwargs["queue"], "short")
-		woke = json.loads(frappe.db.get_value("Flow Run", self.run.name, "waiting"))["woke"]
+		woke = json.loads(frappe.db.get_value("Agent Flow Run", self.run.name, "waiting"))["woke"]
 		self.assertEqual((woke["reason"], woke["payload"]), ("resumed", {"answer": "yes"}))
 
 	def test_wrong_token_refused(self):

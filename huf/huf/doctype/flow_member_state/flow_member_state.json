@@ -21,7 +21,7 @@
   {"fieldname": "member_key", "fieldtype": "Data", "in_list_view": 1, "label": "Member", "length": 140, "read_only": 1, "reqd": 1},
   {"default": "Active", "fieldname": "status", "fieldtype": "Select", "in_list_view": 1, "label": "Status", "options": "Active\nWaiting\nCompleted\nExited", "read_only": 1},
   {"fieldname": "current_node_id", "fieldtype": "Data", "label": "Current Step", "read_only": 1},
-  {"fieldname": "active_flow_run", "fieldtype": "Link", "label": "Active Run", "options": "Flow Run", "read_only": 1},
+  {"fieldname": "active_flow_run", "fieldtype": "Link", "label": "Active Run", "options": "Agent Flow Run", "read_only": 1},
   {"fieldname": "entered_at", "fieldtype": "Datetime", "label": "Entered At", "read_only": 1},
   {"fieldname": "last_event_at", "fieldtype": "Datetime", "label": "Last Event At", "read_only": 1, "search_index": 1},
   {"fieldname": "completed_at", "fieldtype": "Datetime", "label": "Completed At", "read_only": 1},

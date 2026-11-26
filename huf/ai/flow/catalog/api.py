@@ -58,7 +58,7 @@ def _step_tool(node: dict) -> str | None:
 def _latest_run(flow_id: str) -> dict | None:
 	for filters in ({"flow_id": flow_id, "status": "Success"}, {"flow_id": flow_id}):
 		rows = frappe.get_all(
-			"Flow Run",
+			"Agent Flow Run",
 			filters=filters,
 			fields=["name", "creation", "trigger_payload", "context_json", "trigger_type"],
 			order_by="creation desc",
@@ -136,7 +136,7 @@ def _trigger_step(graph: dict, flow_id: str, run: dict | None) -> dict | None:
 		gateway = (node.get("config") or {}).get("gateway")
 		provider = frappe.db.get_value("Gateway", gateway, "provider") if gateway else None
 		step.update(fields=gateway_fields.trigger_fields(node, provider), source="doctype", has_sample=True)
-		step["last_request_available"] = bool(frappe.db.exists("Flow Run", {"flow_id": flow_id, "trigger_type": "Gateway"}))
+		step["last_request_available"] = bool(frappe.db.exists("Agent Flow Run", {"flow_id": flow_id, "trigger_type": "Gateway"}))
 		return step
 	if pinned:
 		step.update(fields=cat.infer_fields(pinned, "input", root_label="What the trigger sent"), source="pinned", has_sample=True)
@@ -146,7 +146,7 @@ def _trigger_step(graph: dict, flow_id: str, run: dict | None) -> dict | None:
 			source="last_run", has_sample=True, ran_at=str(run["creation"]),
 		)
 	if node.get("type") == WEBHOOK:
-		step["last_request_available"] = bool(frappe.db.exists("Flow Run", {"flow_id": flow_id, "trigger_type": "Webhook"}))
+		step["last_request_available"] = bool(frappe.db.exists("Agent Flow Run", {"flow_id": flow_id, "trigger_type": "Webhook"}))
 	return step
 
 

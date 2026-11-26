@@ -127,7 +127,7 @@
    "fieldname": "flow_run",
    "fieldtype": "Link",
    "label": "Flow Run",
-   "options": "Flow Run"
+   "options": "Agent Flow Run"
   },
   {
    "fieldname": "flow_node_id",

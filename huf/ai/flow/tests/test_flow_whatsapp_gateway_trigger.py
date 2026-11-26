@@ -112,7 +112,7 @@ class TestFlowWhatsAppGatewayTrigger(fs.TestWhatsAppMultiGateway):
 
 	def _flow_run_for(self, wamid):
 		event = frappe.get_doc("Gateway Event", self._events(self.gateway_a, wamid)[0])
-		return event, frappe.get_doc("Flow Run", event.flow_run)
+		return event, frappe.get_doc("Agent Flow Run", event.flow_run)
 
 	def test_inbound_whatsapp_message_starts_a_flow_run(self):
 		self._grant_flow_access()
@@ -140,7 +140,7 @@ class TestFlowWhatsAppGatewayTrigger(fs.TestWhatsAppMultiGateway):
 		result = process_gateway_event(self._events(self.gateway_a, "wamid.NOPERM")[0])
 		frappe.set_user("Administrator")
 		self.assertIn("flow_run_id", result)
-		self.assertEqual(frappe.db.count("Flow Run", {"flow_id": flow_id}), 1)
+		self.assertEqual(frappe.db.count("Agent Flow Run", {"flow_id": flow_id}), 1)
 
 	def test_other_gateway_does_not_start_the_flow(self):
 		self._grant_flow_access()
@@ -149,7 +149,7 @@ class TestFlowWhatsAppGatewayTrigger(fs.TestWhatsAppMultiGateway):
 		self._inbound("B", "wamid.FLOWB", "hello")
 		process_gateway_event(self._events(self.gateway_b, "wamid.FLOWB")[0])
 		frappe.set_user("Administrator")
-		self.assertEqual(frappe.db.count("Flow Run", {"flow_id": flow_id}), 0)
+		self.assertEqual(frappe.db.count("Agent Flow Run", {"flow_id": flow_id}), 0)
 		self.assertEqual(len(self.agent_calls), 1)  # B still routes to its agent
 
 	def test_duplicate_wamid_starts_one_flow_run(self):
@@ -160,7 +160,7 @@ class TestFlowWhatsAppGatewayTrigger(fs.TestWhatsAppMultiGateway):
 		self.assertTrue(self._inbound("A", "wamid.DUPF").get("duplicates"))
 		process_gateway_event(self._events(self.gateway_a, "wamid.DUPF")[0])
 		frappe.set_user("Administrator")
-		self.assertEqual(frappe.db.count("Flow Run", {"flow_id": flow_id}), 1)
+		self.assertEqual(frappe.db.count("Agent Flow Run", {"flow_id": flow_id}), 1)
 
 	def _run_triggered_flow(self, wamid, tool_input):
 		self._grant_flow_access()
@@ -207,7 +207,7 @@ class TestFlowWhatsAppGatewayTrigger(fs.TestWhatsAppMultiGateway):
 		self._grant_flow_access()
 		flow_id = self._flow({"action": "send_message", "gateway_name": self.gateway_a.name, "to": fs.SENDER, "message": "x"})
 		started = flow_api.run_flow(flow_id, {})
-		flow_run = frappe.get_doc("Flow Run", started["flow_run_id"])
+		flow_run = frappe.get_doc("Agent Flow Run", started["flow_run_id"])
 		self.assertEqual(self._text_posts(), [])
 		self.assertIn("gateway_context_required", self._tool_output(flow_run))
 
@@ -293,7 +293,7 @@ class TestFlowWhatsAppGatewayTrigger(fs.TestWhatsAppMultiGateway):
 		self._route_gateway_a_to(flow_id)
 		name, _ = self._start("wamid.FL1")
 		run_name = frappe.db.get_value("Gateway Event", name, "flow_run")
-		frappe.db.set_value("Flow Run", run_name, "status", "Queued")
+		frappe.db.set_value("Agent Flow Run", run_name, "status", "Queued")
 		with patch("huf.ai.flow.engine._execute_loop", side_effect=RuntimeError("boom")):
 			run_flow(run_name)
 		event = frappe.get_doc("Gateway Event", name)
@@ -306,14 +306,14 @@ class TestFlowWhatsAppGatewayTrigger(fs.TestWhatsAppMultiGateway):
 		frappe.db.set_value("Gateway Event", name, "status", "Queued")  # reaper / retry re-queues it
 		process_gateway_event(name)
 		frappe.set_user("Administrator")
-		self.assertEqual(frappe.db.count("Flow Run", {"flow_id": flow_id}), 1)
+		self.assertEqual(frappe.db.count("Agent Flow Run", {"flow_id": flow_id}), 1)
 		self.assertEqual(frappe.db.get_value("Gateway Event", name, "status"), "Running")
 
 	def test_trigger_payload_is_enriched(self):
 		flow_id = self._reply_flow()
 		name, _ = self._start("wamid.PL1", "what time is it")
 		event = frappe.get_doc("Gateway Event", name)
-		payload = json.loads(frappe.get_doc("Flow Run", event.flow_run).trigger_payload)
+		payload = json.loads(frappe.get_doc("Agent Flow Run", event.flow_run).trigger_payload)
 		self.assertEqual(payload["gateway"], self.gateway_a.name)
 		self.assertEqual(payload["provider"], "WhatsApp")
 		self.assertEqual(payload["sender_id"], event.sender_id)
@@ -331,7 +331,7 @@ class TestFlowWhatsAppGatewayTrigger(fs.TestWhatsAppMultiGateway):
 		self._reply_flow()
 		with patch("huf.ai.gateway_service._save_whatsapp_media", return_value=["/private/files/a.jpg"]):
 			name, _ = self._start("wamid.MD1", "see attached")
-		payload = json.loads(frappe.get_doc("Flow Run", frappe.db.get_value("Gateway Event", name, "flow_run")).trigger_payload)
+		payload = json.loads(frappe.get_doc("Agent Flow Run", frappe.db.get_value("Gateway Event", name, "flow_run")).trigger_payload)
 		self.assertEqual(payload["attachments"], ["/private/files/a.jpg"])
 
 	def test_waiting_flow_event_is_not_reaped(self):
@@ -340,7 +340,7 @@ class TestFlowWhatsAppGatewayTrigger(fs.TestWhatsAppMultiGateway):
 		self._reply_flow()
 		name, _ = self._start("wamid.WT1")
 		run_name = frappe.db.get_value("Gateway Event", name, "flow_run")
-		frappe.db.set_value("Flow Run", run_name, "status", "Waiting User")
+		frappe.db.set_value("Agent Flow Run", run_name, "status", "Waiting User")
 		frappe.db.sql("update `tabGateway Event` set modified = '2000-01-01 00:00:00' where name = %s", name)
 		reap_stuck_gateway_events()
 		self.assertEqual(frappe.db.get_value("Gateway Event", name, "status"), "Running")

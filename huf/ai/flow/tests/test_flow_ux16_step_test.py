@@ -79,16 +79,16 @@ class Base(IntegrationTestCase):
 	def _run(self, payload=None, outputs=None, status="Success"):
 		run = frappe.get_doc(
 			{
-				"doctype": "Flow Run", "flow_definition": self.flow_id, "flow_id": self.flow_id, "status": status, "trigger_type": "Webhook",
+				"doctype": "Agent Flow Run", "flow_definition": self.flow_id, "flow_id": self.flow_id, "status": status, "trigger_type": "Webhook",
 				"started_at": now_datetime(), "trigger_payload": json.dumps(payload or {}),
 				"context_json": json.dumps({**(payload or {}), "__node_outputs__": outputs or {}}),
 			}
 		)
 		run.insert(ignore_permissions=True)
-		self._docs.append(("Flow Run", run.name))
+		self._docs.append(("Agent Flow Run", run.name))
 
 	def _runs(self):
-		return frappe.db.count("Flow Run", {"flow_id": self.flow_id})
+		return frappe.db.count("Agent Flow Run", {"flow_id": self.flow_id})
 
 
 class TestRealAndSimulated(Base):

@@ -152,7 +152,7 @@ class TestParkedErrorHandler(IntegrationTestCase):
 
 	def tearDown(self):
 		for name in self.runs:
-			frappe.delete_doc("Flow Run", name, ignore_permissions=True, force=True)
+			frappe.delete_doc("Agent Flow Run", name, ignore_permissions=True, force=True)
 		frappe.delete_doc("Flow Definition", self.flow.name, ignore_permissions=True, force=True)
 		frappe.db.commit()
 
@@ -160,7 +160,7 @@ class TestParkedErrorHandler(IntegrationTestCase):
 		graph = {"entry": entry, "nodes": nodes, "edges": [], "error_handler": {"next": handler}}
 		run = frappe.get_doc(
 			{
-				"doctype": "Flow Run",
+				"doctype": "Agent Flow Run",
 				"flow_definition": self.flow.name,
 				"flow_id": self.flow.flow_id,
 				"status": "Running",
@@ -173,7 +173,7 @@ class TestParkedErrorHandler(IntegrationTestCase):
 		return run.name
 
 	def _row(self, name):
-		return frappe.db.get_value("Flow Run", name, ["status", "last_error"], as_dict=True)
+		return frappe.db.get_value("Agent Flow Run", name, ["status", "last_error"], as_dict=True)
 
 	def _go(self, name):
 		flow_engine.run_flow(name)
@@ -216,7 +216,7 @@ class TestParkedErrorHandler(IntegrationTestCase):
 	def test_cancel_while_handler_parked_stays_cancelled(self):
 		name = self._start(self._handler_graph("success"), "boom")
 		self._go(name)
-		frappe.db.set_value("Flow Run", name, "status", "Cancelled")
+		frappe.db.set_value("Agent Flow Run", name, "status", "Cancelled")
 		self.assertEqual(self._go(name).status, "Cancelled")
 
 	def test_no_handler_wait_then_success_regression(self):
@@ -226,7 +226,7 @@ class TestParkedErrorHandler(IntegrationTestCase):
 		]
 		graph = {"entry": "w", "nodes": nodes, "edges": []}
 		name = self._start(nodes, "w", handler="none")
-		frappe.db.set_value("Flow Run", name, "pinned_definition", PinnedVersion.pin(graph).to_json())
+		frappe.db.set_value("Agent Flow Run", name, "pinned_definition", PinnedVersion.pin(graph).to_json())
 		self.assertTrue(self._go(name).status.startswith("Waiting"))
 		self.assertEqual(self._wake_and_go(name).status, "Success")
 
@@ -237,7 +237,7 @@ class TestParkedErrorHandler(IntegrationTestCase):
 		]
 		graph = {"entry": "s", "nodes": nodes, "edges": []}
 		name = self._start(nodes, "s", handler="none")
-		frappe.db.set_value("Flow Run", name, "pinned_definition", PinnedVersion.pin(graph).to_json())
+		frappe.db.set_value("Agent Flow Run", name, "pinned_definition", PinnedVersion.pin(graph).to_json())
 
 
 		def writer(fr, node, config, settings):
