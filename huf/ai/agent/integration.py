@@ -1611,7 +1611,9 @@ def run_agent_sync(
     #          )
     # else:
 
-    frappe.db.set_value("Agent Conversation", conversation.name, "model", resolved_model)
+    # Write only on a change: a run may be executing on this conversation right now.
+    if conversation.model != resolved_model:
+        frappe.db.set_value("Agent Conversation", conversation.name, "model", resolved_model)
 
     resolved_prompt_template = prompt_template
     if not resolved_prompt_template:
@@ -2316,7 +2318,11 @@ def _execute_agent_run(
             async with mcp_session_pool():
                 return await RunProvider.run(agent, enhanced_prompt, resolved_provider, resolved_model_name, context)
 
-        result = _run_async_safely(_run_with_mcp_pool())
+        try:
+            result = _run_async_safely(_run_with_mcp_pool())
+        finally:
+            # New snapshot: rows committed during the call would otherwise fail later writes (1020).
+            safe_commit()
 
         new_items = getattr(result, "new_items", []) or []
 
@@ -2549,6 +2555,7 @@ def _execute_agent_run(
             # read the normalised payload and fall back to the parts.
             total_tokens = (usage_dict or {}).get("total_tokens") or (input_tokens + output_tokens)
 
+            safe_commit()  # no open snapshot, so the increment below cannot hit 1020
             try:
                 frappe.db.sql("""
                     UPDATE `tabAgent Conversation`
@@ -3732,7 +3739,8 @@ async def _run_agent_stream_impl(
 
         # Persist the effective model override on the conversation so subsequent
         # turns in the same chat continue using it unless explicitly changed again.
-        frappe.db.set_value("Agent Conversation", conversation.name, "model", resolved_model)
+        if conversation.model != resolved_model:
+            frappe.db.set_value("Agent Conversation", conversation.name, "model", resolved_model)
 
         context_strategy = agent_doc.context_strategy or "Summarize"
         history_limit = agent_doc.history_limit or 20
@@ -4232,6 +4240,7 @@ async def _run_agent_stream_impl(
                         cost = 0.0
 
                     # Update Conversation Metrics
+                    safe_commit()  # as on the sync path (MariaDB 1020)
                     try:
                         frappe.db.sql("""
                             UPDATE `tabAgent Conversation`
