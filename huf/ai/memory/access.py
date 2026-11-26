@@ -8,7 +8,7 @@ the default policy stay private to that agent.
 import frappe
 
 from huf.ai.memory.defaults import uses_default_memory_for
-from huf.ai.memory.subject import resolve_memory_subject
+from huf.ai.memory.subject import may_recall_for, resolve_memory_subject
 
 
 def can_read_in_run(row, conversation_id=None, agent_name=None):
@@ -21,8 +21,7 @@ def can_read_in_run(row, conversation_id=None, agent_name=None):
 		return False if uses_default_memory_for(agent_name) else None
 	if conversation_id:
 		reader = resolve_memory_subject(conversation_id)
-		# "Administrator" is the system drain; any other user chatting gets only their own rows.
-		if not reader or frappe.session.user not in (reader, "Administrator"):
+		if not may_recall_for(reader):
 			return False
 	else:
 		reader = frappe.session.user

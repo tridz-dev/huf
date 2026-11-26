@@ -12,7 +12,7 @@ from frappe import _
 from frappe.utils import now_datetime
 
 from huf.ai.memory.search import rank_rows
-from huf.ai.memory.subject import caller_may_act_for, resolve_memory_subject
+from huf.ai.memory.subject import caller_may_act_for, may_recall_for, resolve_memory_subject
 
 DEFAULT_MEMORY = {
 	"scope_type": "User",
@@ -206,6 +206,8 @@ def search_default_memory(
 		return {"success": True, "results": []}
 	if not caller_may_act_for(subject):
 		frappe.throw(_("Memory read blocked"), frappe.PermissionError)
+	if not may_recall_for(subject):
+		return {"success": True, "results": []}
 	max_rows = min(max(int(limit or 10), 1), 50)
 	return {
 		"success": True,

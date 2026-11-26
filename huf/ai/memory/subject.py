@@ -56,6 +56,15 @@ def caller_may_act_for(subject) -> bool:
 	return bool(set(frappe.get_roles(user)) & MANAGER_ROLES)
 
 
+def may_recall_for(subject) -> bool:
+	"""True when the subject's memory may reach this session's chat.
+
+	Only the subject, or "Administrator" (the system drain of queued runs). A
+	manager chatting in someone else's conversation does not recall their memory.
+	"""
+	return bool(subject) and frappe.session.user in (subject, "Administrator")
+
+
 def pin_memory_run_context(args_dict, ctx):
 	"""Overwrite run identity keys from the server-side run context (the model cannot choose them)."""
 	huf_ctx = _frappe_run_context_dict(ctx)

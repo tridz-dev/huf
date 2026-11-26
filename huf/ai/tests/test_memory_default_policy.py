@@ -245,6 +245,13 @@ class TestDefaultSaveAndRecall(MemoryCase):
 			)
 			self.assertEqual(found["results"], [], (user, agent))
 
+	def test_manager_chatting_in_another_users_conversation_recalls_nothing(self):
+		self.save()
+		self.f.session.user = "m"
+		self.assertIsNone(self.recall(conversation="C2"))
+		found = memory_tools.search_memory_records(query="employee", agent_name="A", conversation_id="C2")
+		self.assertEqual(found["results"], [])
+
 	def test_manager_in_run_filter_is_their_own(self):
 		self.f.session.user = "m"
 		with patch.object(memory_tools, "_can_read_memory") as can_read:
@@ -410,6 +417,7 @@ class TestExtraction(MemoryCase):
 				{k: call.call_args.kwargs[k] for k in ("run_kind", "channel_id", "external_id")},
 				{"run_kind": "memory_extraction", "channel_id": "memory_extraction", "external_id": "R1"},
 			)
+		self.f.session.user = "u1"
 		self.assertIn("likes tea 0", self.recall(query="tea"))
 
 	def test_same_fact_on_two_turns_is_one_row(self):

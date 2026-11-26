@@ -3,7 +3,7 @@
 import frappe
 
 from huf.ai.memory.defaults import DEFAULT_MEMORY, recall_default_memory_rows
-from huf.ai.memory.subject import MEMORY_EXTRACTION_CHANNEL, resolve_memory_subject
+from huf.ai.memory.subject import MEMORY_EXTRACTION_CHANNEL, may_recall_for, resolve_memory_subject
 
 
 def format_memory_envelope(rows, *, limit, token_budget):
@@ -46,7 +46,7 @@ def build_memory_injection(agent_doc, conversation_id, query):
 		policy = frappe.get_doc("Memory Policy", policy_name)
 		return get_injected_memory_text(agent_doc.name, policy, conversation_id=conversation_id, query=query)
 	subject = resolve_memory_subject(conversation_id=conversation_id)
-	if not subject:
+	if not may_recall_for(subject):
 		return None
 	rows = recall_default_memory_rows(agent_doc.name, subject, query, limit=DEFAULT_MEMORY["max_records"] * 2)
 	return format_memory_envelope(
