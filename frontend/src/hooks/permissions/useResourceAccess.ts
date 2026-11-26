@@ -2,7 +2,7 @@ import { useContext } from 'react';
 import { PermissionsContext } from '@/contexts/PermissionsContext';
 
 /**
- * Who may create / delete each kind of thing, mirroring what the server enforces.
+ * Who may create / change / delete each kind of thing, mirroring what the server enforces.
  *
  * `doctype`: the server checks the DocType's own role permissions (reported by get_me as `doc_permissions`).
  * `capability`: the server checks a Huf capability (API guard or the controller's has_permission).
@@ -33,6 +33,7 @@ export type Resource = keyof typeof RESOURCE_ACCESS;
 
 export interface ResourceAccess {
   canCreate: boolean;
+  canWrite: boolean;
   canDelete: boolean;
   isLoading: boolean;
 }
@@ -43,13 +44,13 @@ export interface ResourceAccess {
  */
 export function useResourceAccess(resource: Resource): ResourceAccess {
   const ctx = useContext(PermissionsContext);
-  if (!ctx) return { canCreate: true, canDelete: true, isLoading: false };
-  if (ctx.isLoading) return { canCreate: false, canDelete: false, isLoading: true };
+  if (!ctx) return { canCreate: true, canWrite: true, canDelete: true, isLoading: false };
+  if (ctx.isLoading) return { canCreate: false, canWrite: false, canDelete: false, isLoading: true };
   const rule: { doctype?: string; capability?: string } = RESOURCE_ACCESS[resource];
   if (rule.capability) {
     const allowed = ctx.hasCapability(rule.capability);
-    return { canCreate: allowed, canDelete: allowed, isLoading: false };
+    return { canCreate: allowed, canWrite: allowed, canDelete: allowed, isLoading: false };
   }
   const perms = ctx.docPermissions?.[rule.doctype as string];
-  return { canCreate: perms?.create ?? true, canDelete: perms?.delete ?? true, isLoading: false };
+  return { canCreate: perms?.create ?? true, canWrite: perms?.write ?? true, canDelete: perms?.delete ?? true, isLoading: false };
 }

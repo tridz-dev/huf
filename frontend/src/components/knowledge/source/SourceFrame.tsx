@@ -160,10 +160,12 @@ export function SourceFrame(props: SourceFrameProps) {
               <Plus className="mr-2 h-4 w-4" />
               Add content
             </Button>
-            <Button type="button" size="sm" variant="outline" onClick={props.onToggleDisabled} data-testid="toggle-disabled">
-              {disabled ? <PlayCircle className="mr-2 h-4 w-4" /> : <PauseCircle className="mr-2 h-4 w-4" />}
-              {disabled ? 'Turn on' : 'Turn off'}
-            </Button>
+            {access.canWrite && (
+              <Button type="button" size="sm" variant="outline" onClick={props.onToggleDisabled} data-testid="toggle-disabled">
+                {disabled ? <PlayCircle className="mr-2 h-4 w-4" /> : <PauseCircle className="mr-2 h-4 w-4" />}
+                {disabled ? 'Turn on' : 'Turn off'}
+              </Button>
+            )}
             <OverflowMenu
               items={[
                 { label: 'Settings', icon: Settings, onSelect: props.onOpenSettings },
