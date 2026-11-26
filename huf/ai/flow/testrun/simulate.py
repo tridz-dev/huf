@@ -60,6 +60,11 @@ def _summary_and_sample(tool_id: str, effect: str, args: dict) -> tuple[str, dic
 		return _to("Would update the sheet range", _first(args, "range"), "Would update a Google Sheet"), {"updatedCells": 1}
 	if tool_id == "gsheets_create":
 		return _to("Would create a Google Sheet called", _first(args, "title"), "Would create a Google Sheet"), {"spreadsheetId": SAMPLE_ID}
+	if tool_id == "delegate_to_agent":
+		return (
+			_to("Would ask the agent", _first(args, "target_agent_name"), "Would ask another agent"),
+			{"success": True, "status": "Success", "result": ""},
+		)
 	if tool_id == "gmail_create_draft":
 		return _to("Would save an email draft for", _first(args, "to"), "Would save an email draft"), {"id": SAMPLE_ID}
 	if tool_id.startswith("gcalendar_"):

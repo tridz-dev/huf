@@ -40,6 +40,11 @@ class TestClassification(unittest.TestCase):
 		for changes in ("gsheets_update", "gsheets_create", "frappe_create_record", "frappe_update_record", "gcalendar_create_event"):
 			self.assertEqual(tool_effect(changes), CHANGES, changes)
 
+	def test_delegating_to_an_agent_is_never_a_read(self):
+		# the delegated agent runs outside the test, so the hand-over itself must be skipped
+		self.assertEqual(tool_effect("delegate_to_agent"), CHANGES)
+		self.assertEqual(tool_effect("delegate_to_agent", {"target_agent_name": "Reports"}, "Get List"), CHANGES)
+
 	def test_unclassified_tools_count_as_changes(self):
 		self.assertEqual(tool_effect("my_custom_tool"), CHANGES)
 		self.assertEqual(tool_effect(None), CHANGES)
@@ -87,6 +92,12 @@ class TestSimulatedOutput(unittest.TestCase):
 		self.assertEqual(post["status_code"], 200)
 		self.assertEqual(simulated_output("gsheets_update", CHANGES, {"range": "A1:B2"})["summary"], "Would update the sheet range A1:B2")
 		self.assertEqual(simulated_output("frappe_create_record", CHANGES, {"doctype": "ToDo"})["summary"], "Would create a ToDo record")
+
+	def test_delegation_names_the_agent(self):
+		out = simulated_output("delegate_to_agent", CHANGES, {"target_agent_name": "Reports", "prompt": "x"})
+		self.assertEqual(out["summary"], "Would ask the agent Reports")
+		self.assertTrue(out["simulated"])
+		self.assertEqual(simulated_output("delegate_to_agent", CHANGES, None)["summary"], "Would ask another agent")
 
 	def test_unknown_tool_still_gets_a_sentence_and_missing_args_do_not_break_it(self):
 		self.assertEqual(simulated_output("gmail_send_email", SENDS, None)["summary"], "Would send email")
