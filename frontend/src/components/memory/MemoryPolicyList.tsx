@@ -1,3 +1,4 @@
+import { useResourceAccess } from '@/hooks/permissions/useResourceAccess';
 import { useEffect, useState } from 'react';
 import { Plus, ShieldCheck, Layers, Sparkles, Trash2, Settings, Brain } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -18,6 +19,7 @@ const memoryPolicyStatusFilters = [
 
 export function MemoryPolicyList() {
   const navigate = useNavigate();
+  const access = useResourceAccess('memoryPolicy');
   const [pendingDelete, setPendingDelete] = useState<MemoryPolicyDoc | null>(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -98,11 +100,11 @@ export function MemoryPolicyList() {
             onChange: (value) => setFilter('status', value),
           },
         ]}
-        primaryAction={{
+        primaryAction={access.canCreate ? {
           label: 'New policy',
           icon: <Plus className="h-3.5 w-3.5" />,
           onClick: () => navigate('/memory/policies/new'),
-        }}
+        } : undefined}
       />
 
       {error && !initialLoading && (
@@ -139,7 +141,7 @@ export function MemoryPolicyList() {
               icon={Brain}
               title="No memory policies"
               description="Create a memory policy to control how agents capture and retrieve long-term memory."
-              action={{ label: 'New policy', onClick: () => navigate('/memory/policies/new') }}
+              action={access.canCreate ? { label: 'New policy', onClick: () => navigate('/memory/policies/new') } : undefined}
             />
           )
         }
@@ -169,12 +171,9 @@ export function MemoryPolicyList() {
                 label: 'Configure',
                 onClick: () => navigate(`/memory/policies/${encodeURIComponent(policy.name)}`),
               },
-              {
-                icon: Trash2,
-                label: 'Delete',
-                variant: 'destructive',
-                onClick: () => setPendingDelete(policy),
-              },
+              ...(access.canDelete
+                ? [{ icon: Trash2, label: 'Delete', variant: 'destructive' as const, onClick: () => setPendingDelete(policy) }]
+                : []),
             ]}
             onClick={() => navigate(`/memory/policies/${encodeURIComponent(policy.name)}`)}
           />

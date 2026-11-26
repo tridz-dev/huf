@@ -1,3 +1,4 @@
+import { useResourceAccess } from '@/hooks/permissions/useResourceAccess';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -114,6 +115,7 @@ export function SourceFrame(props: SourceFrameProps) {
   const navigate = useNavigate();
   const [rebuildOpen, setRebuildOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const access = useResourceAccess('knowledge');
   const [deleting, setDeleting] = useState(false);
   const indexing = rebuilding || sourceStatus === 'Indexing' || sourceStatus === 'Rebuilding';
   const name = form.watch('source_name');
@@ -170,7 +172,7 @@ export function SourceFrame(props: SourceFrameProps) {
                   separated: true,
                   onSelect: props.onToggleDisabled,
                 },
-                { label: 'Delete', icon: Trash2, destructive: true, onSelect: () => setDeleteOpen(true) },
+                ...(access.canDelete ? [{ label: 'Delete', icon: Trash2, destructive: true, onSelect: () => setDeleteOpen(true) }] : []),
               ]}
             />
           </>

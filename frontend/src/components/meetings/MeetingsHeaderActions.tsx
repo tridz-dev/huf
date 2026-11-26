@@ -1,3 +1,4 @@
+import { useResourceAccess } from '@/hooks/permissions/useResourceAccess';
 import { useState } from 'react';
 import { Mic, Plus } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -17,6 +18,7 @@ export function MeetingsHeaderActions() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [quickStarting, setQuickStarting] = useState(false);
   const [starting, setStarting] = useState(false);
+  const { canCreate } = useResourceAccess('meeting');
 
   const beginRecording = async (details: { title?: string; description?: string; participants?: string }) => {
     const { meeting_name: meetingName } = await beginMeetingRecording(details);
@@ -49,6 +51,8 @@ export function MeetingsHeaderActions() {
       setStarting(false);
     }
   };
+
+  if (!canCreate) return null;
 
   return (
     <div className="flex items-center gap-2">

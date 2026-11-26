@@ -1,3 +1,4 @@
+import { useResourceAccess } from '@/hooks/permissions/useResourceAccess';
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
@@ -139,6 +140,7 @@ function mapFormToPayload(
 export function SkillFormPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const access = useResourceAccess('skill');
   const isNew = id === 'new';
 
   const tabConfig = useMemo(
@@ -442,7 +444,7 @@ export function SkillFormPage() {
                 Download .huf
               </Button>
             )}
-            {!isNew && (
+            {!isNew && access.canDelete && (
               <Button variant="outline" size="sm" onClick={handleDelete}>
                 <Trash2 className="w-4 h-4 mr-2" />
                 Delete

@@ -1,3 +1,4 @@
+import { useResourceAccess } from '@/hooks/permissions/useResourceAccess';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { SquareAsterisk, Loader2, PlugZap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -57,6 +58,7 @@ export function IntegrationSettingsDetailsPage({
   const { settingId } = useParams<{ settingId: string }>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const access = useResourceAccess('integration');
   const isNew = settingId === 'new';
   const initialService = searchParams.get('service') || '';
   const listRoute = surface === 'Gateway' ? '/gateways' : '/integrations';
@@ -380,7 +382,7 @@ export function IntegrationSettingsDetailsPage({
           saving={saving}
           deleting={deleting}
           onSave={handleFormSubmit}
-          onDelete={!isNew ? () => setDeleteDialogOpen(true) : undefined}
+          onDelete={!isNew && access.canDelete ? () => setDeleteDialogOpen(true) : undefined}
           status={statusLine}
         >
           {testable && (

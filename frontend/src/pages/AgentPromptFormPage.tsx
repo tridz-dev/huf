@@ -1,3 +1,4 @@
+import { useResourceAccess } from '@/hooks/permissions/useResourceAccess';
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
@@ -83,6 +84,7 @@ function mapDocToFormValues(doc: AgentPromptDoc): AgentPromptFormValues {
 export function AgentPromptFormPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const access = useResourceAccess('prompt');
   const location = useLocation();
   const isNew = id === 'new';
   const [loading, setLoading] = useState(!isNew);
@@ -538,10 +540,12 @@ export function AgentPromptFormPage() {
                         <GitFork className="mr-2 h-4 w-4" />
                         Fork prompt
                       </DropdownMenuItem>
+                      {access.canDelete && (
                       <DropdownMenuItem className="text-destructive" onClick={handleDelete}>
                         <Trash2 className="mr-2 h-4 w-4" />
                         Delete
                       </DropdownMenuItem>
+                      )}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 ) : null}

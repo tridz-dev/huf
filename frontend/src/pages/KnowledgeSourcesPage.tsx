@@ -1,3 +1,4 @@
+import { useResourceAccess } from '@/hooks/permissions/useResourceAccess';
 import { useEffect, useMemo, useState } from 'react';
 import { BookOpen } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -29,8 +30,10 @@ export default KnowledgeSourcesPage;
 function KnowledgeSourcesPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const access = useResourceAccess('knowledge');
   const [createTab, setCreateTab] = useState<'upload' | 'storage'>('upload');
-  const createOpen = searchParams.get('new') === '1';
+  const createRequested = searchParams.get('new') === '1';
+  const createOpen = createRequested && access.canCreate;
   const openCreate = () =>
     setSearchParams((p) => {
       const n = new URLSearchParams(p);
@@ -164,7 +167,7 @@ function KnowledgeSourcesPage() {
               }}
             />
           ) : (
-            <LibraryEmptyState onUpload={openCreate} onConnect={() => { setCreateTab('storage'); openCreate(); }} />
+            <LibraryEmptyState canCreate={access.canCreate} onUpload={openCreate} onConnect={() => { setCreateTab('storage'); openCreate(); }} />
           )
         }
         renderItem={(source) => (
@@ -174,13 +177,13 @@ function KnowledgeSourcesPage() {
             agentCount={agentsFor(source.name)}
             onOpen={() => navigate(`/knowledge/${source.name}`)}
             onTest={() => navigate(`/knowledge/${source.name}#test`)}
-            onAddFiles={() => setAddTarget(source)}
+            onAddFiles={access.canCreate ? () => setAddTarget(source) : undefined}
             onRename={() => setRenameTarget(source)}
             onToggleDisabled={() => void toggleDisabled(source)}
-            onDelete={() => {
+            onDelete={access.canDelete ? () => {
               setTypedName('');
               setDeleteTarget(source);
-            }}
+            } : undefined}
           />
         )}
         keyExtractor={(source) => source.name}

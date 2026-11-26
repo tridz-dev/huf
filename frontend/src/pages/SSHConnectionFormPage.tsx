@@ -1,3 +1,4 @@
+import { useResourceAccess } from '@/hooks/permissions/useResourceAccess';
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
@@ -43,6 +44,7 @@ type SSHConnectionFormValues = z.infer<typeof sshConnectionSchema>;
 export function SSHConnectionFormPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const access = useResourceAccess('sshConnection');
   const location = useLocation();
   const isNew = id === 'new';
   const [loading, setLoading] = useState(!isNew);
@@ -278,9 +280,11 @@ export function SSHConnectionFormPage() {
                 {testing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Play className="h-4 w-4 mr-2 text-steel" />}
                 Test connection
               </Button>
+              {access.canDelete && (
               <Button variant="outline" size="sm" onClick={handleDelete} disabled={deleting || saving} className="border-line hover:border-ink hover:bg-paper-deep">
                 {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4 text-destructive" />}
               </Button>
+              )}
             </>
           )}
           <Button onClick={form.handleSubmit(onSubmit)} disabled={saving}>

@@ -1,3 +1,4 @@
+import { useResourceAccess } from '@/hooks/permissions/useResourceAccess';
 import { Plus, Layers } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../ui/button';
@@ -10,6 +11,7 @@ export function IntegrationSettingsHeaderActions({
 }) {
   const { onAddIntegration } = useIntegrationSettingsContext();
   const navigate = useNavigate();
+  const { canCreate } = useResourceAccess('integration');
 
   return (
     <div className="flex items-center gap-2">
@@ -17,10 +19,12 @@ export function IntegrationSettingsHeaderActions({
         <Layers className="w-4 h-4 mr-2" />
         Service catalog
       </Button>}
+      {canCreate && (
       <Button variant="display" onClick={onAddIntegration} size="sm">
         <Plus className="w-4 h-4 mr-2" />
         {kind === 'channels' ? 'Add Channel' : 'Add Integration'}
       </Button>
+      )}
     </div>
   );
 }

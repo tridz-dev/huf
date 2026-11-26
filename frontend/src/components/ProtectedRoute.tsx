@@ -1,3 +1,5 @@
+import { useResourceAccess, type Resource } from '@/hooks/permissions/useResourceAccess';
+import { useLocation } from 'react-router-dom';
 import { ReactNode } from 'react';
 import { useUser } from '@/contexts/UserContext';
 import { usePermissions } from '@/contexts/PermissionsContext';
@@ -19,13 +21,19 @@ interface ProtectedRouteProps {
   requiredCapability?: PageCapability;
   /** Name used in the "no access" sentence, e.g. "Executions". */
   pageName?: string;
+  /** On the route's ".../new" URL, block people who may not create this. */
+  createResource?: Resource;
 }
 
-export function ProtectedRoute({ children, requiredCapability, pageName }: ProtectedRouteProps) {
+export function ProtectedRoute({ children, requiredCapability, pageName, createResource }: ProtectedRouteProps) {
   const { isLoading, isAuthenticated } = useUser();
   const { isLoading: permissionsLoading, capabilities } = usePermissions();
 
-  if (isLoading || (requiredCapability && permissionsLoading)) {
+  const { pathname } = useLocation();
+  const access = useResourceAccess(createResource ?? 'role');
+  const isCreating = Boolean(createResource) && pathname.replace(/\/+$/, '').endsWith('/new');
+
+  if (isLoading || ((requiredCapability || isCreating) && permissionsLoading)) {
     return <AuthenticatingPage />;
   }
 
@@ -38,6 +46,14 @@ export function ProtectedRoute({ children, requiredCapability, pageName }: Prote
     return (
       <UnifiedLayout>
         <NoAccessPanel pageName={pageName} />
+      </UnifiedLayout>
+    );
+  }
+
+  if (isCreating && !access.canCreate) {
+    return (
+      <UnifiedLayout>
+        <NoAccessPanel pageName="Creating this" />
       </UnifiedLayout>
     );
   }

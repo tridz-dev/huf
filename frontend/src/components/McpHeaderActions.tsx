@@ -1,17 +1,17 @@
+import { useResourceAccess } from '@/hooks/permissions/useResourceAccess';
 import { Plus } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from './ui/button';
-import { usePermissions } from '../contexts/PermissionsContext';
 
 export function McpHeaderActions() {
   const navigate = useNavigate();
-  const { hasCapability } = usePermissions();
+  const { canCreate } = useResourceAccess('mcp');
 
   const handleNewMcp = () => {
     navigate('/mcp/new');
   };
 
-  if (!hasCapability('system.mcp.manage')) {
+  if (!canCreate) {
     return null;
   }
 

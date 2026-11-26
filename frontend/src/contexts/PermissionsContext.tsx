@@ -13,6 +13,8 @@ interface PermissionsContextType {
   capabilities: string[];
   /** Capabilities the Huf Role grants that the server would refuse (the user's Frappe roles cannot write flows). */
   withheldCapabilities: string[];
+  /** Per-DocType create/delete rights; undefined when the server does not report them. */
+  docPermissions?: MeResponse['doc_permissions'];
   /** True while the initial getMe() call is in flight. */
   isLoading: boolean;
   /** Return true if the user has the given capability string. */
@@ -71,6 +73,7 @@ export function PermissionsProvider({ children }: PermissionsProviderProps) {
         hufRole: data.huf_role,
         capabilities: data.capabilities,
         withheldCapabilities: data.withheld_capabilities ?? [],
+        docPermissions: data.doc_permissions,
         isLoading,
         hasCapability,
         refresh: load,

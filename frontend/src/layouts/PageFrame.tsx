@@ -53,6 +53,8 @@ export function PageFrame({
   // empty PageFrame renders no bar at all, so it must not claim the rail
   // toggle (see UnifiedLayout's PageChromeContext doc comment).
   const showHeadBar = Boolean(title || actions);
+  // This bar replaces the topbar, so it carries what the topbar would have shown.
+  const headActions = actions ?? chrome?.headerActions;
 
   useLayoutEffect(() => {
     if (!chrome) return;
@@ -63,9 +65,10 @@ export function PageFrame({
   return (
     <div ref={scrollRef} className="h-full overflow-auto">
       <div className={cn('flex flex-col', className)}>
+        {/* On phones the actions take their own row, so the title, toggle and bells stay visible. */}
         {showHeadBar && (
-          <div className="h-[52px] shrink-0 flex items-center justify-between gap-4 px-6">
-            <div className="flex items-center gap-3 min-w-0">
+          <div className="h-[52px] shrink-0 flex items-center justify-between gap-4 px-6 max-sm:h-auto max-sm:min-h-[52px] max-sm:flex-wrap max-sm:gap-2 max-sm:py-2">
+            <div className="flex items-center gap-3 min-w-0 max-sm:flex-1 max-sm:flex-wrap max-sm:gap-y-1">
               {chrome && (
                 <>
                   {chrome.railToggle}
@@ -82,7 +85,16 @@ export function PageFrame({
                 <span className="font-body text-meta text-steel truncate">{meta}</span>
               )}
             </div>
-            {actions && <div className="flex items-center gap-2 shrink-0">{actions}</div>}
+            {(chrome || headActions) && (
+              <div className="flex items-center gap-2 shrink-0 max-sm:contents">
+                {chrome?.approvals}
+                {headActions && (
+                  <div className="flex items-center gap-2 empty:hidden max-sm:w-full max-sm:flex-wrap max-sm:[&>div]:flex-wrap">
+                    {headActions}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 

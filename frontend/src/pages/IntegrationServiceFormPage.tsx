@@ -1,3 +1,4 @@
+import { useResourceAccess } from '@/hooks/permissions/useResourceAccess';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
@@ -66,6 +67,7 @@ function mapFormToPayload(values: IntegrationServiceFormValues) {
 export function IntegrationServiceFormPage() {
   const { serviceId } = useParams<{ serviceId: string }>();
   const navigate = useNavigate();
+  const access = useResourceAccess('integrationService');
   const isNew = serviceId === 'new';
 
   const [loading, setLoading] = useState(!isNew);
@@ -257,7 +259,7 @@ export function IntegrationServiceFormPage() {
           showSaveButton={showSaveButton}
           saving={saving}
           deleting={deleting}
-          canDelete={!isBuiltin}
+          canDelete={!isBuiltin && access.canDelete}
           onSave={handleFormSubmit}
           onDelete={() => setDeleteDialogOpen(true)}
           onTitleChange={(value) => form.setValue('service_name', value, { shouldDirty: true })}

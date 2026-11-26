@@ -1,3 +1,4 @@
+import { useResourceAccess } from '@/hooks/permissions/useResourceAccess';
 import { useMemo, useState } from 'react';
 import { ArrowUpDown, Loader2, Terminal, Key } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -44,6 +45,7 @@ function SortHeader<TData>({ column, label }: { column: HeaderContext<TData, unk
 
 export function SSHConnectionsPage() {
   const navigate = useNavigate();
+  const access = useResourceAccess('sshConnection');
   const [sorting, setSorting] = useState<SortingState>([]);
 
   const {
@@ -232,7 +234,7 @@ export function SSHConnectionsPage() {
               icon={Terminal}
               title="No SSH connections"
               description="Add a connection to enable remote execution."
-              action={{ label: 'New SSH connection', onClick: () => navigate('/ssh-connections/new') }}
+              action={access.canCreate ? { label: 'New SSH connection', onClick: () => navigate('/ssh-connections/new') } : undefined}
             />
           )
         ) : (

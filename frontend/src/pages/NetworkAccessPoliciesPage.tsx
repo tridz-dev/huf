@@ -1,3 +1,4 @@
+import { useResourceAccess } from '@/hooks/permissions/useResourceAccess';
 import { useMemo, useState } from 'react';
 import { ArrowUpDown, Loader2, Plus, ShieldCheck } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -48,6 +49,7 @@ function SortHeader<TData>({ column, label }: { column: HeaderContext<TData, unk
 
 export function NetworkAccessPoliciesPage() {
   const navigate = useNavigate();
+  const access = useResourceAccess('networkPolicy');
   const [sorting, setSorting] = useState<SortingState>([]);
 
   const {
@@ -135,11 +137,11 @@ export function NetworkAccessPoliciesPage() {
           searchPlaceholder="Search network access policies..."
           searchValue={search}
           onSearchChange={setSearch}
-          primaryAction={{
+          primaryAction={access.canCreate ? {
             label: 'New policy',
             icon: <Plus className="h-4 w-4" />,
             onClick: () => navigate('/network-policies/new'),
-          }}
+          } : undefined}
         />
       }
     >
@@ -166,7 +168,7 @@ export function NetworkAccessPoliciesPage() {
               icon={ShieldCheck}
               title="No network access policies"
               description="Add a policy to control which hosts and ports are reachable."
-              action={{ label: 'New policy', onClick: () => navigate('/network-policies/new') }}
+              action={access.canCreate ? { label: 'New policy', onClick: () => navigate('/network-policies/new') } : undefined}
             />
           )
         ) : (

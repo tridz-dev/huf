@@ -1,3 +1,4 @@
+import { useResourceAccess } from '@/hooks/permissions/useResourceAccess';
 import { Button } from '@/components/ui/button';
 import { Plus } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -5,9 +6,12 @@ import { useNavigate } from 'react-router-dom';
 export function ExecutionProfilesHeaderActions() {
   const navigate = useNavigate();
 
+  const { canCreate } = useResourceAccess('executionProfile');
   const handleNewProfile = () => {
     navigate('/execution-profiles/new');
   };
+
+  if (!canCreate) return null;
 
   return (
     <Button variant="display" onClick={handleNewProfile}>

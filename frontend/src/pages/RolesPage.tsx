@@ -1,3 +1,4 @@
+import { useResourceAccess } from '@/hooks/permissions/useResourceAccess';
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ShieldCheck, Lock, Code2, ChevronRight, ChevronDown, Plus } from 'lucide-react';
@@ -164,6 +165,7 @@ interface RolesPageProps {
 
 export default function RolesPage({ embedded = false }: RolesPageProps) {
   const navigate = useNavigate();
+  const roleAccess = useResourceAccess('role');
   const [roles, setRoles] = useState<HufRole[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
@@ -183,7 +185,7 @@ export default function RolesPage({ embedded = false }: RolesPageProps) {
     setExpanded((prev) => ({ ...prev, [groupKey]: !prev[groupKey] }));
   }
 
-  const createRoleButton = (
+  const createRoleButton = roleAccess.canCreate && (
     <Button size="sm" onClick={() => navigate('/roles/new')} className="shrink-0">
       <Plus className="h-4 w-4 mr-1.5" />
       Create role
