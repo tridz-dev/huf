@@ -23,6 +23,7 @@ import { useChatScrollToBottom } from './useChatScrollToBottom';
 import { useRunStatusPolling } from './useRunStatusPolling';
 import { usePendingRunHydration } from './usePendingRunHydration';
 import { findPendingRunId } from './composer/activeRun';
+import { useCancelledRuns } from './composer/cancelledRuns';
 import {
     dispatchConversationTitleUpdated,
     useConversationTitlePostSuccessFallback,
@@ -346,10 +347,12 @@ export function ChatMessageList({
         }
     }, [chatId]);
 
+    const shownMessages = useCancelledRuns(chatId, conversationItemsForChat, messages, hasMore);
+
     const { scrollContainerRef, scrollToBottomAfterPaint } = useChatScrollToBottom({
         chatId,
         initialLoading,
-        messages,
+        messages: shownMessages,
     });
 
     const handleFeedback = useCallback(
@@ -389,8 +392,8 @@ export function ChatMessageList({
     }, []);
 
     // Don't show loading state if we already have messages (e.g., during transition)
-    const shouldShowLoading = initialLoading && messages.length === 0;
-    const isColdStart = isNewChat && messages.length === 0;
+    const shouldShowLoading = initialLoading && shownMessages.length === 0;
+    const isColdStart = isNewChat && shownMessages.length === 0;
 
     return (
         <div className="flex-1 flex flex-col overflow-hidden min-h-0">
@@ -438,12 +441,12 @@ export function ChatMessageList({
                                     Loading previous messages...
                                 </div>
                             )}
-                            {messages.map((message, index) => {
+                            {shownMessages.map((message, index) => {
                                 let precedingUserMessage: string | undefined;
                                 if (message.from === 'assistant') {
                                     for (let i = index - 1; i >= 0; i--) {
-                                        if (messages[i].from === 'user') {
-                                            precedingUserMessage = messages[i].versions[0]?.content;
+                                        if (shownMessages[i].from === 'user') {
+                                            precedingUserMessage = shownMessages[i].versions[0]?.content;
                                             break;
                                         }
                                     }
