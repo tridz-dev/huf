@@ -72,8 +72,32 @@ def on_knowledge_input_deleted(doc, method):
 		from .indexer import update_source_stats
 
 		update_source_stats(source, backend)
+		recompute_source_status(source.name, exclude_input=doc.name)
 	except Exception as e:
 		frappe.log_error(
 			title="Knowledge Input Cleanup Error",
 			message=f"Error deleting chunks for input {doc.name}: {e!s}",
 		)
+
+
+def recompute_source_status(source_name, exclude_input=None):
+	"""Derive source status/error from its remaining inputs.
+
+	Error if any other input is in Error (latest message wins), else Ready.
+	Concurrent Indexing/Rebuilding states are left alone. `exclude_input` is
+	the input being deleted (on_trash still sees it).
+	"""
+	status = frappe.db.get_value("Knowledge Source", source_name, "status")
+	if status in ("Indexing", "Rebuilding"):
+		return
+	filters = {"knowledge_source": source_name, "status": "Error"}
+	if exclude_input:
+		filters["name"] = ["!=", exclude_input]
+	failed = frappe.get_all(
+		"Knowledge Input", filters=filters, fields=["error_message"], order_by="modified desc", limit=1
+	)
+	if failed:
+		values = {"status": "Error", "error_message": failed[0].error_message}
+	else:
+		values = {"status": "Ready", "error_message": None}
+	frappe.db.set_value("Knowledge Source", source_name, values)
