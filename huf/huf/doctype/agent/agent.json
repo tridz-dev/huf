@@ -63,6 +63,7 @@
   "voice_engine",
   "voice_config",
   "voice_greeting",
+  "voice_language",
   "embed_tab",
   "embed_enabled",
   "publishable_key",
@@ -331,6 +332,13 @@
    "fieldtype": "Code",
    "label": "Voice Configuration",
    "options": "JSON"
+  },
+  {
+   "depends_on": "eval:doc.voice_enabled",
+   "description": "Leave empty to auto-detect: the agent understands and replies in the language spoken. Set a language code or name (e.g. ml, Malayalam) to force transcription and replies into it.",
+   "fieldname": "voice_language",
+   "fieldtype": "Data",
+   "label": "Voice Language"
   },
   {
    "depends_on": "eval:doc.voice_enabled",

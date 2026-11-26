@@ -534,6 +534,7 @@ def transcribe_audio_file(
             return {"success": False, "error": "Agent name not found in context"}
 
         agent_doc = frappe.get_doc("Agent", agent_name)
+        language = language or getattr(agent_doc, "voice_language", None) or None
 
         # Get audio file
         file_doc = None
@@ -651,6 +652,7 @@ def _call_stt_provider(
     Returns the transcript string, or an error dict on provider failure.
     """
     import litellm
+    from huf.ai.voice.language import stt_language_hint, transcription_prompt
 
     if provider_name in MULTIMODAL_STT_PROVIDERS:
         with open(file_path, "rb") as audio_file:
@@ -673,7 +675,7 @@ def _call_stt_provider(
             {
                 "role": "user",
                 "content": [
-                    {"type": "text", "text": "Please transcribe this audio exactly as it is spoken. Do not add any extra commentary or formatting. If there are multiple languages, transcribe them as spoken. If it is silent, just write [Silence]."},
+                    {"type": "text", "text": transcription_prompt(language)},
                     {"type": "input_audio", "input_audio": {"data": base64_audio, "format": audio_format}},
                 ],
             }
@@ -697,8 +699,8 @@ def _call_stt_provider(
     }
 
     # Add optional parameters
-    if language:
-        transcription_params["language"] = language
+    if stt_language_hint(language):
+        transcription_params["language"] = stt_language_hint(language)
 
     with open(file_path, "rb") as audio_file:
         upload_name, upload_mime = _stt_upload_name(file_path)

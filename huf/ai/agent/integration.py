@@ -506,6 +506,10 @@ class AgentManager:
     """
             instructions += tools_instruction
 
+        if getattr(self.agent_doc, "voice_enabled", 0):
+            from huf.ai.voice.language import reply_language_instruction
+            instructions += "\n\n" + reply_language_instruction(getattr(self.agent_doc, "voice_language", None))
+
         instructions += """
             SYSTEM INSTRUCTION - LARGE CONTEXT REFERENCES:
             If you see a data payload or result formatted as a reference like [record_kind: summary · handle=DocType/Name], it means the full massive data payload was truncated to save space.

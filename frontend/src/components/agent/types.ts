@@ -130,6 +130,7 @@ export const agentFormSchema = z.object({
   voice_engine: z.string().optional(),
   voice_config: z.string().optional(),
   voice_greeting: z.string().optional(),
+  voice_language: z.string().optional(),
 
   // Advanced model overrides
   image_generation_model: z.string().optional(),
