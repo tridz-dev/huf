@@ -5,7 +5,7 @@
 
 Reuses the conversation-ownership check from ``huf.ai.artifact_api`` — a
 caller must own the artifact's conversation (or hold System Manager) to
-export it, exactly as for reading it.
+export it. This is stricter than reading it.
 
 Rendering pipeline: markdown -> sanitized HTML (``artifacts.render.html``) ->
 PDF/DOCX bytes (``artifacts.render.pdf`` / ``artifacts.render.docx``). Each
