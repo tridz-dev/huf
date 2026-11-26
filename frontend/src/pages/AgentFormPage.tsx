@@ -67,8 +67,8 @@ export function AgentFormPage() {
   const [activeTab, setActiveTabState] = useState<TabKey>(tabFromHash);
   const setActiveTab = useCallback((tab: TabKey) => {
     setActiveTabState(tab);
-    if (tab === DEFAULT_TAB) window.history.replaceState(null, '', window.location.pathname + window.location.search);
-    else window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#${tab}`);
+    if (tab === DEFAULT_TAB) window.history.replaceState(window.history.state, '', window.location.pathname + window.location.search);
+    else window.history.replaceState(window.history.state, '', `${window.location.pathname}${window.location.search}#${tab}`);
   }, []);
   useEffect(() => {
     const onHash = () => setActiveTabState(tabFromHash());

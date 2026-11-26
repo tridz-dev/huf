@@ -8,6 +8,7 @@ import {
 	AlertDialogHeader,
 	AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { useRef } from 'react';
 import type { Blocker } from 'react-router-dom';
 
 interface UnsavedChangesDialogProps {
@@ -15,11 +16,15 @@ interface UnsavedChangesDialogProps {
 }
 
 export function UnsavedChangesDialog({ blocker }: UnsavedChangesDialogProps) {
+	// After proceed(), Radix closes the dialog; resetting then would undo the pending POP navigation.
+	const proceededRef = useRef(false);
 	return (
 		<AlertDialog
 			open={blocker.state === 'blocked'}
 			onOpenChange={(open) => {
-				if (!open) blocker.reset?.();
+				if (open) return;
+				if (proceededRef.current) { proceededRef.current = false; return; }
+				blocker.reset?.();
 			}}
 		>
 			<AlertDialogContent>
@@ -31,7 +36,7 @@ export function UnsavedChangesDialog({ blocker }: UnsavedChangesDialogProps) {
 				</AlertDialogHeader>
 				<AlertDialogFooter>
 					<AlertDialogCancel onClick={() => blocker.reset?.()}>Cancel</AlertDialogCancel>
-					<AlertDialogAction onClick={() => blocker.proceed?.()}>Leave</AlertDialogAction>
+					<AlertDialogAction onClick={() => { proceededRef.current = true; blocker.proceed?.(); }}>Leave</AlertDialogAction>
 				</AlertDialogFooter>
 			</AlertDialogContent>
 		</AlertDialog>
