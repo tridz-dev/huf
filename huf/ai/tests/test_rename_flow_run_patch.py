@@ -11,6 +11,7 @@ OLD, NEW = "Flow Run", "Agent Flow Run"
 # The bench also carries core's own "Flow Run", so the rename itself is exercised on throwaway
 # Huf-module DocTypes with the same shape (a data DocType plus a DocType linking to it).
 LEG, NEWT, LINKER = "ZZ Legacy Flow Run", "ZZ Agent Flow Run", "ZZ Flow Run Linker"
+CORE_LIKE = "ZZ Core Like Linker"
 
 
 def _mk(name, fields):
@@ -54,12 +55,15 @@ class TestRenameFlowRunPatch(IntegrationTestCase):
 			patch_mod.execute()
 		rename.assert_not_called()
 
-	def test_rename_keeps_rows_and_links_then_second_run_is_noop(self):
+	def _seed(self):
 		frappe.get_doc({"doctype": LEG, "title": "keep"}).insert()
 		run = frappe.get_all(LEG, pluck="name")[0]
 		frappe.get_doc({"doctype": LINKER, "run": run}).insert()
 		frappe.db.commit()
+		return run
 
+	def test_rename_keeps_rows_and_links_then_second_run_is_noop(self):
+		run = self._seed()
 		patch_mod.execute()
 		frappe.clear_cache()
 
@@ -68,21 +72,54 @@ class TestRenameFlowRunPatch(IntegrationTestCase):
 		self.assertEqual(frappe.db.get_value(NEWT, run, "title"), "keep")
 		self.assertEqual(frappe.db.get_value(LINKER, {"run": run}, "run"), run)
 		self.assertEqual(frappe.db.get_value("DocField", {"parent": LINKER, "fieldname": "run"}, "options"), NEWT)
+		self.assertEqual(frappe.db.count("DocField", {"parent": NEWT}), 1)
 
-		with patch.object(frappe, "rename_doc") as rename:
-			patch_mod.execute()
-		rename.assert_not_called()
+	def test_second_run_is_idempotent(self):
+		self._seed()
+		patch_mod.execute()
+		before = frappe.db.count("DocField", {"parent": NEWT})
+		patch_mod.execute()
+		self.assertTrue(frappe.db.exists("DocType", NEWT))
+		self.assertFalse(frappe.db.exists("DocType", LEG))
+		self.assertEqual(frappe.db.count("DocField", {"parent": NEWT}), before)
+
+	def test_core_owned_doctypes_untouched_and_no_dev_mode_or_file_writes(self):
+		# A core-like DocType (module Flow) linking at the legacy name must keep its option.
+		if not frappe.db.exists("DocType", CORE_LIKE):
+			frappe.get_doc(
+				{"doctype": "DocType", "name": CORE_LIKE, "module": "Flow", "custom": 1,
+				 "fields": [{"fieldname": "run", "fieldtype": "Link", "options": LEG, "label": "Run"}],
+				 "permissions": [{"role": "System Manager", "read": 1}]}
+			).insert()
+		frappe.db.commit()
+		dev = frappe.conf.get("developer_mode")
+		try:
+			with (
+				patch("frappe.modules.export_file.export_to_files") as export,
+				patch("frappe.modules.export_file.write_document_file") as write,
+			):
+				patch_mod.execute()
+			self.assertEqual(frappe.conf.get("developer_mode"), dev)
+			export.assert_not_called()
+			write.assert_not_called()
+			opts = frappe.db.get_value("DocField", {"parent": CORE_LIKE, "fieldname": "run"}, "options")
+			self.assertEqual(opts, LEG)
+			self.assertTrue(frappe.db.exists("DocType", NEWT))
+		finally:
+			frappe.delete_doc("DocType", CORE_LIKE, force=True)
+			frappe.db.sql_ddl(f"DROP TABLE IF EXISTS `tab{CORE_LIKE}`")
+			frappe.db.commit()
 
 	def test_core_owned_flow_run_untouched(self):
 		patch_mod.OLD, patch_mod.NEW = "Flow Run", "Agent Flow Run"
-		LEG_ = LEG
+
 		def exists(dt, name=None):
 			return dt == "DocType" and name == "Flow Run"
 
 		with (
 			patch.object(frappe.db, "exists", side_effect=exists),
 			patch.object(frappe.db, "get_value", return_value="Flow"),
-			patch.object(frappe, "rename_doc") as rename,
+			patch.object(frappe.db, "sql_ddl") as ddl,
 		):
 			patch_mod.execute()
-		rename.assert_not_called()
+		ddl.assert_not_called()

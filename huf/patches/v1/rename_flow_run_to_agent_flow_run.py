@@ -2,13 +2,15 @@
 
 Frappe core ships its own "Flow Run" DocType (module Flow). Huf used the same name, so on an
 installed site the "Flow Run" row belongs to whichever app synced last. Only a row whose
-module is Huf is renamed; a core-owned row is left alone. ``rename_doc`` renames the table,
-repoints every Link field (``options``) at the new name and rewrites Custom Fields, Property
-Setters, Version, Comment and other dependents. After the rename, the Frappe core sync
-recreates core's own "Flow Run" in the model-sync step that follows.
+module is Huf is renamed; a core-owned row is left alone.
 
-Runs before model sync so the new "Agent Flow Run" JSON updates the renamed table instead of
-creating an empty second one. Idempotent: does nothing on fresh sites or on a re-run.
+The rename is done with plain SQL on purpose. ``frappe.rename_doc`` needs developer_mode, which
+makes Frappe re-export core doctype files from DB metadata and rewrite Link options on core
+doctypes that legitimately point at core's "Flow Run". This patch never enables developer_mode,
+never writes files and never touches DocTypes outside module Huf.
+
+Runs before model sync so the "Agent Flow Run" JSON updates the renamed table instead of creating
+an empty second one. Idempotent. "Agent Flow Run" uses hash naming, so there is no Series to move.
 """
 
 import frappe
@@ -16,31 +18,53 @@ import frappe
 OLD = "Flow Run"
 NEW = "Agent Flow Run"
 
+# (table, column) pairs that hold the DocType name and must follow the rename.
+NAME_COLUMNS = (
+	("DocType", "name"),
+	("DocField", "parent"),
+	("DocPerm", "parent"),
+	("Custom DocPerm", "parent"),
+	("DocType Link", "parent"),
+	("DocType Action", "parent"),
+	("DocType State", "parent"),
+	("Custom Field", "dt"),
+	("Property Setter", "doc_type"),
+	("Version", "ref_doctype"),
+	("Comment", "reference_doctype"),
+	("Deleted Document", "deleted_doctype"),
+	("Document Naming Rule", "document_type"),
+)
+
 
 def execute():
 	if frappe.db.exists("DocType", NEW) or not frappe.db.exists("DocType", OLD):
 		return
 	module = frappe.db.get_value("DocType", OLD, "module")
 	if module != "Huf":
-		# Core's Flow Run (or a clobbered row): never rename or delete it. Model sync creates
-		# "Agent Flow Run" fresh; any legacy Huf rows in tabFlow Run are left in place.
 		frappe.logger().info(f"rename_flow_run_to_agent_flow_run: '{OLD}' is owned by module {module}; skipped")
 		return
 
-	# DocType.before_rename refuses renames outside developer mode; this is a trusted data patch.
-	prev = frappe.conf.get("developer_mode")
-	frappe.conf.developer_mode = 1
-	try:
-		frappe.rename_doc("DocType", OLD, NEW, force=True)
-	finally:
-		frappe.conf.developer_mode = prev
+	frappe.db.sql_ddl(f"RENAME TABLE `tab{OLD}` TO `tab{NEW}`")
+	for table, col in NAME_COLUMNS:
+		if frappe.db.table_exists(table) and frappe.db.has_column(table, col):
+			frappe.db.sql(f"update `tab{table}` set `{col}` = %s where `{col}` = %s", (NEW, OLD))
+	if frappe.db.table_exists("Property Setter"):
+		frappe.db.sql(
+			"update `tabProperty Setter` set name = concat(%s, substr(name, %s)) where name like %s",
+			(NEW, len(OLD) + 1, OLD + "-%"),
+		)
 
-	# rename_doc repoints every Link to "Flow Run", including those of core Frappe DocTypes that
-	# mean core's own "Flow Run". Point those back; only Huf's own DocTypes keep the new name.
+	# Repoint only Huf-owned fields; core doctypes keep pointing at core's "Flow Run".
 	frappe.db.sql(
 		"""update `tabDocField` set options = %s
-		where fieldtype in ('Link', 'Table', 'Dynamic Link') and options = %s
-		and parent in (select name from `tabDocType` where module != 'Huf')""",
-		(OLD, NEW),
+		where fieldtype in ('Link', 'Table') and options = %s
+		and parent in (select name from `tabDocType` where module = 'Huf')""",
+		(NEW, OLD),
+	)
+	frappe.db.sql(
+		"""update `tabCustom Field` set options = %s
+		where fieldtype in ('Link', 'Table') and options = %s
+		and dt in (select name from `tabDocType` where module = 'Huf')""",
+		(NEW, OLD),
 	)
 	frappe.clear_cache()
