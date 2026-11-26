@@ -51,7 +51,6 @@ def enqueue_memory_extraction(agent_doc, run_doc, *, after_commit=True) -> bool:
 			deduplicate=True,
 			run_id=run_doc.name,
 		)
-		return True
 	except (
 		RuntimeError,
 		TypeError,
@@ -64,6 +63,8 @@ def enqueue_memory_extraction(agent_doc, run_doc, *, after_commit=True) -> bool:
 	) as e:
 		frappe.logger("huf").warning(f"Memory extraction enqueue failed: {e!s}")
 		return False
+	else:
+		return True
 
 
 _RESPONSE_FORMAT = {
@@ -149,24 +150,21 @@ def extract_memory_from_run(run_id):
 	if not transcript.strip():
 		return
 
-	try:
-		from huf.ai.agent.integration import run_agent_sync
+	from huf.ai.agent.integration import run_agent_sync
 
-		# Dedicated conversation keyed by the source run, so the JSON reply never lands in the
-		# user's own chat history and the next extraction cannot read it back as transcript.
-		result = run_agent_sync(
-			agent_name=extraction_agent,
-			prompt=_prompt(transcript, default),
-			channel_id=MEMORY_EXTRACTION_CHANNEL,
-			external_id=run_id,
-			run_kind=MEMORY_EXTRACTION_RUN_KIND,
-			now=1,
-			skip_user_message=True,
-			response_format=_RESPONSE_FORMAT,
-		)
-	except Exception:
-		frappe.log_error(title="Memory extraction failed", message=frappe.get_traceback())
-		return
+	# Dedicated conversation keyed by the source run, so the JSON reply never lands in the
+	# user's own chat history and the next extraction cannot read it back as transcript.
+	# Unexpected errors propagate: the job runner rolls back and records them in the Error Log.
+	result = run_agent_sync(
+		agent_name=extraction_agent,
+		prompt=_prompt(transcript, default),
+		channel_id=MEMORY_EXTRACTION_CHANNEL,
+		external_id=run_id,
+		run_kind=MEMORY_EXTRACTION_RUN_KIND,
+		now=1,
+		skip_user_message=True,
+		response_format=_RESPONSE_FORMAT,
+	)
 	if not result or not result.get("success"):
 		return
 
@@ -175,6 +173,11 @@ def extract_memory_from_run(run_id):
 		_save_default(candidates, agent_name, subject, run_id)
 	else:
 		_save_with_policy(candidates, policy, agent_name, subject, run, run_id)
+
+
+def _candidate_errors():
+	"""Errors that reject one candidate without stopping the rest of the batch."""
+	return (frappe.ValidationError, frappe.PermissionError, TypeError, ValueError)
 
 
 def _save_default(candidates, agent_name, subject, run_id):
@@ -198,7 +201,7 @@ def _save_default(candidates, agent_name, subject, run_id):
 				importance_score=c.get("importance_score") or 0,
 			)
 			saved += 1
-		except Exception:
+		except _candidate_errors():
 			frappe.log_error(
 				title="Memory extraction: failed to save candidate", message=frappe.get_traceback()
 			)
@@ -228,7 +231,7 @@ def _save_with_policy(candidates, policy, agent_name, subject, run, run_id):
 				agent_run_id=run_id,
 				agent_name=agent_name,
 			)
-		except Exception:
+		except _candidate_errors():
 			frappe.log_error(
 				title="Memory extraction: failed to save candidate", message=frappe.get_traceback()
 			)

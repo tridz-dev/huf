@@ -4,6 +4,7 @@ import frappe
 from frappe import _
 from frappe.utils import now_datetime
 
+from huf.ai.memory.access import can_read_in_run
 from huf.ai.memory.defaults import save_default_memory_record, search_default_memory, uses_default_memory_for
 from huf.ai.memory.injection import format_memory_envelope
 from huf.ai.memory.search import rank_rows
@@ -56,6 +57,11 @@ def _can_read_memory(row, conversation_id=None, agent_name=None, strict=False) -
 
 	if frappe.session.user == "Guest":
 		return False
+
+	if strict and agent_name:
+		decided = can_read_in_run(row, conversation_id, agent_name)
+		if decided is not None:
+			return decided
 
 	getter = row.get if isinstance(row, dict) else lambda k, d=None: getattr(row, k, d)
 	row_scope_type = getter("scope_type")
@@ -283,7 +289,7 @@ def get_injected_memory_text(agent_name, policy, conversation_id=None, query=Non
 @frappe.whitelist()
 def get_memory_record(memory_record, conversation_id=None, agent_name=None, **kwargs):
 	doc = frappe.get_doc("Memory Record", memory_record)
-	if not _can_read_memory(doc, conversation_id, agent_name):
+	if not _can_read_memory(doc, conversation_id, agent_name, strict=bool(agent_name)):
 		frappe.throw(_("Memory read blocked"))
 	return doc.as_dict()
 
@@ -341,7 +347,7 @@ def search_memory_records(query=None, record_type=None, scope_type=None, status=
 @frappe.whitelist()
 def archive_memory_record(memory_record, conversation_id=None, agent_name=None, **kwargs):
 	doc = frappe.get_doc("Memory Record", memory_record)
-	if not _can_read_memory(doc, conversation_id, agent_name):
+	if not _can_read_memory(doc, conversation_id, agent_name, strict=bool(agent_name)):
 		frappe.throw(_("Memory archive blocked"))
 	if not _can_write_memory(doc.scope_type, doc.scope_key, agent_name, conversation_id=conversation_id):
 		frappe.throw(_("Memory archive blocked"))
