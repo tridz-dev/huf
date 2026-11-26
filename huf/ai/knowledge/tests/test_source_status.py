@@ -1,6 +1,7 @@
 """Source status recompute after input delete / reprocess (frappe mocked)."""
 
 import types
+import unittest
 from unittest.mock import patch
 
 import huf.ai.knowledge.hooks as mod
@@ -33,21 +34,26 @@ def _run(status, errors, exclude=None):
 	return db.set
 
 
-def test_delete_only_failed_returns_ready():
-	assert _run("Error", [("A", "boom")], exclude="A") == {"status": "Ready", "error_message": None}
+class TestSourceStatus(unittest.TestCase):
+	def test_delete_only_failed_returns_ready(self):
+		self.assertEqual(
+			(_run("Error", [("A", "boom")], exclude="A")), ({"status": "Ready", "error_message": None})
+		)
 
+	def test_second_failed_keeps_error(self):
+		self.assertEqual(
+			(_run("Error", [("A", "boom"), ("B", "bad")], exclude="A")),
+			(
+				{
+					"status": "Error",
+					"error_message": "bad",
+				}
+			),
+		)
 
-def test_second_failed_keeps_error():
-	assert _run("Error", [("A", "boom"), ("B", "bad")], exclude="A") == {
-		"status": "Error",
-		"error_message": "bad",
-	}
+	def test_busy_states_untouched(self):
+		self.assertIsNone(_run("Rebuilding", [("A", "x")], exclude="A"))
+		self.assertIsNone(_run("Indexing", [], None))
 
-
-def test_busy_states_untouched():
-	assert _run("Rebuilding", [("A", "x")], exclude="A") is None
-	assert _run("Indexing", [], None) is None
-
-
-def test_reprocess_success_recomputes():
-	assert _run("Ready", [], None) == {"status": "Ready", "error_message": None}
+	def test_reprocess_success_recomputes(self):
+		self.assertEqual((_run("Ready", [], None)), ({"status": "Ready", "error_message": None}))
