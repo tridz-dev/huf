@@ -284,7 +284,7 @@ export function ChatWindowHeader({
                 <span className="truncate text-[14px] font-[590] tracking-[-0.01em] text-ink">
                     {conversationTitle || agent.agent_name}
                 </span>
-                {conversationTitle && <span className="shrink-0 text-[12px] text-steel-soft">{agent.agent_name}</span>}
+                {conversationTitle && <span className="shrink-0 text-micro text-steel-soft">{agent.agent_name}</span>}
                 {conversationHost && <DesktopHostBadge host={conversationHost} compact />}
                 <span className="flex-1" />
                 <AnalyticsPaneToggle open={analyticsPaneOpen} onToggle={onToggleAnalyticsPane} />
@@ -324,7 +324,7 @@ export function ChatWindowHeader({
                     <span className="truncate text-[14px] font-[590] tracking-[-0.01em] text-ink">
                         {conversationTitle || agent.agent_name}
                     </span>
-                    {conversationTitle && <span className="shrink-0 text-[12px] text-steel-soft">{agent.agent_name}</span>}
+                    {conversationTitle && <span className="shrink-0 text-micro text-steel-soft">{agent.agent_name}</span>}
                     <ChevronDown className="size-[14px] shrink-0 text-steel-soft" />
                 </button>
             </AgentSwitcher>
