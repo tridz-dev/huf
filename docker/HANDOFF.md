@@ -63,11 +63,14 @@ Follow the exact recipe in `AGENTS.md` ("Testing local code"): build runtime and
 rebuild, then `./docker/try.sh --variant bench`. Confirm it works on a clean checkout and fix the recipe if not.
 Also `--variant fast` and `--variant fast-physical`.
 
-### 4. Known limitation to fix (container names)
-Container names are hard-coded (`fasterdocker-run-frappe`, `fasterdocker-run-mariadb`, and `CREDS_CONTAINER` in
-`try.sh`), so `--project` cannot run two stacks and `creds --variant bench` cannot find its container
-(`fasterdocker-run-bench`). Make `creds` resolve the container per variant (and ideally per project), or document
-it. Keep the demo container name working because `demo-entrypoint.sh` and docs refer to it.
+### 4. Container names and `creds`
+`creds` now resolves the credentials container per variant (`creds_container_for_variant` in `try.sh`): demo uses
+`fasterdocker-run-frappe`; bench, fast and fast-physical write no credentials file, so `creds` prints a message
+pointing at `ADMIN_PASSWORD` (env/.env, default `fasterdocker-admin` for fast variants). Container names are still
+fixed, so `--project` cannot run two stacks at once (documented only, not changed).
+
+Boot test should confirm: `./docker/try.sh creds` prints URL/user/password for demo, and
+`./docker/try.sh creds --variant bench` prints the no-credentials-file message without error.
 
 ### 5. Publish workflow and registry
 - Review `fasterdocker-publish.yml` once more on a real run (workflow_dispatch from the branch is not possible until

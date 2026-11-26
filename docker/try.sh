@@ -22,9 +22,16 @@ COMPOSE_BENCH="$DOCKER_DIR/compose.bench.yml"
 COMPOSE_FAST="$DOCKER_DIR/compose.fast.yml"
 COMPOSE_FAST_PHYSICAL="$DOCKER_DIR/compose.fast-physical.yml"
 
-# Container that persists the demo credentials file (demo-entrypoint.sh writes
-# sites/<SITE_NAME>/.fasterdocker-credentials inside this container).
-CREDS_CONTAINER="fasterdocker-run-frappe"
+# Only the demo variant writes a credentials file (demo-entrypoint.sh writes
+# sites/<SITE_NAME>/.fasterdocker-credentials inside the demo app container).
+# creds_container_for_variant prints that container name, or nothing for
+# variants that have no credentials file.
+creds_container_for_variant() {
+  case "${1:-}" in
+    demo) echo "fasterdocker-run-frappe" ;;
+    *) echo "" ;;
+  esac
+}
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -413,7 +420,7 @@ detect_boot_type() {
 read_credentials_from_container() {
   local site="${SITE_NAME:-huf.localhost}"
   local creds_path="sites/${site}/.fasterdocker-credentials"
-  docker exec "${CREDS_CONTAINER}" cat "$creds_path" 2>/dev/null
+  docker exec "$(creds_container_for_variant "$variant")" cat "$creds_path" 2>/dev/null
 }
 
 # Returns the host-side published port for a given container/internal port.
@@ -669,10 +676,26 @@ cmd_creds() {
   # Note: named site_name, not site — `site` collides with the global CLI-flag
   # variable of the same name that apply_cli_overrides reads (a `local site`
   # here would shadow it and trip `set -u` before apply_cli_overrides runs).
-  local site_name creds admin_user admin_pass user_port_env user_port url
+  local site_name creds admin_user admin_pass user_port_env user_port url creds_container
 
   load_env_file
   apply_cli_overrides
+  creds_container=$(creds_container_for_variant "$variant")
+  if [[ -z "$creds_container" ]]; then
+    case "$variant" in
+      fast|fast-physical)
+        echo "The '$variant' variant does not write a credentials file."
+        echo "Log in as Administrator with ADMIN_PASSWORD from your environment or .env"
+        echo "(default: fasterdocker-admin)."
+        ;;
+      *)
+        echo "The '$variant' variant does not write a credentials file."
+        echo "Log in as Administrator with the admin password set for this variant"
+        echo "(see docker/README.md); it is not stored in a container."
+        ;;
+    esac
+    return 0
+  fi
   # Do not remap ports here: the stack is already running and holds its ports.
   user_port_env=$(user_facing_port_env "$variant")
   user_port=${!user_port_env:-}
@@ -682,16 +705,16 @@ cmd_creds() {
   url="http://localhost:${user_port}$(url_path)"
   site_name="${SITE_NAME:-huf.localhost}"
 
-  if ! docker ps --filter name=^"${CREDS_CONTAINER}"$ --filter status=running --format '{{.Names}}' 2>/dev/null \
-       | grep -qx "${CREDS_CONTAINER}"; then
-    fatal "The credentials container (${CREDS_CONTAINER}) is not running. Run './docker/try.sh up' first."
+  if ! docker ps --filter name=^"${creds_container}"$ --filter status=running --format '{{.Names}}' 2>/dev/null \
+       | grep -qx "${creds_container}"; then
+    fatal "The credentials container (${creds_container}) is not running. Run './docker/try.sh up' first."
   fi
 
   # For the demo variant the actual published bench port can be read from the
   # running container, which is more reliable than env vars in a fresh shell.
   if [[ "$variant" == "demo" ]]; then
     local actual_port
-    actual_port=$(get_container_published_port "$CREDS_CONTAINER" 8000)
+    actual_port=$(get_container_published_port "$creds_container" 8000)
     [[ -n "$actual_port" ]] && user_port="$actual_port"
     url="http://localhost:${user_port}$(url_path)"
   fi
@@ -701,7 +724,7 @@ cmd_creds() {
   # the intended fatal message below gets a chance to run.
   creds=$(read_credentials_from_container || true)
   if [[ -z "$creds" ]]; then
-    fatal "Could not read credentials from ${CREDS_CONTAINER}:sites/${site_name}/.fasterdocker-credentials."
+    fatal "Could not read credentials from ${creds_container}:sites/${site_name}/.fasterdocker-credentials."
   fi
 
   admin_user=$(parse_credential_value ADMIN_USER "$creds")
