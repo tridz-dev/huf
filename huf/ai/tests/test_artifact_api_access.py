@@ -3,8 +3,8 @@
 
 """Who may read, and who may change or export, a conversation's artifacts.
 
-Reading follows the Agent Conversation document permission (what the chat view
-uses); everything else stays with the owner and System Manager.
+Reading and the HTML preview follow the Agent Conversation document permission
+(what the chat view uses); everything else stays with the owner and System Manager.
 
 Runs without a bench (frappe is mocked) and under:
 	bench --site <site> run-tests --app huf --module huf.ai.tests.test_artifact_api_access
@@ -20,15 +20,16 @@ from unittest import mock
 import frappe
 
 _SOURCE = Path(__file__).resolve().parents[1] / "artifact_api.py"
+_EXPORT_SOURCE = _SOURCE.with_name("artifact_export_api.py")
 
 
 class _Denied(Exception):
 	pass
 
 
-def _load_artifact_api():
+def _load_artifact_api(source=_SOURCE):
 	"""A private copy of the module with ``whitelist`` as a pass-through, so endpoints stay callable."""
-	spec = importlib.util.spec_from_file_location("_artifact_api_under_test", _SOURCE)
+	spec = importlib.util.spec_from_file_location(f"_{source.stem}_under_test", source)
 	module = importlib.util.module_from_spec(spec)
 	with mock.patch.object(frappe, "whitelist", lambda *a, **kw: lambda fn: fn):
 		spec.loader.exec_module(module)
@@ -86,6 +87,37 @@ class TestArtifactConversationAccess(unittest.TestCase):
 
 		with self.assertRaises(_Denied):
 			self.api._check_conversation_access("CONV-1")
+
+	def _export_api(self):
+		# The renderers need PDF/DOCX libraries; only the permission checks are under test.
+		renderers = {f"huf.ai.artifacts.render.{kind}": mock.MagicMock() for kind in ("docx", "html", "pdf")}
+		with mock.patch.dict("sys.modules", {"huf.ai.artifact_api": self.api, **renderers}):
+			export_api = _load_artifact_api(_EXPORT_SOURCE)
+		export_api.frappe = self.fake
+		export_api._ = lambda text: text
+		self.artifact.artifact_type = "document"
+		return export_api
+
+	def test_reader_gets_the_html_preview_but_cannot_export(self):
+		export_api = self._export_api()
+		self._as("manager@example.com", roles=("Huf Manager",), can_read=True)
+
+		with mock.patch.object(export_api, "_render_artifact_html", return_value="<html></html>"):
+			self.assertEqual(export_api.get_artifact_html("ART-1"), "<html></html>")
+		for fmt in ("pdf", "docx"):
+			with self.assertRaises(_Denied):
+				export_api.export_artifact("ART-1", fmt)
+			with self.assertRaises(_Denied):
+				export_api.preview_artifact_file("ART-1", fmt)
+
+	def test_non_reader_gets_no_html_preview(self):
+		export_api = self._export_api()
+		self._as("other@example.com")
+
+		with mock.patch.object(export_api, "_render_artifact_html") as render:
+			with self.assertRaises(_Denied):
+				export_api.get_artifact_html("ART-1")
+		render.assert_not_called()
 
 	def test_agent_list_tool_stays_owner_only(self):
 		from huf.ai.tools import document_artifact

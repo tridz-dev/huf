@@ -3,9 +3,9 @@
 
 """Export a document Artifact's markdown content as a downloadable PDF/DOCX/HTML file.
 
-Reuses the conversation-ownership check from ``huf.ai.artifact_api`` — a
-caller must own the artifact's conversation (or hold System Manager) to
-export it. This is stricter than reading it.
+Reuses the conversation checks from ``huf.ai.artifact_api``. Viewing the HTML
+preview needs read access to the artifact's conversation; exporting a file needs
+the stricter owner-or-System-Manager check.
 
 Rendering pipeline: markdown -> sanitized HTML (``artifacts.render.html``) ->
 PDF/DOCX bytes (``artifacts.render.pdf`` / ``artifacts.render.docx``). Each
@@ -18,7 +18,7 @@ import frappe
 from frappe import _
 from frappe.utils.file_manager import save_file
 
-from huf.ai.artifact_api import _check_conversation_access
+from huf.ai.artifact_api import _check_conversation_access, _check_conversation_read_access
 from huf.ai.artifacts.render.docx import html_to_docx
 from huf.ai.artifacts.render.html import render_document_html
 from huf.ai.artifacts.render.pdf import html_to_pdf
@@ -83,7 +83,7 @@ def get_artifact_html(name: str) -> str:
 
 	artifact = frappe.get_doc("Artifact", name)
 
-	_check_conversation_access(artifact.conversation)
+	_check_conversation_read_access(artifact.conversation)
 
 	if artifact.artifact_type not in _EXPORTABLE_ARTIFACT_TYPES:
 		frappe.throw(
