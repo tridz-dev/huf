@@ -8,7 +8,8 @@ export interface TablesLedgerProps {
 	legacy?: boolean;
 	onOpen: (row: TableRowModel) => void;
 	onAgentAccess: (row: TableRowModel) => void;
-	onDelete: (row: TableRowModel) => void;
+	/** Absent when the person may not delete tables. */
+	onDelete?: (row: TableRowModel) => void;
 }
 
 /** The Tables ledger (mockup state 1): name + description, agent access, size, updated. */
@@ -42,7 +43,7 @@ export function TablesLedger({ rows, legacy, onOpen, onAgentAccess, onDelete }: 
 							items={[
 								{ label: 'Open', icon: ArrowRight, onSelect: () => onOpen(r) },
 								{ label: 'Agent access', icon: KeyRound, onSelect: () => onAgentAccess(r) },
-								{ label: 'Delete', icon: Trash2, destructive: true, separated: true, onSelect: () => onDelete(r) },
+								...(onDelete ? [{ label: 'Delete', icon: Trash2, destructive: true, separated: true, onSelect: () => onDelete(r) }] : []),
 							]}
 						/>
 					}

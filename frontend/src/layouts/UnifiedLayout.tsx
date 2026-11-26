@@ -1,7 +1,7 @@
 import { ReactNode, createContext, useContext, useMemo, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { AppSidebar } from '../components/app-sidebar';
-import { UnifiedHeader, AncestryCrumb } from './UnifiedHeader';
+import { UnifiedHeader, AncestryCrumb, HeaderApprovals } from './UnifiedHeader';
 import {
   SidebarProvider,
   SidebarInset,
@@ -62,6 +62,9 @@ interface UnifiedLayoutProps {
 interface PageChromeContextValue {
   railToggle: ReactNode;
   ancestryCrumb: ReactNode;
+  approvals: ReactNode;
+  /** The route's `headerActions`: the head bar shows them when the page passes no `actions` of its own. */
+  headerActions: ReactNode;
   setFramed: (framed: boolean) => void;
 }
 
@@ -92,8 +95,8 @@ export function UnifiedLayout({ children, hideHeader, hideRail, headerActions, b
   );
 
   const chromeValue = useMemo<PageChromeContextValue>(
-    () => ({ railToggle, ancestryCrumb, setFramed }),
-    [railToggle, ancestryCrumb],
+    () => ({ railToggle, ancestryCrumb, approvals: <HeaderApprovals />, headerActions, setFramed }),
+    [railToggle, ancestryCrumb, headerActions],
   );
 
   return (

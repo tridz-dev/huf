@@ -1,3 +1,4 @@
+import { useResourceAccess } from '@/hooks/permissions/useResourceAccess';
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useForm, useFieldArray } from 'react-hook-form';
@@ -38,6 +39,7 @@ type NetworkAccessPolicyFormValues = z.infer<typeof networkAccessPolicySchema>;
 export function NetworkAccessPolicyFormPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const access = useResourceAccess('networkPolicy');
   const isNew = id === 'new';
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
@@ -191,7 +193,7 @@ export function NetworkAccessPolicyFormPage() {
             </div>
 
             <div className="flex items-center gap-2">
-              {!isNew && (
+              {!isNew && access.canDelete && (
                 <Button
                   variant="outline"
                   size="sm"

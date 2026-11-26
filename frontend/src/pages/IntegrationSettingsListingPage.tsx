@@ -1,3 +1,4 @@
+import { useResourceAccess } from '@/hooks/permissions/useResourceAccess';
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronDown, Link, Users } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -32,6 +33,7 @@ export function IntegrationSettingsListingPage({
   kind = 'integrations',
 }: IntegrationSettingsListingPageProps) {
   const navigate = useNavigate();
+  const access = useResourceAccess('integration');
   const [catalogOpen, setCatalogOpen] = useState(false);
   const [services, setServices] = useState<IntegrationServiceDoc[]>([]);
   const [categoryFilter, setCategoryFilter] = useState('all');
@@ -182,10 +184,10 @@ export function IntegrationSettingsListingPage({
                   ? 'No messaging channels have been connected yet.'
                   : 'No integrations have been connected yet.'
               }
-              action={{
+              action={access.canCreate ? {
                 label: kind === 'channels' ? 'Add channel' : 'Add integration',
                 onClick: () => setCatalogOpen(true),
-              }}
+              } : undefined}
             />
           )
         }

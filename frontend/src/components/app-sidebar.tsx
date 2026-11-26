@@ -1,6 +1,6 @@
 import { ConnectionIndicator } from './common/ConnectionIndicator';
 import * as React from "react"
-import { ArrowLeft, Home, ChartColumnIncreasing, SquareAsterisk, FileText, Workflow, Database, Layers, MessageSquare, Zap, Server, Users, BookOpen, Link2, Terminal, Settings, LayoutGrid, Brain, Sparkles, SquareChevronRight, ChevronsLeftRightEllipsis, GlobeLock, MessageCircle, Send, Keyboard, SlidersHorizontal, Boxes, type LucideIcon } from "lucide-react"
+import { ArrowLeft, Home, ChartColumnIncreasing, SquareAsterisk, FileText, Workflow, Database, Layers, MessageSquare, Clock, Activity, Cpu, Server, Users, BookOpen, Link2, Terminal, Settings, LayoutGrid, Brain, Sparkles, SquareChevronRight, ChevronsLeftRightEllipsis, GlobeLock, MessageCircle, Send, Keyboard, SlidersHorizontal, Boxes, type LucideIcon } from "lucide-react"
 import { SOLUTIONS_WORD } from "@/components/solutions/labels"
 import { useLocation } from "react-router-dom"
 
@@ -103,7 +103,7 @@ export const buildNavItems = [
   {
     title: "Automations",
     url: "/automations",
-    icon: Zap,
+    icon: Clock,
     capability: "agent.use",
     badge: "Experimental",
   },
@@ -130,7 +130,7 @@ export const libraryNavItems = [
   {
     title: "Providers",
     url: "/providers",
-    icon: Layers,
+    icon: Cpu,
     capability: "system.providers.manage",
   },
   {
@@ -155,7 +155,7 @@ export const operateNavItems = [
 	{
 		title: "Executions",
 		url: "/executions",
-		icon: Zap,
+		icon: Activity,
 		capability: "agent.use",
 		badge: "Experimental",
 	},
@@ -176,7 +176,7 @@ export const settingsNavGroups: Array<{ label?: string; items: Array<{ title: st
   {
     items: [
       { title: "General", url: "/settings/general", icon: SlidersHorizontal, capability: null },
-      { title: "AI providers & models", url: "/providers", icon: Layers, capability: "system.providers.manage" },
+      { title: "AI providers & models", url: "/providers", icon: Cpu, capability: "system.providers.manage" },
       { title: "MCP servers", url: "/mcp", icon: Server, capability: "system.mcp.manage" },
       { title: "Gateways", url: "/gateways", icon: GlobeLock, capability: "system.integrations.manage" },
       { title: "Channels", url: "/channels", icon: MessageCircle, capability: "system.integrations.manage" },

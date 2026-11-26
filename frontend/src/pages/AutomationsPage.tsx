@@ -1,6 +1,7 @@
+import { useResourceAccess } from '@/hooks/permissions/useResourceAccess';
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Zap, Loader2 } from 'lucide-react';
+import { Clock, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { PageFrame } from '@/layouts/PageFrame';
@@ -26,6 +27,7 @@ const statusOptions = [
 
 export function AutomationsPage() {
   const navigate = useNavigate();
+  const access = useResourceAccess('automation');
   const list = useAutomationsList();
 
   const { data: rows, allData, search, setSearch, filters, setFilters, setData } =
@@ -58,7 +60,7 @@ export function AutomationsPage() {
   return (
     <PageFrame
       title="Automations"
-      actions={<Button onClick={() => navigate('/automations/new')}>New automation</Button>}
+      actions={access.canCreate ? <Button onClick={() => navigate('/automations/new')}>New automation</Button> : undefined}
       filters={
         <FilterBar
           searchPlaceholder="Search automations..."
@@ -83,7 +85,7 @@ export function AutomationsPage() {
           hasActiveFilters ? (
             <EmptyState
               variant="no-results"
-              icon={Zap}
+              icon={Clock}
               title="No automations found"
               filterTerm={search}
               secondaryAction={{
@@ -97,10 +99,10 @@ export function AutomationsPage() {
           ) : (
             <EmptyState
               variant="create"
-              icon={Zap}
+              icon={Clock}
               title="No automations"
               description="An automation runs an Agent automatically, outside a normal chat -- on a schedule, when a document changes, or from an external event."
-              action={{ label: 'New automation', onClick: () => navigate('/automations/new') }}
+              action={access.canCreate ? { label: 'New automation', onClick: () => navigate('/automations/new') } : undefined}
             />
           )
         }
@@ -136,7 +138,7 @@ export function AutomationsPage() {
             <ItemCard
               title={automation.automation_name}
               description={automation.description?.slice(0, 100) || 'No description'}
-              icon={Zap}
+              icon={Clock}
               status={{
                 label: automation.status,
                 variant: automationStatusBadgeVariant(automation.status),

@@ -1,3 +1,4 @@
+import { useResourceAccess } from '@/hooks/permissions/useResourceAccess';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { type ColumnDef } from '@tanstack/react-table';
@@ -145,6 +146,7 @@ export default function GatewaysPage() {
 
   // Draft Creation State
   const [showSetup, setShowSetup] = useState(false);
+  const access = useResourceAccess('gateway');
   const [creating, setCreating] = useState(false);
   const [gatewayName, setGatewayName] = useState('');
   const [provider, setProvider] = useState<GatewayProvider>('WhatsApp');
@@ -562,6 +564,7 @@ export default function GatewaysPage() {
           <h2 className="font-semibold text-base text-ink">Active Gateways</h2>
           <p className="text-xs text-steel">Configure routing targets, access control, and webhooks in real time.</p>
         </div>
+        {access.canCreate && (
         <Button size="sm" onClick={() => setShowSetup((v) => !v)}>
           {showSetup ? (
             <>
@@ -573,10 +576,11 @@ export default function GatewaysPage() {
             </>
           )}
         </Button>
+        )}
       </div>
 
       {/* Quick Add Form */}
-      {showSetup && (
+      {showSetup && access.canCreate && (
         <form
           className="mb-6 rounded-xl border border-primary/30 bg-panel p-5 shadow-sm"
           onSubmit={handleCreateGateway}
@@ -630,7 +634,7 @@ export default function GatewaysPage() {
             icon={Network}
             title="No gateways"
             description="Connect WhatsApp, Messenger, Instagram, Telegram, or Slack to let people message your agents."
-            action={{ label: 'Add gateway', onClick: () => setShowSetup(true) }}
+            action={access.canCreate ? { label: 'Add gateway', onClick: () => setShowSetup(true) } : undefined}
           />
         }
         renderItem={(gateway) => {
@@ -1026,6 +1030,7 @@ export default function GatewaysPage() {
 
             {/* Footer Controls */}
             <div className="flex items-center justify-between border-t border-line pt-4">
+              {access.canDelete ? (
               <Button
                 variant="destructive"
                 size="sm"
@@ -1033,6 +1038,7 @@ export default function GatewaysPage() {
               >
                 <Trash2 className="mr-1.5 h-3.5 w-3.5" /> Delete Gateway
               </Button>
+              ) : <span />}
 
               <div className="flex items-center gap-2">
                 <Button variant="outline" size="sm" onClick={() => setEditingGateway(null)}>

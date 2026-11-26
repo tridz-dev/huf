@@ -1,3 +1,4 @@
+import { useResourceAccess } from '@/hooks/permissions/useResourceAccess';
 import { useEffect, useState } from 'react';
 import { Sparkles, Settings, Trash2, Ban, CheckCircle2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -13,9 +14,9 @@ import {
   AlertDialogTitle,
 } from '../components/ui/alert-dialog';
 import { PageFrame } from '@/layouts/PageFrame';
-import { Button } from '@/components/ui/button';
 import { FilterBar, GridView, ItemCard, LoadMoreButton, EmptyState } from '../components/dashboard';
 import { ExperimentalBadge } from '../components/common/ExperimentalBadge';
+import { SkillsHeaderActions } from '../components/skills/SkillsHeaderActions';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
 import { getSkills, deleteSkill, updateSkill } from '../services/skillApi';
 import { formatTimeAgo } from '../utils/time';
@@ -54,6 +55,7 @@ function getStatusVariant(status: string): 'default' | 'secondary' | 'destructiv
 
 export function SkillsPage() {
   const navigate = useNavigate();
+  const access = useResourceAccess('skill');
   const [deleteSkillTarget, setDeleteSkillTarget] = useState<SkillDoc | null>(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -137,7 +139,7 @@ export function SkillsPage() {
     <PageFrame
       title="Skills"
       badge={<ExperimentalBadge />}
-      actions={<Button onClick={() => navigate('/skills/new')}>New skill</Button>}
+      actions={<SkillsHeaderActions onImportSuccess={() => window.location.reload()} />}
       filters={
         <FilterBar
           searchPlaceholder="Search skills..."
@@ -196,7 +198,7 @@ export function SkillsPage() {
               icon={Sparkles}
               title="No skills"
               description="Create a skill to get started."
-              action={{ label: 'New skill', onClick: () => navigate('/skills/new') }}
+              action={access.canCreate ? { label: 'New skill', onClick: () => navigate('/skills/new') } : undefined}
             />
           )
         }
@@ -227,12 +229,9 @@ export function SkillsPage() {
                 label: skill.status === 'Disabled' ? 'Enable' : 'Disable',
                 onClick: () => handleToggleStatus(skill),
               },
-              {
-                icon: Trash2,
-                label: 'Delete skill',
-                variant: 'destructive',
-                onClick: () => setDeleteSkillTarget(skill),
-              },
+              ...(access.canDelete
+                ? [{ icon: Trash2, label: 'Delete skill', variant: 'destructive' as const, onClick: () => setDeleteSkillTarget(skill) }]
+                : []),
             ]}
             onClick={() => navigate(`/skills/${skill.name}`)}
           />

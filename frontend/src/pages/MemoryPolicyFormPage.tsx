@@ -1,3 +1,4 @@
+import { useResourceAccess } from '@/hooks/permissions/useResourceAccess';
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
@@ -116,6 +117,7 @@ const tabLabels: Record<string, string> = Object.fromEntries(
 function MemoryPolicyFormPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const access = useResourceAccess('memoryPolicy');
   const isNew = id === 'new';
 
   const [loading, setLoading] = useState(!isNew);
@@ -318,7 +320,7 @@ function MemoryPolicyFormPage() {
           </div>
 
           <div className="flex items-center gap-2">
-            {!isNew && (
+            {!isNew && access.canDelete && (
               <Button
                 variant="outline"
                 size="sm"

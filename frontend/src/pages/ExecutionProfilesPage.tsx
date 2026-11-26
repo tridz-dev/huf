@@ -1,3 +1,4 @@
+import { useResourceAccess } from '@/hooks/permissions/useResourceAccess';
 import { useMemo, useState } from 'react';
 import { ArrowUpDown, Loader2, ShieldCheck, HardDrive, Cpu } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -44,6 +45,7 @@ function SortHeader<TData>({ column, label }: { column: HeaderContext<TData, unk
 
 export function ExecutionProfilesPage() {
   const navigate = useNavigate();
+  const access = useResourceAccess('executionProfile');
   const [sorting, setSorting] = useState<SortingState>([]);
 
   const {
@@ -226,7 +228,7 @@ export function ExecutionProfilesPage() {
               icon={ShieldCheck}
               title="No execution profiles"
               description="Configure a profile to control where agent code runs."
-              action={{ label: 'New execution profile', onClick: () => navigate('/execution-profiles/new') }}
+              action={access.canCreate ? { label: 'New execution profile', onClick: () => navigate('/execution-profiles/new') } : undefined}
             />
           )
         ) : (
