@@ -85,7 +85,7 @@ class URLExtractor(TextExtractor):
 			else:
 				raise ValueError("Too many redirects")
 			if response.status_code in (401, 403):
-				raise ValueError(AUTH_ERROR_MESSAGE)
+				raise ValueError(AUTH_ERROR_MESSAGE)  # noqa: TRY003, TRY301
 			response.raise_for_status()
 
 			content_type = response.headers.get("Content-Type", "").split(";", 1)[0].strip().lower()
@@ -150,7 +150,7 @@ class URLExtractor(TextExtractor):
 		except ValueError as e:
 			if str(e) == AUTH_ERROR_MESSAGE:
 				raise
-			raise ValueError(f"Error extracting text from URL: {e!s}")
+			raise ValueError(f"Error extracting text from URL: {e!s}")  # noqa: TRY003
 		except requests.exceptions.RequestException as e:
 			raise ValueError(f"Failed to fetch URL: {e!s}")
 		except Exception as e:

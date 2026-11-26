@@ -75,10 +75,10 @@ export function PromptAdvancedFields({ form, isNew }: PromptAdvancedFieldsProps)
         </div>
         <div className="flex flex-row items-center justify-between rounded-md border p-4 sm:col-span-2">
           <div className="space-y-0.5">
-            <Label className="text-base">Active</Label>
+            <Label htmlFor="is_active" className="text-base">Active</Label>
             <p className="text-xs text-steel-soft">Whether this prompt template is active and available for use.</p>
           </div>
-          <Switch checked={form.watch('is_active')} onCheckedChange={(checked) => setValue('is_active', checked)} />
+          <Switch id="is_active" checked={form.watch('is_active')} onCheckedChange={(checked) => setValue('is_active', checked)} />
         </div>
       </div>
     </AdvancedSettings>

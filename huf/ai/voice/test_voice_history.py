@@ -6,9 +6,8 @@ from datetime import datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 import frappe
+import pytest
 
 if isinstance(frappe, MagicMock):  # bench-less stub: decorators must not swallow the handler
 	frappe.whitelist = lambda *a, **k: (lambda fn: fn)
@@ -16,8 +15,8 @@ if isinstance(frappe, MagicMock):  # bench-less stub: decorators must not swallo
 
 	frappe.rate_limiter.rate_limit = lambda *a, **k: (lambda fn: fn)
 
-from huf.ai.providers import elevenlabs_convai_api as webhook  # noqa: E402
-from huf.ai.voice import history  # noqa: E402
+from huf.ai.providers import elevenlabs_convai_api as webhook
+from huf.ai.voice import history
 
 NOW = datetime(2026, 11, 26, 12, 0, 0)
 
@@ -48,7 +47,7 @@ class FakeFrappe:
 	class DuplicateEntryError(Exception):
 		pass
 
-	class PermissionError(Exception):  # noqa: A001
+	class PermissionError(Exception):
 		pass
 
 	def __init__(self):

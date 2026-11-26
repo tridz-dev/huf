@@ -652,6 +652,7 @@ def _call_stt_provider(
     Returns the transcript string, or an error dict on provider failure.
     """
     import litellm
+
     from huf.ai.voice.language import stt_language_hint, transcription_prompt
 
     if provider_name in MULTIMODAL_STT_PROVIDERS:
