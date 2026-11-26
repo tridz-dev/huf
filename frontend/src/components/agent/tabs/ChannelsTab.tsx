@@ -7,10 +7,8 @@
  *                on => both true; persist off => chat off). Children:
  *                persist_conversation ("Remember conversations"), persist_user_history,
  *                allow_ask_user, allow_rich_elements, allow_document_artifacts.
- *  Multi-step    enable_multi_run + default_plan (DefaultPlanTable). DEVIATION: this is
- *                its own reveal, not a Chat child, because multi-run forces
- *                allow_chat=false, which would hide the child that turned chat off.
- *  Website       embed_enabled; children publishable_key (read-only), allowed_origins.
+ *  Multi-step    enable_multi_run + default_plan; own reveal (multi-run forces allow_chat=false).
+ *  Website       embed_enabled (voice embed script); publishable_key, allowed_origins, snippet.
  *  Voice calls   voice_enabled (+ agent_modality: on => Text becomes Both; off =>
  *                Voice becomes Text), children agent_modality preset, then
  *                voice_engine, voice_config (schema fields), voice_greeting,
@@ -34,6 +32,7 @@ import type { AgentFormValues } from '../types';
 import { DefaultPlanTable } from '../DefaultPlanTable';
 import { AutomationsTab } from '../AutomationsTab';
 import { VoiceChannelFields } from './VoiceChannelFields';
+import { WidgetSnippet } from './WidgetSnippet';
 
 export interface ChannelsTabProps {
   form: UseFormReturn<AgentFormValues>;
@@ -104,22 +103,22 @@ export function ChannelsTab({ form, allModels, agentId, locked = false, automati
         description="Talk to it in the HUF chat window. History is kept so conversations continue."
         checked={Boolean(allowChat)} disabled={locked || multiRun} onCheckedChange={setChat}>
         {multiRun && <p className="text-micro text-steel">Chat is off while multi-step runs are on.</p>}
-        <SwitchField form={form} name="persist_conversation" label="Remember conversations" description="Saves history for future sessions. Turning it off also turns chat off." />
+        <SwitchField form={form} name="persist_conversation" label="Remember conversations" description="Keeps history within one conversation; it is not shared across chats. Turning it off also turns chat off." />
         <SwitchField form={form} name="persist_user_history" label="Separate history per user (older doc-event automations only)" description="Does not apply to scheduled runs or the newer automations." />
-        <SwitchField form={form} name="allow_ask_user" label="Ask follow-up questions" description="Buttons and choices instead of plain text. Needs ask_user attached as an action." />
+        <SwitchField form={form} name="allow_ask_user" label="Question buttons" description="Lets it offer buttons and choices instead of plain-text questions. Needs ask_user attached as an action." />
         <SwitchField form={form} name="allow_rich_elements" label="Charts and previews" description="Inline charts, HTML/SVG/mermaid previews and generated media." />
         <SwitchField form={form} name="allow_document_artifacts" label="Long documents" description="Write Markdown/HTML documents, export or redline them when those tools are attached." />
       </ToggleReveal>
 
       <ToggleReveal label="Multi-step runs" icon={<ListChecks className="h-4 w-4" />}
-        description="Plans a step-by-step approach, then runs each step. Turns chat off." checked={Boolean(multiRun)} onCheckedChange={setMulti}>
+        description="Plans the steps, runs them in the background and turns chat off." checked={Boolean(multiRun)} onCheckedChange={setMulti}>
         <DefaultPlanTable rows={plan} onAddRow={() => planWrite([...plan, { step_index: plan.length + 1, status: 'pending', instruction: '', output_ref: '' }])}
           onRemoveRow={(i) => planWrite(plan.filter((_, j) => j !== i))}
           onUpdateRow={(i, f, v) => planWrite(plan.map((r, j) => (j === i ? { ...r, [f]: v } : r)))} />
       </ToggleReveal>
 
       <ToggleReveal label="Website widget" icon={<Globe className="h-4 w-4" />}
-        description="Adds a chat bubble to your site using a publishable key." checked={embed}
+        description="Lets visitors start a voice session from your site using a publishable key." checked={embed}
         onCheckedChange={(on) => form.setValue('embed_enabled', on, { shouldDirty: true })}
         status={<StatusSentence tone={originCount ? 'ready' : 'attention'}>{originCount ? `Live on ${originCount} ${originCount === 1 ? 'domain' : 'domains'}` : 'Add a domain'}</StatusSentence>}>
         <FormField control={form.control} name="publishable_key" render={({ field }) => (
@@ -136,6 +135,7 @@ export function ChannelsTab({ form, allModels, agentId, locked = false, automati
             <FormDescription>One per line. Requests from other sites are rejected.</FormDescription><FormMessage />
           </FormItem>
         )} />
+        <WidgetSnippet publishableKey={form.watch('publishable_key')} agentId={agentId} />
       </ToggleReveal>
 
       <ToggleReveal label="Voice calls" icon={<Mic className="h-4 w-4" />}

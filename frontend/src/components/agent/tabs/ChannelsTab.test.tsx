@@ -44,6 +44,16 @@ describe('ChannelsTab', () => {
     expect(screen.getByLabelText('Allowed domains')).toBeInTheDocument();
   });
 
+  it('shows a copyable voice embed snippet for a saved agent', async () => {
+    render(<Harness agentId="A1" defaults={{ embed_enabled: true, publishable_key: 'pk_abc' } as Partial<AgentFormValues>} />);
+    const pre = document.getElementById('widget-snippet')!;
+    expect(pre.textContent).toContain('huf-voice.js');
+    expect(pre.textContent).toContain('HufVoice.init');
+    expect(pre.textContent).toContain('"pk_abc"');
+    expect(pre.textContent).toContain('"A1"');
+    expect(screen.getByRole('button', { name: 'Copy snippet' })).toBeInTheDocument();
+  });
+
   it('voice on lifts Text modality to Both and reveals voice fields', async () => {
     render(<Harness />);
     await userEvent.click(sw('Voice calls'));
