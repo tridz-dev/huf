@@ -49,9 +49,9 @@ class TestRunAccess(IntegrationTestCase):
 		return doc.name
 
 	def _run(self, flow_name, status="Queued"):
-		run = frappe.get_doc({"doctype": "Flow Run", "flow_definition": flow_name, "flow_id": flow_name, "status": status, "trigger_type": "Manual", "started_at": now_datetime()})
+		run = frappe.get_doc({"doctype": "Agent Flow Run", "flow_definition": flow_name, "flow_id": flow_name, "status": status, "trigger_type": "Manual", "started_at": now_datetime()})
 		run.insert(ignore_permissions=True)
-		self._docs.append(("Flow Run", run.name))
+		self._docs.append(("Agent Flow Run", run.name))
 		return run.name
 
 	def _user(self, *roles):
@@ -76,7 +76,7 @@ class TestRunAccess(IntegrationTestCase):
 		frappe.set_user(self.editor)
 		with self.assertRaises(frappe.PermissionError):
 			actions.cancel_flow_run(self.run_b)
-		self.assertEqual(frappe.db.get_value("Flow Run", self.run_b, "status"), "Queued")
+		self.assertEqual(frappe.db.get_value("Agent Flow Run", self.run_b, "status"), "Queued")
 
 	def test_cancel_is_refused_for_someone_who_can_edit_no_flow(self):
 		frappe.set_user(self._user("Huf User"))

@@ -38,14 +38,14 @@ class TestFlowMemberEntry(IntegrationTestCase):
 	def tearDown(self):
 		frappe.set_user("Administrator")
 		frappe.db.delete("Flow Member State", {"flow": self.flow_id})
-		frappe.db.delete("Flow Run", {"flow_id": self.flow_id})
+		frappe.db.delete("Agent Flow Run", {"flow_id": self.flow_id})
 		frappe.delete_doc("Flow Definition", self.flow_id, ignore_permissions=True, force=True)
 		frappe.db.commit()
 
 	def _run(self, status="Running", key=KEY):
 		run = frappe.get_doc(
 			{
-				"doctype": "Flow Run",
+				"doctype": "Agent Flow Run",
 				"flow_definition": self.flow_id,
 				"flow_id": self.flow_id,
 				"status": status,
@@ -102,7 +102,7 @@ class TestFlowMemberEntry(IntegrationTestCase):
 	def test_reply_timeout_next_nudge(self):
 		run = self._run()
 		node, _ = self._park_reply(run, timeout_ms=60000, timeout_next="nudge")
-		self.assertIsNotNone(frappe.db.get_value("Flow Run", run.name, "resume_at"))
+		self.assertIsNotNone(frappe.db.get_value("Agent Flow Run", run.name, "resume_at"))
 		with patch("frappe.enqueue"):
 			self.assertTrue(park.wake_run(run.name, "elapsed"))
 		run.reload()
@@ -133,4 +133,4 @@ class TestFlowMemberEntry(IntegrationTestCase):
 		self.assertEqual(first["action"], "resume")
 		# the run is no longer waiting, so the second message is not a second wake
 		self.assertNotEqual(second.get("run"), run.name)
-		self.assertTrue(frappe.db.get_value("Flow Run", run.name, "waiting"))
+		self.assertTrue(frappe.db.get_value("Agent Flow Run", run.name, "waiting"))

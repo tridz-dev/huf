@@ -77,7 +77,7 @@ class WP11Base(IntegrationTestCase):
 		frappe.set_user("Administrator")
 		frappe.db.commit()  # drop this connection's old snapshot: other connections changed rows meanwhile
 		for flow_id in self._flows:
-			frappe.db.delete("Flow Run", {"flow_id": flow_id})
+			frappe.db.delete("Agent Flow Run", {"flow_id": flow_id})
 			if frappe.db.exists("Flow Definition", flow_id):
 				frappe.delete_doc("Flow Definition", flow_id, ignore_permissions=True, force=True)
 		frappe.db.delete("ToDo", {"description": ["like", "_wp11 %"]})
@@ -149,9 +149,9 @@ class TestApprovalRaces(WP11Base):
 		return frappe.get_all("ToDo", filters={"description": ["like", f"{self.marker}%"]}, pluck="description")
 
 	def _expire_deadline(self, run):
-		waiting = json.loads(frappe.db.get_value("Flow Run", run.name, "waiting"))
+		waiting = json.loads(frappe.db.get_value("Agent Flow Run", run.name, "waiting"))
 		waiting["timeout_at"] = (now_datetime() - timedelta(seconds=5)).isoformat()
-		frappe.db.set_value("Flow Run", run.name, "waiting", json.dumps(waiting))
+		frappe.db.set_value("Agent Flow Run", run.name, "waiting", json.dumps(waiting))
 		frappe.db.commit()
 
 	def test_two_concurrent_decisions_exactly_one_wins_and_downstream_runs_once(self):
@@ -186,7 +186,7 @@ class TestApprovalRaces(WP11Base):
 
 		self.assertEqual(sorted(v.split(":")[0] for v in results.values()), ["refused", "won"], results)
 		frappe.db.rollback()  # end this connection's old snapshot
-		fresh = frappe.get_doc("Flow Run", run.name)
+		fresh = frappe.get_doc("Agent Flow Run", run.name)
 		self.assertEqual(fresh.status, "Success", fresh.last_error)
 		todos = self._todos()
 		self.assertEqual(len(todos), 1, todos)  # the downstream step of the winning route ran exactly once
@@ -197,7 +197,7 @@ class TestApprovalRaces(WP11Base):
 	def test_loser_with_a_stale_snapshot_gets_a_clear_refusal(self):
 		"""The loser read the run before the winner committed; its own re-read is stale, only the UPDATE tells."""
 		run = self._waiting_run()
-		self.assertEqual(frappe.db.get_value("Flow Run", run.name, "status"), "Waiting Approval")  # snapshot taken
+		self.assertEqual(frappe.db.get_value("Agent Flow Run", run.name, "status"), "Waiting Approval")  # snapshot taken
 		site = frappe.local.site
 
 		def winner():
@@ -218,13 +218,13 @@ class TestApprovalRaces(WP11Base):
 		self.assertIn("already decided", str(ctx.exception))
 		frappe.db.rollback()
 		self.assertEqual(self._todos(), [f"{self.marker} approved"])
-		record = json.loads(frappe.db.get_value("Flow Run", run.name, "context_json"))[flow_engine.NODE_OUTPUTS_KEY]["ask"]
+		record = json.loads(frappe.db.get_value("Agent Flow Run", run.name, "context_json"))[flow_engine.NODE_OUTPUTS_KEY]["ask"]
 		self.assertEqual(record["comment"], "winner")
 
 	def test_stale_loser_is_stopped_by_the_conditional_update(self):
 		"""A caller that already read 'Waiting Approval' (stale snapshot) cannot move a run another caller decided."""
 		run = self._waiting_run()
-		stale = frappe.get_doc("Flow Run", run.name)  # read before the other decision
+		stale = frappe.get_doc("Agent Flow Run", run.name)  # read before the other decision
 		flow_engine.approve_flow_run(run.name, "approved", "first")
 		frappe.db.commit()
 		self.assertEqual(stale.status, "Waiting Approval")  # the stale copy still believes it
@@ -245,7 +245,7 @@ class TestApprovalRaces(WP11Base):
 			flow_engine.approve_flow_run(run.name, "approved", "too late")
 		self.assertIn("This approval has expired", str(ctx.exception))
 		frappe.db.rollback()
-		self.assertEqual(frappe.db.get_value("Flow Run", run.name, "status"), "Waiting Approval")
+		self.assertEqual(frappe.db.get_value("Agent Flow Run", run.name, "status"), "Waiting Approval")
 		self.assertEqual(self._todos(), [])
 		# the timeout path still owns it
 		self.assertTrue(flow_engine.expire_approval(run.name))
@@ -285,7 +285,7 @@ class TestApprovalRaces(WP11Base):
 		flow_id = self._save(self._approval_graph())
 		run = flow_engine.create_flow_run(flow_id, payload={}, trigger_type="Webhook")
 		frappe.db.set_value(
-			"Flow Run",
+			"Agent Flow Run",
 			run.name,
 			{"status": "Waiting User", "current_node_id": "ask", "waiting": json.dumps({"resume_node": "yes_todo"})},
 		)
@@ -320,7 +320,7 @@ class TestApprovalRaces(WP11Base):
 			t.join(timeout=60)
 		self.assertEqual(sorted(results), ["refused", "won"])
 		frappe.db.rollback()
-		self.assertEqual(frappe.db.get_value("Flow Run", run.name, "status"), "Success")
+		self.assertEqual(frappe.db.get_value("Agent Flow Run", run.name, "status"), "Success")
 		self.assertEqual(self._todos(), [f"{self.marker} approved"])
 
 
@@ -333,7 +333,7 @@ class TestTerminalStatusProtection(WP11Base):
 	def _run(self, status):
 		flow_id = self._save(_graph([_out("done", "ok")], WEBHOOK))
 		run = flow_engine.create_flow_run(flow_id, payload={}, trigger_type="Webhook")
-		frappe.db.set_value("Flow Run", run.name, "status", status)
+		frappe.db.set_value("Agent Flow Run", run.name, "status", status)
 		run.reload()
 		return run
 
@@ -362,8 +362,8 @@ class TestTerminalStatusProtection(WP11Base):
 
 	def test_worker_finishing_after_mark_as_failed_does_not_overwrite_it(self):
 		run = self._run("Running")
-		frappe.db.set_value("Flow Run", run.name, "modified", add_to_date(now_datetime(), minutes=-30), update_modified=False)
-		worker_copy = frappe.get_doc("Flow Run", run.name)
+		frappe.db.set_value("Agent Flow Run", run.name, "modified", add_to_date(now_datetime(), minutes=-30), update_modified=False)
+		worker_copy = frappe.get_doc("Agent Flow Run", run.name)
 		out = flow_api.mark_flow_run_failed(run.name)
 		self.assertEqual(out["status"], "Failed")
 		self.assertFalse(flow_engine._complete_flow_run(worker_copy))
@@ -373,13 +373,13 @@ class TestTerminalStatusProtection(WP11Base):
 
 	def test_mark_failed_loses_to_a_worker_that_finished_meanwhile(self):
 		run = self._run("Running")
-		frappe.db.set_value("Flow Run", run.name, "modified", add_to_date(now_datetime(), minutes=-30), update_modified=False)
+		frappe.db.set_value("Agent Flow Run", run.name, "modified", add_to_date(now_datetime(), minutes=-30), update_modified=False)
 
 		real_is_stale = flow_api._is_stale
 
 		def finish_then_report_stale(status, modified):
 			# the live worker completes the run between the staleness check and the write
-			frappe.db.sql("update `tabFlow Run` set status='Success' where name=%s", run.name)
+			frappe.db.sql("update `tabAgent Flow Run` set status='Success' where name=%s", run.name)
 			return real_is_stale(status, modified)
 
 		with patch.object(flow_api, "_is_stale", finish_then_report_stale):
@@ -390,7 +390,7 @@ class TestTerminalStatusProtection(WP11Base):
 
 	def test_mark_failed_refuses_while_a_worker_holds_the_run_lock(self):
 		run = self._run("Running")
-		frappe.db.set_value("Flow Run", run.name, "modified", add_to_date(now_datetime(), minutes=-30), update_modified=False)
+		frappe.db.set_value("Agent Flow Run", run.name, "modified", add_to_date(now_datetime(), minutes=-30), update_modified=False)
 		self.assertTrue(flow_engine._acquire_run_lock(run.name))
 		try:
 			with self.assertRaises(frappe.ValidationError) as ctx:

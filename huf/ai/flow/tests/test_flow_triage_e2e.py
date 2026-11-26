@@ -113,7 +113,7 @@ class TestTriageEndToEnd(IntegrationTestCase):
 		frappe.set_user("Administrator")
 		frappe.db.delete("ToDo", {"description": ["like", "_e2e %"]})
 		frappe.db.delete("Flow State", {"flow_id": self.flow_id})
-		frappe.db.delete("Flow Run", {"flow_id": self.flow_id})
+		frappe.db.delete("Agent Flow Run", {"flow_id": self.flow_id})
 		frappe.delete_doc("Flow Definition", self.flow_id, ignore_permissions=True, force=True)
 		frappe.db.commit()
 

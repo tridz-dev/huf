@@ -169,12 +169,12 @@ class TestSavedFlowInvokesRealTool(unittest.TestCase):
 	def setUp(self):
 		frappe = self.frappe
 		frappe.set_user("Administrator")
-		self._names = {"Flow Definition": [], "Flow Run": [], "Agent Tool Function": []}
+		self._names = {"Flow Definition": [], "Agent Flow Run": [], "Agent Tool Function": []}
 		self.addCleanup(self._cleanup)
 
 	def _cleanup(self):
 		frappe = self.frappe
-		for doctype in ("Flow Run", "Flow Definition", "Agent Tool Function"):
+		for doctype in ("Agent Flow Run", "Flow Definition", "Agent Tool Function"):
 			for name in self._names.get(doctype, []):
 				try:
 					frappe.delete_doc(doctype, name, ignore_permissions=True, force=True)
@@ -256,9 +256,9 @@ class TestSavedFlowInvokesRealTool(unittest.TestCase):
 		self._track("Flow Definition", saved["flow_id"])
 
 		result = flow_api.run_flow(flow_id)
-		self._track("Flow Run", result["flow_run_id"])
+		self._track("Agent Flow Run", result["flow_run_id"])
 
-		flow_run = self.frappe.get_doc("Flow Run", result["flow_run_id"])
+		flow_run = self.frappe.get_doc("Agent Flow Run", result["flow_run_id"])
 		self.assertEqual(
 			flow_run.status,
 			"Success",

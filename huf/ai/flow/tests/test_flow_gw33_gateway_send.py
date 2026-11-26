@@ -47,11 +47,11 @@ from huf.testing.factories import make_agent_tool_function
 class TestToolCallSendsWithoutLLMTurn(IntegrationTestCase):
 	def setUp(self):
 		frappe.set_user("Administrator")
-		self._names = {"Flow Definition": [], "Flow Run": [], "Agent Tool Function": [], "Agent Run": []}
+		self._names = {"Flow Definition": [], "Agent Flow Run": [], "Agent Tool Function": [], "Agent Run": []}
 
 	def tearDown(self):
 		frappe.set_user("Administrator")
-		for doctype in ("Flow Run", "Flow Definition", "Agent Run", "Agent Tool Function"):
+		for doctype in ("Agent Flow Run", "Flow Definition", "Agent Run", "Agent Tool Function"):
 			for name in self._names.get(doctype, []):
 				try:
 					frappe.delete_doc(doctype, name, ignore_permissions=True, force=True)
@@ -170,7 +170,7 @@ class TestToolCallSendsWithoutLLMTurn(IntegrationTestCase):
 			# Automation triggered this Flow" without needing a real Agent
 			# Trigger/Doc Event wiring in this test.
 			flow_run = create_flow_run(flow_id=flow_id, payload={}, trigger_type="Webhook")
-			self._track("Flow Run", flow_run.name)
+			self._track("Agent Flow Run", flow_run.name)
 			engine_run_flow(flow_run.name)
 
 		flow_run.reload()

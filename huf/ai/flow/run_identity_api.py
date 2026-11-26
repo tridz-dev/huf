@@ -18,7 +18,7 @@ from huf.ai.flow.runs.access import require_run_access
 def get_flow_run_identity(flow_run_id: str) -> dict:
 	"""``{run_number, started_by, started_by_name}`` for one Flow Run the caller may read."""
 	require_run_access(flow_run_id, "read")
-	run = frappe.db.get_value("Flow Run", flow_run_id, ["flow_id", "creation", "owner"], as_dict=True)
+	run = frappe.db.get_value("Agent Flow Run", flow_run_id, ["flow_id", "creation", "owner"], as_dict=True)
 	if not run:
 		frappe.throw(_("Run not found"), frappe.DoesNotExistError)
 	return {
@@ -33,7 +33,7 @@ def _resume_at(flow_run_id: str) -> str | None:
 	"""When a run parked on a timed Wait continues (UTC, ``YYYY-MM-DDTHH:MM:SS``), else None."""
 	import json
 
-	raw = frappe.db.get_value("Flow Run", flow_run_id, "waiting")
+	raw = frappe.db.get_value("Agent Flow Run", flow_run_id, "waiting")
 	try:
 		waiting = json.loads(raw) if isinstance(raw, str) and raw else raw
 	except ValueError:
@@ -46,7 +46,7 @@ def _resume_at(flow_run_id: str) -> str | None:
 
 def run_number(flow_id: str, creation) -> int:
 	"""1-based place of a run among all runs of its flow, oldest first."""
-	return frappe.db.count("Flow Run", {"flow_id": flow_id, "creation": ["<=", creation]})
+	return frappe.db.count("Agent Flow Run", {"flow_id": flow_id, "creation": ["<=", creation]})
 
 
 def _full_name(user: str | None) -> str | None:

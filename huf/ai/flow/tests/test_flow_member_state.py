@@ -31,7 +31,7 @@ class TestFlowMemberState(IntegrationTestCase):
 	def tearDown(self):
 		frappe.set_user("Administrator")
 		frappe.db.delete("Flow Member State", {"flow": self.flow_id})
-		frappe.db.delete("Flow Run", {"flow_id": self.flow_id})
+		frappe.db.delete("Agent Flow Run", {"flow_id": self.flow_id})
 		if frappe.db.exists("Flow Definition", self.flow_id):
 			frappe.delete_doc("Flow Definition", self.flow_id, ignore_permissions=True, force=True)
 		frappe.db.commit()
@@ -39,7 +39,7 @@ class TestFlowMemberState(IntegrationTestCase):
 	def _run(self, status="Running", key="a"):
 		return frappe.get_doc(
 			{
-				"doctype": "Flow Run",
+				"doctype": "Agent Flow Run",
 				"flow_definition": self.flow_id,
 				"flow_id": self.flow_id,
 				"status": status,
@@ -125,7 +125,7 @@ class TestFlowMemberState(IntegrationTestCase):
 		run = self._run(status="Waiting User", key="k1")
 		member.upsert_member(self.flow_id, "k1", run.name)
 		self.assertTrue(member.remove_member(self.flow_id, "k1"))
-		self.assertEqual(frappe.db.get_value("Flow Run", run.name, "status"), "Cancelled")
+		self.assertEqual(frappe.db.get_value("Agent Flow Run", run.name, "status"), "Cancelled")
 		self.assertIsNone(member.get_member(self.flow_id, "k1"))
 		self.assertFalse(member.remove_member(self.flow_id, "k1"))
 

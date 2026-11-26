@@ -44,7 +44,7 @@ DOC_EVENT_MAP = {
 # the rows its own run writes would loop). Everything in the "Huf" module is skipped too.
 RECURSION_SKIP_DOCTYPES = frozenset(
 	{
-		"Flow Run",
+		"Agent Flow Run",
 		"Flow Definition",
 		"Agent Run",
 		"Agent Run Event",
@@ -204,7 +204,7 @@ def start_flow_run(
 		if early == "skip":
 			return None
 		if early:
-			return frappe.get_doc("Flow Run", early)
+			return frappe.get_doc("Agent Flow Run", early)
 	flow_run = engine.create_flow_run(
 		flow_id=flow_id, payload=payload, trigger_type=trigger_type, ignore_permissions=True
 	)
@@ -257,7 +257,7 @@ def _already_fired(flow_id: str, node_id: str, scheduled_for: str) -> bool:
 	"""Durable once-per-minute marker: the Flow Run created for that (node, minute) is the record."""
 	return bool(
 		frappe.db.exists(
-			"Flow Run",
+			"Agent Flow Run",
 			[
 				["flow_definition", "=", flow_id],
 				["trigger_type", "=", "Schedule"],
@@ -343,7 +343,7 @@ def expire_due_approvals(now: datetime | None = None, enqueue: bool = False) -> 
 
 	now = now or now_datetime()
 	rows = frappe.get_all(
-		"Flow Run",
+		"Agent Flow Run",
 		filters={"status": "Waiting Approval", "waiting": ["like", "%timeout_at%"]},
 		fields=["name", "waiting"],
 		limit_page_length=500,

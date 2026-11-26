@@ -36,7 +36,7 @@ class TestParkContract(IntegrationTestCase):
 		self.flow = _make_flow()
 		self.run_doc = frappe.get_doc(
 			{
-				"doctype": "Flow Run",
+				"doctype": "Agent Flow Run",
 				"flow_definition": self.flow.name,
 				"flow_id": self.flow.flow_id,
 				"status": "Running",
@@ -46,7 +46,7 @@ class TestParkContract(IntegrationTestCase):
 		self.when = datetime(2030, 1, 1, 9, 0, 0)
 
 	def tearDown(self):
-		frappe.delete_doc("Flow Run", self.run_doc.name, ignore_permissions=True, force=True)
+		frappe.delete_doc("Agent Flow Run", self.run_doc.name, ignore_permissions=True, force=True)
 		frappe.delete_doc("Flow Definition", self.flow.name, ignore_permissions=True, force=True)
 		frappe.db.commit()
 
@@ -54,7 +54,7 @@ class TestParkContract(IntegrationTestCase):
 		return park.park_run(self.run_doc, NODE, ParkRequest(reason="wait", resume_at=self.when, **kw))
 
 	def _row(self):
-		return frappe.db.get_value("Flow Run", self.run_doc.name, ["status", "resume_at", "waiting"], as_dict=True)
+		return frappe.db.get_value("Agent Flow Run", self.run_doc.name, ["status", "resume_at", "waiting"], as_dict=True)
 
 	def test_park_sets_waiting_timer_and_resume_at(self):
 		outcome = self._park()
@@ -90,7 +90,7 @@ class TestParkContract(IntegrationTestCase):
 		self.assertEqual(row.status, "Cancelled")
 		self.assertFalse(self._wake())
 		self.assertEqual(self._row().status, "Cancelled")
-		self.assertIn("Cancelled by Administrator", frappe.db.get_value("Flow Run", self.run_doc.name, "last_error"))
+		self.assertIn("Cancelled by Administrator", frappe.db.get_value("Agent Flow Run", self.run_doc.name, "last_error"))
 
 	def test_token_never_stored(self):
 		park.park_run(self.run_doc, NODE, ParkRequest(reason="wait", resume_at=None, token=True))

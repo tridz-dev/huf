@@ -71,7 +71,7 @@ def _expire_overdue_approvals(flow_run_id: str | None = None) -> None:
 		from huf.ai.flow import engine, triggers
 
 		if flow_run_id:
-			waiting = frappe.db.get_value("Flow Run", {"name": flow_run_id, "status": "Waiting Approval"}, "waiting")
+			waiting = frappe.db.get_value("Agent Flow Run", {"name": flow_run_id, "status": "Waiting Approval"}, "waiting")
 			if not waiting:
 				return
 			try:
@@ -326,7 +326,7 @@ def run_flow(
 	Returns:
 	    dict with flow_run_id, status, current_node_id
 	"""
-	if not frappe.has_permission("Flow Run", "create"):
+	if not frappe.has_permission("Agent Flow Run", "create"):
 		frappe.throw(_("Not permitted"), frappe.PermissionError)
 	require_flow_read(flow_id)  # starting a flow needs read on THAT flow
 
@@ -377,7 +377,7 @@ def get_flow_run(flow_run_id: str) -> dict:
 	require_run_access(flow_run_id, "read")
 
 	_expire_overdue_approvals(flow_run_id)
-	doc = frappe.get_doc("Flow Run", flow_run_id)
+	doc = frappe.get_doc("Agent Flow Run", flow_run_id)
 	ctx = {}
 	try:
 		ctx = json.loads(doc.context_json) if doc.context_json else {}
@@ -430,7 +430,7 @@ def mark_flow_run_failed(flow_run_id: str) -> dict:
 	"""
 	if not _can_mark_failed():
 		frappe.throw(_("Only a System Manager can mark a run as failed."), frappe.PermissionError)
-	if not frappe.db.exists("Flow Run", flow_run_id):
+	if not frappe.db.exists("Agent Flow Run", flow_run_id):
 		frappe.throw(_("Flow Run '{0}' not found").format(flow_run_id), frappe.DoesNotExistError)
 	require_run_access(flow_run_id, "write", "write")  # on this run and its flow, not just the role
 
@@ -440,7 +440,7 @@ def mark_flow_run_failed(flow_run_id: str) -> dict:
 	if not engine._acquire_run_lock(flow_run_id):
 		frappe.throw(_("This run is being worked on right now, so it cannot be marked as failed."))
 	try:
-		doc = frappe.get_doc("Flow Run", flow_run_id)
+		doc = frappe.get_doc("Agent Flow Run", flow_run_id)
 		if doc.status not in STALE_STATUSES:
 			frappe.throw(
 				_("This run is {0}, so it cannot be marked as failed. Only runs stuck in Queued or Running can.").format(
@@ -508,7 +508,7 @@ def list_flow_runs(flow_id: str | None = None, status: str | None = None, limit:
 	Returns:
 	    list of flow run summaries (times are UTC ISO strings)
 	"""
-	if not frappe.has_permission("Flow Run", "read"):
+	if not frappe.has_permission("Agent Flow Run", "read"):
 		frappe.throw(_("Not permitted"), frappe.PermissionError)
 
 	_expire_overdue_approvals()
@@ -523,7 +523,7 @@ def list_flow_runs(flow_id: str | None = None, status: str | None = None, limit:
 	require_flow_read(flow_id)
 	# get_list, not get_all: runs of flows hidden from the caller by User Permissions stay out of the answer.
 	runs = frappe.get_list(
-		"Flow Run",
+		"Agent Flow Run",
 		filters=filters,
 		fields=_FLOW_RUN_LIST_FIELDS,
 		order_by="modified desc",
@@ -548,7 +548,7 @@ def list_flow_runs_page(
 	before comparing with the stored naive ``started_at``. ``search`` matches flow name or run id.
 	Returns ``{"items": [...], "total": n}``.
 	"""
-	if not frappe.has_permission("Flow Run", "read"):
+	if not frappe.has_permission("Agent Flow Run", "read"):
 		frappe.throw(_("Not permitted"), frappe.PermissionError)
 
 	_expire_overdue_approvals()
@@ -580,9 +580,9 @@ def list_flow_runs_page(
 			or_filters.append(["flow_id", "in", matching])
 
 	require_flow_read(flow_id)
-	total = len(frappe.get_list("Flow Run", filters=filters, or_filters=or_filters, pluck="name", limit_page_length=0))
+	total = len(frappe.get_list("Agent Flow Run", filters=filters, or_filters=or_filters, pluck="name", limit_page_length=0))
 	rows = frappe.get_list(
-		"Flow Run",
+		"Agent Flow Run",
 		filters=filters,
 		or_filters=or_filters,
 		fields=_FLOW_RUN_LIST_FIELDS,
@@ -600,7 +600,7 @@ def get_flow_step_labels(items: str | list) -> list:
 	``items`` is a list of ``{"flow_run": ..., "flow_node_id": ...}``; the result is aligned with it
 	(``None`` where the run or flow is unknown).
 	"""
-	if not frappe.has_permission("Flow Run", "read"):
+	if not frappe.has_permission("Agent Flow Run", "read"):
 		frappe.throw(_("Not permitted"), frappe.PermissionError)
 	if isinstance(items, str):
 		items = json.loads(items or "[]")
@@ -609,7 +609,7 @@ def get_flow_step_labels(items: str | list) -> list:
 	for run_name in {i.get("flow_run") for i in items if i.get("flow_run")}:
 		if not can_access_run(run_name, "read"):
 			continue  # a run the caller may not open gets no label (None), same as an unknown run
-		run_flow_ids[run_name] = frappe.db.get_value("Flow Run", run_name, "flow_id")
+		run_flow_ids[run_name] = frappe.db.get_value("Agent Flow Run", run_name, "flow_id")
 	names = _flow_names(run_flow_ids.values())
 	labels = {fid: _node_labels(fid) for fid in set(run_flow_ids.values()) if fid}
 
@@ -656,7 +656,7 @@ def resume_flow_run(flow_run_id: str, input: str | dict | None = None) -> dict:
 
 	engine_resume(flow_run_id, user_input=input)
 
-	doc = frappe.get_doc("Flow Run", flow_run_id)
+	doc = frappe.get_doc("Agent Flow Run", flow_run_id)
 	return {
 		"flow_run_id": doc.name,
 		"status": doc.status,
@@ -673,19 +673,19 @@ def _decide_flow_run(flow_run_id: str, decision: str, comment: str | None) -> di
 	before anything is mutated.
 	"""
 	require_permission(frappe.session.user != "Guest", "Login required")
-	if not frappe.db.exists("Flow Run", flow_run_id):
+	if not frappe.db.exists("Agent Flow Run", flow_run_id):
 		frappe.throw(_("This run could not be found. It may have been deleted."), frappe.DoesNotExistError)
 
 	from huf.ai.flow import engine
 
-	flow_run = frappe.get_doc("Flow Run", flow_run_id)
+	flow_run = frappe.get_doc("Agent Flow Run", flow_run_id)
 	if flow_run.status != "Waiting Approval":
 		frappe.throw(_("This run is not waiting for approval any more."))
 	engine.verify_approval_permission(flow_run)
 
 	engine.approve_flow_run(flow_run_id, decision=decision, comment=comment)
 
-	doc = frappe.get_doc("Flow Run", flow_run_id)
+	doc = frappe.get_doc("Agent Flow Run", flow_run_id)
 	if not engine.run_moved_on(doc, flow_run):  # never confirm a decision that changed nothing
 		frappe.throw(_(engine.DECISION_NOT_SAVED))
 	return {
@@ -915,7 +915,7 @@ def handle_run_flow(flow_id: str, payload: str | dict | None = None, **kwargs) -
 	Returns:
 	    dict with flow_run_id, status, message
 	"""
-	if not frappe.has_permission("Flow Run", "create"):
+	if not frappe.has_permission("Agent Flow Run", "create"):
 		return {"error": "Insufficient permissions to start flows"}
 
 	try:
@@ -961,7 +961,7 @@ def handle_get_flow_run(flow_run_id: str, **kwargs) -> dict:
 
 	try:
 		_expire_overdue_approvals(flow_run_id)
-		doc = frappe.get_doc("Flow Run", flow_run_id)
+		doc = frappe.get_doc("Agent Flow Run", flow_run_id)
 		ctx = {}
 		try:
 			ctx = json.loads(doc.context_json) if doc.context_json else {}
@@ -1005,7 +1005,7 @@ def handle_resume_flow_run(flow_run_id: str, input: dict | None = None, **kwargs
 		from huf.ai.flow.engine import resume_flow_run as engine_resume
 
 		engine_resume(flow_run_id, user_input=input)
-		doc = frappe.get_doc("Flow Run", flow_run_id)
+		doc = frappe.get_doc("Agent Flow Run", flow_run_id)
 
 		return {
 			"success": True,
@@ -1036,7 +1036,7 @@ def handle_approve_flow_run(flow_run_id: str, decision: str = "approved", commen
 	try:
 		from huf.ai.flow.engine import approve_flow_run as engine_approve, verify_approval_permission
 
-		doc = frappe.get_doc("Flow Run", flow_run_id)
+		doc = frappe.get_doc("Agent Flow Run", flow_run_id)
 		verify_approval_permission(doc)
 
 		engine_approve(flow_run_id, decision=decision, comment=comment)
@@ -1069,7 +1069,7 @@ def get_pending_approvals(limit: int = 50) -> list:
 	Returns:
 	    list of pending approval items with flow details
 	"""
-	if not frappe.has_permission("Flow Run", "read"):
+	if not frappe.has_permission("Agent Flow Run", "read"):
 		frappe.throw(_("Not permitted"), frappe.PermissionError)
 
 	_expire_overdue_approvals()
@@ -1081,7 +1081,7 @@ def get_pending_approvals(limit: int = 50) -> list:
 
 	# Get all flow runs waiting for approval
 	pending_runs = frappe.get_all(
-		"Flow Run",
+		"Agent Flow Run",
 		filters={"status": "Waiting Approval"},
 		fields=[
 			"name",

@@ -49,7 +49,7 @@ class TestNonAdminGatewayChecks(IntegrationTestCase):
 
 	def tearDown(self):
 		frappe.set_user("Administrator")
-		frappe.db.delete("Flow Run", {"flow_id": self.flow_id})
+		frappe.db.delete("Agent Flow Run", {"flow_id": self.flow_id})
 		if frappe.db.exists("Flow Definition", self.flow_id):
 			frappe.delete_doc("Flow Definition", self.flow_id, ignore_permissions=True, force=True)
 		frappe.db.delete("Gateway", {"name": self.gateway})
@@ -89,7 +89,7 @@ class TestNonAdminGatewayChecks(IntegrationTestCase):
 		self.assertNotEqual(frappe.db.get_value("Flow Definition", self.flow_id, "status"), "Active")
 		with self.assertRaises(frappe.ValidationError):
 			create_flow_run(flow_id=self.flow_id, payload=payload, trigger_type="Gateway", ignore_permissions=True)
-		self.assertFalse(frappe.db.exists("Flow Run", {"flow_id": self.flow_id}))
+		self.assertFalse(frappe.db.exists("Agent Flow Run", {"flow_id": self.flow_id}))
 
 
 class TestGatewayStates(TestNonAdminGatewayChecks):

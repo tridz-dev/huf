@@ -41,14 +41,14 @@ class TestSubflow(IntegrationTestCase):
 		frappe.set_user("Administrator")
 		for flow in (self.parent_flow, self.child_flow, self.draft_flow):
 			frappe.db.delete("Flow Member State", {"flow": flow.name})
-			frappe.db.delete("Flow Run", {"flow_id": flow.name})
+			frappe.db.delete("Agent Flow Run", {"flow_id": flow.name})
 			frappe.delete_doc("Flow Definition", flow.name, ignore_permissions=True, force=True)
 		frappe.db.commit()
 
 	def _run(self, flow, status="Running", parent_run=None):
 		return frappe.get_doc(
 			{
-				"doctype": "Flow Run",
+				"doctype": "Agent Flow Run",
 				"flow_definition": flow.name,
 				"flow_id": flow.name,
 				"status": status,
@@ -62,7 +62,7 @@ class TestSubflow(IntegrationTestCase):
 		return exec_flow_call(run or self.parent, node, config, {}, GraphContext({}))
 
 	def _children(self):
-		return frappe.get_all("Flow Run", filters={"parent_run": self.parent.name}, fields=["name", "status", "parent_node"])
+		return frappe.get_all("Agent Flow Run", filters={"parent_run": self.parent.name}, fields=["name", "status", "parent_node"])
 
 	def _wait_for_child(self):
 		with patch("frappe.enqueue") as enq:
@@ -70,7 +70,7 @@ class TestSubflow(IntegrationTestCase):
 		return out, self._children()[0]["name"], enq
 
 	def _reload(self):
-		return frappe.get_doc("Flow Run", self.parent.name)
+		return frappe.get_doc("Agent Flow Run", self.parent.name)
 
 	def test_fire_and_forget_starts_child(self):
 		with patch("frappe.enqueue") as enq:
@@ -83,7 +83,7 @@ class TestSubflow(IntegrationTestCase):
 		self.assertEqual(self._reload().status, "Running")  # the parent carries on
 		# a fire-and-forget child never wakes anybody
 		with patch("frappe.enqueue"):
-			flow_engine._complete_flow_run(frappe.get_doc("Flow Run", child["name"]))
+			flow_engine._complete_flow_run(frappe.get_doc("Agent Flow Run", child["name"]))
 		self.assertEqual(self._reload().status, "Running")
 
 	def test_wait_parks_until_child_done(self):
@@ -94,7 +94,7 @@ class TestSubflow(IntegrationTestCase):
 		self.assertEqual(json.loads(parent.waiting)["reason"], "child")
 		enq.assert_called_once()  # only the child was enqueued, after the parent parked
 		with patch("frappe.enqueue"):
-			flow_engine._complete_flow_run(frappe.get_doc("Flow Run", child))
+			flow_engine._complete_flow_run(frappe.get_doc("Agent Flow Run", child))
 		parent = self._reload()
 		self.assertEqual(parent.status, "Running")
 		self.assertEqual(json.loads(parent.waiting)["woke"]["reason"], "child_done")
@@ -108,7 +108,7 @@ class TestSubflow(IntegrationTestCase):
 
 		_out, child, _enq = self._wait_for_child()
 		with patch("frappe.enqueue"), patch("huf.ai.flow.engine._acquire_run_lock", return_value=False):
-			flow_engine._complete_flow_run(frappe.get_doc("Flow Run", child))
+			flow_engine._complete_flow_run(frappe.get_doc("Agent Flow Run", child))
 		parent = self._reload()
 		self.assertEqual(parent.status, "Waiting Timer")
 		self.assertIsNotNone(parent.resume_at)  # handed to the sweeper
@@ -120,7 +120,7 @@ class TestSubflow(IntegrationTestCase):
 	def test_child_failure_routes_on_error(self):
 		_out, child, _enq = self._wait_for_child()
 		with patch("frappe.enqueue"):
-			flow_engine._fail_flow_run(frappe.get_doc("Flow Run", child), "Child blew up")
+			flow_engine._fail_flow_run(frappe.get_doc("Agent Flow Run", child), "Child blew up")
 		again = self._call(run=self._reload(), flow_id=self.child_flow.name, mode="wait")
 		self.assertEqual(again["status"], "failed")
 		self.assertIn("Child blew up", again["error"])
@@ -148,7 +148,7 @@ class TestSubflow(IntegrationTestCase):
 
 	def test_cancel_parent_cancels_child_waiting(self):
 		_out, child, _enq = self._wait_for_child()
-		self.assertEqual(frappe.db.get_value("Flow Run", child, "status"), "Queued")
+		self.assertEqual(frappe.db.get_value("Agent Flow Run", child, "status"), "Queued")
 		self.assertTrue(park.cancel_run(self.parent.name, "Administrator"))
 		self.assertEqual(self._reload().status, "Cancelled")
-		self.assertEqual(frappe.db.get_value("Flow Run", child, "status"), "Cancelled")
+		self.assertEqual(frappe.db.get_value("Agent Flow Run", child, "status"), "Cancelled")

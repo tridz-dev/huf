@@ -104,7 +104,7 @@ def set_status(flow: str, key: str, status: str, node_id: str | None = None) -> 
 def find_waiting_reply_run(flow: str, key: str) -> str | None:
 	"""The run of this member parked on a ``member_reply`` wait, if any."""
 	rows = frappe.get_all(
-		"Flow Run",
+		"Agent Flow Run",
 		filters={"flow_id": flow, "member_key": key, "status": "Waiting Timer"},
 		fields=["name", "waiting"],
 		order_by="creation desc",
@@ -121,7 +121,7 @@ def has_active_run(flow: str, key: str) -> bool:
 	from huf.ai.flow.engine import TERMINAL_STATUSES
 
 	return bool(
-		frappe.db.exists("Flow Run", {"flow_id": flow, "member_key": key, "status": ["not in", list(TERMINAL_STATUSES)]})
+		frappe.db.exists("Agent Flow Run", {"flow_id": flow, "member_key": key, "status": ["not in", list(TERMINAL_STATUSES)]})
 	)
 
 
@@ -161,7 +161,7 @@ def remove_member(flow: str, key: str) -> bool:
 
 	name = member_name(flow, key)
 	run = frappe.db.get_value(DOCTYPE, name, "active_flow_run")
-	if run and frappe.db.exists("Flow Run", run):
+	if run and frappe.db.exists("Agent Flow Run", run):
 		cancel_run(run, frappe.session.user)  # no-op when the run already finished
 	if not frappe.db.exists(DOCTYPE, name):
 		return False

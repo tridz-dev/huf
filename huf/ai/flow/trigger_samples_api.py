@@ -21,7 +21,7 @@ def get_last_webhook_request(flow_id: str) -> dict:
 		frappe.throw(_("Not permitted"), frappe.PermissionError)
 
 	rows = frappe.get_all(
-		"Flow Run",
+		"Agent Flow Run",
 		filters={"flow_id": flow_id, "trigger_type": "Webhook"},
 		fields=["trigger_payload", "creation"],
 		order_by="creation desc",

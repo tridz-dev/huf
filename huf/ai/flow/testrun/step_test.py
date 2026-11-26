@@ -47,7 +47,7 @@ POLL_AFTER_MS = 1000
 class StepTestRun:
 	"""Stands in for the Flow Run a step normally runs inside. Nothing here reaches the database."""
 
-	doctype = "Flow Run"
+	doctype = "Agent Flow Run"
 	name = None
 	run_mode = "Test"
 	status = "Running"

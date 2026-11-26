@@ -33,7 +33,7 @@ def notify_flow_failure(flow_run_name: str) -> bool:
 	try:
 		if not flow_run_name:
 			return False
-		row = frappe.db.get_value("Flow Run", flow_run_name, ["trigger_payload", "status"], as_dict=True)
+		row = frappe.db.get_value("Agent Flow Run", flow_run_name, ["trigger_payload", "status"], as_dict=True)
 		if not row or row.get("status") != "Failed":
 			return False
 		payload = json.loads(row.get("trigger_payload") or "{}")

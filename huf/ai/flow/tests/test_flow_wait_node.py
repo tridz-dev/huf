@@ -33,7 +33,7 @@ class TestWaitNode(IntegrationTestCase):
 		self.flow.insert(ignore_permissions=True)
 		self.run_doc = frappe.get_doc(
 			{
-				"doctype": "Flow Run",
+				"doctype": "Agent Flow Run",
 				"flow_definition": self.flow.name,
 				"flow_id": self.flow.flow_id,
 				"status": "Running",
@@ -42,7 +42,7 @@ class TestWaitNode(IntegrationTestCase):
 		).insert(ignore_permissions=True)
 
 	def tearDown(self):
-		frappe.delete_doc("Flow Run", self.run_doc.name, ignore_permissions=True, force=True)
+		frappe.delete_doc("Agent Flow Run", self.run_doc.name, ignore_permissions=True, force=True)
 		frappe.delete_doc("Flow Definition", self.flow.name, ignore_permissions=True, force=True)
 		frappe.db.commit()
 
@@ -53,7 +53,7 @@ class TestWaitNode(IntegrationTestCase):
 		return exec_wait(self.run_doc, node, node["config"], {})
 
 	def _row(self):
-		return frappe.db.get_value("Flow Run", self.run_doc.name, ["status", "resume_at", "waiting"], as_dict=True)
+		return frappe.db.get_value("Agent Flow Run", self.run_doc.name, ["status", "resume_at", "waiting"], as_dict=True)
 
 	def _wake(self, reason="elapsed"):
 		with patch("frappe.enqueue"):
@@ -96,7 +96,7 @@ class TestWaitNode(IntegrationTestCase):
 		self.assertEqual(out["status"], "success")
 		self.assertEqual(out["output"]["reason"], "elapsed")
 		self.assertEqual(out["next_node_id"], "n2")
-		self.assertFalse(frappe.db.get_value("Flow Run", self.run_doc.name, "waiting"))
+		self.assertFalse(frappe.db.get_value("Agent Flow Run", self.run_doc.name, "waiting"))
 		# entered again with the record cleared: it is a fresh park, not a second output
 		again = self._reenter(node)
 		self.assertTrue(again.is_paused)
@@ -167,14 +167,14 @@ class TestWaitSweeper(IntegrationTestCase):
 
 	def tearDown(self):
 		for name in self.runs:
-			frappe.delete_doc("Flow Run", name, ignore_permissions=True, force=True)
+			frappe.delete_doc("Agent Flow Run", name, ignore_permissions=True, force=True)
 		frappe.delete_doc("Flow Definition", self.flow.name, ignore_permissions=True, force=True)
 		frappe.db.commit()
 
 	def _parked(self, resume_at, status="Running"):
 		run = frappe.get_doc(
 			{
-				"doctype": "Flow Run",
+				"doctype": "Agent Flow Run",
 				"flow_definition": self.flow.name,
 				"flow_id": self.flow.flow_id,
 				"status": status,
@@ -186,7 +186,7 @@ class TestWaitSweeper(IntegrationTestCase):
 		return run.name
 
 	def _status(self, name):
-		return frappe.db.get_value("Flow Run", name, "status")
+		return frappe.db.get_value("Agent Flow Run", name, "status")
 
 	def test_sweeper_wakes_due_only(self):
 		from huf.ai.flow.runs.park import wake_due_waits
@@ -227,7 +227,7 @@ class TestWaitSweeper(IntegrationTestCase):
 
 	def test_stale_sweeper_ignores_waiting_timer(self):
 		name = self._parked(self.NOW)
-		frappe.db.set_value("Flow Run", name, "modified", datetime(2020, 1, 1), update_modified=False)
+		frappe.db.set_value("Agent Flow Run", name, "modified", datetime(2020, 1, 1), update_modified=False)
 		failed = flow_engine.sweep_stale_runs()
 		self.assertNotIn(name, failed)
 		self.assertEqual(self._status(name), "Waiting Timer")
@@ -235,7 +235,7 @@ class TestWaitSweeper(IntegrationTestCase):
 	def test_woken_run_fails_clearly_when_flow_was_deleted(self):
 		run = frappe.get_doc(
 			{
-				"doctype": "Flow Run",
+				"doctype": "Agent Flow Run",
 				"flow_definition": self.flow.name,
 				"flow_id": self.flow.flow_id,
 				"status": "Running",
@@ -243,10 +243,10 @@ class TestWaitSweeper(IntegrationTestCase):
 			}
 		).insert(ignore_permissions=True)
 		self.runs.append(run.name)
-		frappe.db.set_value("Flow Run", run.name, "pinned_definition", None)
-		frappe.db.set_value("Flow Run", run.name, "flow_definition", None)
+		frappe.db.set_value("Agent Flow Run", run.name, "pinned_definition", None)
+		frappe.db.set_value("Agent Flow Run", run.name, "flow_definition", None)
 		frappe.delete_doc("Flow Definition", self.flow.name, ignore_permissions=True, force=True)
 		flow_engine.run_flow(run.name)
-		row = frappe.db.get_value("Flow Run", run.name, ["status", "last_error"], as_dict=True)
+		row = frappe.db.get_value("Agent Flow Run", run.name, ["status", "last_error"], as_dict=True)
 		self.assertEqual(row.status, "Failed")
 		self.assertIn("flow was deleted", row.last_error)

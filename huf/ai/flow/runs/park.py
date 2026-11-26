@@ -122,7 +122,7 @@ def wake_run(flow_run_name: str, reason: str, payload=None, *, enqueue: bool = T
 	if not _acquire_run_lock(flow_run_name):
 		return False
 	try:
-		flow_run = frappe.get_doc("Flow Run", flow_run_name)
+		flow_run = frappe.get_doc("Agent Flow Run", flow_run_name)
 		if flow_run.status != WAIT_STATUS:
 			return False
 		waiting = _waiting(flow_run)
@@ -149,7 +149,7 @@ def cancel_run(flow_run_name: str, by: str) -> bool:
 	from huf.ai.flow.nodes import subflow
 	from huf.ai.flow.support.approval_notifications import _clear_flow_notifications
 
-	flow_run = frappe.get_doc("Flow Run", flow_run_name)
+	flow_run = frappe.get_doc("Agent Flow Run", flow_run_name)
 	message = f"Cancelled by {by}."
 	if not engine._transition_run(
 		flow_run,
@@ -175,7 +175,7 @@ def wake_due_waits(now: datetime | None = None, limit: int = 500) -> list[str]:
 	Each continuation is enqueued on the short queue, never run here, so a big tick cannot hold the scheduler.
 	"""
 	names = frappe.get_all(
-		"Flow Run",
+		"Agent Flow Run",
 		filters={"status": "Waiting Timer", "resume_at": ["<=", now or datetime.now(timezone.utc).replace(tzinfo=None)]},
 		order_by="resume_at asc",
 		limit_page_length=limit,

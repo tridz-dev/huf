@@ -192,7 +192,7 @@ def agent_run_is_test(agent_run_id) -> bool:
 		return False
 	try:
 		flow_run = frappe.db.get_value("Agent Run", agent_run_id, "flow_run")
-		return bool(flow_run) and frappe.db.get_value("Flow Run", flow_run, "run_mode") == STORED_TEST
+		return bool(flow_run) and frappe.db.get_value("Agent Flow Run", flow_run, "run_mode") == STORED_TEST
 	except Exception as exc:
 		_log_doubt(f"looking up Agent Run {agent_run_id}", exc)
 		return True
@@ -233,7 +233,7 @@ def notify_test_owner(flow_run, waiting_data: dict) -> None:
 			frappe.db.get_value("User", owner, "email") or owner,
 			{
 				"type": "Assignment",
-				"document_type": "Flow Run",
+				"document_type": "Agent Flow Run",
 				"document_name": flow_run.name,
 				"subject": f"Test: {card['headline']}",
 				"email_content": f"<p>{TEST_NOTE}.</p>",

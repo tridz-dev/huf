@@ -42,7 +42,7 @@ against a real tenant (REAL_TENANT_CHECKLIST.md).
 | Teams Outbound Message (outbox) | doctype | Full outbound activity as JSON, including reply text and cards, after `redact_payload` (masks keys such as token/secret/password/authorization and Bearer/JWT-looking strings). **Message text, private answers and connect links are stored.** Plus status, attempts, `last_error` (scrubbed, max 500 chars), provider message id |
 | Gateway Identity Link | doctype | gateway, provider, tenant (`team_id`), Entra id (`external_id`), Huf user, state (`Pending`, `Linked`, `Revoked`), source, display label (Teams display name, max 80 chars), linked_at, linked_by. Revoked rows are kept |
 | Teams Action Session | doctype | gateway, kind, state, expiry, intended user, tenant, base conversation id, payload (approval name, or the link name for kind `idlink`), decided_by, decision, card activity id |
-| Agent Run / Flow Run | existing | `requester_user`, `requester_external_id` (Entra id), `gateway`, `gateway_event` are written on success |
+| Agent Run / Agent Flow Run | existing | `requester_user`, `requester_external_id` (Entra id), `gateway`, `gateway_event` are written on success |
 | Redis | cache | Bot access token (until about 5 min before expiry), JWKS, nonces and throttles (ROUTES_AND_CONFIG.md section 5) |
 
 The confirmation card is stored in the outbox like any card (it carries only the opaque session name).
@@ -57,7 +57,7 @@ the outbox row and Teams chat history.
 - Only one purge exists: generic daily deletion of `Rejected` Gateway Events older than 30 days.
 - No retention or purge for: successful Gateway Events and their message text, Teams Outbound Messages
   (including `Sent`), Teams Conversation References, Teams Action Sessions (expired sessions stay `Open`
-  or `Expired`), revoked identity links, Agent/Flow Run links.
+  or `Expired`), revoked identity links, Agent/Agent Flow Run links.
 - No data-subject export or delete command. "Disconnect" revokes the link only; it does not delete the
   Teams person's stored events, references or outbox rows.
 - An administrator must delete rows manually (REAL_TENANT_CHECKLIST.md section 8) until a retention

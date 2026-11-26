@@ -302,7 +302,7 @@ doc_events = {
         "on_update": "huf.ai.telegram_web_access_enforce.on_binding_update",
         "on_trash": "huf.ai.telegram_web_access_enforce.on_binding_trash",
     },
-    "Flow Run": {
+    "Agent Flow Run": {
         "on_update": "huf.ai.gateways.flow_reply.on_flow_run_update",
     },
     "Flow Definition": {"after_insert": "huf.ai.flow.triggers.clear_trigger_cache", "on_update": "huf.ai.flow.triggers.clear_trigger_cache", "on_trash": "huf.ai.flow.triggers.clear_trigger_cache"},

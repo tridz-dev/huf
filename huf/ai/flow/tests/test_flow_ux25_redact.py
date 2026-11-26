@@ -86,14 +86,14 @@ class TestLastWebhookRequest(IntegrationTestCase):
 		flow.insert(ignore_permissions=True)
 		self.run_name = frappe.get_doc(
 			{
-				"doctype": "Flow Run", "flow_definition": flow.name, "flow_id": self.flow_id, "status": "Success", "trigger_type": "Webhook", "started_at": now_datetime(),
+				"doctype": "Agent Flow Run", "flow_definition": flow.name, "flow_id": self.flow_id, "status": "Success", "trigger_type": "Webhook", "started_at": now_datetime(),
 				"trigger_payload": json.dumps({"customer": {"name": "Ada", "token": "tok-123", "Authorization": BEARER}, "Cookie": "sid=1", "x-huf-secret": "hush", "headers": [{"name": "Authorization", "value": BEARER}], "note": SECRET_TEXT, "_trigger": {"x": 1}}),
 			}
 		).insert(ignore_permissions=True).name
 
 	def tearDown(self):
 		frappe.set_user("Administrator")
-		for doctype, name in (("Flow Run", self.run_name), ("Flow Definition", self.flow_id)):
+		for doctype, name in (("Agent Flow Run", self.run_name), ("Flow Definition", self.flow_id)):
 			if frappe.db.exists(doctype, name):
 				frappe.delete_doc(doctype, name, ignore_permissions=True, force=True)
 		frappe.db.commit()

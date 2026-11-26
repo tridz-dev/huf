@@ -62,13 +62,13 @@ class TestDataCatalogApi(IntegrationTestCase):
 	def _run(self, status="Success", payload=None, outputs=None):
 		run = frappe.get_doc(
 			{
-				"doctype": "Flow Run", "flow_definition": self.flow, "flow_id": self.flow_id, "status": status, "trigger_type": "Webhook",
+				"doctype": "Agent Flow Run", "flow_definition": self.flow, "flow_id": self.flow_id, "status": status, "trigger_type": "Webhook",
 				"started_at": now_datetime(), "trigger_payload": json.dumps(payload or {}),
 				"context_json": json.dumps({**(payload or {}), "__node_outputs__": outputs or {}}),
 			}
 		)
 		run.insert(ignore_permissions=True)
-		self._docs.append(("Flow Run", run.name))
+		self._docs.append(("Agent Flow Run", run.name))
 		return run.name
 
 	def test_lists_the_trigger_first_and_only_steps_before_the_step(self):

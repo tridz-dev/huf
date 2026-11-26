@@ -22,7 +22,7 @@
   {"fieldname":"target_agent","fieldtype":"Link","label":"Target agent","options":"Agent","read_only":1},
   {"fieldname":"target_flow","fieldtype":"Link","label":"Target flow","options":"Flow Definition","read_only":1},
   {"fieldname":"agent_run","fieldtype":"Link","label":"Agent run","options":"Agent Run","read_only":1},
-  {"fieldname":"flow_run","fieldtype":"Link","label":"Flow run","options":"Flow Run","read_only":1},
+  {"fieldname":"flow_run","fieldtype":"Link","label":"Flow run","options":"Agent Flow Run","read_only":1},
   {"fieldname":"section_delivery","fieldtype":"Section Break","label":"Reply delivery"},
   {"fieldname":"reply_message_id","fieldtype":"Data","label":"Reply message ID","length":255,"read_only":1,"search_index":1},
   {"fieldname":"reply_status","fieldtype":"Data","label":"Reply status","length":50,"read_only":1},

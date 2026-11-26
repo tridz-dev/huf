@@ -97,7 +97,7 @@ def _send_approval_notifications(flow_run, node: dict, config: dict, waiting_dat
 			# 1. Create Frappe Notification Log (appears in bell icon)
 			enqueue_create_notification(user_email, {
 				"type": "Assignment",
-				"document_type": "Flow Run",
+				"document_type": "Agent Flow Run",
 				"document_name": flow_run.name,
 				"subject": headline,
 				"email_content": f"""
@@ -152,7 +152,7 @@ def _clear_flow_notifications(flow_run):
 			frappe.db.set_value(
 				"Notification Log",
 				{
-					"document_type": "Flow Run",
+					"document_type": "Agent Flow Run",
 					"document_name": flow_run.name,
 					"read": 0
 				},
