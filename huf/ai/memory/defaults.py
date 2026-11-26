@@ -12,7 +12,12 @@ from frappe import _
 from frappe.utils import now_datetime
 
 from huf.ai.memory.search import rank_rows
-from huf.ai.memory.subject import caller_may_act_for, may_recall_for, resolve_memory_subject
+from huf.ai.memory.subject import (
+	caller_may_act_for,
+	is_foreign_owner_write,
+	may_recall_for,
+	resolve_memory_subject,
+)
 
 DEFAULT_MEMORY = {
 	"scope_type": "User",
@@ -164,6 +169,8 @@ def save_default_memory_record(
 		return dict(_SKIPPED)
 	if not caller_may_act_for(subject):
 		frappe.throw(_("Memory write blocked"), frappe.PermissionError)
+	if is_foreign_owner_write(subject, conversation_id, agent_run_id):
+		return dict(_SKIPPED)
 	return insert_default_memory_record(
 		agent_name=agent_name,
 		subject=subject,
@@ -206,7 +213,7 @@ def search_default_memory(
 		return {"success": True, "results": []}
 	if not caller_may_act_for(subject):
 		frappe.throw(_("Memory read blocked"), frappe.PermissionError)
-	if not may_recall_for(subject):
+	if not may_recall_for(subject, agent_run_id):
 		return {"success": True, "results": []}
 	max_rows = min(max(int(limit or 10), 1), 50)
 	return {

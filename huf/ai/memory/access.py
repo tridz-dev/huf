@@ -11,7 +11,7 @@ from huf.ai.memory.defaults import uses_default_memory_for
 from huf.ai.memory.subject import may_recall_for, resolve_memory_subject
 
 
-def can_read_in_run(row, conversation_id=None, agent_name=None):
+def can_read_in_run(row, conversation_id=None, agent_name=None, run_id=None):
 	"""True or False when per user and agent rules decide; None to apply the scope rules."""
 	getter = row.get if isinstance(row, dict) else lambda k, d=None: getattr(row, k, d)
 	scope_type = getter("scope_type")
@@ -21,7 +21,7 @@ def can_read_in_run(row, conversation_id=None, agent_name=None):
 		return False if uses_default_memory_for(agent_name) else None
 	if conversation_id:
 		reader = resolve_memory_subject(conversation_id)
-		if not may_recall_for(reader):
+		if not may_recall_for(reader, run_id):
 			return False
 	else:
 		reader = frappe.session.user

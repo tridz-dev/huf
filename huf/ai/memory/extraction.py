@@ -12,6 +12,7 @@ from huf.ai.memory.subject import (
 	MEMORY_EXTRACTION_CHANNEL,
 	MEMORY_EXTRACTION_RUN_KIND,
 	resolve_memory_subject,
+	run_initiator,
 )
 
 EXTRACT_JOB = "huf.ai.memory.extraction.extract_memory_from_run"
@@ -95,10 +96,20 @@ _RESPONSE_FORMAT = {
 }
 
 
-def _transcript(agent_name, conversation):
+def _foreign_runs(conversation, subject):
+	"""Runs of this conversation that someone other than the subject started."""
+	rows = frappe.get_all(
+		"Agent Run", filters={"conversation": conversation}, fields=["name", "owner", "requester_user"]
+	)
+	return {r.get("name") for r in rows if (r.get("requester_user") or r.get("owner")) != subject}
+
+
+def _transcript(agent_name, conversation, exclude_runs=None):
 	from huf.ai.conversation_manager import ConversationManager
 
-	history = ConversationManager(agent_name=agent_name).get_conversation_history(conversation, limit=40)
+	history = ConversationManager(agent_name=agent_name).get_conversation_history(
+		conversation, limit=40, exclude_runs=exclude_runs
+	)
 	lines = []
 	for msg in history:
 		content = msg.get("content")
@@ -146,7 +157,14 @@ def extract_memory_from_run(run_id):
 	elif not subject:
 		return
 
-	transcript = _transcript(agent_name, run.conversation)
+	# Personal memory is learned only from the owner's own turns.
+	exclude_runs = None
+	if default or (policy.scope_type or "Agent") == "User":
+		if run_initiator(run_id) != subject:
+			return
+		exclude_runs = _foreign_runs(run.conversation, subject)
+
+	transcript = _transcript(agent_name, run.conversation, exclude_runs)
 	if not transcript.strip():
 		return
 

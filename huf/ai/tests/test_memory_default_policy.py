@@ -38,6 +38,7 @@ class FakeFrappe:
 
 	def __init__(self):
 		self.session = SimpleNamespace(user="u1")
+		self.flags = SimpleNamespace(huf_current_agent_run_id=None)
 		self.local = SimpleNamespace(site="site")
 		self.roles = {"m": {"Huf Manager"}, "Administrator": {"System Manager"}}
 		self.tables = {
@@ -64,7 +65,12 @@ class FakeFrappe:
 	def conversation(self, name, owner, channel="chat", agent="A", run=None, run_kind="agent"):
 		self.tables["Agent Conversation"][name] = {"owner": owner, "channel": channel}
 		if run:
-			self.tables["Agent Run"][run] = {"agent": agent, "conversation": name, "run_kind": run_kind}
+			self.tables["Agent Run"][run] = {
+				"agent": agent,
+				"conversation": name,
+				"run_kind": run_kind,
+				"owner": owner,
+			}
 
 	def policy(self, **values):
 		base = dict(
@@ -283,6 +289,7 @@ class TestDefaultSaveAndRecall(MemoryCase):
 
 	def test_queued_run_drained_as_administrator_uses_conversation_owner(self):
 		self.f.session.user = "Administrator"
+		self.f.flags.huf_current_agent_run_id = "R1"
 		self.save()
 		self.assertEqual(self.f.records[0]["scope_key"], "u1")
 		self.assertIn("Vaishna", self.recall())
@@ -306,6 +313,7 @@ class TestInRunReadsByName(MemoryCase):
 
 	def test_drained_run_reads_as_conversation_owner(self):
 		self.f.session.user = "Administrator"
+		self.f.flags.huf_current_agent_run_id = "R1"
 		self.assertTrue(self.can_read(self.row()))
 		self.assertFalse(self.can_read(self.row(owner="Administrator")))
 

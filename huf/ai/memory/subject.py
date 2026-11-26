@@ -56,13 +56,37 @@ def caller_may_act_for(subject) -> bool:
 	return bool(set(frappe.get_roles(user)) & MANAGER_ROLES)
 
 
-def may_recall_for(subject) -> bool:
-	"""True when the subject's memory may reach this session's chat.
+def run_initiator(run_id=None):
+	"""Return the user who started this run, falling back to the session user outside a run.
 
-	Only the subject, or "Administrator" (the system drain of queued runs). A
-	manager chatting in someone else's conversation does not recall their memory.
+	The Agent Run keeps its requester when the sweeper drains it as "Administrator".
 	"""
-	return bool(subject) and frappe.session.user in (subject, "Administrator")
+	run_id = run_id or getattr(frappe.flags, "huf_current_agent_run_id", None)
+	if not run_id:
+		return frappe.session.user
+	row = frappe.db.get_value("Agent Run", run_id, ["owner", "requester_user"], as_dict=True)
+	if not row:
+		return None
+	return row.get("requester_user") or row.get("owner")
+
+
+def may_recall_for(subject, run_id=None) -> bool:
+	"""True when the subject's memory may reach this chat.
+
+	The subject must have started the run. The session must be the subject too, or
+	"Administrator" (the system drain of queued runs). An Administrator or manager
+	chatting in someone else's conversation does not recall their memory.
+	"""
+	if not subject or frappe.session.user not in (subject, "Administrator"):
+		return False
+	return run_initiator(run_id) == subject
+
+
+def is_foreign_owner_write(scope_key, conversation_id=None, run_id=None) -> bool:
+	"""True when someone else's run would write into the conversation owner's memory."""
+	if not scope_key or scope_key != resolve_memory_subject(conversation_id, run_id):
+		return False
+	return run_initiator(run_id) != scope_key
 
 
 def pin_memory_run_context(args_dict, ctx):

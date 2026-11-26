@@ -8,7 +8,7 @@ from huf.ai.memory.access import can_read_in_run
 from huf.ai.memory.defaults import save_default_memory_record, search_default_memory, uses_default_memory_for
 from huf.ai.memory.injection import format_memory_envelope
 from huf.ai.memory.search import rank_rows
-from huf.ai.memory.subject import resolve_memory_subject
+from huf.ai.memory.subject import is_foreign_owner_write, resolve_memory_subject
 
 MANAGER_ROLES = {"System Manager", "Huf Manager"}
 WRITE_BLOCKED_SCOPES_FOR_NON_MANAGER = {"Role", "Workspace", "Site", "Global"}
@@ -176,6 +176,8 @@ def save_memory_record(
 		scope_type, resolved_scope_key, agent_name, conversation_id=conversation_id, policy=policy
 	):
 		frappe.throw(_("Memory write blocked"))
+	if scope_type == "User" and is_foreign_owner_write(resolved_scope_key, conversation_id, agent_run_id):
+		return {"success": False, "skipped": True, "reason": "Memory is not available in this conversation."}
 
 	if promote_to_knowledge and not _is_manager():
 		frappe.throw(_("Knowledge promotion blocked"))
