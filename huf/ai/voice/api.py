@@ -360,7 +360,7 @@ def start_public_session(publishable_key, agent) -> dict[str, Any]:
 	# `allow_cors` config - see the NOTE above and TESTING.md for why that
 	# site-wide config is required for this endpoint to be browser-callable
 	# at all, independent of the allowed_origins check above.
-	_, config = _get_agent_voice_config(agent_doc)
+	_engine_key, config = _get_agent_voice_config(agent_doc)
 
 	# Identifies the source as an embed session without propagating the
 	# publishable key itself into engine-layer session records or logs.
