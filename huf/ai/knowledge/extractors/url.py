@@ -85,7 +85,7 @@ class URLExtractor(TextExtractor):
 			else:
 				raise ValueError("Too many redirects")
 			if response.status_code in (401, 403):
-				raise ValueError(AUTH_ERROR_MESSAGE)  # noqa: TRY003, TRY301
+				raise ValueError(AUTH_ERROR_MESSAGE)  # noqa: TRY301
 			response.raise_for_status()
 
 			content_type = response.headers.get("Content-Type", "").split(";", 1)[0].strip().lower()
