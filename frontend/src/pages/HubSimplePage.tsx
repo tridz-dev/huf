@@ -9,6 +9,7 @@ import { AutoGrowTextarea } from '@/components/hub/AutoGrowTextarea';
 import { HubRecentChats } from '@/components/hub/HubRecentChats';
 import { SlashCommandMenu } from '@/components/hub/SlashCommandMenu';
 import { Button } from '@/components/ui/button';
+import { SidebarTrigger } from '@/components/ui/sidebar';
 import { getHubReadiness, HubReadiness } from '@/services/hubApi';
 import { getConversationMessages } from '@/services/chatApi';
 import { sendMessage, streamingAvailable } from '@/services/streamChatApi';
@@ -243,6 +244,7 @@ export default function HubSimplePage() {
       <main className="relative z-10 flex-1 flex flex-col h-full overflow-hidden">
         {/* Chat toolbar — new chat / resume a recent conversation */}
         <div className="absolute top-3 left-4 z-10 flex items-center gap-1">
+          <SidebarTrigger className="text-steel hover:text-ink" />
           <IconRailButton icon={Plus} label="New chat" onClick={handleNewChat} />
           <HubRecentChats onSelect={handleLoadConversation} />
         </div>
