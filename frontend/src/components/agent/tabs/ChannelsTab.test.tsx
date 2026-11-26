@@ -46,6 +46,13 @@ describe('ChannelsTab', () => {
     expect(api.getValues('allow_chat')).toBe(false);
   });
 
+  it('per-user history label no longer says legacy only', async () => {
+    render(<Harness defaults={{ allow_chat: true }} />);
+    expect(sw('Separate history per user')).toBeTruthy();
+    expect(screen.queryByText(/older doc-event/i)).toBeNull();
+    expect(screen.queryByText(/does not apply to scheduled runs/i)).toBeNull();
+  });
+
   it('website widget reveals key and origins', async () => {
     render(<Harness />);
     await userEvent.click(sw('Website widget'));

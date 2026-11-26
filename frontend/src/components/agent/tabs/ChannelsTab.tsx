@@ -106,7 +106,7 @@ export function ChannelsTab({ form, allModels, agentId, locked = false, automati
         checked={Boolean(allowChat)} disabled={locked || multiRun} onCheckedChange={setChat}>
         {multiRun && <p className="text-micro text-steel">Chat is off while multi-step runs are on.</p>}
         <SwitchField form={form} name="persist_conversation" label="Remember conversations" description="Keeps history within one conversation; it is not shared across chats. Turning it off also turns chat off." />
-        <SwitchField form={form} name="persist_user_history" label="Separate history per user (older doc-event automations only)" description="Does not apply to scheduled runs or the newer automations." />
+        <SwitchField form={form} name="persist_user_history" label="Separate history per user" description="Dedicated-conversation automations keep one conversation per person who triggers them. Runs with no person behind them (schedules, webhooks) use the automation's run-as user." />
         <SwitchField form={form} name="allow_ask_user" label="Question buttons" description="Lets it offer buttons and choices instead of plain-text questions. Needs ask_user attached as an action." />
         <SwitchField form={form} name="allow_rich_elements" label="Charts and previews" description="Inline charts, HTML/SVG/mermaid previews and generated media." />
         <SwitchField form={form} name="allow_document_artifacts" label="Long documents" description="Write Markdown/HTML documents, export or redline them when those tools are attached." />
