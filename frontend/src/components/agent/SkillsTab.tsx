@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Plus, Sparkles, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -12,6 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { useResourceAccess } from '@/hooks/permissions/useResourceAccess';
 import type { AgentSkillRow } from '@/types/skill.types';
 
 interface SkillsTabProps {
@@ -24,6 +26,7 @@ export function SkillsTab({ skills, skillOptions, onChange }: SkillsTabProps) {
   const [selectedSkill, setSelectedSkill] = useState('');
   const [pickerOpen, setPickerOpen] = useState(false);
   const comboboxRef = useRef<HTMLDivElement>(null);
+  const { canCreate } = useResourceAccess('skill');
 
   const handleAdd = () => {
     if (!selectedSkill || skills.some((s) => s.skill === selectedSkill)) return;
@@ -61,6 +64,14 @@ export function SkillsTab({ skills, skillOptions, onChange }: SkillsTabProps) {
             </CardTitle>
             <CardDescription>Reusable capability bundles attached to this agent</CardDescription>
           </div>
+          {canCreate && (
+            <Button asChild size="sm" variant="outline">
+              <Link to="/skills/new">
+                <Plus className="w-4 h-4 mr-2" />
+                New skill
+              </Link>
+            </Button>
+          )}
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
