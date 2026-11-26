@@ -1,12 +1,22 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { act, render, renderHook, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useForm } from 'react-hook-form';
 import { Form } from '@/components/ui/form';
 import { ChannelsTab } from './ChannelsTab';
+import { useAgentSections } from '../form/useAgentSections';
+import { mapAgentDocToFormValues } from '../form/agentFormModel';
 import type { AgentFormValues } from '../types';
 
+const remote = vi.hoisted(() => ({ get: vi.fn(), getAgentSection: vi.fn(), updateAgentSection: vi.fn() }));
+vi.mock('@/lib/frappe-sdk', async (orig) => ({ ...(await orig<typeof import('@/lib/frappe-sdk')>()), call: { get: remote.get, post: vi.fn() } }));
+vi.mock('@/services/agentApi', async (orig) => ({
+  ...(await orig<typeof import('@/services/agentApi')>()),
+  getAgentSection: remote.getAgentSection,
+  updateAgentSection: remote.updateAgentSection,
+  getAgentDesktopAccess: vi.fn().mockResolvedValue({}),
+}));
 vi.mock('../AutomationsTab', () => ({ AutomationsTab: () => <div>automations-ui</div> }));
 vi.mock('@/services/voiceSettingsApi', () => ({ listVoiceEngines: async () => [], getVoiceConfigSchema: async () => [] }));
 vi.mock('sonner', () => ({ toast: { warning: vi.fn() } }));
@@ -68,5 +78,58 @@ describe('ChannelsTab', () => {
     expect(screen.getByText('automations-ui')).toBeInTheDocument();
     await userEvent.click(sw('Multi-step runs'));
     expect(api.getValues('enable_multi_run')).toBe(true);
+  });
+});
+
+describe('default plan generation', () => {
+  const planStatus = (state: string, error: string | null = null) => remote.get.mockResolvedValue({ message: { state, error } });
+
+  it('shows progress while the plan is generated', async () => {
+    planStatus('generating');
+    render(<Harness agentId="A1" defaults={{ enable_multi_run: true, default_plan: [] }} />);
+    expect(await screen.findByText('Generating plan...')).toBeInTheDocument();
+  });
+
+  it('shows why generation failed', async () => {
+    planStatus('failed', 'provider down');
+    render(<Harness agentId="A1" defaults={{ enable_multi_run: true, default_plan: [] }} />);
+    expect(await screen.findByRole('alert')).toHaveTextContent('provider down');
+  });
+
+  it('adopts generated rows without a conflict and keeps edits made meanwhile saveable', async () => {
+    planStatus('done');
+    const server: Record<string, unknown> = { name: 'A1', agent_name: 'Bot', prompt_mode: 'Local', template_version_at_attach: 0,
+      summary_prompt_mode: 'Local', summary_template_version_at_attach: 0, description: 'd', instructions: 'i', enable_multi_run: 1, default_plan: [] };
+    let rows: unknown[] = [];
+    let release!: () => void;
+    const ready = new Promise<void>((resolve) => { release = resolve; });
+    remote.get.mockImplementation(async () => { await ready; rows = [{ step_index: 1, instruction: 'first', status: 'pending' }]; return { message: { state: 'done' } }; });
+    remote.getAgentSection.mockImplementation(async () => ({ name: 'A1', modified: 'r1', values: { ...server, default_plan: rows } }));
+    remote.updateAgentSection.mockImplementation(async (_n: string, _s: string, values: object) => { Object.assign(server, values); return { name: 'A1', modified: 'r2' }; });
+    remote.updateAgentSection.mockClear();
+    const abilities = { tools: [], mcp: [], knowledge: [], skills: [], dirty: { tools: false, knowledge: false, skills: false }, hydrate: vi.fn(), markSaved: vi.fn() } as never;
+    const { result } = renderHook(() => {
+      const form = useForm<AgentFormValues>({ defaultValues: mapAgentDocToFormValues({}) });
+      const sections = useAgentSections({ id: 'A1', isNew: false, form, abilities, canSave: true, onRenamed: vi.fn(), onTabWithError: vi.fn() });
+      return { form, sections };
+    });
+    await waitFor(() => expect(result.current.sections.loading).toBe(false));
+    act(() => { result.current.form.setValue('description', 'edited meanwhile'); });
+    // A behaviour save made before the rows are adopted must not send (and so wipe) the plan.
+    act(() => { result.current.form.setValue('allow_ask_user', true); });
+    await act(async () => { await result.current.sections.saveNow(); });
+    const early = remote.updateAgentSection.mock.calls.find((c) => c[1] === 'behavior')!;
+    expect(early[2]).toHaveProperty('allow_ask_user');
+    expect(early[2]).not.toHaveProperty('default_plan');
+    remote.updateAgentSection.mockClear();
+    act(() => { result.current.form.setValue('description', 'edited again'); });
+    await act(async () => { release(); });
+    await waitFor(() => expect(result.current.form.getValues('default_plan')).toHaveLength(1));
+    expect(result.current.sections.conflictFields).toEqual([]);
+    expect(result.current.form.getValues('description')).toBe('edited again');
+    await act(async () => { await result.current.sections.saveNow(); });
+    expect(remote.updateAgentSection).toHaveBeenCalledTimes(1);
+    expect(remote.updateAgentSection.mock.calls[0][1]).toBe('general');
+    expect(remote.updateAgentSection.mock.calls[0][3]).toBe('r1'); // generation did not move the revision
   });
 });

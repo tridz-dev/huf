@@ -25,6 +25,7 @@ import {
 } from './agentFormModel';
 import type { AgentForm } from '../tabs/fields';
 import type { useAgentAbilities } from './useAgentAbilities';
+import { useDefaultPlanStatus } from './useDefaultPlanStatus';
 
 type Revisions = Partial<Record<AgentConfigSection, string>>;
 type SaveMode = 'auto' | 'explicit';
@@ -224,6 +225,8 @@ export function useAgentSections({ id, isNew, form, abilities, canSave, onRename
 
     const current = form.getValues();
     const doc = formValuesToDoc(current);
+    // The server may fill an empty default_plan without moving the revision: only send it if the user edited it.
+    const planUntouched = sig(current.default_plan) === sig(baselineRef.current.default_plan);
     const snap = { tools: [...ab.tools], mcp: [...ab.mcp], knowledge: [...ab.knowledge], skills: [...ab.skills] };
     let target = target0;
     let revision: string | undefined;
@@ -232,7 +235,7 @@ export function useAgentSections({ id, isNew, form, abilities, canSave, onRename
       for (const section of dirty) {
         const expected = revision ?? revisionsRef.current[section];
         if (!expected) throw new Error('This section is not ready to save. Reload the agent and try again.');
-        const fields = fieldsFor(section, mode).filter((f) => !isDesktopField(f));
+        const fields = fieldsFor(section, mode).filter((f) => !isDesktopField(f) && !(f === 'default_plan' && planUntouched));
         let payload: Record<string, unknown>;
         if (section === 'tools') payload = { agent_tool: toolRows(snap.tools), agent_mcp_server: mcpRows(snap.mcp) };
         else if (section === 'knowledge') payload = { agent_knowledge: knowledgeRows(snap.knowledge) };
@@ -353,6 +356,11 @@ export function useAgentSections({ id, isNew, form, abilities, canSave, onRename
   }, [form, isNew]);
 
   reloadRef.current = reloadLatest;
+
+  // A generated default plan is written server-side without touching the agent revision; pull it in through the
+  // normal rebase so an untouched default_plan is adopted silently and never shows up as the user's conflict.
+  useDefaultPlanStatus(id, !isNew && !loading && !!values.enable_multi_run && !(values.default_plan || []).length,
+    () => { void reloadRef.current().catch((e) => console.error('Reload after plan generation failed:', e)); });
 
   const applyChoice = useCallback((field: string, choice: 'mine' | 'theirs') => {
     if (choice === 'theirs') form.setValue(field as never, theirsRef.current[field] as never, { shouldDirty: false });

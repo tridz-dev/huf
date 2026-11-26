@@ -31,6 +31,7 @@ import type { AIModel, AgentOrchestrationPlanRow } from '@/types/agent.types';
 import type { AgentFormValues } from '../types';
 import { DefaultPlanTable } from '../DefaultPlanTable';
 import { AutomationsTab } from '../AutomationsTab';
+import { useDefaultPlanStatus } from '../form/useDefaultPlanStatus';
 import { VoiceChannelFields } from './VoiceChannelFields';
 import { WidgetSnippet } from './WidgetSnippet';
 
@@ -74,6 +75,7 @@ export function ChannelsTab({ form, allModels, agentId, locked = false, automati
   const modality = form.watch('agent_modality');
   const origins = form.watch('allowed_origins');
   const plan = form.watch('default_plan') || [];
+  const planStatus = useDefaultPlanStatus(agentId, multiRun === true && plan.length === 0);
   const [autoLocal, setAutoLocal] = useState(Boolean(agentId));
   const autoOpen = automationsOpen ?? autoLocal;
   const setAuto = (v: boolean) => { setAutoLocal(v); onAutomationsOpenChange?.(v); };
@@ -112,6 +114,8 @@ export function ChannelsTab({ form, allModels, agentId, locked = false, automati
 
       <ToggleReveal label="Multi-step runs" icon={<ListChecks className="h-4 w-4" />}
         description="Plans the steps, runs them in the background and turns chat off." checked={Boolean(multiRun)} onCheckedChange={setMulti}>
+        {planStatus.state === 'generating' && <p role="status" className="text-micro text-steel">Generating plan...</p>}
+        {planStatus.state === 'failed' && <p role="alert" className="text-micro text-destructive">{`Couldn't generate a plan${planStatus.error ? `: ${planStatus.error}` : ''}. Add the steps yourself or turn multi-step off and on to retry.`}</p>}
         <DefaultPlanTable rows={plan} onAddRow={() => planWrite([...plan, { step_index: plan.length + 1, status: 'pending', instruction: '', output_ref: '' }])}
           onRemoveRow={(i) => planWrite(plan.filter((_, j) => j !== i))}
           onUpdateRow={(i, f, v) => planWrite(plan.map((r, j) => (j === i ? { ...r, [f]: v } : r)))} />
