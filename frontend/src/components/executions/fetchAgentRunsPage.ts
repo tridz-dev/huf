@@ -1,6 +1,6 @@
 import { getAgentRuns, type AgentRunDoc } from '@/services/agentRunApi';
 import { toServerDatetime } from '@/lib/serverTime';
-import { DEFAULT_RANGE, TIME_RANGE_MS } from './executionsRange';
+import { rangeStart } from './executionsRange';
 
 export interface AgentRunsParams {
   page?: number;
@@ -18,11 +18,10 @@ export async function fetchAgentRunsPage(params: AgentRunsParams): Promise<{ dat
   // (setFilter drops the key when it equals the "no-op" sentinel — here
   // that's the not-yet-initialized state, so an absent range still means
   // "use the default window", same as the Status/Agent filters below).
-  const rangeKey = params.range ?? DEFAULT_RANGE;
-  const rangeMs = TIME_RANGE_MS[rangeKey] ?? TIME_RANGE_MS[DEFAULT_RANGE];
+  const from = rangeStart(params.range);
   const runFilters: Array<[string, string, unknown]> = [['is_child', '=', '0']];
-  if (rangeMs) {
-    runFilters.push(['start_time', '>=', toServerDatetime(new Date(Date.now() - rangeMs))]);
+  if (from) {
+    runFilters.push(['start_time', '>=', toServerDatetime(from)]);
   }
 
   const response = await getAgentRuns({

@@ -18,7 +18,7 @@ import { useRunParam } from '@/hooks/flow/useRunParam';
 import { FlowRunViewer } from '@/components/FlowRunViewer';
 import { cn } from '@/lib/utils';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { DEFAULT_RANGE, TIME_RANGE_MS, TIME_RANGE_OPTIONS } from './executionsRange';
+import { DEFAULT_RANGE, TIME_RANGE_OPTIONS, normalizeRange, rangeStart } from './executionsRange';
 
 /** The "Flow runs" tab: every Flow Run, newest first; a row opens the same Run details sheet as the flow canvas. */
 export function ExecutionsFlowRunsTab() {
@@ -30,11 +30,10 @@ export function ExecutionsFlowRunsTab() {
   const { items, hasMore, initialLoading, loadingMore, search, setSearch, loadMore, total, filters, setFilter } =
     useInfiniteScroll<{ page?: number; limit?: number; start?: number; search?: string; status?: string; range?: string }, FlowRunSummary>({
       fetchFn: async (params) => {
-        const rangeMs = TIME_RANGE_MS[params.range ?? DEFAULT_RANGE] ?? TIME_RANGE_MS[DEFAULT_RANGE];
         const response = await listFlowRunsPage({
           status: params.status,
           search: params.search,
-          fromDate: rangeMs ? new Date(Date.now() - rangeMs).toISOString() : undefined,
+          fromDate: rangeStart(params.range)?.toISOString(),
           start: params.start,
           limit: params.limit,
         });
@@ -79,7 +78,7 @@ export function ExecutionsFlowRunsTab() {
     const q = searchParams.get('q');
     if (q) setSearch(q);
     if (status && status !== 'all') setFilter('status', status);
-    if (range && range !== DEFAULT_RANGE) setFilter('range', range);
+    if (range && range !== DEFAULT_RANGE) setFilter('range', normalizeRange(range));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

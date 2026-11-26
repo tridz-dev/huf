@@ -32,7 +32,7 @@ const STARTER_PROMPTS: Record<string, StarterPrompt[]> = {
     { label: 'Create approval flow for ToDo', route: '/flows' },
     { label: 'Invite user and assign Builder role', route: '/members' },
     { label: 'Show weekly cost analysis', route: '/dashboard' },
-    { label: 'List failed automations today', route: '/executions' },
+    { label: 'List failed automations today', route: '/executions?status=Failed&range=today' },
   ],
   builder: [
     { label: 'Build a new flow', route: '/flows' },
