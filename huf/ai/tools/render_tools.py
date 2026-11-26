@@ -172,6 +172,16 @@ _CHART_TAG_TEMPLATES = {
 }
 
 
+class MissingPieLabelError(ValueError):
+	"""A pie row has nothing to name its slice with."""
+
+	def __init__(self, index: int):
+		super().__init__(
+			f"data[{index}] needs a non-empty 'label' field naming the pie slice, e.g. "
+			'{"label": "Category", "value": 10}'
+		)
+
+
 def handle_render_chart(chart_type=None, data=None, series_keys=None, x_key="label", colors=None, title=None, **kwargs) -> str:
 	"""Template structured data into a JSX chart <artifact> tag matching the
 	rules in huf.ai.chart_artifact_instructions (allowed tags/components,
@@ -204,10 +214,7 @@ def handle_render_chart(chart_type=None, data=None, series_keys=None, x_key="lab
 			if row.get("label") in (None, "") and row.get("name") not in (None, ""):
 				data[i] = row = {**row, "label": row["name"]}
 			if row.get("label") in (None, ""):
-				raise ValueError(
-					f"data[{i}] needs a non-empty 'label' field naming the pie slice, e.g. "
-					'{"label": "Category", "value": 10}'
-				)
+				raise MissingPieLabelError(i)
 
 	if not series_keys:
 		series_keys = ["value"]
