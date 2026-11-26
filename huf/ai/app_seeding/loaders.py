@@ -2,6 +2,8 @@ import json
 
 import frappe
 
+from huf.ai.prompts.lineage import find_seed_target
+
 # Seed-owned fields = every key in the seed payload except provenance/meta.
 # `seed_snapshot` (hidden JSON on the doc) records the values last written by
 # the seeder; a field whose current value differs from its snapshot was edited
@@ -227,7 +229,7 @@ def _upsert_doc(doctype: str, key_field: str, data: dict, source_app: str, sourc
     if missing_refs:
         return False, {"reason": "missing_refs", "missing_refs": missing_refs}
 
-    docname = frappe.db.get_value(doctype, {key_field: key_val})
+    docname = find_seed_target(doctype, key_field, key_val)
 
     # Add provenance fields
     data["source_app"] = source_app

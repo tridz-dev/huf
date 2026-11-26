@@ -30,6 +30,8 @@ import yaml
 from frappe import _
 from frappe.exceptions import ValidationError
 
+from huf.ai.prompts.lineage import resolve_prompt_link
+
 SKILL_DOCTYPE = "Skill"
 CATEGORY_DOCTYPE = "Skill Category"
 IMPORT_LOG_DOCTYPE = "Skill Import Log"
@@ -311,14 +313,7 @@ def _create_or_update_skill(
 
 	skill_prompts = []
 	for item in manifest.get("prompts", []):
-		prompt_slug = _resolve_link(PROMPT_DOCTYPE, "slug", item, warnings)
-		if not prompt_slug and isinstance(item, dict):
-			# Allow "prompt": "Title" shorthand used in some SKILL.md specs.
-			prompt_slug = _resolve_link(
-				PROMPT_DOCTYPE, "title", item.get("prompt") or item, warnings
-			)
-		if not prompt_slug:
-			prompt_slug = _resolve_link(PROMPT_DOCTYPE, "title", item, warnings)
+		prompt_slug = resolve_prompt_link(item, warnings, PROMPT_DOCTYPE)
 		if prompt_slug:
 			row = {"prompt": prompt_slug}
 			if isinstance(item, dict):

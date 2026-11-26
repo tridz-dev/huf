@@ -13,6 +13,8 @@ from typing import Any, Optional
 import frappe
 from agents import FunctionTool
 
+from huf.ai.prompts.lineage import latest_row
+
 
 # Map of standard tool types to their handler function paths.
 # Mirrors the mapping in huf.ai.sdk_tools.create_agent_tools.
@@ -292,7 +294,7 @@ def get_skill_prompts(agent_name: str) -> list[dict[str, str]]:
     for skill in get_agent_skills(agent_name):
         for row in skill.get("skill_prompts", []):
             try:
-                prompt_doc = frappe.get_doc("Agent Prompt", row.prompt)
+                prompt_doc = frappe.get_doc("Agent Prompt", latest_row("Agent Prompt", row.prompt))
                 if not getattr(prompt_doc, "is_active", 1):
                     continue
                 prompts.append(
