@@ -259,14 +259,15 @@ class AgentManager:
             logger.warning(f"Failed to load skill MCP tools: {e!s}")
 
         try:
-            from huf.ai.skills.loader import create_list_skills_tool
+            from huf.ai.skills.loader import create_list_skills_tool, create_load_skill_tool
 
-            list_skills_tool = create_list_skills_tool(self.agent_doc.agent_name)
-            if list_skills_tool:
-                existing_names = {tool.name for tool in self.tools}
-                if list_skills_tool.name not in existing_names:
-                    self.tools.append(list_skills_tool)
-                    self.tool_sources[list_skills_tool.name] = "internal_capability"
+            for skill_tool in (
+                create_list_skills_tool(self.agent_doc.agent_name),
+                create_load_skill_tool(self.agent_doc.agent_name),
+            ):
+                if skill_tool and skill_tool.name not in {t.name for t in self.tools}:
+                    self.tools.append(skill_tool)
+                    self.tool_sources[skill_tool.name] = "internal_capability"
         except Exception as e:
             logger.warning(f"Failed to load skills listing tool: {e!s}")
 
