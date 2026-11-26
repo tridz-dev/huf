@@ -20,6 +20,7 @@ import { cacheReasoning } from './chatMessageList.mappers';
 import { cacheAgentNameForChat } from './useChatAgentIdentity';
 import { useVoiceCall } from '@/hooks/useVoiceCall';
 import { VoiceCallOverlay } from './VoiceCallOverlay';
+import { useRunStop } from './composer/useRunStop';
 import { DesktopRunBanner } from './desktop/DesktopRunBanner';
 import { DesktopRunError, parseDesktopRunFailure, rebindDesktopConversation } from '@/services/desktopHostApi';
 import { refreshDesktopHosts } from '@/hooks/useDesktopHosts';
@@ -70,6 +71,8 @@ interface ChatInputProps {
      * request/response path (never SSE), because the server pins them to that computer and may
      * answer with a structured "offline / rebind / remote off" result instead of a run. */
     hostedDeviceId?: string | null;
+    /** Newest Queued/Started run of the open conversation (drives Stop for queued runs). */
+    pendingRunId?: string | null;
 }
 
 export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput({
@@ -89,6 +92,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
     runImmediately = false,
     artifactPaneOpen = false,
     hostedDeviceId = null,
+    pendingRunId = null,
 }: ChatInputProps, ref) {
     const [message, setMessage] = useState('');
     // A hosted-conversation turn the server declined (desktop offline, workspace changed, remote
@@ -509,9 +513,9 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
         send: sendTextMessage,
     }));
 
-    const handleStop = useCallback(() => {
-        abortControllerRef.current?.abort();
-    }, []);
+    const { canStop, handleStop } = useRunStop({
+        isStreaming: isStreamingResponse, pendingRunId, hasDraft: !!message.trim() || !!pendingFile, abortControllerRef, setMessages,
+    });
 
     const handleDesktopRetry = useCallback(async () => {
         if (!desktopFailure || isSubmitting) return;
@@ -1234,7 +1238,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                                     <Phone className="size-[17px]" />
                                 </Button>
                             )}
-                            {isStreamingResponse ? (
+                            {canStop ? (
                                 <Button
                                     type="button"
                                     onClick={handleStop}

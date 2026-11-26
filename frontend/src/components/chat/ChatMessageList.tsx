@@ -22,6 +22,7 @@ import { useChatAgentIdentity } from './useChatAgentIdentity';
 import { useChatScrollToBottom } from './useChatScrollToBottom';
 import { useRunStatusPolling } from './useRunStatusPolling';
 import { usePendingRunHydration } from './usePendingRunHydration';
+import { findPendingRunId } from './composer/activeRun';
 import {
     dispatchConversationTitleUpdated,
     useConversationTitlePostSuccessFallback,
@@ -496,6 +497,7 @@ export function ChatMessageList({
                 runImmediately={runImmediately}
                 artifactPaneOpen={artifactPaneOpen}
                 hostedDeviceId={hostedDeviceId}
+                pendingRunId={findPendingRunId(messages)}
             />
             </div>
         </div>
