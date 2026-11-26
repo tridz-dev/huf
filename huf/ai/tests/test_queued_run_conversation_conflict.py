@@ -13,7 +13,13 @@ from unittest.mock import patch
 
 import frappe
 
-from huf.ai.agent.integration import _execute_agent_run, run_agent_sync
+from huf.ai.agent.integration import (
+	_execute_agent_run,
+	_save_partial_reply,
+	generate_conversation_title,
+	run_agent_sync,
+)
+from huf.ai.conversation_manager import ConversationManager
 from huf.testing.factories import (
 	make_agent,
 	make_agent_conversation,
@@ -22,7 +28,7 @@ from huf.testing.factories import (
 )
 
 
-def _write_from_other_connection(conversation_id, value):
+def _write_from_other_connection(conversation_id, value, field="title"):
 	"""Commit a change to the conversation row on a separate DB connection."""
 	site = frappe.local.site
 
@@ -30,7 +36,7 @@ def _write_from_other_connection(conversation_id, value):
 		frappe.init(site)
 		frappe.connect()
 		try:
-			frappe.db.set_value("Agent Conversation", conversation_id, "title", value)
+			frappe.db.set_value("Agent Conversation", conversation_id, field, value)
 			frappe.db.commit()  # nosemgrep: test needs a second, committed transaction
 		finally:
 			frappe.destroy()
@@ -125,3 +131,44 @@ class TestQueuedRunConversationConflict(unittest.TestCase):
 		self.assertEqual(
 			frappe.db.get_value("Agent Conversation", self.conversation.name, "modified"), before
 		)
+
+	def test_partial_reply_saved_after_row_changed_under_open_snapshot(self):
+		conversation = frappe.get_doc("Agent Conversation", self.conversation.name)
+		_read_row(conversation.name)  # the stream's snapshot, older than the next write
+		_write_from_other_connection(conversation.name, "second")
+		saved = _save_partial_reply(
+			ConversationManager(agent_name=self.agent.name),
+			conversation,
+			"partial",
+			self.provider,
+			self.model,
+			self.agent.name,
+			self.run.name,
+		)
+		self.assertTrue(saved)
+		self.assertTrue(frappe.db.exists("Agent Message", {"agent_run": self.run.name, "content": "partial"}))
+
+	def _generate_title(self, field, value):
+		"""Run title generation while another request writes ``field`` during the model call."""
+		name = self.conversation.name
+		frappe.db.set_value("Agent Conversation", name, "title", "Chat with test")
+		frappe.db.commit()  # nosemgrep: fixture must be visible to the second connection
+
+		async def _completion(*args, **kwargs):
+			_write_from_other_connection(name, value, field)
+			return "Generated title"
+
+		history = [{"role": "user", "content": "hello"}]
+		with (
+			patch.object(ConversationManager, "get_conversation_history", return_value=history),
+			patch("huf.ai.providers.litellm.get_simple_completion", new=_completion),
+		):
+			generate_conversation_title(name, self.agent.name)
+		frappe.db.rollback()
+		return frappe.db.get_value("Agent Conversation", name, "title")
+
+	def test_title_saved_when_row_changes_during_generation(self):
+		self.assertEqual(self._generate_title("total_messages", 7), "Generated title")
+
+	def test_title_generation_keeps_a_rename_made_during_the_call(self):
+		self.assertEqual(self._generate_title("title", "My name"), "My name")

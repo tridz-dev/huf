@@ -1145,7 +1145,6 @@ def generate_conversation_title(conversation_name, agent_name):
 
         conv_manager = ConversationManager(agent_name=agent_name)
         history = conv_manager.get_conversation_history(conversation_name, limit=5)
-
         if not history:
             return
 
@@ -1164,12 +1163,13 @@ def generate_conversation_title(conversation_name, agent_name):
         from huf.ai.providers.litellm import get_simple_completion
 
         messages = [{"role": "user", "content": prompt}]
-
-        title = _run_async_safely(
-            get_simple_completion(model, messages, provider)
-        )
+        title = _run_async_safely(get_simple_completion(model, messages, provider))
         if title:
             title = title.strip().strip('"').strip("'")
+            safe_commit()  # new snapshot: the row may have changed during the call (1020)
+            latest = frappe.db.get_value("Agent Conversation", conversation_name, "title", for_update=True)
+            if latest != current_title:
+                return  # renamed while the title was being generated
             frappe.db.set_value("Agent Conversation", conversation_name, "title", title)
             frappe.db.commit()  # nosemgrep: justified background-job commit
             _emit_conversation_title_updated(conversation_name, title)
@@ -2968,6 +2968,7 @@ def _guarded_fail_started_run(run_name: str, message: str) -> bool:
 def _save_partial_reply(conv_manager, conversation, text, provider, model, agent_name, run_name) -> bool:
     """Best-effort save of a partial reply; never raises so the guarded fail that follows always runs."""
     try:
+        safe_commit()  # the stream's snapshot may predate a newer write to the conversation (1020)
         conv_manager.add_message(conversation, "agent", text, provider, model, agent_name, run_name)
         return True
     except Exception as exc:
