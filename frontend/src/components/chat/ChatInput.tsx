@@ -21,6 +21,7 @@ import { cacheAgentNameForChat } from './useChatAgentIdentity';
 import { useVoiceCall } from '@/hooks/useVoiceCall';
 import { VoiceCallOverlay } from './VoiceCallOverlay';
 import { useRunStop } from './composer/useRunStop';
+import { useComposerMode } from './composer/composerMode';
 import { DesktopRunBanner } from './desktop/DesktopRunBanner';
 import { DesktopRunError, parseDesktopRunFailure, rebindDesktopConversation } from '@/services/desktopHostApi';
 import { refreshDesktopHosts } from '@/hooks/useDesktopHosts';
@@ -126,12 +127,10 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
         error?: string;
     } | null>(null);
 
-    // "Talk to this agent" voice call. The Agent object available here is
-    // just `agentName` (no `voice_enabled`/`voice_engine` — plumbing that in
-    // would require changes to how agent data flows into ChatInput), so the
-    // call button is always shown and relies on `start_session` throwing a
-    // clear backend error for agents without a voice engine configured,
-    // surfaced below via the same toast convention as the rest of this file.
+    // "Talk to this agent" voice call; call/dictation follow the agent's modality.
+    const composerMode = useComposerMode(agentName);
+    const voiceOnly = composerMode === 'voice';
+    const showVoice = composerMode !== 'text';
     const voiceCall = useVoiceCall(agentName, chatId ?? undefined);
     const voiceCallErrorRef = useRef<string | null>(null);
     useEffect(() => {
@@ -1113,7 +1112,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                             <PhoneOff className="size-3.5" />
                         </Button>
                     )}
-                    {(voiceCall.status === 'error' || voiceCall.status === 'ended') && (
+                    {showVoice && (voiceCall.status === 'error' || voiceCall.status === 'ended') && (
                         <Button
                             type="button"
                             onClick={handleStartVoiceCall}
@@ -1150,7 +1149,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                     "rounded-chat-bubble border border-input bg-panel",
                     artifactPaneOpen && "px-[12px] py-[10px]"
                 )}>
-                    <textarea
+                    {!voiceOnly && <textarea
                         ref={textareaRef}
                         value={message}
                         onChange={(e) => {
@@ -1168,7 +1167,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                             height: `${MIN_HEIGHT}px`
                         }}
                         disabled={isSubmitting}
-                    />
+                    />}
                     {pendingFile && (
                         <div className="px-3 pt-2 w-full">
                             <ChatAttachmentCard
@@ -1184,7 +1183,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                             />
                         </div>
                     )}
-                    {!artifactPaneOpen && (
+                    {(!artifactPaneOpen || voiceOnly) && (
                     <div className="flex items-center gap-2.5 px-2.5 pb-2 pt-1.5">
                             {allowFileUpload && (
                                 <>
@@ -1211,7 +1210,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                             {agentModel && (
                                 <span className="text-[12px] text-steel">{agentModel}</span>
                             )}
-                            {!message.trim() && !pendingFile && (
+                            {showVoice && (voiceOnly || !message.trim()) && !pendingFile && (
                                 <SpeechInput
                                     onTranscriptionChange={handleTranscriptionChange}
                                     onAudioRecorded={handleAudioRecorded}
@@ -1224,7 +1223,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                                     className="shrink-0"
                                 />
                             )}
-                            {!message.trim() && !pendingFile && voiceCall.status === 'idle' && (
+                            {showVoice && (voiceOnly || !message.trim()) && !pendingFile && voiceCall.status === 'idle' && (
                                 <Button
                                     type="button"
                                     variant="ghost"
@@ -1247,7 +1246,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                                 >
                                     <Square className="size-3.5" fill="currentColor" />
                                 </Button>
-                            ) : (
+                            ) : (voiceOnly && !pendingFile) ? null : (
                                 <Button
                                     type="submit"
                                     disabled={
