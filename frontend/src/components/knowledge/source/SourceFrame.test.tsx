@@ -70,3 +70,17 @@ describe('SourceFrame status sentence', () => {
     expect(text()).toContain('No documents yet');
   });
 });
+
+describe('SourceFrame header toggle', () => {
+  it('shows Turn off as a visible header button and calls the handler', () => {
+    const onToggleDisabled = vi.fn();
+    render(<Host onToggleDisabled={onToggleDisabled} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Turn off' }));
+    expect(onToggleDisabled).toHaveBeenCalledTimes(1);
+  });
+  it('shows Turn on when the source is off', () => {
+    render(<Host disabled />);
+    expect(screen.getByRole('button', { name: 'Turn on' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Turn off' })).toBeNull();
+  });
+});

@@ -6,6 +6,7 @@
  * children of the list. A row in the `adding` state drops in (§8).
  */
 import { createContext, useContext, type CSSProperties, type MouseEvent, type ReactNode } from 'react';
+import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
 
 const GRID = 'grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 md:grid-cols-[minmax(0,2.2fr)_minmax(0,1.4fr)_9rem_7rem_2rem]';
@@ -100,6 +101,11 @@ export interface ResourceRowProps {
   onOpen?: () => void;
   /** Custom layout only: content per column key (columns after the first). */
   cells?: Record<string, ReactNode>;
+  /** Selection: pass `onSelectedChange` to show a checkbox before the glyph. */
+  selected?: boolean;
+  onSelectedChange?: (selected: boolean) => void;
+  /** Accessible name for the checkbox, e.g. "Select report.pdf". */
+  selectLabel?: string;
   className?: string;
 }
 
@@ -116,7 +122,7 @@ function isInsideControl(target: EventTarget | null, row: HTMLElement): boolean 
 /** Stops a click in the actions slot from reaching the row, so its menu and buttons never open the item. */
 const stopRowClick = (e: MouseEvent<HTMLDivElement>) => e.stopPropagation();
 
-export function ResourceRow({ title, type, glyph, origin, status, time, reason, actions, adding, onOpen, cells, className }: ResourceRowProps) {
+export function ResourceRow({ title, type, glyph, origin, status, time, reason, actions, adding, onOpen, cells, selected, onSelectedChange, selectLabel, className }: ResourceRowProps) {
   const defs = useContext(ColumnsCtx);
   const handleRowClick = onOpen
     ? (e: MouseEvent<HTMLLIElement>) => {
@@ -126,6 +132,9 @@ export function ResourceRow({ title, type, glyph, origin, status, time, reason, 
     : undefined;
   const titleCell = (
     <div className="flex min-w-0 items-center gap-3">
+      {onSelectedChange && (
+        <Checkbox aria-label={selectLabel ?? 'Select row'} checked={selected === true} onCheckedChange={(v) => onSelectedChange(v === true)} />
+      )}
       {glyph ?? (type ? <TypeGlyph label={type} /> : null)}
       <div className="min-w-0">
         {onOpen ? (
@@ -152,7 +161,7 @@ export function ResourceRow({ title, type, glyph, origin, status, time, reason, 
     'aria-busy': adding || undefined,
   };
   const rowClass = (grid: string) =>
-    cn(grid, 'px-4 py-2.5 transition-colors hover:bg-paper-deep', onOpen && 'cursor-pointer', adding && 'motion-safe:animate-drop', className);
+    cn(grid, 'px-4 py-2.5 transition-colors hover:bg-paper-deep', onOpen && 'cursor-pointer', selected && 'bg-paper-deep', adding && 'motion-safe:animate-drop', className);
   if (defs) {
     return (
       <li {...rowProps} onClick={handleRowClick} className={rowClass(CUSTOM_GRID)}>

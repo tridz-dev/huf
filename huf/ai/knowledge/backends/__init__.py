@@ -83,6 +83,15 @@ class KnowledgeBackend(ABC):
 		"""Get backend statistics (chunk count, size, etc.)."""
 		pass
 
+	def get_chunks(self, input_id: str, start: int = 0, limit: int = 20) -> tuple[list[ChunkResult], int] | None:
+		"""List the stored chunks of one input, in document order.
+
+		Returns ``(page, total)`` (``ChunkResult.metadata["chunk_index"]`` is the
+		position), or ``None`` when the backend cannot list chunks. Optional:
+		backends that do not override this are reported as "preview unavailable".
+		"""
+		return None
+
 	@classmethod
 	def get_advanced_config_schema(cls) -> list[dict[str, Any]]:
 		"""Return schema for backend-specific advanced configuration.

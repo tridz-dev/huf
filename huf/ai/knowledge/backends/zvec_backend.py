@@ -426,6 +426,11 @@ class ZvecBackend(KnowledgeBackend):
 			# Propagate: swallowing would let add_chunks append duplicates on re-index.
 			raise
 
+	def get_chunks(self, input_id: str, start: int = 0, limit: int = 20):
+		from .chunk_listing import zvec_chunks
+
+		return zvec_chunks(self, input_id, start, limit)
+
 	def clear(self) -> None:
 		"""Destroy the on-disk collection and recreate it empty."""
 		if not self._initialized or not self.collection:

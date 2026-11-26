@@ -333,6 +333,28 @@ class PGVectorBackend(LlamaIndexBackend, KnowledgeBackend):
 		self.vector_store.delete_nodes(filters=filters)
 		return count_before
 
+	def get_chunks(self, input_id: str, start: int = 0, limit: int = 20):
+		from .chunk_listing import page_chunks, parse_json_metadata, to_result
+
+		if not self._initialized:
+			raise RuntimeError("Backend not initialized. Call initialize() first.")
+		query = f"""
+			SELECT node_id, text, metadata_
+			FROM {self._get_sql_table_name()}
+			WHERE metadata_->>'site_name' = :site_name
+			  AND metadata_->>'knowledge_source' = :knowledge_source
+			  AND metadata_->>'input_id' = :input_id
+		"""  # noqa: S608 - table name comes from validated config; values are bound
+		params = {"site_name": frappe.local.site, "knowledge_source": self.knowledge_source, "input_id": input_id}
+		engine = create_engine(self._get_sqlalchemy_url())
+		with engine.begin() as conn:
+			rows = conn.execute(text(query), params).fetchall()
+		chunks = []
+		for node_id, body, meta in rows:
+			meta = parse_json_metadata(meta)
+			chunks.append(to_result(meta.get("chunk_id") or node_id, body, meta, meta.get("source_title")))
+		return page_chunks(chunks, start, limit)
+
 	def clear(self) -> None:
 		if not self._initialized:
 			raise RuntimeError("Backend not initialized. Call initialize() first.")
