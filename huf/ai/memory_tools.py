@@ -410,4 +410,3 @@ def expire_stale_memory_records():
 			frappe.log_error(title="Memory Expiry", message=f"Expired {len(expired)} stale Memory Records")
 	except Exception as e:
 		frappe.log_error(title="Memory Expiry Error", message=f"Memory expiry scheduler failed: {str(e)}")
-
