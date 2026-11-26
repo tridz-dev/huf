@@ -19,6 +19,7 @@ from frappe import _
 from huf.ai.agent.access import assert_agent_access
 from huf.ai.voice import get_engine, get_engine_class, supported_engines
 from huf.ai.voice.engines.base import VoiceEngine
+from huf.ai.voice.history import mint_voice_session
 from huf.permissions import has_capability
 
 
@@ -91,7 +92,12 @@ def _check_agent_access(agent_doc) -> None:
 
 
 def _mint_session(
-	agent_doc, config: dict[str, Any], user_ref: Any, *, conversation_id: str | None = None
+	agent_doc,
+	config: dict[str, Any],
+	user_ref: Any,
+	*,
+	conversation_id: str | None = None,
+	session_user: str | None = None,
 ) -> dict[str, Any]:
 	"""Resolve the agent's voice engine and start a session.
 
@@ -111,7 +117,20 @@ def _mint_session(
 		frappe.throw(_("Agent '{0}' does not have a voice engine configured.").format(agent_doc.name))
 
 	engine: VoiceEngine = get_engine(engine_key)
-	result = engine.start_session(agent_doc, config, user_ref, conversation_id=conversation_id)
+	nonce = None
+	if type(engine).persists_via_webhook:
+		# Stored hashed server-side; ties the later webhook call to the authenticated caller.
+		nonce = mint_voice_session(
+			agent_doc.name, engine_key, user=session_user, conversation=conversation_id
+		)
+	result = engine.start_session(
+		agent_doc,
+		config,
+		user_ref,
+		conversation_id=conversation_id,
+		session_user=session_user,
+		voice_nonce=nonce,
+	)
 	if conversation_id and "conversation_id" not in result:
 		result["conversation_id"] = conversation_id
 	return result
@@ -180,7 +199,13 @@ def start_session(agent: str, conversation_id: str | None = None) -> dict[str, A
 		_check_conversation_access(agent_doc, conversation_id)
 
 	engine_key, config = _get_agent_voice_config(agent_doc)
-	return _mint_session(agent_doc, config, frappe.session.user, conversation_id=conversation_id)
+	return _mint_session(
+		agent_doc,
+		config,
+		frappe.session.user,
+		conversation_id=conversation_id,
+		session_user=frappe.session.user,
+	)
 
 
 @frappe.whitelist()

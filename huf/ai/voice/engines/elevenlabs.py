@@ -16,6 +16,7 @@ from frappe.rate_limiter import rate_limit
 
 from huf.ai.tools.registry import PermissionAwareToolRegistry
 from huf.ai.voice.engines.base import VoiceEngine
+from huf.ai.voice.history import NONCE_VARIABLE
 
 SETTINGS_DOCTYPE = "Elevenlabs Settings"
 API_BASE = "https://api.elevenlabs.io/v1"
@@ -25,6 +26,7 @@ class ElevenLabsConvaiEngine(VoiceEngine):
 	key = "elevenlabs_convai"
 	label = "ElevenLabs Conversational AI"
 	kind = "realtime"
+	persists_via_webhook = True
 
 	@classmethod
 	def get_config_schema(cls) -> list[dict[str, Any]]:
@@ -105,7 +107,14 @@ class ElevenLabsConvaiEngine(VoiceEngine):
 
 	@rate_limit(limit=10, seconds=60)
 	def start_session(
-		self, agent_doc, config: dict[str, Any], user_ref: Any, *, conversation_id: str | None = None
+		self,
+		agent_doc,
+		config: dict[str, Any],
+		user_ref: Any,
+		*,
+		conversation_id: str | None = None,
+		session_user: str | None = None,
+		voice_nonce: str | None = None,
 	) -> dict[str, Any]:
 		# agent_id comes only from the per-Agent voice_config resolved upstream in
 		# huf.ai.voice.api - never from user_ref or any browser-supplied value.
@@ -140,13 +149,13 @@ class ElevenLabsConvaiEngine(VoiceEngine):
 			"signed_url": data.get("signed_url"),
 			"agent_id": agent_id,
 		}
-		# ElevenLabs has no server-side way to receive this at mint time; a client must send
-		# {"huf_conversation_id": conversation_id} as a dynamic_variable in its own
-		# conversation_initiation_client_data when it opens the WebSocket, and the post-call
-		# webhook reads it back to find the right conversation - see elevenlabs_convai_api.py.
+		# ElevenLabs has no server-side way to receive this at mint time; the client sends
+		# these as dynamic_variables in its conversation_initiation_client_data, and the signed
+		# post-call webhook echoes them back. The nonce is only a lookup key for the server-side
+		# Huf Voice Session row - see elevenlabs_convai_api.py.
+		result["dynamic_variables"] = {NONCE_VARIABLE: voice_nonce} if voice_nonce else {}
 		if conversation_id:
 			result["conversation_id"] = conversation_id
-			result["dynamic_variables"] = {"huf_conversation_id": conversation_id}
 		return result
 
 	# No documented ElevenLabs REST endpoint exists to explicitly end an active

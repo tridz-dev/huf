@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronRight, MessageSquare } from 'lucide-react';
+import { ChevronRight, MessageSquare, Mic } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ChatListItem } from '@/services/chatApi';
 import { useLocalStorageBoolean } from '@/hooks/useLocalStorageBoolean';
@@ -60,6 +60,7 @@ function ConversationRow({
   onProjectChange,
   onPinChange,
 }: ConversationRowProps) {
+  const RowIcon = chat.isVoice ? Mic : MessageSquare;
   return (
     <ConversationMenu
       conversationId={chat.id}
@@ -91,7 +92,8 @@ function ConversationRow({
           isSelected ? 'bg-chat-row-selected' : 'hover:bg-chat-row-hover'
         )}
       >
-        <MessageSquare
+        <RowIcon
+          aria-label={chat.isVoice ? 'Voice call' : undefined}
           className={cn('h-[15px] w-[15px] shrink-0', isSelected ? 'text-steel' : 'text-steel-soft')}
         />
         <ConversationTitle
