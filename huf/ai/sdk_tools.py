@@ -34,6 +34,7 @@ from huf.ai.tools.invocation import (
 )
 from huf.ai.tools.registry import PermissionAwareToolRegistry
 from huf.ai.tools.support.run_context import _frappe_run_context_dict, _pin_code_execution_identity
+from huf.ai.memory.subject import MEMORY_TOOL_TYPES, pin_memory_run_context
 from huf.ai.tools.types import _GUEST_DOCTYPE_PINNED_TYPES, _GUEST_REPORT_PINNED_TYPES
 from huf.ai.tools.perplexity import handle_perplexity_search
 
@@ -898,6 +899,9 @@ def create_function_tool(
                     # Audit linkage comes only from the server-side run context;
                     # whatever the model sent for it is discarded.
                     _pin_code_execution_identity(args_dict, ctx)
+
+                if tool_type in MEMORY_TOOL_TYPES:
+                    pin_memory_run_context(args_dict, ctx)  # the model cannot pick conversation/run/agent
 
                 if pin_run_context:
                     # N8: only this path can mint the token the Desktop handlers require, so

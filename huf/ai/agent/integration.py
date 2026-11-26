@@ -551,18 +551,14 @@ class AgentManager:
             if can_search or can_write:
                 instructions += "\n\n                " + "\n                ".join(memory_lines) + "\n            "
 
-            if getattr(self.agent_doc, "memory_policy", None):
-                try:
-                    policy = frappe.get_doc("Memory Policy", self.agent_doc.memory_policy)
-                    from huf.ai.memory_tools import get_injected_memory_text
+            try:
+                from huf.ai.memory.injection import build_memory_injection
 
-                    injected_memory = get_injected_memory_text(
-                        self.agent_doc.name, policy, conversation_id=conversation_id, query=memory_query
-                    )
-                    if injected_memory:
-                        instructions += f"\n\n{injected_memory}\n"
-                except Exception as e:
-                    frappe.log_error(title="Memory Injection Failed", message=str(e))
+                injected_memory = build_memory_injection(self.agent_doc, conversation_id, memory_query)
+                if injected_memory:
+                    instructions += f"\n\n{injected_memory}\n"
+            except Exception as e:
+                frappe.log_error(title="Memory Injection Failed", message=str(e))
 
         if self.agent_doc.allow_chat:
             from huf.ai.capabilities import capability_enabled
@@ -2679,23 +2675,11 @@ def _execute_agent_run(
         _finalized_here = _guarded_finish_started_run(
             run_doc.name, "Success", **{k: v for k, v in run_update.items() if k != "status"}
         )
-        from huf.ai.memory_tools import should_extract_memory
+        from huf.ai.memory.extraction import enqueue_memory_extraction, should_extract_memory
 
-        # An extraction run must never queue another extraction: its own
-        # success would re-trigger the job and loop indefinitely.
+        # Extraction runs never queue another extraction (no recursion).
         if _finalized_here and should_extract_memory(agent_doc, run_doc.run_kind):
-            try:
-                frappe.enqueue(
-                    "huf.ai.memory_tools.extract_memory_from_run",
-                    queue="default",
-                    timeout=300,
-                    is_async=True,
-                    enqueue_after_commit=True,
-                    run_id=run_doc.name,
-                )
-            except (RuntimeError, TypeError, ValueError, KeyError, AttributeError,
-                    frappe.DoesNotExistError, frappe.ValidationError, frappe.PermissionError) as e:
-                frappe.logger("huf").warning(f"Memory extraction enqueue failed: {e!s}")
+            enqueue_memory_extraction(agent_doc, run_doc)
         _emit_run_lifecycle_event(
             run_doc,
             conversation,
@@ -4363,6 +4347,10 @@ async def _run_agent_stream_impl(
                             "conversation_id": conversation.name,
                         }
                         return
+
+                    from huf.ai.memory.extraction import enqueue_memory_extraction
+
+                    enqueue_memory_extraction(agent_doc, run_doc, after_commit=False)  # run committed above
 
                     # Handle Sub-Agent Success Lifecycle Hook
                     if parent_conversation_id and invoked_by_agent:

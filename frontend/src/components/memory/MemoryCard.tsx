@@ -35,6 +35,14 @@ const getRecordTypeIcon = (type: string) => {
   }
 };
 
+/** Who can see a memory, in words: User scope is private to its owner (and the agent that saved it). */
+const describeMemoryScope = (memory: Pick<MemoryRecord, "scope_type" | "scope_key" | "agent">) => {
+  if (memory.scope_type === "User") {
+    return memory.agent ? `Private to ${memory.scope_key} · ${memory.agent}` : `Private to ${memory.scope_key}`;
+  }
+  return memory.scope_key ? `${memory.scope_type} · ${memory.scope_key}` : memory.scope_type;
+};
+
 export const MemoryCard: React.FC<MemoryCardProps> = ({ memory, onArchive }) => {
   const [isArchiving, setIsArchiving] = useState(false);
 
@@ -68,6 +76,12 @@ export const MemoryCard: React.FC<MemoryCardProps> = ({ memory, onArchive }) => 
             {getRecordTypeIcon(memory.record_type)}
             {memory.record_type}
           </Badge>
+          <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+            <span data-testid="memory-scope">{describeMemoryScope(memory)}</span>
+            <Badge variant="outline" data-testid="memory-status" className="text-micro px-1.5 py-0">
+              {memory.status}
+            </Badge>
+          </div>
           <CardTitle className="text-base line-clamp-1">{memory.title}</CardTitle>
         </div>
         <TooltipProvider>

@@ -54,6 +54,19 @@ describe('AdvancedPresetsTab', () => {
     }
   });
 
+  it('says what memory does when no policy is chosen', async () => {
+    mount({ enable_memory: true });
+    await userEvent.click(screen.getByRole('button', { name: /Show developer options/ }));
+    expect(screen.getByText(/No policy selected: facts are saved and recalled automatically/)).toBeInTheDocument();
+  });
+
+  it('shows the plain policy hint when a policy is selected', async () => {
+    mount({ enable_memory: true, memory_policy: 'Research' });
+    await userEvent.click(screen.getByRole('button', { name: /Show developer options/ }));
+    expect(screen.queryByText(/No policy selected/)).not.toBeInTheDocument();
+    expect(screen.getByText('Which memories may be stored and recalled.')).toBeInTheDocument();
+  });
+
   it('shows the Advanced caching controls only in Advanced mode with caching on', async () => {
     mount({ prompt_cache_mode: 'Advanced', enable_prompt_caching: true }, { cacheStatus: { supported: false, alternatives: ['claude-x'] } });
     await userEvent.click(screen.getByRole('button', { name: /Show developer options/ }));
