@@ -179,10 +179,16 @@ if default_url_fetcher is not None:
 
 elif not WEASYPRINT_AVAILABLE:
 
+	class WeasyPrintUnavailableError(RuntimeError):
+		"""WeasyPrint or one of its system libraries cannot be loaded."""
+
+		def __init__(self):
+			super().__init__("WeasyPrint is unavailable; see docs/ARTIFACT_RENDERING_DEPENDENCIES.md")
+
 	def safe_url_fetcher(url: str):
 		"""Same allow-list check, but there is no engine to fetch with."""
 		_check_url_allowed(url)
-		raise RuntimeError("WeasyPrint is unavailable; see docs/ARTIFACT_RENDERING_DEPENDENCIES.md")
+		raise WeasyPrintUnavailableError
 
 else:
 	from weasyprint.urls import URLFetcher

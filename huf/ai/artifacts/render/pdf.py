@@ -13,6 +13,17 @@ Fallback to Frappe's wkhtmltopdf-based get_pdf if WeasyPrint fails.
 import frappe
 
 
+class PDFExportUnavailableError(RuntimeError):
+	"""Neither WeasyPrint nor the wkhtmltopdf fallback could produce a PDF."""
+
+	def __init__(self):
+		super().__init__(
+			"PDF export is unavailable: WeasyPrint could not run (missing system "
+			"libraries such as pango) and the wkhtmltopdf fallback failed. "
+			"See docs/ARTIFACT_RENDERING_DEPENDENCIES.md."
+		)
+
+
 def html_to_pdf(html: str) -> bytes:
 	"""Render a full HTML document to PDF bytes.
 
@@ -62,8 +73,4 @@ def html_to_pdf(html: str) -> bytes:
 
 			return get_pdf(html)
 		except Exception as fallback_error:
-			raise RuntimeError(
-				"PDF export is unavailable: WeasyPrint could not run (missing system "
-				"libraries such as pango) and the wkhtmltopdf fallback failed. "
-				"See docs/ARTIFACT_RENDERING_DEPENDENCIES.md."
-			) from fallback_error
+			raise PDFExportUnavailableError from fallback_error

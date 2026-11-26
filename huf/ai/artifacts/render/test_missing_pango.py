@@ -10,6 +10,8 @@ import sys
 import unittest
 from unittest.mock import MagicMock, patch
 
+MISSING_PANGO_MESSAGE = "cannot load library 'libpango-1.0-0'"
+
 
 def _load_safety_without_pango():
 	if "frappe" not in sys.modules:
@@ -23,7 +25,7 @@ def _load_safety_without_pango():
 
 		def fake_import(name, *a, **k):
 			if name == "weasyprint" or name.startswith("weasyprint."):
-				raise OSError("cannot load library 'libpango-1.0-0'")
+				raise OSError(MISSING_PANGO_MESSAGE)
 			return real_import(name, *a, **k)
 
 		with patch("builtins.__import__", fake_import):
