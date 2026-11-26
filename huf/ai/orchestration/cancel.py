@@ -4,6 +4,7 @@ import frappe
 from frappe.utils import now_datetime
 
 from huf.ai.run_control import CANCELLED_BY_USER, is_run_cancelled, mark_cancelled_tool_calls
+from huf.ai.transaction import safe_commit
 
 ACTIVE_STATUSES = ("Planned", "Running", "Paused")
 
@@ -65,7 +66,7 @@ def honour_cancel(orch) -> bool:
 	if not is_run_cancelled(orch.parent_run):
 		return False
 	_stop(orch)
-	frappe.db.commit()
+	safe_commit()
 	return True
 
 
@@ -81,7 +82,7 @@ def finish_if_cancelled(run_doc, conversation):
 	_fail_started(run_doc.name)
 	frappe.db.set_value("Agent Run", run_doc.name, "end_time", now_datetime(), update_modified=False)
 	_emit_run_lifecycle_event(run_doc, conversation, "failed", {"error": CANCELLED_BY_USER})
-	frappe.db.commit()
+	safe_commit()
 	return {
 		"success": False,
 		"cancelled": True,
