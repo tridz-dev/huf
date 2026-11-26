@@ -10,7 +10,7 @@ from typing import Any, ClassVar
 import frappe
 from frappe import _
 
-from . import ChunkResult, KnowledgeBackend
+from . import BackendNotInitializedError, ChunkResult, KnowledgeBackend
 from .llamaindex_base import LLAMAINDEX_AVAILABLE, LlamaIndexBackend
 
 try:
@@ -337,7 +337,7 @@ class PGVectorBackend(LlamaIndexBackend, KnowledgeBackend):
 		from .chunk_listing import page_chunks, parse_json_metadata, to_result
 
 		if not self._initialized:
-			raise RuntimeError("Backend not initialized. Call initialize() first.")
+			raise BackendNotInitializedError
 		query = f"""
 			SELECT node_id, text, metadata_
 			FROM {self._get_sql_table_name()}
@@ -345,7 +345,11 @@ class PGVectorBackend(LlamaIndexBackend, KnowledgeBackend):
 			  AND metadata_->>'knowledge_source' = :knowledge_source
 			  AND metadata_->>'input_id' = :input_id
 		"""  # noqa: S608 - table name comes from validated config; values are bound
-		params = {"site_name": frappe.local.site, "knowledge_source": self.knowledge_source, "input_id": input_id}
+		params = {
+			"site_name": frappe.local.site,
+			"knowledge_source": self.knowledge_source,
+			"input_id": input_id,
+		}
 		engine = create_engine(self._get_sqlalchemy_url())
 		with engine.begin() as conn:
 			rows = conn.execute(text(query), params).fetchall()

@@ -7,7 +7,7 @@ from typing import Any
 
 import frappe
 
-from . import ChunkResult, KnowledgeBackend
+from . import BackendNotInitializedError, ChunkResult, KnowledgeBackend
 from .llamaindex_base import LLAMAINDEX_AVAILABLE, LlamaIndexBackend
 
 try:
@@ -147,7 +147,7 @@ class ChromaBackend(LlamaIndexBackend, KnowledgeBackend):
 		from .chunk_listing import page_chunks, to_result
 
 		if not self._initialized or not self.collection:
-			raise RuntimeError("Backend not initialized. Call initialize() first.")
+			raise BackendNotInitializedError
 		found = self.collection.get(where={"input_id": input_id}, include=["documents", "metadatas"])
 		ids = found.get("ids") or []
 		docs = found.get("documents") or []
@@ -155,7 +155,9 @@ class ChromaBackend(LlamaIndexBackend, KnowledgeBackend):
 		chunks = []
 		for i, chunk_id in enumerate(ids):
 			meta = (metas[i] if i < len(metas) else None) or {}
-			chunks.append(to_result(chunk_id, docs[i] if i < len(docs) else "", meta, meta.get("source_title")))
+			chunks.append(
+				to_result(chunk_id, docs[i] if i < len(docs) else "", meta, meta.get("source_title"))
+			)
 		return page_chunks(chunks, start, limit)
 
 	def clear(self) -> None:

@@ -50,6 +50,13 @@ class ChunkResult:
 	ref: str | None = None  # record/URL reference for citations
 
 
+class BackendNotInitializedError(RuntimeError):
+	"""A backend was used before ``initialize()``."""
+
+	def __init__(self):
+		super().__init__("Backend not initialized. Call initialize() first.")
+
+
 class KnowledgeBackend(ABC):
 	"""Abstract base class for knowledge backends."""
 
@@ -83,7 +90,9 @@ class KnowledgeBackend(ABC):
 		"""Get backend statistics (chunk count, size, etc.)."""
 		pass
 
-	def get_chunks(self, input_id: str, start: int = 0, limit: int = 20) -> tuple[list[ChunkResult], int] | None:
+	def get_chunks(
+		self, input_id: str, start: int = 0, limit: int = 20
+	) -> tuple[list[ChunkResult], int] | None:
 		"""List the stored chunks of one input, in document order.
 
 		Returns ``(page, total)`` (``ChunkResult.metadata["chunk_index"]`` is the

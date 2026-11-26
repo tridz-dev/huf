@@ -19,7 +19,7 @@ from typing import Any
 import frappe
 from frappe import _
 
-from . import ChunkResult, KnowledgeBackend
+from . import BackendNotInitializedError, ChunkResult, KnowledgeBackend
 
 try:
 	import redis
@@ -347,7 +347,7 @@ class RedisBackend(KnowledgeBackend):
 		from .chunk_listing import MAX_LISTED_CHUNKS, page_chunks, to_result
 
 		if not self._initialized or not self.redis_client:
-			raise RuntimeError("Backend not initialized. Call initialize() first.")
+			raise BackendNotInitializedError
 		query = (
 			Query(
 				f"@site_name:{{{_escape_tag(frappe.local.site)}}} "

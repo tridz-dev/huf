@@ -10,7 +10,7 @@ from typing import Any
 import frappe
 from frappe import _
 
-from . import ChunkResult, KnowledgeBackend
+from . import BackendNotInitializedError, ChunkResult, KnowledgeBackend
 from .llamaindex_base import LLAMAINDEX_AVAILABLE, LlamaIndexBackend
 
 try:
@@ -252,7 +252,7 @@ class PineconeBackend(LlamaIndexBackend, KnowledgeBackend):
 		from .chunk_listing import page_chunks, to_result
 
 		if not self._initialized:
-			raise RuntimeError("Backend not initialized. Call initialize() first.")
+			raise BackendNotInitializedError
 		filters = MetadataFilters(
 			filters=[
 				ExactMatchFilter(key="site_name", value=frappe.local.site),
@@ -264,7 +264,9 @@ class PineconeBackend(LlamaIndexBackend, KnowledgeBackend):
 		chunks = []
 		for node in nodes:
 			meta = dict(node.metadata or {})
-			chunks.append(to_result(meta.get("chunk_id") or node.id_, node.text, meta, meta.get("source_title")))
+			chunks.append(
+				to_result(meta.get("chunk_id") or node.id_, node.text, meta, meta.get("source_title"))
+			)
 		return page_chunks(chunks, start, limit)
 
 	def clear(self) -> None:

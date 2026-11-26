@@ -35,7 +35,7 @@ import frappe
 from frappe import _
 from frappe.utils import get_files_path
 
-from . import ChunkResult, KnowledgeBackend
+from . import BackendNotInitializedError, ChunkResult, KnowledgeBackend
 from .llamaindex_base import LLAMAINDEX_AVAILABLE, LlamaIndexBackend
 
 try:
@@ -401,12 +401,14 @@ class FaissBackend(LlamaIndexBackend, KnowledgeBackend):
 		from .chunk_listing import page_chunks, to_result
 
 		if not self._initialized:
-			raise RuntimeError("Backend not initialized. Call initialize() first.")
+			raise BackendNotInitializedError
 		chunks = []
 		for record in self._chunk_store.values():
 			meta = record.get("metadata") or {}
 			if meta.get("input_id") == input_id:
-				chunks.append(to_result(record.get("chunk_id"), record.get("text"), meta, meta.get("source_title")))
+				chunks.append(
+					to_result(record.get("chunk_id"), record.get("text"), meta, meta.get("source_title"))
+				)
 		return page_chunks(chunks, start, limit)
 
 	def clear(self) -> None:
