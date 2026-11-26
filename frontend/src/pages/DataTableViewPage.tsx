@@ -38,6 +38,8 @@ export function DataTableViewPage() {
 	const [rowCount, setRowCount] = useState<number | undefined>(undefined);
 	const [deleteOpen, setDeleteOpen] = useState(false);
 	const access = useResourceAccess('dataTable');
+	// Editing fields is a table-manage action, gated like the Delete table action below.
+	const canManageTable = access.canDelete;
 	const permissions = useContext(PermissionsContext);
 	// Mirrors import_export._require_import: any one of these lets a person import rows.
 	const canImportRows =
@@ -104,7 +106,7 @@ export function DataTableViewPage() {
 					...(empty || !canImportRows ? [] : [{ label: 'Import', icon: Upload, onSelect: () => update({ import: '1' }) }]),
 				]
 			: []),
-		{ label: 'Edit fields', icon: Pencil, onSelect: () => setTab('fields') },
+		...(canManageTable ? [{ label: 'Edit fields', icon: Pencil, onSelect: () => navigate(`/data/${tableId}/edit`) }] : []),
 		...(access.canDelete ? [{ label: 'Delete table', icon: Trash2, destructive: true, separated: true, onSelect: () => setDeleteOpen(true) }] : []),
 	];
 
@@ -144,7 +146,7 @@ export function DataTableViewPage() {
 			}
 		>
 			{tab === 'data' && <DataTab key={dataKey} ref={dataRef} schema={schema} tableId={tableId} onImport={() => update({ import: '1' })} onCount={setRowCount} />}
-			{tab === 'fields' && <FieldsTab schema={schema} tableId={tableId} onChanged={() => void loadSchema()} />}
+			{tab === 'fields' && <FieldsTab schema={schema} tableId={tableId} canManage={canManageTable} onChanged={() => void loadSchema()} />}
 			{tab === 'agents' && <AgentsTab schema={schema} tableId={tableId} />}
 			{tab === 'activity' && <ActivityTab tableId={tableId} />}
 

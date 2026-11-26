@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { FieldsTab } from '../FieldsTab';
 import { AgentsTab } from '../AgentsTab';
@@ -46,6 +46,25 @@ describe('FieldsTab', () => {
 		render(<MemoryRouter><FieldsTab schema={schema} tableId="T1" onChanged={() => {}} /></MemoryRouter>);
 		expect(screen.getByText('Email')).toBeInTheDocument();
 		expect(screen.getAllByText('Required, Unique')[0]).toBeInTheDocument();
+	});
+
+	it('shows Add field to managers and navigates to the builder', async () => {
+		const Where = () => <p>builder {useLocation().pathname}</p>;
+		render(
+			<MemoryRouter initialEntries={['/data/T1?tab=fields']}>
+				<Routes>
+					<Route path="/data/:tableId" element={<FieldsTab schema={schema} tableId="T1" onChanged={() => {}} canManage />} />
+					<Route path="/data/:tableId/edit" element={<Where />} />
+				</Routes>
+			</MemoryRouter>,
+		);
+		await userEvent.click(screen.getByRole('button', { name: /Add field/ }));
+		expect(await screen.findByText('builder /data/T1/edit')).toBeInTheDocument();
+	});
+
+	it('hides Add field from users who cannot manage the table', () => {
+		render(<MemoryRouter><FieldsTab schema={schema} tableId="T1" onChanged={() => {}} /></MemoryRouter>);
+		expect(screen.queryByRole('button', { name: /Add field/ })).toBeNull();
 	});
 });
 

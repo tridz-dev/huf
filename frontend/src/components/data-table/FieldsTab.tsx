@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Pencil } from 'lucide-react';
+import { Pencil, Plus } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { OverflowMenu, ResourceList, ResourceRow } from '@/components/patterns';
 import { friendlyTypeName, typeGlyph } from '@/data/fieldTypeLabels';
 import { getTableToolSignature } from '@/services/dataTableApi';
@@ -11,12 +12,14 @@ export interface FieldsTabProps {
 	schema: DataTableSchema;
 	tableId: string;
 	onChanged: () => void;
+	/** Table managers only: shows the Add field button that opens the builder. */
+	canManage?: boolean;
 }
 
 const LAYOUT = new Set(['Tab Break', 'Section Break', 'Column Break']);
 
 /** Fields tab: the table's fields in order, with rules and what agents see. */
-export function FieldsTab({ schema, tableId }: FieldsTabProps) {
+export function FieldsTab({ schema, tableId, canManage = false }: FieldsTabProps) {
 	const navigate = useNavigate();
 	const [sig, setSig] = useState<TableToolSignature | null>(null);
 
@@ -36,9 +39,17 @@ export function FieldsTab({ schema, tableId }: FieldsTabProps) {
 
 	return (
 		<div className="space-y-3">
-			<p className="text-ui-text text-steel">
-				These are the columns of {schema.table_name}. Agents use the same fields you see here.
-			</p>
+			<div className="flex items-start justify-between gap-3">
+				<p className="text-ui-text text-steel">
+					These are the columns of {schema.table_name}. Agents use the same fields you see here.
+				</p>
+				{canManage && (
+					<Button size="sm" className="shrink-0" onClick={edit}>
+						<Plus aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+						Add field
+					</Button>
+				)}
+			</div>
 			<ResourceList label="Fields" columns={['Field', 'Rules', 'What the agent sees', '']}>
 				{fields.map((f) => {
 					const Glyph = typeGlyph(f.fieldtype);

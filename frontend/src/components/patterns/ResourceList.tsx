@@ -5,7 +5,7 @@
  * Inline rows (ProgressRow, AttentionBanner) slot in above the rows as
  * children of the list. A row in the `adding` state drops in (§8).
  */
-import { createContext, useContext, type CSSProperties, type ReactNode } from 'react';
+import { createContext, useContext, type CSSProperties, type MouseEvent, type ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 
 const GRID = 'grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 md:grid-cols-[minmax(0,2.2fr)_minmax(0,1.4fr)_9rem_7rem_2rem]';
@@ -103,8 +103,27 @@ export interface ResourceRowProps {
   className?: string;
 }
 
+/** Controls inside a row that handle their own clicks; a click on them must not open the row. */
+const INTERACTIVE_SELECTOR =
+  'a,button,input,select,textarea,label,summary,[role="button"],[role="link"],[role="checkbox"],[role="switch"],[role="radio"],[role="option"],[role="menu"],[role="menuitem"],[role="menuitemcheckbox"],[role="menuitemradio"],[contenteditable="true"]';
+
+function isInsideControl(target: EventTarget | null, row: HTMLElement): boolean {
+  if (!(target instanceof Element)) return false;
+  const control = target.closest(INTERACTIVE_SELECTOR);
+  return control !== null && row.contains(control);
+}
+
+/** Stops a click in the actions slot from reaching the row, so its menu and buttons never open the item. */
+const stopRowClick = (e: MouseEvent<HTMLDivElement>) => e.stopPropagation();
+
 export function ResourceRow({ title, type, glyph, origin, status, time, reason, actions, adding, onOpen, cells, className }: ResourceRowProps) {
   const defs = useContext(ColumnsCtx);
+  const handleRowClick = onOpen
+    ? (e: MouseEvent<HTMLLIElement>) => {
+        if (isInsideControl(e.target, e.currentTarget)) return;
+        onOpen();
+      }
+    : undefined;
   const titleCell = (
     <div className="flex min-w-0 items-center gap-3">
       {glyph ?? (type ? <TypeGlyph label={type} /> : null)}
@@ -132,30 +151,37 @@ export function ResourceRow({ title, type, glyph, origin, status, time, reason, 
     'data-state': adding ? 'adding' : undefined,
     'aria-busy': adding || undefined,
   };
-  const rowClass = (grid: string) => cn(grid, 'px-4 py-2.5 transition-colors hover:bg-paper-deep', adding && 'motion-safe:animate-drop', className);
+  const rowClass = (grid: string) =>
+    cn(grid, 'px-4 py-2.5 transition-colors hover:bg-paper-deep', onOpen && 'cursor-pointer', adding && 'motion-safe:animate-drop', className);
   if (defs) {
     return (
-      <li {...rowProps} className={rowClass(CUSTOM_GRID)}>
+      <li {...rowProps} onClick={handleRowClick} className={rowClass(CUSTOM_GRID)}>
         {titleCell}
         {defs.slice(1).map((c) => (
           <div key={c.key} data-col={c.key} className={cn('hidden min-w-0 items-center text-micro text-steel md:flex', ALIGN[c.align ?? 'start'])}>
             {cells?.[c.key]}
           </div>
         ))}
-        <div className="flex justify-end">{actions}</div>
+        <div className="flex justify-end" onClick={stopRowClick}>
+          {actions}
+        </div>
       </li>
     );
   }
   return (
-    <li {...rowProps} className={rowClass(GRID)}>
+    <li {...rowProps} onClick={handleRowClick} className={rowClass(GRID)}>
       {titleCell}
       <div className="hidden min-w-0 truncate font-mono text-meta text-steel-soft md:block">{origin}</div>
       <div className="flex items-center justify-end gap-2 md:justify-start">
         {status}
-        <span className="md:hidden">{actions}</span>
+        <span className="md:hidden" onClick={stopRowClick}>
+          {actions}
+        </span>
       </div>
       <div className="hidden text-micro text-steel md:block">{time}</div>
-      <div className="hidden justify-end md:flex">{actions}</div>
+      <div className="hidden justify-end md:flex" onClick={stopRowClick}>
+        {actions}
+      </div>
     </li>
   );
 }
