@@ -42,12 +42,11 @@
    "label": "Details"
   },
   {
-   "description": "Machine identifier for this skill. Use snake_case.",
+   "description": "Machine identifier. Derived from the title when left empty.",
    "fieldname": "skill_name",
    "fieldtype": "Data",
    "in_list_view": 1,
    "label": "Skill Name",
-   "reqd": 1,
    "unique": 1
   },
   {
