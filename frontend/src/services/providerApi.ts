@@ -127,7 +127,7 @@ export async function getProviders(
       filters: filters.length > 0 ? filters : undefined,
       limit: limit + 1, // Fetch one extra to check if there's more
       ...(start > 0 && { limit_start: start }), // Only include if start > 0
-      orderBy: { field: 'modified', order: 'desc' },
+      orderBy: { field: 'provider_name', order: 'asc' },
     });
 
     const mappedProviders = providers.map((p: Record<string, unknown>) => ({
@@ -318,7 +318,7 @@ export async function getModels(
       filters: filters.length > 0 ? filters : undefined,
       limit: limit + 1,
       ...(start > 0 && { limit_start: start }),
-      orderBy: { field: 'modified', order: 'desc' },
+      orderBy: { field: 'model_name', order: 'asc' },
     });
 
     const mappedModels = models.map((m: Record<string, unknown>) => mapModelListItem(m));

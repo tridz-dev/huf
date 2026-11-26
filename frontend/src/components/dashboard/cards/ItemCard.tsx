@@ -96,7 +96,7 @@ export function ItemCard({
             <span className="min-w-0 truncate" title={title}>{title}</span>
           </CardTitle>
           {description && (
-            <CardDescription className="text-steel text-ui-text line-clamp-2 min-h-[2.5rem]">{description}</CardDescription>
+            <CardDescription className="text-steel text-ui-text line-clamp-2 min-h-[2.5rem]" title={description}>{description}</CardDescription>
           )}
           {status && (
             <CardAction className="top-5 flex items-center gap-2">

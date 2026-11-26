@@ -249,7 +249,9 @@ function AgentProcedureDetailPage() {
             <div>
               <CardTitle className="flex items-center gap-3">
                 {procedure.procedure_name || procedure.name}
-                <Badge variant="secondary">{procedure.tier || 'Draft'}</Badge>
+                {procedure.tier && procedure.tier !== (procedure.status || 'Draft') && (
+                  <Badge variant="secondary">{procedure.tier}</Badge>
+                )}
                 <Badge variant="outline">{procedure.status || 'Draft'}</Badge>
               </CardTitle>
               <CardDescription className="mt-1">{procedure.name}</CardDescription>

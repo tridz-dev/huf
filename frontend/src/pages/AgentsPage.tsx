@@ -219,7 +219,7 @@ function AgentsPage() {
           return (
             <ItemCard
               title={agent.agent_name || agent.name}
-              description={agent.description?.slice(0, 100) || 'No description'}
+              description={agent.description || 'No description'}
               avatarColor={agent.agent_color}
               cornerBadge={
                 <ProviderBrandIcon

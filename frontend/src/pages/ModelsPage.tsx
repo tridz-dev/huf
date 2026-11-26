@@ -159,7 +159,7 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
       };
     },
     initialParams: {},
-    pageSize: 9,
+    pageSize: 12,
     debounceMs: 300,
     autoLoad: true,
   });
