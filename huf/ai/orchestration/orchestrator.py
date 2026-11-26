@@ -162,7 +162,9 @@ def execute_next_step(orch_name=None):
 
 
 def _execute_next_step(orch):
-    if orch.status == "Cancelled":
+    from huf.ai.orchestration.cancel import honour_cancel
+
+    if orch.status == "Cancelled" or honour_cancel(orch):
         return "cancelled"
 
     # Check recursion depth (ST-09.5)
@@ -252,6 +254,10 @@ def _execute_next_step(orch):
     # the scheduler's Failed status with a stale-in-progress save — abandon
     # silently with logging instead (see ST-R1.3 / F-26).
     current_status = frappe.db.get_value("Agent Orchestration", orch.name, "status")
+    if current_status == "Cancelled":
+        # Stopped by the user while this step ran: never write Running/Failed back over it.
+        frappe.db.commit()
+        return "cancelled"
     if current_status == "Failed" and next_step.status == "done":
         frappe.log_error(
             title="Orchestration Scheduler",

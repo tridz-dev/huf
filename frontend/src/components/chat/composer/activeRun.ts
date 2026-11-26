@@ -15,6 +15,18 @@ export function getStreamRunId(): string | null {
   return streamRunId;
 }
 
+/** Idempotency key sent with the SSE turn in flight; finds its run before `run_started` arrives. */
+let streamClientKey: string | null = null;
+
+export function newStreamClientKey(): string {
+  streamClientKey = `chat-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+  return streamClientKey;
+}
+
+export function getStreamClientKey(): string | null {
+  return streamClientKey;
+}
+
 /** Id of the newest Queued/Started run among the loaded messages (its message key is the run id). */
 export function findPendingRunId(messages: MessageType[]): string | null {
   for (let i = messages.length - 1; i >= 0; i -= 1) {

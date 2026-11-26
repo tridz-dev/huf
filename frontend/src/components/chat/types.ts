@@ -15,6 +15,8 @@ export type MessageType = {
   runStatus?: 'Queued' | 'Started' | 'Success' | 'Failed';
   /** Links a user bubble to the Agent Run that created it (for merge/hydration). */
   agentRunId?: string;
+  /** Stop was pressed and the server has not yet reported the run as ended. */
+  stopping?: boolean;
   error?: string;
   sttModel?: string;
   status?: string;

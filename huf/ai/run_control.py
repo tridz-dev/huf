@@ -127,6 +127,9 @@ def cancel_agent_run(run_id: str):
 		return {"run_id": run_id, "status": "Failed", "cancel_requested": True}
 	if row.status in ("Success", "Failed"):
 		return {"run_id": run_id, "status": row.status, "cancel_requested": False}
+	from huf.ai.orchestration.cancel import cancel_orchestration_for_run
+	if cancel_orchestration_for_run(run_id):
+		return {"run_id": run_id, "status": "Failed", "cancel_requested": True}
 	if row.status == "Queued":
 		# Not started yet: nothing polls the marker, so fail it now (guarded: only if still Queued).
 		# If the drainer just started it the guarded UPDATE changes nothing; fall to the marker path.

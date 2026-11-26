@@ -88,3 +88,17 @@ describe('run_started frame', () => {
     expect(getStreamRunId()).toBeNull();
   });
 });
+
+describe('sendMessage on a new chat', () => {
+  it('sends a client key and recovers the run by it when no conversation id is known', async () => {
+    stubFetch({ ok: false, status: 504 });
+    recover.mockResolvedValue({
+      success: true, queued: false, status: 'Success', response: 'late answer', conversation_id: 'NEW', agent_run_id: 'R',
+    });
+    const res = await sendMessage({ agent: 'a', message: 'hi' }, { useStreaming: true });
+    const sent = JSON.parse(vi.mocked(fetch).mock.calls[0][1]?.body as string);
+    expect(sent.client_idempotency_key).toMatch(/^chat-/);
+    expect(recover).toHaveBeenCalledWith(expect.objectContaining({ clientKey: sent.client_idempotency_key }));
+    expect(res.message).toMatchObject({ conversation_id: 'NEW', run: { response: 'late answer', agent_run_id: 'R' } });
+  });
+});

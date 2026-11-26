@@ -2655,6 +2655,9 @@ def _execute_agent_run(
                 "cost_calculation_status": "calculated" if cost is not None else "unavailable",
             })
 
+        from huf.ai.orchestration.cancel import finish_if_cancelled
+        if stopped := finish_if_cancelled(run_doc, conversation):
+            return stopped
         agent_message = conv_manager.add_message(conversation, "agent", final_output, resolved_provider, resolved_model, agent_name, run_doc.name)
 
         r_res = context.get("reasoning_resolution") if context else None

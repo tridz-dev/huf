@@ -5,7 +5,7 @@ vi.mock('@/services/chatApi', () => ({ getAgentRunStatus: vi.fn() }));
 
 import { findPendingRunId } from './activeRun';
 import { recoverRunAfterGateway } from './gatewayRecovery';
-import { markCancelled } from './useRunStop';
+import { applyStopOutcome, cancelAndAwaitRun, markStopping } from './stopRun';
 import type { MessageType } from '../types';
 
 const msg = (over: Partial<MessageType>): MessageType =>
@@ -19,15 +19,51 @@ describe('findPendingRunId', () => {
   });
 });
 
-describe('markCancelled', () => {
-  it('marks a queued run bubble as cancelled', () => {
-    const out = markCancelled([msg({ key: 'run1', runStatus: 'Queued' })], 'run1', false);
-    expect(out[0].runStatus).toBe('Failed');
-    expect(out[0].error).toBe('Cancelled by user');
+const stopDeps = { sleep: async () => undefined, now: () => 0, pollMs: 1, totalTimeoutMs: 1000 };
+const requested = { run_id: 'R', status: 'Started' as const, cancel_requested: true };
+
+describe('stop', () => {
+  it('shows stopping, not cancelled, for a run the server has only been asked to cancel', () => {
+    const [queued] = markStopping([msg({ key: 'run1', runStatus: 'Started' })], 'run1', false);
+    expect(queued).toMatchObject({ stopping: true, runStatus: 'Started' });
+    expect(queued.error).toBeUndefined();
+    const [streaming] = markStopping([msg({ key: 'assistant-1' })], 'run2', true);
+    expect(streaming).toMatchObject({ stopping: true, agentRunId: 'run2' });
+    expect(streaming.error).toBeUndefined();
   });
-  it('marks the in-flight streaming bubble (no runStatus) as cancelled', () => {
-    const out = markCancelled([msg({ key: 'assistant-1' })], 'run2', true);
-    expect(out[0].error).toBe('Cancelled by user');
+
+  it('polls until the run is terminal before reporting it cancelled', async () => {
+    const getStatus = vi
+      .fn()
+      .mockResolvedValueOnce({ status: 'Started' })
+      .mockRejectedValueOnce(new Error('blip'))
+      .mockResolvedValueOnce({ status: 'Failed', error: 'Client disconnected' });
+    const out = await cancelAndAwaitRun('R', { ...stopDeps, cancel: async () => requested, getStatus });
+    expect(getStatus).toHaveBeenCalledTimes(3);
+    expect(out).toEqual({ status: 'Failed', error: 'Cancelled by user' });
+  });
+
+  it('reports nothing for a run still open at the deadline', async () => {
+    let t = 0;
+    const out = await cancelAndAwaitRun('R', {
+      ...stopDeps,
+      now: () => t,
+      sleep: async () => { t += 600; },
+      cancel: async () => requested,
+      getStatus: vi.fn().mockResolvedValue({ status: 'Started' }),
+    });
+    expect(out).toBeNull();
+    const [m] = applyStopOutcome([msg({ key: 'R', runStatus: 'Started', stopping: true })], 'R', out);
+    expect(m).toMatchObject({ stopping: false, runStatus: 'Started' });
+  });
+
+  it('shows the real reply of a run that finished before the stop', () => {
+    const [m] = applyStopOutcome([msg({ key: 'assistant-1', agentRunId: 'R', stopping: true })], 'R', {
+      status: 'Success',
+      response: 'done',
+    });
+    expect(m).toMatchObject({ runStatus: 'Success', stopping: false });
+    expect(m.versions[0].content).toBe('done');
   });
 });
 
@@ -39,20 +75,20 @@ describe('recoverRunAfterGateway', () => {
       .fn()
       .mockResolvedValueOnce({ status: 'Started', agent_run_id: 'R' })
       .mockResolvedValueOnce({ status: 'Success', response: 'done', agent_run_id: 'R', agent_message_id: 'M' });
-    const out = await recoverRunAfterGateway({ runId: 'R', startedAt: 0 }, { ...fast, getStatus });
+    const out = await recoverRunAfterGateway({ runId: 'R', startedAt: Date.now() }, { ...fast, getStatus });
     expect(out).toMatchObject({ success: true, queued: false, response: 'done', agent_message_id: 'M' });
   });
 
   it('surfaces a failed run', async () => {
     const getStatus = vi.fn().mockResolvedValue({ status: 'Failed', error: 'boom', agent_run_id: 'R' });
-    const out = await recoverRunAfterGateway({ runId: 'R', startedAt: 0 }, { ...fast, getStatus });
+    const out = await recoverRunAfterGateway({ runId: 'R', startedAt: Date.now() }, { ...fast, getStatus });
     expect(out).toMatchObject({ success: false, error: 'boom' });
   });
 
   it('finds the run by conversation when the id is unknown', async () => {
     const findRun = vi.fn().mockResolvedValueOnce(null).mockResolvedValueOnce('R2');
     const getStatus = vi.fn().mockResolvedValue({ status: 'Success', response: 'ok', agent_run_id: 'R2' });
-    const out = await recoverRunAfterGateway({ conversationId: 'C', startedAt: 0 }, { ...fast, findRun, getStatus });
+    const out = await recoverRunAfterGateway({ conversationId: 'C', startedAt: Date.now() }, { ...fast, findRun, getStatus });
     expect(out.agent_run_id).toBe('R2');
     expect(getStatus).toHaveBeenCalledWith('R2');
   });
@@ -78,7 +114,15 @@ describe('recoverRunAfterGateway', () => {
     ).rejects.toThrow(/no run was found/);
   });
 
-  it('cannot look up a run for a brand-new conversation', async () => {
-    await expect(recoverRunAfterGateway({ startedAt: 0 }, fast)).rejects.toThrow(/timed out/);
+  it('recovers a brand-new chat by the client key, before any conversation is known', async () => {
+    const findByKey = vi.fn().mockResolvedValueOnce(null).mockResolvedValueOnce('R3');
+    const getStatus = vi.fn().mockResolvedValue({ status: 'Success', response: 'ok', conversation_id: 'NEW' });
+    const out = await recoverRunAfterGateway({ clientKey: 'k1', startedAt: Date.now() }, { ...fast, findByKey, getStatus });
+    expect(findByKey).toHaveBeenCalledWith('k1');
+    expect(out).toMatchObject({ success: true, agent_run_id: 'R3', conversation_id: 'NEW', response: 'ok' });
+  });
+
+  it('fails clearly when there is neither a client key nor a conversation to search', async () => {
+    await expect(recoverRunAfterGateway({ startedAt: Date.now() }, fast)).rejects.toThrow(/timed out/);
   });
 });

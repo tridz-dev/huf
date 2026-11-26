@@ -31,6 +31,8 @@ export interface RecoverParams {
   /** Run id when the stream already reported it (`run_started`); otherwise the run is looked up. */
   runId?: string | null;
   conversationId?: string;
+  /** Idempotency key the request carried: finds the run even before any conversation is known. */
+  clientKey?: string;
   /** Epoch ms the request was sent; only runs created after it (minus slack) are considered. */
   startedAt: number;
   signal?: AbortSignal;
@@ -41,10 +43,14 @@ export interface RecoverDeps {
   now: () => number;
   getStatus: (runId: string) => Promise<AgentRunStatusResponse>;
   findRun: (conversationId: string, sinceMs: number) => Promise<string | null>;
+  findByKey: (clientKey: string) => Promise<string | null>;
   pollMs: number;
   findTimeoutMs: number;
   totalTimeoutMs: number;
 }
+
+// The chat gives up on a silent turn after 180s: hand an open run to the run poller before that.
+const MAX_FROM_SEND_MS = 170_000;
 
 // Server and browser clocks differ; accept runs created slightly before our send time.
 // Frappe stores `creation` as a naive timestamp, compared here in browser-local time.
@@ -71,11 +77,21 @@ async function findLatestRun(conversationId: string, sinceMs: number): Promise<s
   return runs[0]?.name ?? null;
 }
 
+export async function findRunByClientKey(clientKey: string): Promise<string | null> {
+  const runs = (await db.getDocList(doctype['Agent Run'], {
+    fields: ['name'],
+    filters: [['idempotency_key', '=', clientKey]],
+    limit: 1,
+  })) as Array<{ name: string }>;
+  return runs[0]?.name ?? null;
+}
+
 const defaultDeps: RecoverDeps = {
   sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
   now: () => Date.now(),
-  getStatus: getAgentRunStatus,
+  getStatus: (runId) => getAgentRunStatus(runId),
   findRun: findLatestRun,
+  findByKey: findRunByClientKey,
   pollMs: 3000,
   findTimeoutMs: 30_000,
   totalTimeoutMs: 120_000,
@@ -96,21 +112,27 @@ export async function recoverRunAfterGateway(
   overrides: Partial<RecoverDeps> = {}
 ): Promise<RecoveredRun> {
   const deps = { ...defaultDeps, ...overrides };
-  const deadline = deps.now() + deps.totalTimeoutMs;
+  const deadline = Math.min(deps.now() + deps.totalTimeoutMs, params.startedAt + MAX_FROM_SEND_MS);
   const check = () => {
     if (params.signal?.aborted) throw abortError();
   };
 
   let runId = params.runId ?? null;
   if (!runId) {
-    if (!params.conversationId) {
+    const { clientKey, conversationId, startedAt } = params;
+    const lookUp = clientKey
+      ? () => deps.findByKey(clientKey)
+      : conversationId
+        ? () => deps.findRun(conversationId, startedAt)
+        : null;
+    if (!lookUp) {
       throw new Error('The server timed out before confirming the run. Check the conversation list for the result.');
     }
     const findDeadline = deps.now() + deps.findTimeoutMs;
     while (!runId) {
       check();
       try {
-        runId = await deps.findRun(params.conversationId, params.startedAt);
+        runId = await lookUp();
       } catch {
         runId = null;
       }

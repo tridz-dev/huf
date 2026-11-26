@@ -9,7 +9,7 @@ import {
   type NewConversationResponse,
   type SendMessageResponse,
 } from './chatApi';
-import { setStreamRunId } from '@/components/chat/composer/activeRun';
+import { newStreamClientKey, setStreamRunId } from '@/components/chat/composer/activeRun';
 import {
   GATEWAY_STATUSES,
   GatewayError,
@@ -110,6 +110,8 @@ export interface StreamAgentParams {
    * the internal 3s connectivity guard used elsewhere in this module.
    */
   signal?: AbortSignal;
+  /** Sent as `client_idempotency_key`, so the run can be found if the response is lost. */
+  clientKey?: string;
 }
 
 /**
@@ -118,7 +120,7 @@ export interface StreamAgentParams {
 export async function* streamAgentResponse(
   params: StreamAgentParams
 ): AsyncGenerator<StreamChunk, StreamChunk | undefined, unknown> {
-  const { agentName, message, conversationId, skipUserMessage, files, modelOverride, project, signal } = params;
+  const { agentName, message, conversationId, skipUserMessage, files, modelOverride, project, signal, clientKey } = params;
   const url = `${frappeUrl}/huf/stream/${encodeURIComponent(agentName)}`;
 
   const body: Record<string, unknown> = {
@@ -141,6 +143,9 @@ export async function* streamAgentResponse(
   }
   if (project) {
     body.project = project;
+  }
+  if (clientKey) {
+    body.client_idempotency_key = clientKey;
   }
 
   const res = await fetch(url, {
@@ -243,6 +248,7 @@ export async function sendMessage(
     let runId: string | null = null;
     const startedAt = Date.now();
     setStreamRunId(null);
+    const clientKey = newStreamClientKey();
     try {
       for await (const chunk of streamAgentResponse({
         agentName: params.agent,
@@ -253,6 +259,7 @@ export async function sendMessage(
         modelOverride: params.modelOverride,
         project: params.project,
         signal,
+        clientKey,
       })) {
         if (chunk.type === 'run_started') {
           runId = chunk.agent_run_id ?? null;
@@ -299,6 +306,7 @@ export async function sendMessage(
         const recovered = await recoverRunAfterGateway({
           runId,
           conversationId: params.conversationId,
+          clientKey,
           startedAt,
           signal,
         }).catch((recoveryError: unknown) => {
