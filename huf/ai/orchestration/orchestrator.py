@@ -5,7 +5,7 @@ from frappe import _
 from frappe.utils import now_datetime
 from huf.ai.orchestration.planning import run_planning
 from huf.ai.agent.integration import run_agent_sync
-from huf.ai.transaction import commit_if_background
+from huf.ai.transaction import commit_if_background, safe_commit
 from huf.ai.run_budget import get_current_budget, estimate_run_cost
 
 
@@ -256,7 +256,7 @@ def _execute_next_step(orch):
     current_status = frappe.db.get_value("Agent Orchestration", orch.name, "status")
     if current_status == "Cancelled":
         # Stopped by the user while this step ran: never write Running/Failed back over it.
-        frappe.db.commit()
+        safe_commit()
         return "cancelled"
     if current_status == "Failed" and next_step.status == "done":
         frappe.log_error(
