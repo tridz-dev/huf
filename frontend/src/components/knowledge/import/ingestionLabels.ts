@@ -46,6 +46,9 @@ export function itemReason(item: Pick<IngestionItem, 'status' | 'skip_reason' | 
     if (raw.includes('modified after you have opened')) {
       return 'Processing was interrupted. Try again.';
     }
+    if (raw.includes('needs a sign-in')) {
+      return 'This address is private. Share the Google Sheet or page publicly, then try again.';
+    }
     if (raw.includes('fetch url') || raw.includes('404') || raw.includes('resolve')) {
       return 'We could not reach that address.';
     }
