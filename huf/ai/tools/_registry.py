@@ -1492,6 +1492,14 @@ BUILDER_TOOLS = [
 		],
 	},
 	{
+		"tool_name": "delegate_to_agent",
+		"description": "Run an existing agent for the current user in its own new conversation and return its answer (waits up to ~75s, else returns a link). Use after find_existing_agents for data/report tasks.",
+		"function_path": "huf.ai.tools.hub.delegate.delegate_to_agent",
+		"category": "Builder",
+		"parameters": [_p("target_agent_name", required=True, description="Exact name of the agent to run"),
+			_p("prompt", required=True, description="The user's request, passed to that agent as its prompt")],
+	},
+	{
 		"tool_name": "get_agent",
 		"description": (
 			"Get a single Agent's summary (read-only) — agent_name, description, provider, "
