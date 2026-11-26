@@ -168,6 +168,11 @@ function autoCompleteJsx(jsx: string): string {
 	return completed;
 }
 
+// Slices are only drawn once the entry animation ticks; re-renders keep restarting it.
+class StaticPie extends Pie {
+	static defaultProps = { ...Pie.defaultProps, isAnimationActive: false };
+}
+
 // Available components for JSX parsing - cast through unknown to avoid strict type checking
 const availableComponents: Record<string, AnyComponent> = {
 	// Recharts - cast through unknown to avoid type issues with required props
@@ -176,7 +181,7 @@ const availableComponents: Record<string, AnyComponent> = {
 	BarChart: BarChart as unknown as AnyComponent,
 	Bar: Bar as unknown as AnyComponent,
 	PieChart: PieChart as unknown as AnyComponent,
-	Pie: Pie as unknown as AnyComponent,
+	Pie: StaticPie as unknown as AnyComponent,
 	Cell: Cell as unknown as AnyComponent,
 	AreaChart: AreaChart as unknown as AnyComponent,
 	Area: Area as unknown as AnyComponent,

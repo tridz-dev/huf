@@ -29,7 +29,7 @@ Rules:
 4. Use `||` for fallbacks: `colors[x] || "#8884d8"` not `colors[x]  "#8884d8"`.
 5. Allowed layout tags: div, span, p, Card, CardContent. Do NOT use CardHeader or CardTitle — the artifact's own `title` attribute already renders as the visible header, so adding your own duplicates it into a second, nested title bar.
 6. Allowed chart components: BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, LineChart, Line, AreaChart, Area.
-7. Prefer a single `fill` on Bar/Pie when possible. Avoid `.map()` for per-item Cell colors unless using a simple one-line arrow: `(entry) => <Cell fill={colors[entry.status] || "#888"} />`.
+7. Prefer a single `fill` on Bar/Pie when possible. For pie charts, every row needs a `label` (slice name) and a numeric `value`; put each slice color in the row as `"fill"` (e.g. `{ "label": "A", "value": 1, "fill": "#007BFF" }`) and use `<Pie data={data} dataKey="value" nameKey="label" />` with no `.map()` and no `Cell`.
 8. Put flex layouts on Card (`style={{ display: "flex", gap: 12 }}`) or use div wrappers.
 9. Pair charts with a markdown table for the underlying data when helpful.
 """

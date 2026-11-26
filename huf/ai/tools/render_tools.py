@@ -199,6 +199,15 @@ def handle_render_chart(chart_type=None, data=None, series_keys=None, x_key="lab
 			raise ValueError(f"data[{i}] must be an object")
 		if chart_type != "pie" and x_key not in row:
 			raise ValueError(f"data[{i}] is missing the required x_key field {x_key!r}")
+		if chart_type == "pie":
+			# Slices are named through "label"; accept "name" as an alias.
+			if row.get("label") in (None, "") and row.get("name") not in (None, ""):
+				data[i] = row = {**row, "label": row["name"]}
+			if row.get("label") in (None, ""):
+				raise ValueError(
+					f"data[{i}] needs a non-empty 'label' field naming the pie slice, e.g. "
+					'{"label": "Category", "value": 10}'
+				)
 
 	if not series_keys:
 		series_keys = ["value"]
@@ -261,7 +270,7 @@ def _build_pie_jsx(value_key: str, colors) -> str:
 		"<Card style={{ padding: 12 }}>\n"
 		'  <ResponsiveContainer width="100%" height={320}>\n'
 		"    <PieChart>\n"
-		f'      <Pie data={{data}} dataKey="{safe_value_key}" nameKey="label" outerRadius={{120}}>\n'
+		f'      <Pie data={{data}} dataKey="{safe_value_key}" nameKey="label" outerRadius={{120}} isAnimationActive={{false}}>\n'
 		"        {data.map((entry, index) => (\n"
 		'          <Cell key={`cell-${index}`} fill={colors[index % colors.length] || "#8884d8"} />\n'
 		"        ))}\n"
