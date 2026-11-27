@@ -13,12 +13,14 @@ import re
 from typing import Any
 
 import frappe
+from frappe import _
 from frappe.utils import add_to_date, now_datetime
 
 from huf.ai.transaction import commit_if_background
 
 DOCTYPE = "Flow Member State"
 MAX_KEY_CHARS = 140
+REMOVE_PASSES = 3  # tries to stop a member's runs before remove_member gives up
 MAX_VARS_BYTES = 64 * 1024
 MAX_HISTORY = 100
 DEFAULT_RETENTION_DAYS = 365
@@ -207,22 +209,35 @@ def record_history(flow: str, key: str, node: str, run: str | None = None) -> No
 
 
 def remove_member(flow: str, key: str) -> bool:
-	"""Forget a member: cancel their waiting run, withdraw their unsent messages, then delete the row.
+	"""Forget a member: cancel all their unfinished runs (Running ones too), withdraw their unsent messages,
+	then delete the row. True when a row existed.
 
-	True when a row existed.
+	Commits. Raises, keeping the row, when a run cannot be stopped.
 	"""
 	from huf.ai.channels import outbox
+	from huf.ai.flow.engine import TERMINAL_STATUSES
 	from huf.ai.flow.runs.park import cancel_run
 
+	for attempt in range(REMOVE_PASSES + 1):
+		frappe.db.commit()  # nosemgrep -- a fresh snapshot: see what workers committed, and let them see the cancels
+		# oldest first: a parent is cancelled before its child, so the child's end cannot wake it
+		runs = frappe.get_all(
+			"Agent Flow Run",
+			filters={"flow_id": flow, "member_key": key},
+			fields=["name", "status"],
+			order_by="creation asc",
+			limit_page_length=0,
+		)
+		# before the cancel, so these rows carry the removal as their reason; finished runs included
+		outbox.withdraw([run.name for run in runs], outbox.MEMBER_REMOVED)
+		unfinished = [run.name for run in runs if run.status not in TERMINAL_STATUSES]
+		if not unfinished:
+			break
+		if attempt == REMOVE_PASSES:
+			frappe.throw(_("This person has a run that could not be stopped. Try again."))
+		for run in unfinished:
+			cancel_run(run, frappe.session.user, running=True)
 	name = member_name(flow, key)
-	run = frappe.db.get_value(DOCTYPE, name, "active_flow_run")
-	# before the cancel, so these rows carry the removal as their reason; finished runs included
-	runs = frappe.get_all(
-		"Agent Flow Run", filters={"flow_id": flow, "member_key": key}, pluck="name", limit_page_length=0
-	)
-	outbox.withdraw(runs, outbox.MEMBER_REMOVED)
-	if run and frappe.db.exists("Agent Flow Run", run):
-		cancel_run(run, frappe.session.user)  # leaves a finished run's status alone
 	if not frappe.db.exists(DOCTYPE, name):
 		return False
 	frappe.db.delete(DOCTYPE, {"name": name})

@@ -528,6 +528,16 @@ def _transition_run(
 	return changed
 
 
+def run_cancelled(flow_run_name: str, *, lock: bool = False) -> bool:
+	"""Whether the run was cancelled while this worker holds it.
+
+	With ``lock`` the run row stays locked until the transaction ends, so a send queued in it is committed before
+	a cancel can happen, and that cancel withdraws it.
+	"""
+	commit_if_background()  # a fresh snapshot
+	return frappe.db.get_value("Agent Flow Run", flow_run_name, "status", for_update=lock) == "Cancelled"
+
+
 # ---------------------------------------------------------------------------
 # Public entry points
 # ---------------------------------------------------------------------------
@@ -1210,6 +1220,9 @@ def _make_node_handler(flow_run, settings):
 	"""Bridge one Flow node executor into the executor's handler contract."""
 
 	def handler(node: NodeSpec, context: GraphContext, state: ExecutionState):
+		if run_cancelled(flow_run.name):  # stop here: no step of a cancelled run starts
+			flow_run.status = "Cancelled"
+			return Outcome.paused(PauseRequest(kind="user", status_label="Cancelled"))
 		raw = _with_step_key(flow_run, node.raw, settings)
 		if node.type == "send.message":
 			decided = _decided_send(flow_run, raw, settings)
@@ -1296,6 +1309,8 @@ def _execute_loop(flow_run, nodes_map: dict, edges_list: list, settings: dict):
 	_persist_context(flow_run, _context_of(flow_run, settings), settings)
 
 	if result.status == ExecutionResult.PAUSED:
+		if getattr(flow_run, "status", None) == "Cancelled":
+			return result  # the cancel already published its own event
 		_publish_flow_event(
 			flow_run,
 			"flow_paused",
