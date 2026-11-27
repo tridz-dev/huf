@@ -306,6 +306,13 @@ class TestDeliveryRecheck(IntegrationTestCase):
 		):
 			self.assertEqual(self.check(), "freq_cap")
 
+	def test_consent_hook_blocks_at_delivery(self):
+		with patch.object(guard, "_consent_hook_paths", return_value=["app.consent"]), patch.object(
+			frappe, "get_attr", return_value=lambda req: {"allow": False, "reason": "no_opt_in"}
+		):
+			self.assertEqual(self.check(), "no_opt_in")
+		self.assertEqual(len(self.seen), 1)  # after Huf's consent step
+
 	def test_transport_passes_the_step_key(self):
 		row = SimpleNamespace(
 			channel="whatsapp", gateway="g", template="t", token_names="[]", header=None,  # noqa: S106

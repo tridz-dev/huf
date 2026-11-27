@@ -128,7 +128,7 @@ def check_recipient(request: dict) -> dict:
 
 
 def check_consent(request: dict) -> dict:
-	"""Huf's own opt-out records. An app's consent rules stay in its ``huf_pre_send_hooks``.
+	"""Huf's own opt-out records. An app's consent rules go in its ``huf_pre_send_consent_hooks``.
 
 	Inside :func:`batch` an allow is reused for the same recipient; a block drops that recipient's allows.
 	"""
