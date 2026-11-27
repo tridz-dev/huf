@@ -80,9 +80,9 @@ def enqueue(request: dict, *, deliver_now: bool = True) -> str:
 	"""
 	step_key = request.get("step_key")
 	if not step_key:
-		raise ValueError("step_key is required")
+		raise ValueError("step_key")
 	if guard_steps.normalise_recipient(request.get("recipient_ref")):
-		raise LiteralRecipient("recipient_ref must be a reference, not a number")
+		raise LiteralRecipient("recipient_ref")
 	existing = frappe.db.get_value(DOCTYPE, {"step_key": step_key}, "name")
 	if existing:
 		return existing
@@ -96,8 +96,17 @@ def enqueue(request: dict, *, deliver_now: bool = True) -> str:
 			**{
 				key: request.get(key)
 				for key in (
-					"step_key", "run_id", "node_id", "member_key", "gateway", "channel",
-					"category", "template", "language", "recipient_ref", "text_ref",
+					"step_key",
+					"run_id",
+					"node_id",
+					"member_key",
+					"gateway",
+					"channel",
+					"category",
+					"template",
+					"language",
+					"recipient_ref",
+					"text_ref",
 				)
 			},
 		}
@@ -108,8 +117,12 @@ def enqueue(request: dict, *, deliver_now: bool = True) -> str:
 		return frappe.db.get_value(DOCTYPE, {"step_key": step_key}, "name")
 	if deliver_now:
 		frappe.enqueue(
-			"huf.ai.channels.outbox.deliver", queue="short", name=doc.name, enqueue_after_commit=True,
-			job_id=f"outbox:{step_key}", deduplicate=True,
+			"huf.ai.channels.outbox.deliver",
+			queue="short",
+			name=doc.name,
+			enqueue_after_commit=True,
+			job_id=f"outbox:{step_key}",
+			deduplicate=True,
 		)
 	return doc.name
 
@@ -128,14 +141,14 @@ def deliver(name: str, *, transport: Callable | None = None, resolver: Callable 
 	if token_names:
 		try:
 			if not row.member_key:
-				raise token_binder.TokenUnbound(token_names)
+				raise token_binder.TokenUnbound(token_names)  # noqa: TRY301
 			values = token_binder.bind(row.template or "", token_names, row.member_key, _refs(row))
 		except token_binder.TokenUnbound as exc:
 			return _finish(row, "Blocked", delivery_error(exc))
 	try:
 		recipient, text = (resolver or resolve_from_run)(row)
 		answer = (transport or whatsapp_transport)(row, recipient, text, values)
-	except Exception as exc:
+	except Exception as exc:  # noqa: BLE001 - every transport error is classified
 		return _failed_attempt(row, delivery_error(exc))
 	finally:
 		values = {}
@@ -151,15 +164,19 @@ def retry_due(limit: int = 500) -> int:
 	names = frappe.get_all(
 		DOCTYPE,
 		filters=[["status", "=", "Retrying"], ["next_attempt_at", "<=", now_datetime()]],
-		pluck="name", limit=limit,
+		pluck="name",
+		limit=limit,
 	) + frappe.get_all(
 		DOCTYPE, filters=[["status", "=", "Sending"], ["modified", "<", stale]], pluck="name", limit=limit
 	)
 	for row_name in names:
 		step_key = frappe.db.get_value(DOCTYPE, row_name, "step_key")
 		frappe.enqueue(
-			"huf.ai.channels.outbox.deliver", queue="short", name=row_name,
-			job_id=f"outbox:{step_key}", deduplicate=True,
+			"huf.ai.channels.outbox.deliver",
+			queue="short",
+			name=row_name,
+			job_id=f"outbox:{step_key}",
+			deduplicate=True,
 		)
 	return len(names)
 
@@ -172,11 +189,15 @@ def on_delivery_status(gateway=None, provider_message_id=None, status=None, erro
 		name = frappe.db.get_value(DOCTYPE, {"provider_message_id": provider_message_id}, "name")
 		if name:
 			frappe.db.set_value(
-				DOCTYPE, name,
-				{"delivery_status": str(status)[:40], **({"error_code": str(error_code)[:80]} if error_code else {})},
+				DOCTYPE,
+				name,
+				{
+					"delivery_status": str(status)[:40],
+					**({"error_code": str(error_code)[:80]} if error_code else {}),
+				},
 				update_modified=False,
 			)
-	except Exception as exc:
+	except Exception as exc:  # noqa: BLE001 - a status hook never raises
 		frappe.logger("huf.outbox").warning("delivery status: %s", type(exc).__name__)
 
 
@@ -199,27 +220,32 @@ def whatsapp_transport(row, recipient, text, values) -> dict:
 	from huf.ai.whatsapp import management
 
 	if row.channel != "whatsapp":
-		raise ValueError("unsupported channel")
+		raise ValueError("channel")
 	if management._send_authority(row.gateway):
-		raise PermissionError("no send authority")
+		raise PermissionError("send_authority")
 	account = frappe.db.get_value("Gateway", row.gateway, "whatsapp_account")
 	phone = bridge.normalize_phone(recipient)
 	if row.template:
 		token_names = json.loads(row.token_names or "[]")
 		header = json.loads(row.header) if row.header else None
 		return bridge.send_template(
-			account, phone, row.template,
+			account,
+			phone,
+			row.template,
 			_body_params(token_names, values) if token_names else [],
 			[header] if header else [],
-			language_code=row.language or None, gateway_name=row.gateway, run_id=row.run_id,
-			force_graph=True, redact_params=True,
+			language_code=row.language or None,
+			gateway_name=row.gateway,
+			run_id=row.run_id,
+			force_graph=True,
+			redact_params=True,
 		)
 	return bridge.send_text(account, phone, str(text), gateway_name=row.gateway)
 
 
 def _claim(name: str):
 	"""Lock the row and mark it Sending, committing so a crash leaves it re-deliverable; None when not due."""
-	frappe.db.sql(f"select name from `tab{DOCTYPE}` where name=%s for update", name)
+	frappe.db.sql("select name from `tabChannel Outbox` where name=%s for update", name)
 	row = frappe.get_doc(DOCTYPE, name)
 	if row.status not in DELIVERABLE:
 		return None
@@ -267,5 +293,5 @@ def _classify_exception(exc: BaseException) -> dict:
 		return {"kind": "permission", "retryable": False, "code": "no_send_authority"}
 	try:
 		return classify_send_exception(exc)
-	except Exception:
+	except Exception:  # noqa: BLE001 - unclassifiable is permanent
 		return {"kind": "unknown", "retryable": False}
