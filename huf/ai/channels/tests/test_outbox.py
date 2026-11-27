@@ -168,6 +168,24 @@ class TestOutbox(IntegrationTestCase):
 		self.assertEqual(self.row(name).delivery_status, "delivered")
 		outbox.on_delivery_status(provider_message_id=None, status=None)  # never raises
 
+	def test_delivery_status_bumps_modified_only_on_change(self):
+		name = outbox.enqueue(request(), deliver_now=False)
+		outbox.deliver(name, transport=FakeTransport(), resolver=resolver)
+		message_id = self.row(name).provider_message_id
+		old = add_to_date(now_datetime(), days=-1)
+
+		def modified_after(**receipt):
+			frappe.db.set_value(outbox.DOCTYPE, name, "modified", old, update_modified=False)
+			outbox.on_delivery_status(provider_message_id=message_id, **receipt)
+			return self.row(name).modified
+
+		self.assertGreater(modified_after(status="delivered"), old)
+		self.assertEqual(modified_after(status="delivered"), old)
+		self.assertGreater(modified_after(status="failed", error_code="131026"), old)
+		self.assertEqual(modified_after(status="failed", error_code="131026"), old)
+		self.assertEqual(modified_after(status="failed"), old)
+		self.assertGreater(modified_after(status="failed", error_code="131047"), old)
+
 	def test_ambiguous_outcomes_are_final(self):
 		dropped = requests.ConnectionError(ProtocolError("Connection aborted.", ConnectionResetError()))
 		cases = [
