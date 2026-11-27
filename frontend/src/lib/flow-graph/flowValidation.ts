@@ -143,6 +143,7 @@ export function validateNode(node: NodeLike, edges: EdgeLike[]): FlowIssue[] {
       // Draft and publish share this list: a draft saves anyway, publish is blocked until it is empty.
       for (const i of gatewayTriggerIssues(chat, c, peekIssueRegistry())) add(i.field, i.message);
     }
+    if (kind === 'trigger.app' && isBlank(c.app)) add('app', 'Choose the app that starts this flow.');
     if (kind === 'trigger.doc-event') {
       if (isBlank(c.doctype)) add('doctype', 'Choose a document type.');
       if (isBlank(c.event)) add('event', 'Choose when it should fire.');
