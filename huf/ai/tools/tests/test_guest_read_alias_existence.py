@@ -1,17 +1,19 @@
 """A Guest calling a read tool alias must not learn whether a record exists."""
 
+import unittest
+
 import frappe
-from frappe.tests.utils import FrappeTestCase
 
 from huf.ai.tools.invocation import invoke_tool_sync
 
 MISSING = "huf-no-such-record"
 
 
-class TestGuestReadAliasExistence(FrappeTestCase):
+class TestGuestReadAliasExistence(unittest.TestCase):
 	def setUp(self):
 		self.todo = self._todo("existence probe")
 		self.report = frappe.get_all("Report", pluck="name", limit=1)[0]
+		self.addCleanup(frappe.db.rollback)
 		self.addCleanup(frappe.set_user, frappe.session.user)
 
 	def _todo(self, text):
