@@ -13,6 +13,9 @@ Users split in three:
 - *app-only users*: no Huf capability. They reach only the flows of apps that granted them a role, never a
   Huf-native flow, never a Huf-wide screen or setting, never publish, and a test run is always a dry run.
 
+Reading is the one exception: holders of a native Huf role (Huf User, Huf Viewer, Huf Manager) keep reading
+Huf-native flows even without ``flows.use`` (a Huf Viewer has none). It never reaches an app-owned flow.
+
 The guards only ever refuse. They never grant what the function's own permission checks would refuse.
 """
 
@@ -40,6 +43,11 @@ def is_app_only(user: str | None = None) -> bool:
 	if user == "Guest" or is_privileged(user):
 		return False
 	return not has_capability(user, HUF_CAPABILITY)
+
+
+def _may_not_read_native() -> bool:
+	"""App-only and without a native Huf role: Huf-native flows are not theirs to read either."""
+	return is_app_only() and not (access.NATIVE_ROLES & set(frappe.get_roles(frappe.session.user)))
 
 
 def app_approve_roles(action: str) -> set[str]:
@@ -74,6 +82,15 @@ def guard_huf_only() -> None:
 		_deny()
 
 
+def guard_huf_read() -> None:
+	"""A read-only list of Huf-native flows: refused for app-only users without a native Huf role.
+
+	The list itself must be permission-checked, so app-owned flows stay out of it.
+	"""
+	if _may_not_read_native():
+		_deny()
+
+
 def guard_app_meta(app: str | None = None) -> None:
 	"""Static builder metadata (doctype lists, roles, time zone, user search).
 
@@ -101,12 +118,13 @@ def guard_app_named(app: str | None) -> None:
 
 
 def guard_flow(flow_id: str | None, action: str) -> None:
-	"""One flow. App-owned: ``flow_access(action)``. Huf-native or unknown: refused for app-only users."""
+	"""One flow. App-owned: ``flow_access(action)``. Huf-native or unknown: refused for app-only users, except
+	that a native Huf role may ``view`` it."""
 	if is_privileged():
 		return
 	if is_app_flow(flow_id):
 		require_flow_access(flow_id, action)
-	elif is_app_only():
+	elif _may_not_read_native() if action == "view" else is_app_only():
 		_deny()
 
 
@@ -114,6 +132,8 @@ def guard_flow_or_huf(flow_id: str | None, action: str) -> None:
 	"""A list that is per flow when ``flow_id`` is given and Huf-wide otherwise."""
 	if flow_id:
 		guard_flow(flow_id, action)
+	elif action == "view":
+		guard_huf_read()
 	else:
 		guard_huf_only()
 

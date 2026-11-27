@@ -27,10 +27,11 @@ from huf.www import huf as page
 A_FLOW, B_FLOW, NATIVE_FLOW = "test-hw709-a", "test-hw709-b", "test-hw709-native"
 ROLE_A, ROLE_B = "HW709 App A", "HW709 App B"
 USER_A, USER_HUF = "hw709-a@example.com", "hw709-hufuser@example.com"
+USER_VIEWER = "hw709-viewer@example.com"
 
 #: Guard -> what an app-only user gets on another app's flow and on a Huf-native flow.
 FLOW_GUARDS = {"guard_flow", "guard_run", "guard_huf_flow", "guard_flow_or_huf"}
-ALL_GUARDS = FLOW_GUARDS | {"guard_huf_only", "guard_app_meta", "guard_app_named", "guard_public"}
+ALL_GUARDS = FLOW_GUARDS | {"guard_huf_only", "guard_huf_read", "guard_app_meta", "guard_app_named", "guard_public"}
 FLOW_PARAMS = {"flow_id", "flow"}
 RUN_PARAMS = {"flow_run_id", "flow_run_name", "flow_run"}
 
@@ -179,6 +180,31 @@ class TestApiGuards(IntegrationTestCase):
 		for flow in (A_FLOW, B_FLOW):
 			with self.assertRaises(frappe.PermissionError):
 				api_guards.guard_flow(flow, "view")
+
+	def test_huf_viewer_reads_native_flows_only(self):
+		_user(USER_VIEWER, "Huf Viewer")
+		frappe.set_user(USER_VIEWER)
+		self.assertTrue(api_guards.is_app_only())  # no flows.use: only the read paths open
+		api_guards.guard_flow(NATIVE_FLOW, "view")
+		api_guards.guard_run(self.runs[NATIVE_FLOW], "view")
+		api_guards.guard_huf_read()
+		api_guards.guard_flow_or_huf(None, "view")
+		refused = [
+			lambda: api_guards.guard_huf_only(),
+			lambda: api_guards.guard_huf_flow(NATIVE_FLOW),
+			lambda: api_guards.guard_flow_or_huf(None, "edit"),
+		]
+		refused += [lambda a=a: api_guards.guard_flow(NATIVE_FLOW, a) for a in ("edit", "test", "approve")]
+		for flow in (A_FLOW, B_FLOW):
+			refused.append(lambda f=flow: api_guards.guard_flow(f, "view"))
+			refused.append(lambda f=flow: api_guards.guard_run(self.runs[f], "view"))
+		for call in refused:
+			with self.assertRaises(frappe.PermissionError):
+				call()
+		from huf.ai.flow.listing.cards import list_flow_cards
+
+		ids = {item["flow_id"] for item in list_flow_cards(search="test-hw709")["items"]}
+		self.assertEqual(ids, {NATIVE_FLOW})
 
 	def test_list_node_types_refuses_an_app_the_user_may_not_view(self):
 		from huf.ai.flow.catalog.api import list_node_types
