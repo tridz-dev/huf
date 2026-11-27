@@ -6,6 +6,7 @@ from frappe.model.document import Document
 from frappe.utils import now_datetime
 
 from huf.ai import system_records
+from huf.ai.flow.app_scope import access as app_access
 from huf.ai.flow.app_scope import ownership
 from huf.ai.graph.validation.flow_validation import validate_flow
 from huf.ai.graph.error_copy import describe_errors
@@ -23,7 +24,12 @@ SYSTEM_RECORD_UNLOCKED_FIELDS: tuple = ("updated_by", "updated_at")
 
 def get_permission_query_conditions(user=None):
 	"""Hide system Flow Definitions from non-System-Managers. Registered in hooks.py."""
-	return system_records.make_permission_query_conditions("Flow Definition")(user)
+	conds = [
+		system_records.make_permission_query_conditions("Flow Definition")(user),
+		app_access.flow_scope_condition(user),
+	]
+	conds = [c for c in conds if c]
+	return " and ".join(f"({c})" for c in conds) if conds else None
 
 
 # Kept as a re-export for any external caller that used to introspect Flow's allowed
@@ -51,9 +57,11 @@ class FlowDefinition(Document):
 		system_records.guard_flag_tamper(self)
 		system_records.guard_field_immutability(self, unlocked_fields=SYSTEM_RECORD_UNLOCKED_FIELDS)
 		ownership.guard_owner_app(self)
+		app_access.guard_server_only_fields(self)
 
 	def db_set(self, fieldname, value=None, *args, **kwargs):
 		ownership.guard_db_set(self, fieldname, value)
+		app_access.guard_server_only_db_set(self, fieldname, value)
 		return super().db_set(fieldname, value, *args, **kwargs)
 
 	def before_save(self):
