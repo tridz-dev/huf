@@ -23,6 +23,9 @@ Rules, fail closed:
 - App roles never read Agent Flow Run or Flow Member State documents (they hold raw payloads): they read runs
   only through the scoped, masked flow APIs.
 
+An app's users need no Huf role. The app lists its own roles in ``huf_app_roles = ["<role>", ...]`` so that Huf
+gives their holders no default Huf role (``huf_user_role.ensure_default_huf_roles``).
+
 Frappe ``has_permission`` hooks can only deny; the grant itself is a Custom DocPerm row synced by
 :mod:`huf.ai.flow.app_scope.docperms`. The hooks below and the query conditions scope those rows to
 ``owner_app``.
