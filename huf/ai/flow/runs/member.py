@@ -100,7 +100,7 @@ def lock_member(flow: str, key: str) -> str:
 	user = frappe.session.user
 	insert = (
 		f"insert into `tab{DOCTYPE}` (name, creation, modified, owner, modified_by, flow, member_key, status, entered_at)"
-		" values (%s, %s, %s, %s, %s, %s, %s, 'Active', %s)"
+		" values (%s, %s, %s, %s, %s, %s, %s, 'Active', %s)"  # noqa: S608 - constant table name
 	)
 	frappe.db.multisql(
 		{

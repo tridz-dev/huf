@@ -60,7 +60,7 @@ class TestFlowMemberConcurrency(IntegrationTestCase):
 				run = triggers.start_flow_run(flow_id, {"n": 2}, "Manual", node_id, enqueue=True)
 				frappe.db.commit()
 				started.append(run.name if run else None)
-			except Exception as exc:  # reported by the assertion below
+			except Exception as exc:  # noqa: BLE001 - reported by the assertion below
 				errors.append(repr(exc))
 			finally:
 				frappe.destroy()
@@ -80,7 +80,9 @@ class TestFlowMemberConcurrency(IntegrationTestCase):
 		self.assertEqual(len(runs), 1)
 		self.assertEqual(frappe.db.count("Agent Flow Run", {"flow_id": self.flow_id}), 1)
 		rows = frappe.get_all(
-			"Flow Member State", filters={"flow": self.flow_id}, fields=["member_key", "run_count", "active_flow_run"]
+			"Flow Member State",
+			filters={"flow": self.flow_id},
+			fields=["member_key", "run_count", "active_flow_run"],
 		)
 		self.assertEqual(rows, [{"member_key": KEY, "run_count": 1, "active_flow_run": runs[0]}])
 
