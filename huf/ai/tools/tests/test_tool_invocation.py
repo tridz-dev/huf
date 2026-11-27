@@ -140,7 +140,7 @@ class _ToolInvocationFrappeDouble:
 		for row in self.db.tool_function_rows.values():
 			if doctype == "Agent Tool Function" and row.get("name") == name:
 				return SimpleNamespace(**row)
-		raise self.DoesNotExistError(f"{doctype} {name} not found")
+		raise self.DoesNotExistError(name)
 
 	def get_doc(self, data):
 		doc = _FakeDoc(data)

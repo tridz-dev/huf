@@ -1072,6 +1072,8 @@ class TestJoinAndWelcome(SynthBase):
 	def test_guard_captcha_issues_challenge_and_defers(self):
 		self.gate.telegram_guard_captcha = 1
 		self.patch("frappe.utils.get_url", return_value="https://huf.example.com")
+		# A site host_name with a scheme wins over get_url; pin it so the site config does not decide.
+		self.patch("huf.ai.telegram_public_url.configured_host", return_value="https://huf.example.com")
 		self.patch("huf.ai.telegram_guard._bot_token", return_value=TOKEN)
 		self.patch(
 			"huf.ai.telegram_guard.make_question",
