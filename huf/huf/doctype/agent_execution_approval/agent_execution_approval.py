@@ -21,6 +21,12 @@ class AgentExecutionApproval(Document):
 		if not self.flags.recording_decision:
 			require_server_write(self)
 
+	def before_discard(self):
+		# discard writes docstatus with db_set, so ``validate`` never runs
+		from huf.ai.flow.runs.write_guard import require_server_write
+
+		require_server_write(self)
+
 	def before_rename(self, old, new, merge=False):
 		from huf.ai.flow.runs.write_guard import refuse
 

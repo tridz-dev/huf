@@ -15,17 +15,22 @@ class AgentUser(Document):
 	"""
 
 	def validate(self):
-		if APPROVAL in (self.parenttype, self._stored_parent()[0]):
+		if _is_approval(self.parenttype) or _is_approval(self._stored_parent()[0]):
 			self._require_server_write()
 
 	def on_trash(self):
-		if self.parenttype == APPROVAL:
+		if _is_approval(self.parenttype):
+			self._require_server_write()
+
+	def before_discard(self):
+		# discard writes docstatus with db_set, so ``validate`` never runs
+		if _is_approval(self.parenttype):
 			self._require_server_write()
 
 	def db_update(self):
 		# Saving any parent that names this row rewrites it by name and runs no child hook.
 		parenttype, parent = self._stored_parent()
-		if parenttype == APPROVAL and (self.parenttype, str(self.parent)) != (parenttype, parent):
+		if _is_approval(parenttype) and (self.parenttype, str(self.parent)) != (parenttype, parent):
 			self._refuse()
 		super().db_update()
 
@@ -41,3 +46,9 @@ class AgentUser(Document):
 		from huf.ai.flow.runs.write_guard import refuse
 
 		refuse(self)
+
+
+def _is_approval(parenttype) -> bool:
+	"""Match as the database does: the collation ignores case, accents and trailing spaces, so a row stored under such
+	a spelling is still loaded as an approver row."""
+	return bool(parenttype) and frappe.db.get_value("DocType", {"name": str(parenttype)}, "name") == APPROVAL
