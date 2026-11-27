@@ -203,13 +203,22 @@ def get_data_catalog(flow_id: str, node_id: str) -> dict:
 
 
 @frappe.whitelist()
-def list_node_types() -> list[dict]:
-	"""Step types that installed apps add through ``huf_flow_nodes``, for the editor palette. Built-in types are not listed."""
+def list_node_types(app: str | None = None) -> list[dict]:
+	"""Step types for the editor palette. Without ``app``: those installed apps add through ``huf_flow_nodes`` (built-ins
+	are not listed). With ``app`` (embed mode): that app's types, then ``{"type", "builtin": True}`` for each allow-listed
+	built-in. This only narrows what the palette offers; publish checks decide what a flow may contain."""
 	require_permission(frappe.has_permission("Flow Definition", "read"), "Not permitted")
-	return [
+	scoped = app is not None
+	if scoped and app not in frappe.get_installed_apps():
+		frappe.throw(_("This app is not installed on this site"), frappe.ValidationError)
+	rows = [
 		{
 			"type": t.type, "label": t.label, "category": t.category, "icon": t.icon, "description": t.description,
 			"config_schema": t.config_schema, "routing": t.routing, "outputs": list(t.outputs), "app": t.app, "builtin": False,
 		}
 		for t in node_registry.registered_types().values()
+		if not scoped or t.app == app
 	]
+	if scoped:
+		rows += [{"type": t, "builtin": True} for t in node_registry.embed_builtin_types()]
+	return rows
