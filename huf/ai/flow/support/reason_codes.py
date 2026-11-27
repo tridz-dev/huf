@@ -6,7 +6,7 @@
 A trace explains an outcome with a short code, never with free text, so no personal data can reach it. Huf's own
 codes are listed here; an app adds its codes in ``hooks.py``::
 
-	huf_flow_reason_codes = ["points_balance_low", "tier_not_eligible"]
+        huf_flow_reason_codes = ["points_balance_low", "tier_not_eligible"]
 
 (a mapping ``{code: description}`` works too). Nothing here raises: an unregistered code becomes ``unknown``.
 
@@ -26,6 +26,10 @@ HUF_CODES = frozenset(
 		"hook_timeout",
 		"bad_recipient",
 		"freq_cap",
+		"template_params_invalid",
+		"header_invalid",
+		"media_host_not_allowed",
+		"no_opt_in",
 		"window_defer_exhausted",
 		# send-time token binder
 		"token_unbound",
