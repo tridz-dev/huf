@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState, ReactNode } from 'react
 import { toast } from 'sonner';
 import { auth, db } from '@/lib/frappe-sdk';
 import { doctype } from '@/data/doctypes';
-import { onSessionInvalidated } from '@/lib/sessionInvalidation';
+import { leaveForLogin, onSessionInvalidated } from '@/lib/sessionInvalidation';
 
 const SESSION_ENDED_FLAG = 'huf:session-ended';
 
@@ -100,7 +100,7 @@ export function UserProvider({ children }: UserProviderProps) {
     // Preserve where the user was headed so login can bounce them back.
     const currentPath = window.location.pathname + window.location.search;
     const redirectTo = encodeURIComponent(currentPath || HOME_URL);
-    window.location.href = `${LOGIN_URL}${redirectTo}#login`;
+    leaveForLogin(`${LOGIN_URL}${redirectTo}#login`);
   };
 
   /**

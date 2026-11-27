@@ -16,6 +16,7 @@ import { Checkbox } from '../ui/checkbox';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
 import { humanizeFlowError } from '@/lib/flow-graph/flowValidation';
 import { useFlowContext } from '../../contexts/FlowContext';
+import { isEmbedPath } from '@/embed/bridge';
 import { toast } from '@/lib/toast';
 import { useNavigate } from 'react-router-dom';
 import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
@@ -308,25 +309,28 @@ export function FlowSettingsModal({ open, onClose }: FlowSettingsModalProps) {
                 </CollapsibleContent>
               </Collapsible>
 
-              <section className="grid gap-2 rounded-lg border border-destructive/30 p-3" aria-labelledby="flow-danger-title" data-testid="flow-settings-danger-zone">
-                <h3 id="flow-danger-title" className="text-sm font-semibold text-destructive">Danger zone</h3>
-                <p className="text-sm text-muted-foreground">
-                  {isLive ? 'This flow is live. ' : ''}Deleting removes the flow and its run history for good.
-                </p>
-                <div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="border-destructive/40 text-destructive hover:text-destructive"
-                    data-testid="flow-settings-delete"
-                    onClick={() => setConfirmingDelete(true)}
-                    disabled={busy || !activeFlow}
-                  >
-                    Delete flow
-                  </Button>
-                </div>
-              </section>
+              {/* The embedded editor never deletes a flow: the host owns the list (docs/flow/BUILDER_EMBED.md). */}
+              {!isEmbedPath() && (
+                <section className="grid gap-2 rounded-lg border border-destructive/30 p-3" aria-labelledby="flow-danger-title" data-testid="flow-settings-danger-zone">
+                  <h3 id="flow-danger-title" className="text-sm font-semibold text-destructive">Danger zone</h3>
+                  <p className="text-sm text-muted-foreground">
+                    {isLive ? 'This flow is live. ' : ''}Deleting removes the flow and its run history for good.
+                  </p>
+                  <div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="border-destructive/40 text-destructive hover:text-destructive"
+                      data-testid="flow-settings-delete"
+                      onClick={() => setConfirmingDelete(true)}
+                      disabled={busy || !activeFlow}
+                    >
+                      Delete flow
+                    </Button>
+                  </div>
+                </section>
+              )}
 
               {error && (
                 <p role="alert" className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive" data-testid="flow-settings-error">
