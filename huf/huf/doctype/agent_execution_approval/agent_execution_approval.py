@@ -8,6 +8,24 @@ from frappe.utils import get_datetime, now_datetime
 
 
 class AgentExecutionApproval(Document):
+	"""A decision authorises code to run, so the record is written by server code only.
+
+	``_transition`` marks its own save with ``flags.recording_decision`` (permission checks stay on); the
+	dispatchers and the expiry path use ``ignore_permissions``. ``flags`` cannot be set by a request, so
+	generic document APIs can neither create nor change an approval, whatever the DocPerm rows allow.
+	"""
+
+	def validate(self):
+		from huf.ai.flow.runs.write_guard import require_server_write
+
+		if not self.flags.recording_decision:
+			require_server_write(self)
+
+	def before_rename(self, old, new, merge=False):
+		from huf.ai.flow.runs.write_guard import refuse
+
+		refuse(self)
+
 	def has_permission(self, permission_type=None, verbose=False):
 		user = frappe.session.user
 
@@ -15,9 +33,8 @@ class AgentExecutionApproval(Document):
 		if "System Manager" in frappe.get_roles(user):
 			return True
 
-		# Strict capability checks for mutating actions. Approval records are
-		# normally created by the dispatcher under ignore_permissions; manual
-		# create/write/delete requires the execution-kind-specific approval capability.
+		# Strict capability checks for mutating actions. Passing them is not enough to
+		# create or change a record: ``validate`` limits that to server code.
 		if permission_type == "create":
 			return _has_approval_capability(self, user)
 
@@ -204,7 +221,11 @@ def _transition(
 	doc.decided_at = now_datetime()
 	if comment:
 		doc.comment = comment
-	doc.save()
+	doc.flags.recording_decision = True
+	try:
+		doc.save()
+	finally:
+		doc.flags.recording_decision = False
 	return doc
 
 
