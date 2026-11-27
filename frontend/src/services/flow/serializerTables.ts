@@ -69,6 +69,22 @@ export const REQUIRED_CONFIG_KEYS: Partial<Record<string, string[]>> = {
 };
 
 
+/** Title of a rules step while "Let AI choose the path" is on (the rules title comes from the palette). */
+export const AI_CHOICE_TITLE = 'Let AI choose';
+
+/**
+ * Title a loaded step shows: the stored one, or the default when there is none or it is only the raw node type (as
+ * some app-built flows store it). A rules step that lets AI choose is named for that unless the user renamed it.
+ */
+export function storedNodeTitle(type: string, label: unknown, config: Record<string, unknown> | undefined): string {
+    const stored = typeof label === 'string' ? label.trim() : '';
+    const fallback = getDefaultLabel(type);
+    const decision = config?.decision;
+    const aiChoice = type === 'router.decision' && decision !== null && typeof decision === 'object';
+    if (!stored || stored === type) return aiChoice ? AI_CHOICE_TITLE : fallback;
+    return aiChoice && stored === fallback ? AI_CHOICE_TITLE : stored;
+}
+
 export function getDefaultLabel(backendType: string): string {
     const labels: Record<string, string> = {
         'trigger.webhook': 'Webhook trigger',

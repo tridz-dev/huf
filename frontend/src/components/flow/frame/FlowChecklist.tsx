@@ -47,7 +47,7 @@ export function FlowChecklist({ live, className, separator = true, menuOnly = fa
       </PopoverAnchor>
       <PopoverContent align="end" sideOffset={menuOnly ? 30 : 4} className="w-[380px] max-w-[calc(100vw-1.5rem)] p-0" data-testid="flow-issues-popover">
         <div className="border-b border-border px-3.5 py-3">
-          <p className="text-sm font-semibold" data-testid="flow-issues-title">{text}</p>
+          <p className="text-sm font-semibold" data-testid="flow-issues-title">{shownText || text}</p>
           <p className="mt-0.5 text-xs text-muted-foreground" data-testid="flow-issues-note">
             {live
               ? 'This flow is live, so it has to be finished before it can be saved. Finish these, or unpublish it to keep working on a draft.'
