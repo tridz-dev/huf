@@ -67,6 +67,52 @@ class TestRunLockTTL(IntegrationTestCase):
 		self.assertIn(self.name, engine.sweep_stale_runs())
 		self.assertEqual(frappe.db.get_value("Agent Flow Run", self.name, "status"), "Failed")
 
+	def _expire_and_retake(self) -> str:
+		"""The old holder's lock expires and another worker takes it; returns the new owner's token."""
+		self._kill_worker()
+		frappe.cache().delete(self.key)
+		frappe.cache().set(self.key, "other-owner", ex=60, nx=True)
+		self.addCleanup(frappe.cache().delete, self.key)
+		return "other-owner"
+
+	def test_lock_value_is_a_per_acquisition_token(self):
+		self.assertTrue(engine._acquire_run_lock(self.name))
+		first = frappe.cache().get(self.key)
+		engine._release_run_lock(self.name)
+		self.assertTrue(engine._acquire_run_lock(self.name))
+		self.assertNotEqual(frappe.cache().get(self.key), first)
+		self.assertEqual(frappe.cache().get(self.key).decode(), engine._run_lock_tokens[self.key])
+
+	def test_old_holder_release_does_not_delete_the_new_holders_lock(self):
+		self.assertTrue(engine._acquire_run_lock(self.name))
+		other = self._expire_and_retake()
+		engine._release_run_lock(self.name)
+		self.assertEqual(frappe.cache().get(self.key).decode(), other)
+		self.assertNotIn(self.key, engine._run_lock_tokens)
+
+	def test_old_holder_heartbeat_does_not_extend_the_new_holders_lock(self):
+		self.assertTrue(engine._acquire_run_lock(self.name))
+		token = engine._run_lock_tokens[self.key]
+		self._expire_and_retake()
+		frappe.cache().expire(self.key, 5)
+		cache = frappe.cache()
+		self.assertEqual(cache.eval(engine._EXPIRE_IF_OWNER, 1, self.key, token, 120), 0)
+		self.assertLessEqual(cache.ttl(self.key), 5)
+		with self._short_lock():
+			engine._start_run_lock_heartbeat(cache, self.key, token)
+			time.sleep(0.6)
+			engine._stop_run_lock_heartbeat(self.key)
+		self.assertLessEqual(cache.ttl(self.key), 5)
+
+	def test_owner_heartbeat_and_release_still_work(self):
+		self.assertTrue(engine._acquire_run_lock(self.name))
+		token = engine._run_lock_tokens[self.key]
+		frappe.cache().expire(self.key, 5)
+		self.assertEqual(frappe.cache().eval(engine._EXPIRE_IF_OWNER, 1, self.key, token, 120), 1)
+		self.assertGreater(frappe.cache().ttl(self.key), 5)
+		engine._release_run_lock(self.name)
+		self.assertFalse(self._held())
+
 
 class TestWakeSweeperLock(IntegrationTestCase):
 	def setUp(self):

@@ -49,6 +49,8 @@ HUF_CODES = frozenset(
 		"facts_timeout",
 		# send-time token binder
 		"token_unbound",
+		# send-time member recipient (huf_send_recipient_providers)
+		"recipient_unbound",
 		# split node: marketing send suppressed for a held-out run (H-W2-07)
 		"holdout_no_contact",
 		# codes the WhatsApp outbound policy already refuses with
