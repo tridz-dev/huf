@@ -27,6 +27,8 @@ HUF_CODES = frozenset(
 		"bad_recipient",
 		"freq_cap",
 		"window_defer_exhausted",
+		# send-time token binder
+		"token_unbound",
 		# codes the WhatsApp outbound policy already refuses with
 		"blocked_by_hook",
 		"bsuid_recipient",
