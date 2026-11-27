@@ -36,6 +36,8 @@ EMAIL = "asha.rao@example.test"
 NAME = "Asha Raoul"
 CONFIG = {"gateway": "gw", "recipient": PHONE, "template": "promo", "category": "marketing"}
 NODE = {"id": "s1", "type": "send.message", "next": "n2", "config": CONFIG}
+# node id -> ledger kind: how the stand-in policy tells which registered steps are ledger steps
+LEDGER_IDS: dict = {}
 LEDGER_KINDS = ("grant_points", "issue_coupon", "adjust_points", "redeem_points")
 
 
@@ -114,7 +116,7 @@ def happiol_like_ledger_policy(graph):
 					"message": "Raw ledger writes are not allowed.",
 				}
 			)
-		elif n["type"] in LEDGER_KINDS or config.get("ledger_kind") in LEDGER_KINDS:
+		elif n["type"] in LEDGER_KINDS or LEDGER_IDS.get(n["id"]) in LEDGER_KINDS:
 			if not config.get("idempotency_key"):
 				errors.append(
 					{
@@ -178,7 +180,8 @@ class TestG1LedgerOnlyThroughGuardedPath(IntegrationTestCase):
 		for kind in LEDGER_KINDS:
 			# A registered kind stands in for the app's ledger node (Huf has no ledger kinds of its own).
 			g = finished_flow()
-			g["nodes"][1]["config"]["ledger_kind"] = kind
+			LEDGER_IDS["cond"] = kind
+			self.addCleanup(LEDGER_IDS.clear)
 			with self.subTest(kind=kind), validators("happiol_like_ledger_policy"):
 				ok, codes = self.codes(g, "publish")
 				self.assertFalse(ok)
@@ -193,7 +196,7 @@ class TestG1LedgerOnlyThroughGuardedPath(IntegrationTestCase):
 		self.assertEqual(happiol_like_ledger_policy(with_node(node)), [])
 
 	def test_broken_policy_fails_closed(self):
-		g = with_node({"id": "lw", "type": "ledger_write", "config": {}})
+		g = finished_flow()
 		with validators("crash"):
 			result = validate_flow(g, "publish")
 		self.assertFalse(result.ok)
