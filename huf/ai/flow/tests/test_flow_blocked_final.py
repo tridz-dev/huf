@@ -20,7 +20,13 @@ NODE = {"id": "s1", "type": "send.message", "next": "n2", "config": CONFIG}
 
 def run_doc(waiting=None):
 	return SimpleNamespace(
-		name="RUN-1", flow_id="flow-1", flow_version="3", member_key="m1", run_mode="", status="Running", waiting=waiting
+		name="RUN-1",
+		flow_id="flow-1",
+		flow_version="3",
+		member_key="m1",
+		run_mode="",
+		status="Running",
+		waiting=waiting,
 	)
 
 
@@ -75,12 +81,15 @@ class TestSendCannotRetry(IntegrationTestCase):
 		self.assertIn("cannot try again", send.config_problem({**CONFIG, "retry": RETRY}))
 
 	def test_preflight_forbids_retry_on_send(self):
-		defn = {"nodes": [{**NODE, "config": {**CONFIG, "retry": RETRY}}, {"id": "s2", **{k: v for k, v in NODE.items() if k != "id"}, "retry": RETRY}]}
+		defn = {
+			"nodes": [
+				{**NODE, "config": {**CONFIG, "retry": RETRY}},
+				{"id": "s2", **{k: v for k, v in NODE.items() if k != "id"}, "retry": RETRY},
+			]
+		}
 		with patch.object(preflight, "template_exists", return_value=True):
 			found = preflight._send_checks(defn, None)
-		self.assertEqual(
-			[f.node_id for f in found if f.code == "SEND_RETRY_FORBIDDEN"], ["s1", "s2"]
-		)
+		self.assertEqual([f.node_id for f in found if f.code == "SEND_RETRY_FORBIDDEN"], ["s1", "s2"])
 		with patch.object(preflight, "template_exists", return_value=True):
 			clean = preflight._send_checks({"nodes": [NODE]}, None)
 		self.assertNotIn("SEND_RETRY_FORBIDDEN", [f.code for f in clean])

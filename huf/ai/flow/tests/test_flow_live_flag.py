@@ -20,13 +20,24 @@ CONFIG = {"gateway": "gw", "recipient": "+91 98765 43210", "template": "promo", 
 
 def run_doc(run_mode=""):
 	return SimpleNamespace(
-		name="RUN-1", flow_id="flow-1", flow_version="3", member_key="m1", run_mode=run_mode, status="Running", waiting=None
+		name="RUN-1",
+		flow_id="flow-1",
+		flow_version="3",
+		member_key="m1",
+		run_mode=run_mode,
+		status="Running",
+		waiting=None,
 	)
 
 
 class TestIsLive(IntegrationTestCase):
 	def test_truth_table(self):
-		for dry, live_send, expected in ((True, True, False), (False, False, False), (True, False, False), (False, True, True)):
+		for dry, live_send, expected in (
+			(True, True, False),
+			(False, False, False),
+			(True, False, False),
+			(False, True, True),
+		):
 			with self.subTest(dry=dry, live_send=live_send):
 				with (
 					patch.object(gate, "is_dry_run", return_value=dry),
@@ -95,7 +106,12 @@ class TestNodeCallContextLive(IntegrationTestCase):
 	def test_dispatch_fills_live(self):
 		seen = []
 		node_type = SimpleNamespace(
-			type="app.x", label="X", routing="next", can_wait=False, test_simulate="run", handler="app.handler"
+			type="app.x",
+			label="X",
+			routing="next",
+			can_wait=False,
+			test_simulate="run",
+			handler="app.handler",
 		)
 		for live in (True, False):
 			with (
