@@ -65,6 +65,19 @@ class TestFlowRetentionBatches(IntegrationTestCase):
 		left = frappe.get_all("Flow Member State", filters={"flow": self.flow}, pluck="member_key")
 		self.assertEqual(sorted(left), ["recent", "waiting"])
 
+	def test_member_without_last_event_is_aged_by_creation(self):
+		for key in ("never-old0", "never-old1", "never-old2", "never-new"):
+			self._member(key, last_event_at=None)
+			if key != "never-new":
+				frappe.db.set_value(
+					"Flow Member State", member.member_name(self.flow, key), "creation", OLD, update_modified=False
+				)
+		# more NULL rows than one batch: the purge must still end
+		with patch.object(member, "PURGE_BATCH_SIZE", 1):
+			self.assertGreaterEqual(member.purge_inactive(30), 3)
+		left = frappe.get_all("Flow Member State", filters={"flow": self.flow}, pluck="member_key")
+		self.assertEqual(left, ["never-new"])
+
 	def test_parked_run_row_is_narrow(self):
 		graph = {"nodes": [{"id": "w1", "type": "wait"}, {"id": "n2", "type": "output", "config": {}}]}
 		flow = frappe.get_doc(
