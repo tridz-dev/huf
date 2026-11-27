@@ -1688,7 +1688,11 @@ def _router_llm_ai_block(run_ctx) -> dict | None:
 			"error": "AI features are switched off on this site, so this step did not run.",
 		}
 	except RunBudgetExceeded:
-		return {"status": "failed", "error": "This run has used up its AI budget, so this step did not run."}
+		return {
+			"status": "failed",
+			"reason_code": "ai_budget_exceeded",
+			"error": "This run has used up its AI budget, so this step did not run.",
+		}
 	except Exception:  # noqa: BLE001 - a kill switch must not fail open
 		return {
 			"status": "failed",

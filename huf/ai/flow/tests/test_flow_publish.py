@@ -102,3 +102,33 @@ class TestFlowPublish(IntegrationTestCase):
 		graph["nodes"][0]["config"]["event"] = "on_trash"
 		frappe.db.set_value("Flow Definition", self.name, "definition_json", json.dumps(graph))
 		self.assertEqual(flow_api.publish_flow(self.flow_id)["status"], "Active")
+
+
+class TestFlowPublishKnowledgeAndHandoff(IntegrationTestCase):
+	"""knowledge.search and handoff are Flow steps: a flow using either validates and publishes."""
+
+	def _publish_with(self, step: dict) -> None:
+		graph = _graph()
+		graph["nodes"][0]["next"] = step["id"]
+		graph["nodes"].insert(1, {**step, "next": "e"})
+		flow_id = f"_test-publish-{frappe.generate_hash(length=8)}"
+		doc = frappe.get_doc(
+			{
+				"doctype": "Flow Definition",
+				"flow_id": flow_id,
+				"flow_name": "Publish step test",
+				"status": "Draft",
+				"definition_json": json.dumps(graph),
+			}
+		)
+		doc.insert(ignore_permissions=True)
+		self.addCleanup(frappe.delete_doc, "Flow Definition", doc.name, ignore_permissions=True, force=True)
+		self.assertEqual(flow_api.publish_flow(flow_id)["status"], "Active")
+
+	def test_knowledge_search_flow_validates_and_publishes(self):
+		self._publish_with(
+			{"id": "k", "type": "knowledge.search", "config": {"query": "refund policy", "knowledge_source": "KS-TEST"}}
+		)
+
+	def test_handoff_flow_validates_and_publishes(self):
+		self._publish_with({"id": "h", "type": "handoff", "config": {"target": "support", "reason": "handoff"}})

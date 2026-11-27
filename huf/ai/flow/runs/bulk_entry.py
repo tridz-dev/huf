@@ -15,6 +15,7 @@ from frappe import _
 
 from huf.ai.flow.runs.access import require_flow_read
 from huf.ai.flow.runs.start import _check_key, start_flow_for_member
+from huf.ai.channels import guard_steps
 from huf.ai.flow.support import facts
 
 CHUNK_SIZE = 500
@@ -65,7 +66,7 @@ def get_bulk_entry_progress(flow: str, batch_id: str) -> dict:
 def run_chunk(flow_id: str, member_keys: list[str], entry_key: str | None, batch_id: str) -> dict:
 	"""Enter one chunk. Each member commits on its own, so a failure costs only that member's entry."""
 	counts = dict.fromkeys(COUNTERS[1:], 0)
-	with facts.batch(flow_id, member_keys):
+	with guard_steps.batch(), facts.batch(flow_id, member_keys):
 		for key in member_keys:
 			try:
 				run = start_flow_for_member(flow_id, key, {}, entry_key=entry_key)
