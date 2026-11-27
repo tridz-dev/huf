@@ -15,8 +15,12 @@ def entry_policy_of(config) -> str:
 
 
 def entry_decision(flow_id: str, policy: str, member_key: str | None, payload: dict | None = None) -> dict:
-	"""What a trigger firing for ``member_key`` should do: ``{"action": "start"}``, ``{"action": "skip", "reason"}``
-	or ``{"action": "resume", "run"}`` (a run waiting for this member's reply was woken)."""
+	"""What a trigger firing for ``member_key`` should do: ``{"action": "start"}``,
+	``{"action": "skip", "code", "reason"}`` or ``{"action": "resume", "run"}`` (a run waiting for this member's reply
+	was woken).
+
+	For the once and one-active policies ``start`` is a claim: of concurrent calls for one member, one gets it.
+	"""
 	from huf.ai.flow.runs import member
 	from huf.ai.flow.runs.park import wake_run
 
@@ -24,11 +28,11 @@ def entry_decision(flow_id: str, policy: str, member_key: str | None, payload: d
 	if not member_key or policy == "new_run_each_time":
 		return start
 	if policy == "once_per_member":
-		if member.get_member(flow_id, member_key):
-			return {"action": "skip", "reason": "This person has already been through this flow."}
+		if not member.claim_entry(flow_id, member_key, once=True):
+			return _skip("already_entered", "This person has already been through this flow.")
 	elif policy == "one_active_per_member":
-		if member.has_active_run(flow_id, member_key):
-			return {"action": "skip", "reason": "This person already has a run in progress."}
+		if not member.claim_entry(flow_id, member_key):
+			return _skip("run_in_progress", "This person already has a run in progress.")
 	elif policy == "resume_if_waiting":
 		run = member.find_waiting_reply_run(flow_id, member_key)
 		if run:
@@ -36,8 +40,12 @@ def entry_decision(flow_id: str, policy: str, member_key: str | None, payload: d
 			reply = {k: p.get(k) for k in ("text", "message", "sender_id", "display_name") if p.get(k) is not None}
 			if wake_run(run, "reply", reply):
 				return {"action": "resume", "run": run}
-			return {"action": "skip", "reason": "This person's reply was already received."}
+			return _skip("reply_already_received", "This person's reply was already received.")
 	return start
+
+
+def _skip(code: str, reason: str) -> dict:
+	return {"action": "skip", "code": code, "reason": reason}
 
 
 def apply_entry_policy(flow_id: str, trigger_node_id: str, trigger_type: str, payload: dict | None):
