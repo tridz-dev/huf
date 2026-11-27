@@ -359,6 +359,7 @@ scheduler_events = {
         "huf.ai.gateway_service.cleanup_stale_access_entries",
         "huf.ai.flow.state.purge_expired",
         "huf.ai.flow.runs.member.purge_inactive",
+        "huf.ai.flow.policy.frequency_cap.purge_expired",
         "huf.ai.flow.code_node.purge_scratch",  # leftover Execute-code scratch folders (killed workers)
         "huf.ai.whatsapp.send_keys.purge_expired",
         "huf.ai.secrets.purge_expired",

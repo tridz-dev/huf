@@ -4,8 +4,9 @@
  */
 import { useEffect, useState } from 'react';
 import { actionOptions } from '@/data/actions';
+import { embedApp, isBackendTypeAllowed, setScopeTypes } from '@/components/flow/palette/embedScope';
 import type { ActionOption } from '@/types/modal.types';
-import { listNodeTypes, type AppNodeType, type SchemaProp } from '@/services/flow/steps/nodeTypesApi';
+import { listNodeTypes, type AppNodeType, type NodeTypeRow, type SchemaProp } from '@/services/flow/steps/nodeTypesApi';
 
 let cached: AppNodeType[] | null = null;
 let inFlight: Promise<AppNodeType[]> | null = null;
@@ -18,9 +19,12 @@ export function setAppNodeTypes(types: AppNodeType[] | null) {
 
 export function loadAppNodeTypes(): Promise<AppNodeType[]> {
   if (cached) return Promise.resolve(cached);
-  inFlight ??= listNodeTypes()
-    .catch(() => [] as AppNodeType[])
-    .then((types) => {
+  const app = embedApp();
+  inFlight ??= listNodeTypes(app ?? undefined)
+    .catch(() => [] as NodeTypeRow[]) // Embedded: an unknown app or a failed load leaves the scope empty.
+    .then((rows) => {
+      if (app !== null) setScopeTypes(rows.map((r) => r.type));
+      const types = rows.filter((r) => !r.builtin);
       setAppNodeTypes(types);
       return types;
     })
@@ -53,6 +57,8 @@ export const appMissingMessage = (app: string): string =>
 /** An app step whose type is not in the loaded catalog (its app was removed): the app's name, else null. */
 export function missingAppStep(backendType: unknown): { app: string } | null {
   if (!appNodeTypesLoaded() || typeof backendType !== 'string' || getAppNodeType(backendType)) return null;
+  // Embedded: another app's step was left out of the list on purpose, not removed from the site.
+  if (embedApp() !== null && !isBackendTypeAllowed(backendType)) return null;
   const app = backendType.split('.')[0];
   return backendType.includes('.') && app && !BUILTIN_STEP_PREFIXES.has(app) ? { app } : null;
 }

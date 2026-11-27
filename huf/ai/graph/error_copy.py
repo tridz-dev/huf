@@ -64,6 +64,7 @@ FIELD_LABELS: dict[str, str] = {
 	"input": "inputs",
 	"on_true": "the step when true",
 	"on_false": "the step when false",
+	"fallback_next": "the step when facts cannot be read",
 	"cron": "schedule",
 	"doctype": "document type",
 	"event": "event",

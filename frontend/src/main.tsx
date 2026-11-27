@@ -5,8 +5,10 @@ import { AppErrorBoundary } from './components/common/AppErrorBoundary';
 import './index.css';
 import './pwa/registerSW';
 import { initTheme } from './lib/personalization';
+import { initEmbedTheme } from './embed/theme';
 
 initTheme();
+initEmbedTheme();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

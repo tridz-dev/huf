@@ -10,7 +10,7 @@ behaviour and T-01 pins it with tests):
 
 - ``ast.parse(expression, mode="eval")``, never anything looser.
 - An explicit AST **node-type allow-list**, walked once at parse time. Anything not on the list --
-  most importantly ``ast.Call`` and ``ast.Attribute``, but also imports, comprehensions, lambdas,
+  most importantly ``ast.Call`` and ``ast.Attribute`` (except ``facts.<name>``, rewritten to a subscript), but also imports, comprehensions, lambdas,
   the walrus operator, f-strings, and starred expressions -- is rejected before any evaluation ever
   runs.
 - A hard length cap (``MAX_EXPRESSION_LENGTH``, matches ``$defs/Expression.maxLength`` = 500) and a
@@ -250,8 +250,22 @@ def parse_expression(expression: str) -> ParsedExpression:
 	except SyntaxError as exc:
 		raise ExpressionError(f"invalid expression syntax: {exc}") from exc
 
+	tree = _FactsAttribute().visit(tree)
 	_validate_node(tree, depth=0)
 	return ParsedExpression(source=source, _tree=tree.body)
+
+
+class _FactsAttribute(ast.NodeTransformer):
+	"""``facts.<name>`` is read as ``facts['<name>']``. Every other attribute stays and is rejected."""
+
+	def visit_Attribute(self, node: ast.Attribute) -> ast.AST:
+		self.generic_visit(node)
+		if isinstance(node.value, ast.Name) and node.value.id == "facts" and not node.attr.startswith("_"):
+			return ast.copy_location(
+				ast.Subscript(value=node.value, slice=ast.copy_location(ast.Constant(node.attr), node), ctx=ast.Load()),
+				node,
+			)
+		return node
 
 
 def _validate_node(node: ast.AST, depth: int) -> None:

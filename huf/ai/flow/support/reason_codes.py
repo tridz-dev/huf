@@ -6,7 +6,7 @@
 A trace explains an outcome with a short code, never with free text, so no personal data can reach it. Huf's own
 codes are listed here; an app adds its codes in ``hooks.py``::
 
-	huf_flow_reason_codes = ["points_balance_low", "tier_not_eligible"]
+        huf_flow_reason_codes = ["points_balance_low", "tier_not_eligible"]
 
 (a mapping ``{code: description}`` works too). Nothing here raises: an unregistered code becomes ``unknown``.
 
@@ -28,7 +28,16 @@ HUF_CODES = frozenset(
 		"ai_disabled",
 		"bad_recipient",
 		"freq_cap",
+		"template_params_invalid",
+		"header_invalid",
+		"media_host_not_allowed",
+		"no_opt_in",
 		"window_defer_exhausted",
+		# condition facts providers
+		"facts_error",
+		"facts_timeout",
+		# send-time token binder
+		"token_unbound",
 		# codes the WhatsApp outbound policy already refuses with
 		"blocked_by_hook",
 		"bsuid_recipient",
