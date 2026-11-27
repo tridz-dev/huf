@@ -11,6 +11,7 @@ from huf.ai.channels import guard, guard_steps, token_binder
 from huf.ai.flow import engine, preflight
 from huf.ai.flow.nodes import send
 from huf.ai.flow.runs import park
+from huf.ai.flow.support import step_keys
 from huf.ai.flow.support.node_schemas import build_node_schemas
 from huf.ai.graph.executor import GraphContext
 
@@ -58,7 +59,13 @@ class TestSendMessageNode(IntegrationTestCase):
 		return {"allow": True}
 
 	def run_node(self, flow_run=None, **config):
-		return send.exec_send_message(flow_run or run_doc(), NODE, {**CONFIG, **config}, {})
+		node = step_keys.with_key(NODE, frappe.generate_hash())  # the engine always attaches a step key
+		return send.exec_send_message(flow_run or run_doc(), node, {**CONFIG, **config}, {})
+
+	def test_send_without_step_key_is_not_queued(self):
+		result = send.exec_send_message(run_doc(), NODE, dict(CONFIG), {})
+		self.assertEqual(result["status"], "failed")
+		self.transport.assert_not_called()
 
 	def test_allowed_send_is_queued_exactly_once(self):
 		result = self.run_node()
