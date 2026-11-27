@@ -19,17 +19,50 @@ from __future__ import annotations
 import frappe
 from frappe import _
 
+from huf.ai.flow.app_scope.access import apps_for, flow_access, is_privileged
+from huf.ai.flow.app_scope.ownership import owner_app_of
+
 
 def can_access_run(flow_run_id: str, ptype: str = "read", flow_ptype: str | None = None) -> bool:
 	"""True when the caller may ``ptype`` the run and ``flow_ptype`` (default: read) its flow. A missing run answers False."""
 	if not flow_run_id or not frappe.db.exists("Agent Flow Run", flow_run_id):
 		return False
+	app_flow = delegated_flow_of_run(flow_run_id)
+	if app_flow:
+		# App roles hold no run DocPerm: reading goes through the flow grant, and they never write a run.
+		return ptype == "read" and flow_ptype in (None, "read") and flow_access(None, app_flow, "view")
 	if not frappe.has_permission("Agent Flow Run", ptype, doc=flow_run_id):
 		return False
 	flow_id = frappe.db.get_value("Agent Flow Run", flow_run_id, "flow_id")
 	if flow_id and frappe.db.exists("Flow Definition", flow_id):
 		return bool(frappe.has_permission("Flow Definition", flow_ptype or "read", doc=flow_id))
 	return True  # the flow was deleted: only the run's own permission is left to check
+
+
+def delegated_flow_of_run(flow_run_id: str) -> str | None:
+	"""The run's flow when it is app-owned and the caller is not privileged, else None."""
+	row = frappe.db.get_value("Agent Flow Run", flow_run_id, ["flow_definition", "flow_id"], as_dict=True)
+	flow = row and (row.flow_definition or row.flow_id)
+	return flow if flow and is_delegated_flow(flow) else None
+
+
+def is_delegated_flow(flow_id: str | None) -> bool:
+	return bool(flow_id and not is_privileged() and owner_app_of(flow_id))
+
+
+def can_list_runs() -> bool:
+	"""Whether the caller may see any run list at all; each list still scopes what it returns."""
+	return bool(frappe.has_permission("Agent Flow Run", "read") or apps_for(None, "view"))
+
+
+def run_reader(flow_id: str | None):
+	"""The query function for a run list already guarded on ``flow_id``.
+
+	``get_all`` only for one app-owned flow the guard has checked; otherwise ``get_list`` (DocPerm and scope).
+	"""
+	if is_delegated_flow(flow_id) and flow_access(None, flow_id, "view"):
+		return frappe.get_all
+	return frappe.get_list
 
 
 def require_run_access(flow_run_id: str, ptype: str = "read", flow_ptype: str | None = None, message: str | None = None) -> str | None:

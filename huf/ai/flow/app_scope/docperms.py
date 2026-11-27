@@ -3,7 +3,8 @@
 Rows granted, at permlevel 0 only:
 
 - Flow Definition: read for ``view`` roles, read and write for ``edit`` roles.
-- Agent Flow Run and Flow Member State: read for ``view`` roles.
+- Agent Flow Run and Flow Member State: nothing. They hold raw payloads, so app roles read runs only through the
+  masked flow APIs; rows synced for them by an earlier version are removed here.
 
 Never create, delete, share, export, import, report or permlevel 1 (``definition_json`` is saved for editors only
 through :mod:`huf.ai.flow.app_scope.drafts`). The scope to ``owner_app`` is applied
@@ -18,7 +19,6 @@ from frappe.permissions import setup_custom_perms
 
 from huf.ai.flow.app_scope.access import app_grants
 
-DOCTYPES = ("Flow Definition", "Agent Flow Run", "Flow Member State")
 STATE_KEY = "huf_flow_app_access_synced"
 _FLAGS = (
 	"read", "write", "create", "delete", "submit", "cancel", "amend", "report", "export", "import",
@@ -36,8 +36,6 @@ def desired_rows() -> dict[tuple[str, str], dict]:
 			write = 1 if role in per_action["edit"] else 0
 			prev = rows.get(("Flow Definition", role), {"write": 0})
 			rows[("Flow Definition", role)] = {"read": 1, "write": max(write, prev["write"])}
-			for dt in ("Agent Flow Run", "Flow Member State"):
-				rows[(dt, role)] = {"read": 1, "write": 0}
 	return rows
 
 

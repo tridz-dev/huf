@@ -21,7 +21,7 @@ from __future__ import annotations
 import frappe
 from frappe import _
 
-from huf.ai.flow.app_scope.access import apps_for, is_privileged, require_flow_access
+from huf.ai.flow.app_scope.access import app_grants, apps_for, is_privileged, require_flow_access
 from huf.ai.flow.app_scope.ownership import owner_app_of
 
 HUF_CAPABILITY = "flows.use"
@@ -39,6 +39,12 @@ def is_app_only(user: str | None = None) -> bool:
 	if user == "Guest" or is_privileged(user):
 		return False
 	return not has_capability(user, HUF_CAPABILITY)
+
+
+def app_approve_roles(action: str) -> set[str]:
+	"""The approve roles of the apps whose flows the caller may ``action``: all an app-only user may look up."""
+	grants = app_grants()
+	return {role for app in apps_for(None, action) if app in grants for role in grants[app]["approve"]}
 
 
 def is_app_flow(flow_id: str | None) -> bool:

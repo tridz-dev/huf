@@ -207,19 +207,15 @@ class TestAppScopedAccess(IntegrationTestCase):
 
 	# --- runs and member states -----------------------------------------------------------------------------
 
-	def test_runs_and_member_states_are_scoped(self):
+	def test_app_roles_read_no_run_or_state_documents(self):
+		"""Raw payloads: app roles get runs only through the masked APIs (see test_app_read)."""
 		self._as(USER_A)
-		runs = set(frappe.get_list("Agent Flow Run", pluck="flow_definition", limit_page_length=0))
-		states = set(frappe.get_list("Flow Member State", pluck="flow", limit_page_length=0))
-		self.assertIn(A_FLOW, runs)
-		self.assertIn(A_FLOW, states)
-		self.assertFalse(runs & {B_FLOW, NATIVE_FLOW})
-		self.assertFalse(states & {B_FLOW, NATIVE_FLOW})
-		frappe.client.get("Agent Flow Run", self.runs[A_FLOW])
-		for other in (B_FLOW, NATIVE_FLOW):
+		for doctype in ("Agent Flow Run", "Flow Member State"):
+			self.assertFalse(frappe.has_permission(doctype, "read"))
+		for flow in (A_FLOW, B_FLOW, NATIVE_FLOW):
 			with self.assertRaises(frappe.PermissionError):
-				frappe.client.get("Agent Flow Run", self.runs[other])
-			state = frappe.db.get_value("Flow Member State", {"flow": other}, "name", ignore=True)
+				frappe.client.get("Agent Flow Run", self.runs[flow])
+			state = frappe.db.get_value("Flow Member State", {"flow": flow}, "name", ignore=True)
 			self.assertFalse(frappe.has_permission("Flow Member State", "read", state))
 
 	def test_app_user_cannot_write_runs_or_states(self):
@@ -248,7 +244,8 @@ class TestAppScopedAccess(IntegrationTestCase):
 		)
 		keys = [(r.parent, r.role) for r in rows]
 		self.assertEqual(len(keys), len(set(keys)))
-		self.assertEqual(len(keys), 9)
+		self.assertEqual(len(keys), 3)
+		self.assertEqual({parent for parent, _role in keys}, {"Flow Definition"})
 		for r in rows:
 			self.assertEqual(r.permlevel, 0)
 			for f in ("create", "delete", "share", "export", "import", "submit", "amend", "cancel"):
