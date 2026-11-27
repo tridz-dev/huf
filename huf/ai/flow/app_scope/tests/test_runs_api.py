@@ -134,6 +134,24 @@ class TestRunsApi(IntegrationTestCase):
 				self.assertEqual(sum(c["count"] for c in counts), total, (group_by, kwargs))
 		self.assertEqual(len(runs_api.list_app_runs("huf", flow_ids=flows)), 5)
 
+	def test_end_node_in_rows_and_counts(self):
+		failed = frappe.get_all(
+			"Agent Flow Run", {"flow_definition": A_FLOW, "status": "Failed"}, pluck="name"
+		)[0]
+		frappe.db.set_value("Agent Flow Run", failed, "current_node_id", "end__blocked")
+		frappe.set_user(USER_A)
+		flows = [A_FLOW, A_FLOW2]
+		rows = runs_api.list_app_runs("huf", flow_ids=flows)
+		self.assertEqual({r["run_id"]: r["end_node"] for r in rows}[failed], "end__blocked")
+		# SQL path ("node") and Python path ("node,reason") agree
+		for group_by in ("node", "node,reason", "flow,status,node"):
+			counts = runs_api.count_app_runs("huf", group_by=group_by, flow_ids=flows)
+			by_node = {}
+			for c in counts:
+				by_node[c["node"] or None] = by_node.get(c["node"] or None, 0) + c["count"]
+			self.assertEqual(by_node, {"end__blocked": 1, None: 2}, group_by)
+		self.assertNotIn(PHONE, frappe.as_json(runs_api.count_app_runs("huf", "node,reason", flow_ids=flows)))
+
 	def test_bad_group_by_refused(self):
 		frappe.set_user(USER_A)
 		with self.assertRaises(frappe.ValidationError):
