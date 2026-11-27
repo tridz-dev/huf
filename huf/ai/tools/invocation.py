@@ -37,6 +37,7 @@ import frappe
 
 from huf.ai.tools.call_telemetry import finalize_tool_call_telemetry as _finalize_tool_call_telemetry
 from huf.ai.tools.call_telemetry import start_tool_call_telemetry as _start_tool_call_telemetry
+from huf.ai.tools.guest_guard import guest_scope_error
 from huf.ai.tools.support.sync import _run_coroutine_sync
 from huf.ai.tools.types import _GUEST_DOCTYPE_PINNED_TYPES, _GUEST_REPORT_PINNED_TYPES, MUTATING_TOOL_TYPES
 
@@ -103,6 +104,7 @@ REFERENCE_DOCTYPE_PIN_TYPES = frozenset({
 	"Submit Document", "Cancel Document", "Get Amended Document",
 	"Attach File to Document",
 	"Send Email",
+	"Get Value", "Set Value",
 })
 
 # Bare tool-name aliases usable without a backing Agent Tool Function
@@ -432,6 +434,8 @@ async def invoke_tool(
 					"fixed target report configured."
 				),
 			)
+		if scope_error := guest_scope_error(tool_type, extra_args, args_dict):
+			return ToolResult(success=False, denied=True, error=scope_error)
 		args_dict["ignore_permissions"] = True
 
 		# Override report_name with reference_report if pinned for guest.

@@ -15,6 +15,7 @@ from agents import FunctionTool
 
 from huf.ai.prompts.lineage import latest_row
 from huf.ai.skills.auto_load import format_skill_content, is_injected_up_front
+from huf.ai.tools.types import _GUEST_DOCTYPE_PINNED_TYPES
 
 
 # Map of standard tool types to their handler function paths.
@@ -173,6 +174,14 @@ def _build_extra_args(tool_doc, skill_tool_row=None) -> dict:
         }
         and tool_doc.reference_doctype
     ):
+        extra_args["reference_doctype"] = tool_doc.reference_doctype
+
+    elif (
+        tool_type in _GUEST_DOCTYPE_PINNED_TYPES
+        and tool_doc.reference_doctype
+        and frappe.session.user == "Guest"
+    ):
+        # Types this path does not pin for signed-in callers; a Guest call needs the pin.
         extra_args["reference_doctype"] = tool_doc.reference_doctype
 
     elif tool_type == "Client Side Tool" and tool_doc.function_name:
