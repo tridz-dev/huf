@@ -71,11 +71,11 @@ def run_reader(flow_id: str | None):
 	``get_list`` (DocPerm and scope).
 	"""
 	if is_delegated_flow(flow_id) and flow_access(None, flow_id, "view"):
-		return _get_user_permitted_runs
+		return get_user_permitted_runs
 	return frappe.get_list
 
 
-def _get_user_permitted_runs(doctype: str, filters=None, or_filters=None, **kwargs) -> list:
+def get_user_permitted_runs(doctype: str, filters=None, or_filters=None, **kwargs) -> list:
 	"""``get_all`` on runs, leaving out those the caller's User Permissions hide (``get_all`` ignores them).
 
 	Narrowed before ordering and paging, so pages and totals stay correct.

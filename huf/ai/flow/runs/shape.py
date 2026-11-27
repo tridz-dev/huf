@@ -33,7 +33,8 @@ _STEP_TYPE_TITLES = {
 }
 
 from huf.ai.flow.runs.outcome import stored_outcome
-from huf.ai.flow.support.pii import mask_for_view
+from huf.ai.flow.support.decision_rights import approval_decision_rights
+from huf.ai.flow.support.pii import mask_for_view, mask_text
 
 _DECISION_OUTCOMES = {
 	"approved": ("Approved", "good"),
@@ -203,6 +204,32 @@ def waiting_for_view(waiting):
 		return mask_for_view(waiting)
 	masked = mask_for_view({k: v for k, v in waiting.items() if k not in _WAITING_KEEP})
 	return {**masked, **{k: waiting[k] for k in _WAITING_KEEP if k in waiting}}
+
+
+# What a viewer who cannot decide an approval may still see of it, besides ``_WAITING_KEEP``.
+_UNDECIDABLE_KEEP = ("step_title", "flow_name", "test_run", "test_note")
+REDACTED = "[redacted]"
+
+
+def waiting_of_viewer(status, waiting, flow):
+	"""``waiting`` as this user may see it, before field masking.
+
+	For an approval the user cannot decide, the rendered texts (title, message, summary) are left out and the
+	facts keep only their labels: they quote run data, in which a name cannot be recognised and masked. A
+	cancelled run keeps its approval payload; nobody can decide it any more, so its texts are left out for
+	everyone, former approvers included.
+	"""
+	if not isinstance(waiting, dict) or (status != "Waiting Approval" and waiting.get("type") != "approval"):
+		return waiting
+	if approval_decision_rights(status, waiting, flow)[0]:
+		return waiting
+	kept = {k: waiting[k] for k in (*_WAITING_KEEP, *_UNDECIDABLE_KEEP) if k in waiting}
+	kept["facts"] = [
+		{"label": mask_text(str(f["label"])), "value": REDACTED}
+		for f in waiting.get("facts") or []
+		if isinstance(f, dict) and f.get("label")
+	]
+	return kept
 
 
 def approval_lapsed(status, waiting) -> bool:

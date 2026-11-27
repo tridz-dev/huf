@@ -22,11 +22,12 @@ from huf.ai.flow.app_scope.links import flow_link
 from huf.ai.flow.runs.access import (
 	can_access_run,
 	can_list_runs,
+	get_user_permitted_runs,
 	require_flow_read,
 	require_run_access,
 	run_reader,
 )
-from huf.ai.flow.runs.shape import _STEP_TYPE_TITLES, extras_for_detail, waiting_for_view
+from huf.ai.flow.runs.shape import _STEP_TYPE_TITLES, extras_for_detail, waiting_for_view, waiting_of_viewer
 from huf.ai.flow.support.approval_card import api_card, build_card
 from huf.ai.flow.support.decision_rights import approval_decision_rights
 from huf.ai.flow.support.node_schemas import _node_config_schema, build_node_schemas  # noqa: F401  (re-exported)
@@ -429,7 +430,8 @@ def get_flow_run(flow_run_id: str) -> dict:
 		pass
 
 	stale = _is_stale(doc.status, doc.modified)
-	can_decide, cannot_decide_reason = approval_decision_rights(doc.status, waiting)
+	can_decide, cannot_decide_reason = approval_decision_rights(doc.status, waiting, doc.flow_definition or doc.flow_id)
+	seen = waiting_of_viewer(doc.status, waiting, doc.flow_definition or doc.flow_id)
 	return {
 		"flow_run_id": doc.name,
 		"flow_id": doc.flow_id,
@@ -442,7 +444,7 @@ def get_flow_run(flow_run_id: str) -> dict:
 		"current_node_id": doc.current_node_id,
 		"hop_count": doc.hop_count,
 		"context_json": mask_for_view(ctx),
-		"waiting": waiting_for_view(waiting),
+		"waiting": waiting_for_view(seen),
 		"node_labels": _node_labels(doc.flow_id),
 		"trigger_event": _trigger_event(doc, ctx),
 		"last_error": doc.last_error,
@@ -454,7 +456,7 @@ def get_flow_run(flow_run_id: str) -> dict:
 		"stale_after_minutes": STALE_RUN_MINUTES,
 		"can_decide": can_decide,
 		"cannot_decide_reason": cannot_decide_reason,
-		"approval_card": api_card(_flow_names([doc.flow_id]).get(doc.flow_id), waiting, doc.flow_id) if doc.status == "Waiting Approval" else None,
+		"approval_card": api_card(_flow_names([doc.flow_id]).get(doc.flow_id), seen, doc.flow_id) if doc.status == "Waiting Approval" else None,
 		**extras_for_detail(doc, ctx),
 	}
 
@@ -1043,7 +1045,7 @@ def handle_get_flow_run(flow_run_id: str, **kwargs) -> dict:
 			"current_node_id": doc.current_node_id,
 			# Masked before cutting, so a cut value cannot slip past the masker (G4).
 			"context_summary": {k: str(v)[:100] for k, v in mask_for_view(ctx).items()},
-			"waiting": waiting_for_view(waiting),
+			"waiting": waiting_for_view(waiting_of_viewer(doc.status, waiting, doc.flow_definition or doc.flow_id)),
 		}
 	except Exception as e:
 		log_flow_error(frappe.get_traceback(), "Get Flow Run Tool Error")
@@ -1153,7 +1155,8 @@ def get_pending_approvals(limit: int = 50, flow_id: str | None = None) -> list:
 	user_roles = set(frappe.get_roles(user))
 
 	# Get all flow runs waiting for approval
-	pending_runs = frappe.get_all(
+	# User Permissions narrow the list, before the limit (``get_all`` ignores them).
+	pending_runs = get_user_permitted_runs(
 		"Agent Flow Run",
 		filters={"status": "Waiting Approval", **({"flow_id": flow_id} if flow_id else {})},
 		fields=[
