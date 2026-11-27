@@ -43,7 +43,11 @@ class TestReadFollowups(base.AppReadFixture):
 		detail = api.get_flow_run(self.runs[base.FLOW_1])
 		self.assertFalse(detail["can_decide"])
 		self.assertEqual([f["label"] for f in detail["approval_card"]["facts"]], ["Who", "Phone"])
-		for part in (detail["approval_card"], detail["waiting"], api.handle_get_flow_run(self.runs[base.FLOW_1])["waiting"]):
+		for part in (
+			detail["approval_card"],
+			detail["waiting"],
+			api.handle_get_flow_run(self.runs[base.FLOW_1])["waiting"],
+		):
 			text = frappe.as_json(part)
 			self.assertNotIn(NAME, text)
 			self.assertNotIn(base.PHONE, text)
@@ -107,11 +111,8 @@ class TestReadFollowups(base.AppReadFixture):
 		self.assertEqual(
 			members_api.remove_flow_member(base.FLOW_1, member_ref=row["member_ref"]), {"removed": True}
 		)
-		self.assertFalse(
-			frappe.db.exists("Flow Member State", member.member_name(base.FLOW_1, base.PHONE))
-		)
+		self.assertFalse(frappe.db.exists("Flow Member State", member.member_name(base.FLOW_1, base.PHONE)))
 		with self.assertRaises(frappe.ValidationError):
 			members_api.remove_flow_member(base.FLOW_1, member_ref="not-a-ref")
 		with self.assertRaises(frappe.ValidationError):
 			members_api.remove_flow_member(base.FLOW_1)
-
