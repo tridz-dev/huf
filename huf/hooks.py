@@ -18,6 +18,8 @@ huf_decision_backends = {
 
 # A STOP keyword (existing ``huf_gateway_opt_out`` notify hook) also exits the sender from every flow.
 huf_gateway_opt_out = ["huf.ai.flow.runs.member.exit_on_opt_out"]
+# Channel outbox (H-W2-15): mirror provider delivery status onto the queued flow send.
+huf_gateway_delivery_status = ["huf.ai.channels.outbox.on_delivery_status"]
 
 # Apps
 # ------------------
@@ -374,6 +376,7 @@ scheduler_events = {
             "huf.ai.orchestration.scheduler.process_orchestrations",
             "huf.ai.agent.integration.recover_stalled_agent_runs",
             "huf.ai.gateways.teams.outbox.retry_due",
+            "huf.ai.channels.outbox.retry_due",  # flow sends: backoff passed, or a worker died mid-delivery
             "huf.ai.flow.triggers.run_due_schedule_flows",
             "huf.ai.flow.triggers.expire_due_approvals",
             "huf.ai.flow.runs.park.wake_due_waits",

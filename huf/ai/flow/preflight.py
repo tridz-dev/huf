@@ -24,6 +24,7 @@ import re
 
 import frappe
 
+from huf.ai.channels import guard_steps
 from huf.ai.flow.support import facts
 from huf.ai.graph.expressions import ExpressionError, parse_expression
 
@@ -108,6 +109,9 @@ def _send_checks(defn, flow_id: str | None) -> list[Finding]:
 		):
 			# Only WhatsApp has a send transport and guard chain; any other (or unknown) gateway cannot send.
 			found.append(Finding("SEND_GATEWAY_UNSUPPORTED", node_id))
+		if guard_steps.normalise_recipient(config.get("recipient")):
+			# A phone number written into the definition: the outbox stores references only (G4).
+			found.append(Finding("SEND_RECIPIENT_LITERAL", node_id))
 		template = config.get("template")
 		if _blank(template):
 			if _blank(config.get("text")):

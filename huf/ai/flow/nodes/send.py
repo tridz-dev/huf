@@ -4,16 +4,19 @@ Config: ``gateway`` (Gateway name), ``recipient`` (value or reference, a phone n
 (exactly one), ``variables`` (token names, bound at send time by ``huf_send_token_providers``), ``category``
 (``marketing`` | ``service``), optional ``header`` (media or location header) and ``language``.
 
-Order (CONTRACTS.md section 7): bind tokens, then :func:`huf.ai.channels.guard.evaluate`, then the transport.
-No path reaches the transport without an allowing guard result. Output ``status`` is one of:
+Order (CONTRACTS.md section 7): bind tokens, then :func:`huf.ai.channels.guard.evaluate`, then the outbox.
+No path reaches the outbox without an allowing guard result. Every decided outcome is recorded under the
+step key (H-W2-13), so a re-delivered job or a re-run replays it instead of sending again (G2). Output ``status`` is one of:
 
-- ``sent``: the transport accepted it;
+- ``queued``: allowed and live; handed to the channel outbox (H-W2-15), which delivers, retries transient
+  errors and binds the tokens again at delivery. The step never fails for a delivery error, so the engine
+  never re-runs it;
 - ``blocked`` with ``reason``: final (G2), the run goes on by its normal edge, nothing is retried;
 - ``previewed``: the guard allowed it but the run is not live, so nothing was sent;
 - ``deferred``: outside the send window; the run is parked (``park.defer_send``) and the whole chain runs
   again on wake.
 
-Token values exist only in the dict handed to the transport: never in the output, context, trace or logs (G4).
+Token values exist only in the dict the outbox hands to the transport at delivery: never in the output, context, trace or logs (G4).
 A live guard pass with a cap commits the transaction, so the run context is persisted before it.
 """
 
@@ -31,6 +34,8 @@ CONFIG_KEYS = frozenset(
 	{"gateway", "recipient", "template", "text", "variables", "category", "header", "language"}
 )
 CATEGORIES = ("marketing", "service")
+#: Output statuses of a decided send: the engine never runs such a send again (G2).
+FINAL_STATUSES = frozenset({"blocked", "queued", "sent", "previewed"})
 WINDOW_DEFER_EXHAUSTED = "window_defer_exhausted"
 
 
@@ -96,7 +101,6 @@ def exec_send_message(flow_run, node: dict, config: dict, settings: dict):
 	template = config.get("template") or None
 	if template is not None:
 		template = ctx.resolve(template)
-	text = ctx.resolve(config["text"]) if config.get("text") else None
 	token_names = list(config.get("variables") or [])
 	member_key = getattr(flow_run, "member_key", None)
 	node_id = node.get("id") or ""
@@ -109,14 +113,13 @@ def exec_send_message(flow_run, node: dict, config: dict, settings: dict):
 
 	def blocked(reason: str) -> dict:
 		_leave_waiting(flow_run, node, _transition_run)
-		return _done(node, {"status": "blocked", "reason": reason})
+		return _final(flow_run, ctx, settings, node, key, {"status": "blocked", "reason": reason})
 
-	values: dict = {}
-	if token_names:
+	if token_names:  # values are bound again at delivery; here only "can every token be bound" (G4)
 		if not member_key:
 			return blocked(token_binder.TOKEN_UNBOUND)
 		try:
-			values = token_binder.bind(template or "", token_names, member_key, refs)
+			token_binder.bind(template or "", token_names, member_key, refs)
 		except token_binder.TokenUnbound:
 			return blocked(token_binder.TOKEN_UNBOUND)
 
@@ -146,18 +149,29 @@ def exec_send_message(flow_run, node: dict, config: dict, settings: dict):
 		return blocked(result.reason or "unknown")
 	_leave_waiting(flow_run, node, _transition_run)
 	if not live:
-		return _done(node, {"status": "previewed"})
+		return _final(flow_run, ctx, settings, node, key, {"status": "previewed"})
 
-	refused = _transport(
-		gateway, channel, recipient, template, text, token_names, values, config, {**refs, "step_key": key}
+	if not key:
+		return _failed("This send step has no step key, so it cannot be queued safely.")
+	refused = _enqueue(
+		{
+			**refs,
+			"step_key": key,
+			"member_key": member_key,
+			"gateway": gateway,
+			"channel": channel,
+			"category": config["category"],
+			"template": template,
+			"language": config.get("language") or None,
+			"recipient_ref": config["recipient"],
+			"text_ref": config.get("text") or None,
+			"token_names": token_names,
+			"header": config.get("header"),
+		}
 	)
 	if refused:
-		return _failed(refused)
-	sent = _done(node, {"status": "sent"})
-	if key:
-		step_keys.record(ctx.data, node_id, key, sent)
-		_persist_context(flow_run, ctx, settings)
-	return sent
+		return blocked(refused)
+	return _final(flow_run, ctx, settings, node, key, {"status": "queued"})
 
 
 def _leave_waiting(flow_run, node: dict, transition) -> None:
@@ -177,33 +191,26 @@ def _body_params(token_names: list[str], values: dict):
 	return {name: values[name] for name in token_names}
 
 
-def _transport(gateway, channel, recipient, template, text, token_names, values, config, refs) -> str | None:
-	"""Hand the send to the channel. None when accepted, else a readable reason (no values in it)."""
-	if channel != "whatsapp":
-		return f"Sending from a {channel} channel is not supported by this step yet."
-	from huf.ai.gateway_adapters import whatsapp_bridge as bridge
-	from huf.ai.whatsapp import management
+def _final(flow_run, ctx, settings, node: dict, key: str, output: dict) -> dict:
+	"""Record a decided send (blocked, previewed or queued) under its step key, so no re-run sends it (G2)."""
+	from huf.ai.flow.engine import _persist_context
 
-	refused = management._send_authority(gateway)  # write authority of the run user on the gateway
-	if refused:
-		return "This run's user may not send from this channel."
-	account = frappe.db.get_value("Gateway", gateway, "whatsapp_account")
-	phone = bridge.normalize_phone(recipient)
-	if template:
-		answer = bridge.send_template(
-			account,
-			phone,
-			template,
-			_body_params(token_names, values) if token_names else [],
-			[config["header"]] if config.get("header") else [],
-			language_code=config.get("language") or None,
-			gateway_name=gateway,
-			run_id=refs["run_id"],
-			force_graph=True,
-			redact_params=True,
-		)
-	else:
-		answer = bridge.send_text(account, phone, str(text), gateway_name=gateway)
-	if isinstance(answer, dict) and answer.get("success") is False:
-		return "The channel did not accept the message."
+	result = _done(node, output)
+	if key:
+		step_keys.record(ctx.data, node.get("id") or "", key, result)
+		ctx.dirty = True
+		_persist_context(flow_run, ctx, settings)
+	return result
+
+
+def _enqueue(request: dict) -> str | None:
+	"""Queue the allowed send on the outbox (H-W2-15). None when queued, else a reason code (a final block)."""
+	from huf.ai.channels import outbox
+
+	if request.get("channel") != "whatsapp":
+		return "channel_unsupported"
+	try:
+		outbox.enqueue(request)
+	except outbox.LiteralRecipient:
+		return "bad_recipient"
 	return None

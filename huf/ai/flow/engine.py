@@ -1112,11 +1112,37 @@ def _with_step_key(flow_run, node: dict, settings) -> dict:
 	return step_keys.with_key(node, step_keys.key_for(flow_run.name, node.get("id") or "", data, retry))
 
 
+def _decided_send(flow_run, node: dict, settings) -> dict | None:
+	"""The recorded result of a send step already decided (blocked, queued, sent), or None (G2).
+
+	A re-delivered job replays its own step key. Inside the error-handler chain, a send step reached again
+	replays its previous visit as well: a handler, retry or republish path never sends twice.
+	"""
+	from huf.ai.flow.nodes import send
+	from huf.ai.flow.nodes.error_handler import first_error
+	from huf.ai.flow.support import step_keys
+
+	data = _context_of(flow_run, settings).data
+	node_id = node.get("id") or ""
+	done = step_keys.replay(data, step_keys.key_of(node))
+	visits = step_keys.visits(data, node_id)
+	if done is None and visits and first_error(flow_run, settings, None):
+		previous = step_keys.step_key(flow_run.name, node_id, (visits - 1) * step_keys.VISIT_STRIDE + 1)
+		done = step_keys.replay(data, previous)
+	if done is None or (done.get("output") or {}).get("status") not in send.FINAL_STATUSES:
+		return None
+	return done
+
+
 def _make_node_handler(flow_run, settings):
 	"""Bridge one Flow node executor into the executor's handler contract."""
 
 	def handler(node: NodeSpec, context: GraphContext, state: ExecutionState):
 		raw = _with_step_key(flow_run, node.raw, settings)
+		if node.type == "send.message":
+			decided = _decided_send(flow_run, raw, settings)
+			if decided is not None:
+				return Outcome.from_mapping(decided)
 
 		def run_once():
 			try:

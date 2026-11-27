@@ -10,6 +10,7 @@ from huf.ai.channels import guard, guard_steps
 from huf.ai.flow import engine
 from huf.ai.flow.catalog import node_registry
 from huf.ai.flow.nodes import send
+from huf.ai.flow.support import step_keys
 from huf.ai.flow.testrun import gate
 from huf.ai.graph.executor import GraphContext
 from huf.huf.doctype.flow_definition.flow_definition import FlowDefinition
@@ -70,7 +71,7 @@ class TestSendHonoursLive(IntegrationTestCase):
 			patch.object(guard, "_hook_paths", return_value=[]),
 			patch.object(guard_steps, "window_resolvers", return_value=[]),
 			patch.object(guard_steps, "resolve_caps", return_value=[]),
-			patch.object(send, "_transport", self.transport),
+			patch.object(send, "_enqueue", self.transport),
 			patch.object(send, "channel_of", return_value="whatsapp"),
 			patch.object(engine, "_context_of", return_value=GraphContext()),
 			patch.object(engine, "_persist_context"),
@@ -81,7 +82,8 @@ class TestSendHonoursLive(IntegrationTestCase):
 
 	def run_node(self, live_send, run_mode=""):
 		with patch.object(gate, "live_send_on", return_value=live_send):
-			return send.exec_send_message(run_doc(run_mode), NODE, dict(CONFIG), {})
+			node = step_keys.with_key(NODE, frappe.generate_hash())  # the engine always attaches a step key
+			return send.exec_send_message(run_doc(run_mode), node, dict(CONFIG), {})
 
 	def test_dry_run_with_live_send_sends_nothing(self):
 		self.assertEqual(self.run_node(True, gate.STORED_TEST)["output"], {"status": "previewed"})
@@ -92,7 +94,7 @@ class TestSendHonoursLive(IntegrationTestCase):
 		self.assertEqual(self.transport.call_count, 0)
 
 	def test_live_send_on_and_not_dry_sends_once(self):
-		self.assertEqual(self.run_node(True)["output"], {"status": "sent"})
+		self.assertEqual(self.run_node(True)["output"], {"status": "queued"})
 		self.assertEqual(self.transport.call_count, 1)
 
 

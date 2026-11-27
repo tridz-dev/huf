@@ -87,6 +87,14 @@ class TestFlowPreflight(IntegrationTestCase):
 				codes = _codes(preflight.run_preflight(_send(config)))
 			self.assertEqual(("SEND_GATEWAY_UNSUPPORTED", "s") in codes, blocked, channel)
 
+	def test_literal_phone_recipient_is_an_error(self):
+		base = {"gateway": "gw", "category": "service", "text": "hi"}
+		with _hooks(), mock.patch.object(preflight, "gateway_channel", return_value="whatsapp"):
+			literal = _codes(preflight.run_preflight(_send({**base, "recipient": PHONE})))
+			ref = _codes(preflight.run_preflight(_send({**base, "recipient": "{{ trigger.sender }}"})))
+		self.assertIn(("SEND_RECIPIENT_LITERAL", "s"), literal)
+		self.assertNotIn(("SEND_RECIPIENT_LITERAL", "s"), ref)
+
 	def test_broken_hooks_are_error_findings(self):
 		cases = {
 			"hook_raises": "PREFLIGHT_HOOK_ERROR",
