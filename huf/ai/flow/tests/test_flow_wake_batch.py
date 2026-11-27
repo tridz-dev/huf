@@ -45,7 +45,8 @@ class TestWakeBatch(IntegrationTestCase):
 		names = [f"{self.prefix}-{i:03d}" for i in range(count)]
 		waiting = json.dumps({"type": "timer", "node_id": "w1"})
 		rows = [
-			(name, park.WAIT_STATUS, NOW - timedelta(minutes=count - i // 2), waiting) for i, name in enumerate(names)
+			(name, park.WAIT_STATUS, NOW - timedelta(minutes=count - i // 2), waiting)
+			for i, name in enumerate(names)
 		]
 		frappe.db.bulk_insert("Agent Flow Run", ["name", "status", "resume_at", "waiting"], rows)
 		frappe.db.commit()
