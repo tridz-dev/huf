@@ -13,6 +13,7 @@ from frappe import _
 from frappe.desk.doctype.notification_log.notification_log import enqueue_create_notification
 from frappe.desk.doctype.notification_settings.notification_settings import is_email_notifications_enabled
 
+from huf.ai.flow.app_scope.access import approval_recipients
 from huf.ai.flow.app_scope.links import flow_link
 from huf.ai.flow.support.approval_card import build_card, facts_html, flow_name_of
 from huf.ai.flow.support.approvers import approver_roles_of
@@ -67,7 +68,9 @@ def _send_approval_notifications(flow_run, node: dict, config: dict, waiting_dat
 	# Ensure unique recipients to avoid duplicate emails
 	if approvers:
 		approvers = list(set(approvers))
-	
+	# App-owned flow: only people who may approve this flow. Nobody left is logged below, never widened.
+	approvers = approval_recipients(flow_run, approvers)
+
 	if not approvers:
 		frappe.log_error(
 			title="Flow Approval Notification",
