@@ -17,6 +17,6 @@ describe('storedNodeTitle', () => {
     expect(storedNodeTitle('router.decision', 'Choose by rules', {})).toBe('Choose by rules');
   });
   it('says which app starts an app trigger', () => {
-    expect(triggerSubtitle({ type: 'app', app: 'happiol' } as unknown as TriggerConfig)).toBe('Started by happiol');
+    expect(triggerSubtitle({ type: 'app', app: 'happiol' } as unknown as TriggerConfig)).toBe('Started by Happiol');
   });
 });
