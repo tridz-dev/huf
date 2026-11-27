@@ -52,6 +52,7 @@ export const ACTION_TO_BACKEND_TYPE: Record<ActionType, BackendNodeType> = {
     'flow-call': 'flow.call',
     'member-set': 'member.set',
     'send-message': 'send.message',
+    'split': 'split',
 };
 
 const BACKEND_TO_ACTION_TYPE: Record<string, ActionType> = Object.fromEntries(
@@ -65,10 +66,11 @@ const ROUTING_KEYS: Partial<Record<BackendNodeType, string[]>> = {
     'router.decision': ['options'],
     'human.approval': ['approve_next', 'reject_next', 'timeout_next'],
     'foreach': ['body'],
+    'split': ['options'],
 };
 
 /** Node types with no `next` key at all. */
-const NO_NEXT_TYPES = new Set<string>(['condition', 'router.llm', 'router.decision', 'human.approval', 'output', 'stop']);
+const NO_NEXT_TYPES = new Set<string>(['condition', 'router.llm', 'router.decision', 'human.approval', 'output', 'stop', 'split']);
 
 /** Valid values of a handle id / edge route other than 'next'. */
 export const FLOW_EDGE_ROUTES: readonly FlowEdgeRoute[] = [
@@ -101,6 +103,8 @@ export interface MakeFlowEdgeOptions {
     index?: number;
     /** router.decision rule check (route 'option'). */
     expression?: string;
+    /** split branch weight (route 'option'). */
+    weight?: number;
 }
 
 /** Build the canonical canvas edge for a route. Used by deserialize; WP-D should use it for new connections. */
@@ -108,6 +112,7 @@ export function makeFlowEdge(source: string, target: string, route: FlowEdgeRout
     const label = route === 'option' ? opts.label ?? target
         : ROUTE_LABELS[route];
     const data: FlowEdgeData = opts.expression !== undefined ? { route, expression: opts.expression } : { route };
+    if (typeof opts.weight === 'number') data.weight = opts.weight;
     const edge: FlowEdge = {
         id: makeFlowEdgeId(source, route, target, route === 'option' || route === 'body' ? opts.index ?? 0 : undefined),
         source,
@@ -202,6 +207,13 @@ function serializeNode(node: FlowNode, outgoing: FlowEdge[], nextOf: Map<string,
             setIf('default', wanted && routed.has(wanted) ? wanted : options[0]?.node_id);
             break;
         }
+        case 'split':
+            config.options = byRoute('option').map((e) => ({
+                label: typeof e.label === 'string' && e.label !== '' ? e.label : e.target,
+                node_id: e.target,
+                weight: typeof e.data?.weight === 'number' ? e.data.weight : 0,
+            }));
+            break;
         case 'human.approval':
             setIf('approve_next', first('approve'));
             setIf('reject_next', first('reject'));
@@ -430,6 +442,11 @@ function deserializeEdgesForNode(node: BackendNode, byId: Map<string, BackendNod
             const options = (cfg.options as Array<{ label: string; node_id: string; expression?: string }> | undefined) ?? [];
             options.forEach((o, index) => push(o.node_id, 'option', { label: o.label, index, expression: o.expression }));
             if (typeof cfg.default === 'string' && !options.some((o) => o.node_id === cfg.default)) push(cfg.default, 'default');
+            break;
+        }
+        case 'split': {
+            const options = (cfg.options as Array<{ label?: string; node_id: string; weight?: number }> | undefined) ?? [];
+            options.forEach((o, index) => push(o.node_id, 'option', { label: o.label ?? o.node_id, index, weight: o.weight }));
             break;
         }
         case 'human.approval':

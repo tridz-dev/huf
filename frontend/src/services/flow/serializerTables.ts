@@ -96,6 +96,7 @@ export function getDefaultLabel(backendType: string): string {
         'member.set': 'Remember for this person',
         'send.message': 'Send message',
         'code.run': 'Execute code',
+        'split': 'Split audience',
         'output': 'End',
     };
     return labels[backendType] || backendType;
@@ -132,6 +133,7 @@ export function getDefaultIcon(backendType: string): string {
         'member.set': 'UserPen',
         'send.message': 'Send',
         'code.run': 'Terminal',
+        'split': 'Split',
         'output': 'CheckCircle2',
     };
     return icons[backendType] || 'Play';
