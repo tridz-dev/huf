@@ -148,7 +148,9 @@ class TestExecutionApprovalWrite(IntegrationTestCase):
 	def test_direct_child_writes_cannot_change_or_remove_an_approver(self):
 		child = self._row()
 		before = self._approver_rows()
-		changed = lambda **extra: frappe.as_json({**frappe.get_doc("Agent User", child).as_dict(), **extra})
+		def changed(**extra):
+			return frappe.as_json({**frappe.get_doc("Agent User", child).as_dict(), **extra})
+
 		self._refused(lambda: client.save(changed(user=self.requester)))
 		self._refused(lambda: v1.delete_doc("Agent User", child))
 		self._refused(lambda: client.delete("Agent User", child))
@@ -159,7 +161,9 @@ class TestExecutionApprovalWrite(IntegrationTestCase):
 		agent = self._agent(allowed_users=[{"user": self.manager}])
 		agent_row = agent.allowed_users[0].name
 		before = self._approver_rows()
-		moved = lambda name, **extra: frappe.as_json({**frappe.get_doc("Agent User", name).as_dict(), **extra})
+		def moved(name, **extra):
+			return frappe.as_json({**frappe.get_doc("Agent User", name).as_dict(), **extra})
+
 		self._refused(lambda: client.save(moved(child, parenttype="Agent", parentfield="allowed_users", parent=agent.name)))
 		self._refused(lambda: client.save(moved(agent_row, parenttype=APPROVAL, parentfield="approver_users", parent=self.name)))
 		# saving another parent that names the approval's row would take it over without any child hook
