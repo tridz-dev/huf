@@ -43,6 +43,13 @@ _ROUTING = {
 }
 _TEST_MODES = ("skip", "run")
 
+#: Built-in types the app-scoped (embed) palette may offer (docs/flow/BUILDER_EMBED.md section 3). Generic write paths
+#: (``code.run``, ``tool.call``, ``doc.create``, ``doc.update``) stay out; a new built-in is excluded until added here.
+EMBED_BUILTIN_TYPES = (
+	"trigger.unset", "trigger.schedule", "trigger.doc-event", "condition", "router.decision", "transform", "foreach",
+	"wait", "stop", "output", "human.approval", "member.set", "send.message", "knowledge.search",
+)
+
 
 @dataclass
 class NodeCallContext:
@@ -83,6 +90,12 @@ def builtin_types() -> frozenset[str]:
 	from huf.ai.graph.validator import PROCEDURE_NODE_TYPES, FLOW_ONLY_NODE_TYPES
 
 	return PROCEDURE_NODE_TYPES | FLOW_ONLY_NODE_TYPES
+
+
+def embed_builtin_types() -> list[str]:
+	"""The allow-listed built-ins that exist on this version."""
+	existing = builtin_types()
+	return [t for t in EMBED_BUILTIN_TYPES if t in existing]
 
 
 def _entries(value) -> list[dict]:

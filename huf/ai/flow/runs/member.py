@@ -15,11 +15,17 @@ from typing import Any
 import frappe
 from frappe.utils import add_to_date, now_datetime
 
+from huf.ai.transaction import commit_if_background
+
 DOCTYPE = "Flow Member State"
 MAX_KEY_CHARS = 140
 MAX_VARS_BYTES = 64 * 1024
 MAX_HISTORY = 100
 DEFAULT_RETENTION_DAYS = 365
+# ``active_flow_run`` of a member whose entry was granted but whose run is not recorded yet. It expires, so a run
+# that failed to be created does not keep the member out.
+ENTRY_CLAIM = "entry-claimed"
+ENTRY_CLAIM_SECONDS = 60
 
 
 class FlowMemberError(ValueError):
@@ -72,17 +78,61 @@ def get_member(flow: str, key: str) -> dict | None:
 	return row
 
 
-def upsert_member(flow: str, key: str, run: str | None = None) -> str:
-	"""Create the member on first sight, then count this run. Returns the row name."""
+def lock_member(flow: str, key: str) -> str:
+	"""Insert-or-skip: create the member if missing and hold its row lock until the transaction ends. Returns the row name.
+
+	One upsert statement, not insert-then-``for update``: a failed insert keeps a shared lock, and many callers
+	upgrading it at once deadlock.
+	"""
 	name = member_name(flow, key)
 	now = now_datetime()
-	if not frappe.db.exists(DOCTYPE, name):
-		try:
-			frappe.get_doc(
-				{"doctype": DOCTYPE, "flow": flow, "member_key": key, "status": "Active", "entered_at": now}
-			).insert(ignore_permissions=True)
-		except frappe.DuplicateEntryError:
-			pass  # another run created it at the same moment
+	user = frappe.session.user
+	insert = (
+		f"insert into `tab{DOCTYPE}` (name, creation, modified, owner, modified_by, flow, member_key, status, entered_at)"  # noqa: S608 - constant table
+		" values (%s, %s, %s, %s, %s, %s, %s, 'Active', %s)"
+	)
+	frappe.db.multisql(
+		{
+			"mariadb": f"{insert} on duplicate key update name = name",
+			"postgres": f"{insert} on conflict (name) do update set name = excluded.name",
+		},
+		(name, now, now, user, user, flow, key, now),
+	)
+	return name
+
+
+def claim_entry(flow: str, key: str, once: bool = False) -> bool:
+	"""Atomically grant one entry. ``once``: only to a member that never had a run; otherwise only to a member with
+	no run in progress. False when the entry is taken, also while another caller's run is still being created.
+
+	In a background job this is its own short transaction, so the claim is visible to others before the run exists.
+	The commit before the lock matters: MariaDB refuses to lock a row that changed after the transaction's first read.
+	"""
+	commit_if_background()
+	name = lock_member(flow, key)
+	row = frappe.db.get_value(
+		DOCTYPE, name, ["active_flow_run", "last_event_at", "run_count"], as_dict=True, for_update=True
+	)
+	now = now_datetime()
+	claimed = (
+		row.active_flow_run == ENTRY_CLAIM
+		and row.last_event_at
+		and row.last_event_at > add_to_date(now, seconds=-ENTRY_CLAIM_SECONDS)
+	)
+	taken = bool(claimed) or (bool(row.run_count) if once else has_active_run(flow, key))
+	if not taken:
+		frappe.db.set_value(
+			DOCTYPE, name, {"active_flow_run": ENTRY_CLAIM, "last_event_at": now}, update_modified=False
+		)
+	commit_if_background()
+	return not taken
+
+
+def upsert_member(flow: str, key: str, run: str | None = None) -> str:
+	"""Create the member on first sight, then count this run. Returns the row name."""
+	commit_if_background()  # the lock must come before any read of this transaction, see claim_entry
+	name = lock_member(flow, key)
+	now = now_datetime()
 	frappe.db.sql(
 		f"update `tab{DOCTYPE}` set run_count = run_count + 1, last_event_at = %s, status = 'Active',"
 		" completed_at = null, active_flow_run = %s where name = %s",
