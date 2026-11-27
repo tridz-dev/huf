@@ -5,8 +5,20 @@ from frappe.model.document import Document
 class AgentFlowRun(Document):
 	def before_insert(self):
 		from huf.ai.flow.app_scope.ownership import owner_app_of
+		from huf.ai.flow.runs.write_guard import require_server_write
 
+		require_server_write(self)
 		self.owner_app = owner_app_of(self.flow_definition)
+
+	def validate(self):
+		from huf.ai.flow.runs.write_guard import require_server_write
+
+		require_server_write(self)
+
+	def before_rename(self, old, new, merge=False):
+		from huf.ai.flow.runs.write_guard import refuse
+
+		refuse(self)
 
 
 def on_doctype_update():

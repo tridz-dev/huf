@@ -14,6 +14,16 @@ class FlowMemberState(Document):
 
 		self.name = member_name(self.flow, self.member_key)
 
+	def validate(self):
+		from huf.ai.flow.runs.write_guard import require_server_write
+
+		require_server_write(self)
+
+	def before_rename(self, old, new, merge=False):
+		from huf.ai.flow.runs.write_guard import refuse
+
+		refuse(self)
+
 
 def on_doctype_update():
 	"""Composite indexes. ``member_key`` alone is indexed through ``search_index`` on the field, because schema
