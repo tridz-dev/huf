@@ -370,7 +370,9 @@ class TestRunning(CodeFlowBase):
 		self.assertIn("more memory", run.last_error)
 
 	def test_output_over_the_cap_is_truncated(self):
-		run = self._run(self._save(_code_graph("for i in range(60000):\n\tprint('0123456789abcdef')")))
+		graph = _code_graph("for i in range(60000):\n\tprint('0123456789abcdef')")
+		graph["nodes"][-1]["config"]["value"] = "done"  # the capped stdout is over the output step's own limit
+		run = self._run(self._save(graph))
 		self.assertEqual(run.status, "Success", run.last_error)
 		out = self._outputs(run)["code"]
 		self.assertTrue(out["truncated"])

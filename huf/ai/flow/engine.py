@@ -1270,6 +1270,11 @@ def _with_reason_code(outcome: Outcome) -> Outcome:
 	return outcome
 
 
+def _loop_node_types() -> tuple:
+	"""Every step type the run loop can execute: engine built-ins, ``trigger.app`` and app-registered types."""
+	return (*_NODE_TYPES, node_registry.APP_TRIGGER_TYPE, *node_registry.registered_types())
+
+
 def _execute_loop(flow_run, nodes_map: dict, edges_list: list, settings: dict):
 	"""Drive a Flow run to completion, a pause, or a failure.
 
@@ -1285,7 +1290,7 @@ def _execute_loop(flow_run, nodes_map: dict, edges_list: list, settings: dict):
 	failed_node_ids: list = []
 	router = _build_router(flow_run, settings, edges_list, state, unhandled_failures, failed_node_ids)
 	handler = _make_node_handler(flow_run, settings)
-	handlers = {node_type: handler for node_type in (*_NODE_TYPES, *node_registry.registered_types())}
+	handlers = {node_type: handler for node_type in _loop_node_types()}
 
 	policy = ExecutionPolicy(
 		max_hops=getattr(flow_run, "max_hops", None) or DEFAULT_MAX_HOPS,
