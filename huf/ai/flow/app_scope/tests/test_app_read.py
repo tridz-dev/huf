@@ -62,7 +62,9 @@ def _user(email, *roles):
 	user.add_roles(*roles)
 
 
-class TestAppRead(IntegrationTestCase):
+class AppReadFixture(IntegrationTestCase):
+	"""Two app-owned flows with one run and one member each, and the app's users. No tests of its own."""
+
 	@classmethod
 	def setUpClass(cls):
 		super().setUpClass()
@@ -122,6 +124,23 @@ class TestAppRead(IntegrationTestCase):
 		patcher.start()
 		self.addCleanup(patcher.stop)
 
+	def _restrict(self, allow, value):
+		doc = frappe.get_doc(
+			{
+				"doctype": "User Permission",
+				"user": USER,
+				"allow": allow,
+				"for_value": value,
+				"apply_to_all_doctypes": 1,
+			}
+		).insert(ignore_permissions=True)
+		self.addCleanup(frappe.clear_cache, user=USER)
+		self.addCleanup(doc.delete, ignore_permissions=True)
+		self.addCleanup(frappe.set_user, "Administrator")
+		frappe.clear_cache(user=USER)
+
+
+class TestAppRead(AppReadFixture):
 	# --- raw documents ------------------------------------------------------------------------------------
 
 	def test_app_roles_do_not_read_raw_runs_or_states(self):
@@ -153,21 +172,6 @@ class TestAppRead(IntegrationTestCase):
 		self.assertNotIn(EMAIL, text)
 
 	# --- User Permissions ---------------------------------------------------------------------------------
-
-	def _restrict(self, allow, value):
-		doc = frappe.get_doc(
-			{
-				"doctype": "User Permission",
-				"user": USER,
-				"allow": allow,
-				"for_value": value,
-				"apply_to_all_doctypes": 1,
-			}
-		).insert(ignore_permissions=True)
-		self.addCleanup(frappe.clear_cache, user=USER)
-		self.addCleanup(doc.delete, ignore_permissions=True)
-		self.addCleanup(frappe.set_user, "Administrator")
-		frappe.clear_cache(user=USER)
 
 	def _assert_run_refused(self, run):
 		with self.assertRaises(frappe.PermissionError):
