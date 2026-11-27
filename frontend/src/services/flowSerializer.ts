@@ -22,7 +22,7 @@ import type {
 } from '@/types/flow.types';
 import type { BackendFlowGraph, BackendNode, BackendNodeType } from './flowApi';
 import { layoutWhenUnplaced } from '../lib/flow/flowLayout';
-import { NODE_TYPE_TO_TRIGGER, REQUIRED_CONFIG_KEYS, TRIGGER_CONFIG_KEYS, TRIGGER_TO_NODE_TYPE, gatewayConfigOut, getDefaultIcon, getDefaultLabel } from './flow/serializerTables';
+import { NODE_TYPE_TO_TRIGGER, REQUIRED_CONFIG_KEYS, TRIGGER_CONFIG_KEYS, TRIGGER_TO_NODE_TYPE, gatewayConfigOut, getDefaultIcon, storedNodeTitle } from './flow/serializerTables';
 import { endOutcomeConfig } from './flow/endOutcome'; import { defaultContract, deriveContract, placeholderFingerprint } from './flow/flowContract';
 
 export { defaultContract };
@@ -397,7 +397,7 @@ function buildNodeData(node: BackendNode): FlowNodeData {
     const frontendType = mapBackendNodeTypeToFrontend(node.type);
 
     const base: FlowNodeData = {
-        label: node._label || getDefaultLabel(node.type),
+        label: storedNodeTitle(node.type, node._label, node.config),
         nodeType: frontendType as FlowNodeData['nodeType'],
         icon: node._icon || getDefaultIcon(node.type),
         configured: isBackendNodeConfigured(node),

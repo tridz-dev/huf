@@ -93,6 +93,10 @@ export function triggerSubtitle(cfg: TriggerConfig | undefined, gateways?: reado
       if (dt && ev) return `When a ${dt} is ${ev}`;
       return dt ? `When a ${dt} changes` : 'Starts when a record changes';
     }
+    case 'app': {
+      const app = typed((cfg as { app?: unknown }).app);
+      return app ? `Started by ${app}` : 'Started by an app';
+    }
     default:
       return 'Choose what starts this flow';
   }

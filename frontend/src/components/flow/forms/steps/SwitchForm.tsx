@@ -14,6 +14,7 @@ import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
 import { parseCondition } from '@/lib/flow-condition/parse';
 import { buildBranchOptionLabels, findUpstreamNodeIds } from '@/lib/flow/flowBranchTargets';
 import { edgeRoute, makeFlowEdge, makeFlowEdgeId } from '../../../../services/flowSerializer';
+import { AI_CHOICE_TITLE } from '../../../../services/flow/serializerTables';
 import type { FlowEdge } from '../../../../types/flow.types';
 
 /** Longest rule name shown as the branch label on the canvas. */
@@ -31,7 +32,7 @@ function freeOptionIndex(edges: FlowEdge[], source: string, target: string): num
  * takes its path, otherwise the "Otherwise go to" path. Rules and paths are the step's option and default edges.
  */
 export function SwitchForm({ nodeId, cfg, patch, Err, title }: ActionFormProps) {
-  const { activeFlow, updateEdges } = useFlowContext();
+  const { activeFlow, updateEdges, updateNodeData } = useFlowContext();
   const { canManage } = useFlowPermissions();
   const edges = activeFlow?.edges ?? [];
   const nodes = activeFlow?.nodes ?? [];
@@ -41,6 +42,12 @@ export function SwitchForm({ nodeId, cfg, patch, Err, title }: ActionFormProps) 
     const next: Record<string, unknown> = { ...decision, ...change };
     for (const k of Object.keys(change)) if (change[k] === undefined) delete next[k];
     patch({ decision: next });
+  };
+  // A step still named after its mode follows the mode; a name the user chose is kept.
+  const setAiMode = (on: boolean) => {
+    patch({ decision: on ? { ...(decision ?? {}) } : undefined });
+    const [from, to] = on ? [title, AI_CHOICE_TITLE] : [AI_CHOICE_TITLE, title];
+    updateNodeData(nodeId, (data) => (!data.label || data.label === from ? { ...data, label: to } : data));
   };
   const confidence = typeof decision?.minimum_confidence === 'number' ? decision.minimum_confidence : undefined;
 
@@ -90,11 +97,11 @@ export function SwitchForm({ nodeId, cfg, patch, Err, title }: ActionFormProps) 
   };
 
   return (
-    <Section title={title} hint={decision ? 'The AI picks one of the paths below. When it is unsure, the flow takes the unsure path.' : 'Checks each rule from the top. The first one that matches takes its path.'}>
+    <Section title={decision ? AI_CHOICE_TITLE : title} hint={decision ? 'The AI picks one of the paths below. When it is unsure, the flow takes the unsure path.' : 'Checks each rule from the top. The first one that matches takes its path.'}>
       <div className="space-y-2 rounded-md border border-border p-2" data-testid="flow-switch-decision">
         <div className="flex items-center gap-2">
           <Checkbox id="flow-switch-ai" data-testid="flow-switch-ai" disabled={!canManage} checked={decision !== null}
-            onCheckedChange={(on) => patch({ decision: on === true ? { ...(decision ?? {}) } : undefined })} />
+            onCheckedChange={(on) => setAiMode(on === true)} />
           <Label htmlFor="flow-switch-ai" size="sm">Let AI choose the path</Label>
         </div>
         {decision ? (

@@ -651,3 +651,27 @@ body:has([role="dialog"][data-state="open"].inset-y-0.right-0) [data-sonner-toas
     --width: 100%;
   }
 }
+
+/* Flow canvas chrome (zoom buttons, attribution) follows the theme tokens, so it is not a white box in dark themes. */
+.react-flow .react-flow__controls-button {
+  background: var(--card);
+  color: var(--card-foreground);
+  fill: var(--card-foreground);
+  border-bottom-color: var(--border);
+}
+.react-flow .react-flow__controls-button svg {
+  fill: currentColor;
+}
+.react-flow .react-flow__controls-button:hover {
+  background: var(--muted);
+}
+.react-flow .react-flow__controls-button:disabled {
+  opacity: 0.4;
+}
+.react-flow .react-flow__attribution {
+  background: transparent;
+  color: var(--muted-foreground);
+}
+.react-flow .react-flow__attribution a {
+  color: var(--muted-foreground);
+}
