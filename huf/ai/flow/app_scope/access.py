@@ -179,32 +179,20 @@ def flow_scope_condition(user: str | None = None, table: str = "tabFlow Definiti
 	return "(" + " or ".join(parts) + ")" if parts else "1=0"
 
 
+def _scoped_by_flow(column: str, user) -> str | None:
+	cond = flow_scope_condition(user)
+	if cond is None or cond == "1=0":
+		return cond
+	sub = f"select `tabFlow Definition`.`name` from `tabFlow Definition` where {cond}"  # noqa: S608 -- escaped
+	return f"ifnull({column}, '') in ({sub})"
+
+
 def get_run_permission_query_conditions(user=None):
-	cond = flow_scope_condition(user, table="tabFlow Definition")
-	if cond is None:
-		return None
-	return (
-		(
-			"ifnull(`tabAgent Flow Run`.`flow_definition`, '') in "
-			f"(select `tabFlow Definition`.`name` from `tabFlow Definition` where {cond})"
-		)
-		if cond != "1=0"
-		else "1=0"
-	)
+	return _scoped_by_flow("`tabAgent Flow Run`.`flow_definition`", user)
 
 
 def get_member_state_permission_query_conditions(user=None):
-	cond = flow_scope_condition(user, table="tabFlow Definition")
-	if cond is None:
-		return None
-	return (
-		(
-			"`tabFlow Member State`.`flow` in "
-			f"(select `tabFlow Definition`.`name` from `tabFlow Definition` where {cond})"
-		)
-		if cond != "1=0"
-		else "1=0"
-	)
+	return _scoped_by_flow("`tabFlow Member State`.`flow`", user)
 
 
 # --- server-only writes on app flows ------------------------------------------------------------------------
