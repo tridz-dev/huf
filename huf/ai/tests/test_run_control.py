@@ -987,11 +987,11 @@ class TestPartialReplySaveIsolated(unittest.TestCase):
 
 		cm = MagicMock()
 		cm.add_message.side_effect = RuntimeError("db gone")
-		self.assertFalse(ai._save_partial_reply(cm, MagicMock(), "hi", "p", "m", "agent", "R1"))
+		self.assertFalse(ai._save_partial_reply(cm, SimpleNamespace(name="C1"), "hi", "p", "m", "agent", "R1"))
 		cm.add_message.assert_called_once()
 
 	def test_add_message_ok(self):
 		import huf.ai.agent.integration as ai
 
 		cm = MagicMock()
-		self.assertTrue(ai._save_partial_reply(cm, MagicMock(), "hi", "p", "m", "agent", "R1"))
+		self.assertTrue(ai._save_partial_reply(cm, SimpleNamespace(name="C1"), "hi", "p", "m", "agent", "R1"))
