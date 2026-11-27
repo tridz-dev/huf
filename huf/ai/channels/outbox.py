@@ -218,7 +218,12 @@ def withdraw(run_ids: list[str], code: str) -> None:
 	for name in names:
 		status = frappe.db.get_value(DOCTYPE, name, "status", for_update=True)
 		if status in DELIVERABLE:
-			values = {"status": "Blocked", "next_attempt_at": None, "error_class": BLOCKED, "error_code": code}
+			values = {
+				"status": "Blocked",
+				"next_attempt_at": None,
+				"error_class": BLOCKED,
+				"error_code": code,
+			}
 			frappe.db.set_value(DOCTYPE, name, values)
 		elif status == "Sending":
 			# ``modified`` stays: it dates the claim, which closes a dead worker's row
