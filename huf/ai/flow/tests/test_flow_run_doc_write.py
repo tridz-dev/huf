@@ -17,6 +17,7 @@ from frappe.tests import IntegrationTestCase
 
 from huf.ai.flow import engine
 from huf.ai.flow.runs import actions
+from huf.ai.flow.tests.test_flow_draft_validation import _end, _graph, _trigger
 from huf.testing.factories import make_user
 
 RUN = "Agent Flow Run"
@@ -27,7 +28,7 @@ FORGED = {
 	"waiting": json.dumps({"type": "approval"}),
 	"status": "Success",
 	"member_key": "forged-member",
-	"run_mode": "Live",
+	"run_mode": "Test",
 }
 
 
@@ -36,7 +37,7 @@ class TestRunDocWrite(IntegrationTestCase):
 		frappe.set_user("Administrator")
 		self._docs = []
 		self.flow = f"_test-docwrite-{frappe.generate_hash(length=6)}"
-		defn = {"nodes": [{"id": "n1", "type": "trigger.manual", "config": {}}], "edges": []}
+		defn = _graph([_trigger("end"), _end()])
 		flow = frappe.get_doc({"doctype": "Flow Definition", "flow_id": self.flow, "flow_name": "Doc write", "status": "Draft", "definition_json": json.dumps(defn)})
 		flow.flags.ignore_validate = True
 		flow.insert(ignore_permissions=True)
@@ -117,7 +118,7 @@ class TestRunDocWrite(IntegrationTestCase):
 
 	def test_engine_creates_a_run_for_a_user_without_ignore_permissions(self):
 		frappe.set_user(self.users["Huf User"])
-		run = engine.create_flow_run(flow_id=self.flow, payload={}, trigger_type="Manual", mode="test")
+		run = engine.create_flow_run(flow_id=self.flow, payload={}, trigger_type="Webhook", mode="test")
 		self.assertTrue(frappe.db.exists(RUN, run.name))
 		# the engine's allowance covers its own insert only, not later saves of the returned document
 		run.flags.ignore_permissions = False
