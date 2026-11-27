@@ -5,6 +5,8 @@ from __future__ import annotations
 from typing import Any
 
 import frappe
+import requests
+from urllib3.exceptions import ConnectTimeoutError, NewConnectionError
 from huf.ai.gateway_adapters import whatsapp_bridge as bridge
 from huf.ai.gateway_adapters import whatsapp_errors as we
 
@@ -46,6 +48,50 @@ class WhatsAppPartsError(Exception):
 		self.cause = cause
 		self.sent_ids = list(sent_ids)
 		self.remaining = list(remaining)
+
+
+# Graph "unknown error" / "service temporarily unavailable": the message may have been accepted.
+_OUTCOME_UNKNOWN_CODES = frozenset({1, 2})
+_RATE_LIMIT_KINDS = frozenset({"rate_limited", "pair_rate_limited"})
+
+
+def _never_connected(exc: BaseException) -> bool:
+	"""True when the cause chain shows the connection was never opened, so no request was written."""
+	seen: set[int] = set()
+	while exc is not None and id(exc) not in seen:
+		seen.add(id(exc))
+		if isinstance(exc, requests.ConnectTimeout):
+			return True
+		if isinstance(exc, requests.ConnectionError) and exc.args:
+			reason = getattr(exc.args[0], "reason", None)
+			if isinstance(reason, (NewConnectionError, ConnectTimeoutError)):
+				return True
+		exc = exc.__cause__ or exc.__context__
+	return False
+
+
+def is_provably_unsent(exc: BaseException) -> bool:
+	"""True only when Meta certainly did not accept the message, so sending it again cannot double it.
+
+	That is: the connection was never opened, Meta answered with an error code or a rate limit, or Huf
+	refused before posting. A read timeout, a dropped connection, an unreadable answer and anything
+	unrecognised are unknown outcomes: False.
+	"""
+	if isinstance(exc, WhatsAppPartsError):
+		return not exc.sent_ids and is_provably_unsent(exc.cause)
+	if isinstance(exc, WhatsAppWindowClosed) or _never_connected(exc):
+		return True
+	if isinstance(exc, bridge.BridgeError):
+		payload = exc.payload if isinstance(exc.payload, dict) else {}
+		if payload.get("error") not in (None, "send_failed"):
+			return True  # a policy or validation refusal
+	elif not isinstance(exc, (WhatsAppSendError, requests.HTTPError)):
+		return False
+	classification = classify_send_exception(exc)
+	code = classification.get("code")
+	if code is not None:
+		return code not in _OUTCOME_UNKNOWN_CODES
+	return classification.get("kind") in _RATE_LIMIT_KINDS
 
 
 def classify_send_exception(exc: BaseException) -> dict[str, Any]:

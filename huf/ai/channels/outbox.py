@@ -5,39 +5,51 @@
 
 Retry classes (:func:`classify`):
 
-- ``transient``: the channel may accept it later (rate limit, server error, timeout). Retried with
-  exponential backoff up to :data:`MAX_ATTEMPTS`, then final as ``permanent`` with ``retry_exhausted``.
+- ``transient``: the message certainly did not reach the channel (connect error, rate limit, error
+  answer) and it may accept it later. Retried with exponential backoff up to :data:`MAX_ATTEMPTS`, then
+  final as ``permanent`` with ``retry_exhausted``.
+- ``ambiguous``: the channel may have accepted it (read timeout, dropped connection, unreadable answer,
+  a row left in Sending by a dead worker). Final, never sent again.
 - ``permanent``: retrying will not help (bad recipient, template rejected, no authority). Final, no retry.
-- ``blocked``: a guard or binder block (G2). Never enqueued; a block found at delivery (the binder runs
-  again there, CONTRACTS.md section 7) is final with the cap slot already spent.
+- ``blocked``: a guard or binder block (G2). Never enqueued; a block found at delivery is final with the
+  cap slot already spent. Delivery runs the binder (CONTRACTS.md section 7), the Gateway switch, the live
+  gate and the guard chain again, without a second cap claim. A closed send window parks the row.
 
 Delivery error shape (:func:`delivery_error`): ``{"class", "code", "kind"}``. No message text, phone or
 value (G4). A row stores token names and the step's references (``recipient_ref``, which may be
 ``"$member"``, and ``text_ref``); the
 recipient, text and token values are resolved again from the run at delivery and handed only to the
-transport. The step key (H-W2-13) is the unique row key and the transport idempotency token, so a
-re-delivered job never makes a second transport effect for a row already sent (G5).
+transport. The step key (H-W2-13) is the unique row key, so a re-delivered job finds the row and never
+posts it twice (G5). WhatsApp does not deduplicate; template sends carry the key as the opaque reference
+echoed on status webhooks, for reconciliation only.
 """
 
 from __future__ import annotations
 
+import copy
 import json
 from collections.abc import Callable
+from datetime import datetime, timezone
 from typing import Any
 
 import frappe
-from frappe.utils import add_to_date, now_datetime
+from frappe.utils import add_to_date, convert_utc_to_system_timezone, get_datetime, now_datetime
 
-from huf.ai.channels import guard_steps, recipient_binder, token_binder
+from huf.ai.channels import guard, guard_steps, recipient_binder, token_binder
 
 DOCTYPE = "Channel Outbox"
-TRANSIENT, PERMANENT, BLOCKED = "transient", "permanent", "blocked"
+TRANSIENT, PERMANENT, BLOCKED, AMBIGUOUS = "transient", "permanent", "blocked", "ambiguous"
 MAX_ATTEMPTS = 5
 BACKOFF_BASE_S = 30
 BACKOFF_MAX_S = 3600
 RETRY_EXHAUSTED = "retry_exhausted"
 NOT_ACCEPTED = "not_accepted"
-DELIVERABLE = ("Queued", "Retrying", "Sending")  # Sending = a worker died mid-delivery
+DELIVERABLE = ("Queued", "Retrying")
+STALE_SENDING_MINUTES = 10
+STALE_SENDING = "stale_sending"
+GATEWAY_DISABLED = "gateway_disabled"
+NOT_LIVE = "not_live"
+WINDOW_MAX_PARK_DAYS = 7  # a row has no deferral counter, so its age bounds the parking
 
 
 class LiteralRecipient(ValueError):
@@ -45,15 +57,15 @@ class LiteralRecipient(ValueError):
 
 
 def classify(error: Any) -> str:
-	"""The retry class of ``error``: a reason code string (guard/binder block), a classification dict, or an exception."""
-	if isinstance(error, (str, token_binder.TokenUnbound, recipient_binder.RecipientUnbound)):
-		return BLOCKED
-	classification = error if isinstance(error, dict) else _classify_exception(error)
-	return TRANSIENT if classification.get("retryable") else PERMANENT
+	"""The retry class of ``error``: a reason code string (guard/binder block), a classification dict, or a send exception."""
+	return delivery_error(error)["class"]
 
 
-def delivery_error(error: Any) -> dict:
-	"""``{"class", "code", "kind"}`` for ``error``; codes and kinds only, never message text (G4)."""
+def delivery_error(error: Any, *, posting: bool = True) -> dict:
+	"""``{"class", "code", "kind"}`` for ``error``; codes and kinds only, never message text (G4).
+
+	``posting`` False: the error was raised before the transport ran, so nothing can have been sent.
+	"""
 	if isinstance(error, token_binder.TokenUnbound):
 		return {"class": BLOCKED, "code": token_binder.TOKEN_UNBOUND, "kind": "guard"}
 	if isinstance(error, recipient_binder.RecipientUnbound):
@@ -62,8 +74,12 @@ def delivery_error(error: Any) -> dict:
 		return {"class": BLOCKED, "code": error, "kind": "guard"}
 	classification = error if isinstance(error, dict) else _classify_exception(error)
 	code = classification.get("code")
+	retryable = bool(classification.get("retryable"))
+	error_class = TRANSIENT if retryable else PERMANENT
+	if posting and isinstance(error, BaseException) and _outcome_unknown(error, retryable):
+		error_class = AMBIGUOUS
 	return {
-		"class": TRANSIENT if classification.get("retryable") else PERMANENT,
+		"class": error_class,
 		"code": str(code) if code is not None else str(classification.get("kind") or "unknown"),
 		"kind": str(classification.get("kind") or "unknown"),
 	}
@@ -133,12 +149,16 @@ def enqueue(request: dict, *, deliver_now: bool = True) -> str:
 def deliver(name: str, *, transport: Callable | None = None, resolver: Callable | None = None) -> str | None:
 	"""Deliver one row once; its new status, or None when there was nothing to do.
 
+	The guard is checked again here: the row may have been queued long before.
+
 	``transport(row, recipient, text, values)`` answers ``{"message_id": ...}`` or raises; ``resolver(row)``
 	answers ``(recipient, text)``. Both default to the WhatsApp transport and the run's context.
 	"""
 	row = _claim(name)
 	if row is None:
 		return None
+	if row.status != "Sending":  # closed by the claim
+		return row.status
 	token_names = json.loads(row.token_names or "[]")
 	values: dict = {}
 	if token_names:
@@ -155,7 +175,13 @@ def deliver(name: str, *, transport: Callable | None = None, resolver: Callable 
 		return _finish(row, "Blocked", delivery_error(exc))
 	except Exception as exc:  # noqa: BLE001 - classified like a transport error
 		values = {}
-		return _failed_attempt(row, delivery_error(exc))
+		return _failed_attempt(row, delivery_error(exc, posting=False))
+	verdict = _blocked_now(row, recipient)
+	if isinstance(verdict, datetime):
+		return _park(row, verdict)
+	if verdict:
+		values = {}
+		return _finish(row, "Blocked", delivery_error(verdict))
 	try:
 		answer = (transport or whatsapp_transport)(row, recipient, text, values)
 	except Exception as exc:  # noqa: BLE001 - every transport error is classified
@@ -169,8 +195,8 @@ def deliver(name: str, *, transport: Callable | None = None, resolver: Callable 
 
 
 def retry_due(limit: int = 500) -> int:
-	"""Enqueue delivery of rows whose backoff has passed and of rows left in Sending by a dead worker. Scheduler job."""
-	stale = add_to_date(now_datetime(), minutes=-10)
+	"""Enqueue rows whose backoff has passed, and rows left in Sending so :func:`deliver` closes them. Scheduler job."""
+	stale = add_to_date(now_datetime(), minutes=-STALE_SENDING_MINUTES)
 	names = frappe.get_all(
 		DOCTYPE,
 		filters=[["status", "=", "Retrying"], ["next_attempt_at", "<=", now_datetime()]],
@@ -252,14 +278,91 @@ def whatsapp_transport(row, recipient, text, values) -> dict:
 			run_id=row.run_id,
 			force_graph=True,
 			redact_params=True,
+			opaque_ref=row.step_key,
 		)
 	return bridge.send_text(account, phone, str(text), gateway_name=row.gateway)
 
 
+def _blocked_now(row, recipient) -> str | datetime | None:
+	"""None to send, a block code, or the moment the send window opens. Never raises: an error blocks."""
+	try:
+		if not frappe.db.get_value("Gateway", row.gateway, "is_enabled"):
+			return GATEWAY_DISABLED
+		from huf.ai.flow.testrun import gate
+
+		flow_run = frappe.get_doc("Agent Flow Run", row.run_id)
+		if not gate.is_live(flow_run):
+			return NOT_LIVE
+		request = {
+			"member_key": row.member_key,
+			"gateway": row.gateway,
+			"channel": row.channel,
+			"category": row.category,
+			"recipient": recipient,
+			"template": row.template or None,
+			"token_names": json.loads(row.token_names or "[]"),
+			**_refs(row, flow_run),
+			"step_key": row.step_key,
+			"live": True,
+		}
+		return _recheck(request, json.loads(row.header) if row.header else None)
+	except Exception as exc:  # noqa: BLE001 - fail closed
+		frappe.logger("huf.outbox").warning("delivery guard: %s", type(exc).__name__)
+		return guard.HOOK_ERROR
+
+
+def _recheck(request: dict, header: dict | None) -> str | datetime | None:
+	"""``guard.evaluate`` without its last step: the cap slot was claimed at enqueue.
+
+	``evaluate`` has no way to leave the cap out (a claim would count twice, a look would see this send's own
+	slot), so this walks the same steps in the same order with the same runner.
+	"""
+	seconds = guard._timeout(None)
+	hooks = guard._hook_paths()
+	resolvers = guard_steps.window_resolvers()
+	for name, step in guard.BUILTIN_STEPS:
+		reason = guard._run_step(name, step, copy.deepcopy({**request, "header": header}), seconds)
+		if reason:
+			return reason
+	if resolvers:
+		reason, defer_until = guard._window_step(copy.deepcopy(request), resolvers, seconds)
+		if reason or defer_until:
+			return reason or defer_until
+	for path in hooks:
+		reason = guard._run_step(path, frappe.get_attr(path), copy.deepcopy(request), seconds)
+		if reason:
+			return reason
+	return None
+
+
+def _park(row, defer_until: datetime) -> str:
+	"""Outside the send window: try again when it opens. Nothing was posted, so no attempt is spent."""
+	if get_datetime(row.creation) < add_to_date(now_datetime(), days=-WINDOW_MAX_PARK_DAYS):
+		return _finish(row, "Blocked", delivery_error("window_defer_exhausted"))
+	utc = defer_until.astimezone(timezone.utc).replace(tzinfo=None)
+	row.db_set(
+		{
+			"status": "Retrying",
+			"attempts": row.attempts - 1,
+			"next_attempt_at": convert_utc_to_system_timezone(utc).replace(tzinfo=None),
+		},
+		commit=True,
+	)
+	return "Retrying"
+
+
 def _claim(name: str):
-	"""Lock the row and mark it Sending, committing so a crash leaves it re-deliverable; None when not due."""
+	"""Lock the row and mark it Sending, committing before anything is posted; None when not due.
+
+	A row left in Sending by a dead worker may already have been posted: it is closed as ambiguous.
+	"""
 	frappe.db.sql("select name from `tabChannel Outbox` where name=%s for update", name)
 	row = frappe.get_doc(DOCTYPE, name)
+	if row.status == "Sending" and get_datetime(row.modified) < add_to_date(
+		now_datetime(), minutes=-STALE_SENDING_MINUTES
+	):
+		_finish(row, "Failed", {"class": AMBIGUOUS, "code": STALE_SENDING, "kind": "unknown"})
+		return row
 	if row.status not in DELIVERABLE:
 		return None
 	if row.status == "Retrying" and row.next_attempt_at and row.next_attempt_at > now_datetime():
@@ -317,6 +420,23 @@ def _refs(row, flow_run=None) -> dict:
 		"run_id": row.run_id,
 		"node_id": row.node_id,
 	}
+
+
+def _outcome_unknown(exc: BaseException, retryable: bool) -> bool:
+	"""Whether the channel may have accepted the message although the send raised ``exc``."""
+	import requests
+
+	from huf.ai.gateway_adapters import whatsapp_bridge as bridge
+	from huf.ai.gateway_adapters.whatsapp_parts.send_errors import is_provably_unsent
+
+	# a non-retryable local error is plainly permanent; a transport or unreadable-answer one is not
+	posted = retryable or isinstance(exc, (requests.RequestException, bridge.BridgeError))
+	if not posted:
+		return False
+	try:
+		return not is_provably_unsent(exc)
+	except Exception:  # noqa: BLE001 - unclassifiable is unknown
+		return True
 
 
 def _classify_exception(exc: BaseException) -> dict:
