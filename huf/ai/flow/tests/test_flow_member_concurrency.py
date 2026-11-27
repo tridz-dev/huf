@@ -61,7 +61,7 @@ class TestFlowMemberConcurrency(IntegrationTestCase):
 				frappe.db.commit()
 				started.append(run.name if run else None)
 			except Exception as exc:  # noqa: BLE001 - reported by the assertion below
-				errors.append(repr(exc) + frappe.get_traceback()[-1800:])
+				errors.append(repr(exc))
 			finally:
 				frappe.destroy()
 
@@ -120,9 +120,19 @@ class TestFlowMemberConcurrency(IntegrationTestCase):
 		self.assertEqual(member.get_member(self.flow_id, KEY).run_count, WORKERS)
 
 	def test_unused_claim_expires(self):
-		self.assertTrue(member.claim_active_entry(self.flow_id, KEY))
-		self.assertFalse(member.claim_active_entry(self.flow_id, KEY))
+		self.assertTrue(member.claim_entry(self.flow_id, KEY))
+		self.assertFalse(member.claim_entry(self.flow_id, KEY))
 		frappe.db.set_value(
 			"Flow Member State", member.member_name(self.flow_id, KEY), "last_event_at", "2000-01-01 00:00:00"
 		)
-		self.assertTrue(member.claim_active_entry(self.flow_id, KEY))
+		self.assertTrue(member.claim_entry(self.flow_id, KEY))
+
+	def test_unused_once_claim_expires(self):
+		self.assertTrue(member.claim_entry(self.flow_id, KEY, once=True))
+		self.assertFalse(member.claim_entry(self.flow_id, KEY, once=True))
+		frappe.db.set_value(
+			"Flow Member State", member.member_name(self.flow_id, KEY), "last_event_at", "2000-01-01 00:00:00"
+		)
+		self.assertTrue(member.claim_entry(self.flow_id, KEY, once=True))
+		member.upsert_member(self.flow_id, KEY, None)
+		self.assertFalse(member.claim_entry(self.flow_id, KEY, once=True))

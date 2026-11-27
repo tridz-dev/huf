@@ -15,6 +15,8 @@ from typing import Any
 import frappe
 from frappe.utils import add_to_date, now_datetime
 
+from huf.ai.transaction import commit_if_background
+
 DOCTYPE = "Flow Member State"
 MAX_KEY_CHARS = 140
 MAX_VARS_BYTES = 64 * 1024
@@ -76,21 +78,8 @@ def get_member(flow: str, key: str) -> dict | None:
 	return row
 
 
-def create_member(flow: str, key: str) -> bool:
-	"""Insert-or-skip: True when this call created the member, False when it already existed (also when another
-	transaction created it at the same moment; the insert waits for that transaction to finish)."""
-	try:
-		frappe.get_doc(
-			{"doctype": DOCTYPE, "flow": flow, "member_key": key, "status": "Active", "entered_at": now_datetime()}
-		).insert(ignore_permissions=True)
-	except frappe.DuplicateEntryError:
-		frappe.clear_last_message()
-		return False
-	return True
-
-
 def lock_member(flow: str, key: str) -> str:
-	"""Create the member if missing and hold its row lock until the transaction ends. Returns the row name.
+	"""Insert-or-skip: create the member if missing and hold its row lock until the transaction ends. Returns the row name.
 
 	One upsert statement, not insert-then-``for update``: a failed insert keeps a shared lock, and many callers
 	upgrading it at once deadlock.
@@ -112,34 +101,36 @@ def lock_member(flow: str, key: str) -> str:
 	return name
 
 
-def claim_active_entry(flow: str, key: str) -> bool:
-	"""Atomically grant the member's one active run. False when a run is in progress or being created.
+def claim_entry(flow: str, key: str, once: bool = False) -> bool:
+	"""Atomically grant one entry. ``once``: only to a member that never had a run; otherwise only to a member with
+	no run in progress. False when the entry is taken, also while another caller's run is still being created.
 
-	The row lock serialises concurrent triggers; the stored claim outlives a commit made before the run is
-	inserted. The member row and its run are read with locking reads, which see what others just committed.
+	In a background job this is its own short transaction, so the claim is visible to others before the run exists.
+	The commit before the lock matters: MariaDB refuses to lock a row that changed after the transaction's first read.
 	"""
+	commit_if_background()
 	name = lock_member(flow, key)
-	row = frappe.db.get_value(DOCTYPE, name, ["active_flow_run", "last_event_at"], as_dict=True, for_update=True)
-	now = now_datetime()
-	if row.active_flow_run == ENTRY_CLAIM:
-		if row.last_event_at and row.last_event_at > add_to_date(now, seconds=-ENTRY_CLAIM_SECONDS):
-			return False
-	elif row.active_flow_run:
-		from huf.ai.flow.engine import TERMINAL_STATUSES
-
-		status = frappe.db.get_value("Agent Flow Run", row.active_flow_run, "status", for_update=True)
-		if status and status not in TERMINAL_STATUSES:
-			return False
-	if has_active_run(flow, key):
-		return False
-	frappe.db.set_value(
-		DOCTYPE, name, {"active_flow_run": ENTRY_CLAIM, "last_event_at": now}, update_modified=False
+	row = frappe.db.get_value(
+		DOCTYPE, name, ["active_flow_run", "last_event_at", "run_count"], as_dict=True, for_update=True
 	)
-	return True
+	now = now_datetime()
+	claimed = (
+		row.active_flow_run == ENTRY_CLAIM
+		and row.last_event_at
+		and row.last_event_at > add_to_date(now, seconds=-ENTRY_CLAIM_SECONDS)
+	)
+	taken = bool(claimed) or (bool(row.run_count) if once else has_active_run(flow, key))
+	if not taken:
+		frappe.db.set_value(
+			DOCTYPE, name, {"active_flow_run": ENTRY_CLAIM, "last_event_at": now}, update_modified=False
+		)
+	commit_if_background()
+	return not taken
 
 
 def upsert_member(flow: str, key: str, run: str | None = None) -> str:
 	"""Create the member on first sight, then count this run. Returns the row name."""
+	commit_if_background()  # the lock must come before any read of this transaction, see claim_entry
 	name = lock_member(flow, key)
 	now = now_datetime()
 	frappe.db.sql(

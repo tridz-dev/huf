@@ -28,10 +28,10 @@ def entry_decision(flow_id: str, policy: str, member_key: str | None, payload: d
 	if not member_key or policy == "new_run_each_time":
 		return start
 	if policy == "once_per_member":
-		if member.get_member(flow_id, member_key) or not member.create_member(flow_id, member_key):
+		if not member.claim_entry(flow_id, member_key, once=True):
 			return _skip("already_entered", "This person has already been through this flow.")
 	elif policy == "one_active_per_member":
-		if not member.claim_active_entry(flow_id, member_key):
+		if not member.claim_entry(flow_id, member_key):
 			return _skip("run_in_progress", "This person already has a run in progress.")
 	elif policy == "resume_if_waiting":
 		run = member.find_waiting_reply_run(flow_id, member_key)
