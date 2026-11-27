@@ -51,6 +51,8 @@ _TEST_MODES = ("skip", "run")
 EMBED_BUILTIN_TYPES = (
 	"trigger.unset", "trigger.schedule", "trigger.doc-event", "trigger.app", "condition", "router.decision", "transform", "foreach",
 	"wait", "stop", "output", "human.approval", "member.set", "send.message", "knowledge.search", "split",
+	# Member-only in an app flow: see huf/ai/flow/app_scope/targets.py.
+	"handoff",
 )
 
 
