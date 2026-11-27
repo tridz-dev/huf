@@ -152,6 +152,14 @@ export const actionOptions: ActionOption[] = [
     keywords: ['member', 'contact', 'journey', 'remember'],
   },
   {
+    id: 'send-message',
+    name: 'Send message',
+    description: 'Send a WhatsApp message to the person this run is about.',
+    icon: 'Send',
+    category: 'data',
+    keywords: ['whatsapp', 'message', 'send', 'notify', 'template'],
+  },
+  {
     id: 'flow-call',
     name: 'Run another flow',
     description: 'Start a published flow, and optionally wait for it.',
@@ -261,6 +269,7 @@ export const ACTION_CARD_CONTRACT: Record<string, ActionCardContract> = {
   'doc-update': { configType: 'doc-update', backendType: 'doc.update' },
   'flow-call': { configType: 'flow-call', backendType: 'flow.call' },
   'member-set': { configType: 'member-set', backendType: 'member.set' },
+  'send-message': { configType: 'send-message', backendType: 'send.message' },
   'transform': { configType: 'transform', backendType: 'transform' },
   'state-get': { configType: 'state-get', backendType: 'state.get' },
   'state-set': { configType: 'state-set', backendType: 'state.set' },

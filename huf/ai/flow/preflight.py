@@ -36,6 +36,8 @@ SEVERITIES = (ERROR, WARNING, INFO)
 
 #: Step types that send a message to a person.
 SEND_NODE_TYPES = frozenset({"send.message"})
+#: Gateway providers a send step can send through.
+SEND_CHANNELS = frozenset({"whatsapp"})
 TEMPLATE_DOCTYPES = ("WhatsApp Templates", "Telegram Message Template")
 
 _CODE_RE = re.compile(r"^[A-Za-z0-9_.]{1,64}$")
@@ -80,15 +82,29 @@ def template_exists(name: str) -> bool:
 	)
 
 
+def gateway_channel(name: str) -> str:
+	"""Lowercase provider of the Gateway (``whatsapp``), or "" when it does not exist."""
+	return (frappe.db.get_value("Gateway", name.strip(), "provider") or "").strip().lower()
+
+
 def _send_checks(defn, flow_id: str | None) -> list[Finding]:
 	found: list[Finding] = []
 	sends = [n for n in _nodes(defn) if n.get("type") in SEND_NODE_TYPES]
 	for node in sends:
 		node_id, config = node.get("id"), _config(node)
 		category = config.get("category")
-		if _blank(config.get("gateway")) or _blank(config.get("recipient")) or category not in ("marketing", "service"):
+		if (
+			_blank(config.get("gateway"))
+			or _blank(config.get("recipient"))
+			or category not in ("marketing", "service")
+		):
 			# What the guard chain needs to judge the send: without it the send cannot be checked.
 			found.append(Finding("SEND_GUARD_CONFIG_MISSING", node_id))
+		elif (
+			isinstance(config.get("gateway"), str) and gateway_channel(config["gateway"]) not in SEND_CHANNELS
+		):
+			# Only WhatsApp has a send transport and guard chain; any other (or unknown) gateway cannot send.
+			found.append(Finding("SEND_GATEWAY_UNSUPPORTED", node_id))
 		template = config.get("template")
 		if _blank(template):
 			if _blank(config.get("text")):

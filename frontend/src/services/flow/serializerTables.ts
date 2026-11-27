@@ -60,6 +60,7 @@ export const REQUIRED_CONFIG_KEYS: Partial<Record<string, string[]>> = {
     'doc.update': ['doctype', 'name', 'values'],
     'flow.call': ['flow_id'],
     'member.set': ['vars'],
+    'send.message': ['gateway', 'category'],
     'code.run': ['code', 'profile'],
     'transform': ['op'],
 };
@@ -93,6 +94,7 @@ export function getDefaultLabel(backendType: string): string {
         'doc.update': 'Update document',
         'flow.call': 'Run another flow',
         'member.set': 'Remember for this person',
+        'send.message': 'Send message',
         'code.run': 'Execute code',
         'output': 'End',
     };
@@ -128,6 +130,7 @@ export function getDefaultIcon(backendType: string): string {
         'doc.update': 'FilePen',
         'flow.call': 'Workflow',
         'member.set': 'UserPen',
+        'send.message': 'Send',
         'code.run': 'Terminal',
         'output': 'CheckCircle2',
     };

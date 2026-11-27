@@ -18,6 +18,7 @@ import { peekIssueRegistry } from '../flow-gateway/registryStore';
 import { unreachableNodeIds } from '../flow/flowEdit';
 import { MAX_CODE_BYTES } from './codeFlow';
 import type { FlowEdge, FlowNode } from '../../types/flow.types';
+import { sendMessageIssues } from '@/lib/flow-send/sendMessage';
 
 type Cfg = Record<string, unknown>;
 
@@ -67,6 +68,7 @@ export function nodeKind(node: NodeLike): string {
     case 'doc-update': return 'doc.update';
     case 'flow-call': return 'flow.call';
     case 'member-set': return 'member.set';
+    case 'send-message': return 'send.message';
     case 'code-run': return 'code.run';
     default: return typeof t === 'string' ? t : 'unknown';
   }
@@ -276,6 +278,9 @@ export function validateNode(node: NodeLike, edges: EdgeLike[]): FlowIssue[] {
       break;
     case 'member.set':
       if (Object.keys(asObj(c.vars)).length === 0) add('vars', 'Add at least one value to remember.');
+      break;
+    case 'send.message':
+      for (const [field, message] of sendMessageIssues(c)) add(field, message);
       break;
     case 'flow.call':
       if (isBlank(c.flow_id)) add('flow_id', 'Choose a flow to run.');
