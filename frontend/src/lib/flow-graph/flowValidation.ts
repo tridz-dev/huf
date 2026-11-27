@@ -70,6 +70,7 @@ export function nodeKind(node: NodeLike): string {
     case 'member-set': return 'member.set';
     case 'send-message': return 'send.message';
     case 'code-run': return 'code.run';
+    case 'split': return 'split';
     default: return typeof t === 'string' ? t : 'unknown';
   }
 }
