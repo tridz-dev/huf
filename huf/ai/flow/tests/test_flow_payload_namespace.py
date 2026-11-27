@@ -79,5 +79,6 @@ class TestPayloadNamespace(IntegrationTestCase):
 
 	def test_doc_event_keeps_its_trigger_record(self):
 		payload = {"_trigger": {"doctype": "User", "docname": "Administrator"}}
-		run = self._run(payload, "Doc Event")
+		with patch.object(engine, "select_entry_node", return_value="trigger"):
+			run = self._run(payload, "Doc Event")
 		self.assertEqual(json.loads(run.context_json), payload)

@@ -126,7 +126,8 @@ def _create_run(
 		}.get(node.get("type"), "Manual")
 		run = engine.create_flow_run(
 			flow_id=flow_id,
-			payload={**payload, ENTRY_MARKER: marker},
+			payload=payload,
+			entry_marker=marker,
 			trigger_type=trigger_type,
 			ignore_permissions=True,
 			member_key=key,
