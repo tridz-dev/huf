@@ -5,6 +5,7 @@ import { AgentRunForm } from './forms/AgentRunForm';
 import { ToolCallForm } from './forms/tool/ToolCallForm';
 import { RouterForm } from './forms/RouterForm';
 import { SwitchForm } from './forms/steps/SwitchForm';
+import { SplitForm } from './forms/steps/SplitForm';
 import { ConditionForm } from './forms/ConditionForm';
 import { LoopForm } from './forms/LoopForm';
 import { ApprovalForm } from './forms/approval/ApprovalForm';
@@ -49,6 +50,8 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
       return <RouterForm {...common} />;
     case 'router-decision':
       return <SwitchForm {...common} />;
+    case 'split':
+      return <SplitForm {...common} />;
     case 'condition':
       return <ConditionForm {...common} />;
     case 'foreach':
