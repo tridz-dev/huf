@@ -9,6 +9,7 @@ from frappe.tests import IntegrationTestCase
 from huf.ai.flow.policy import frequency_cap as cap
 
 DAY = 86400
+WEEK = 7 * DAY
 NOW = 1_800_000_000.0
 
 
@@ -48,6 +49,17 @@ class TestFlowFrequencyCap(IntegrationTestCase):
 		self.assertEqual(cap.check(self.member, "email", DAY), 1)
 		self.assertEqual(frappe.db.count(cap.DOCTYPE, {"member_key": self.member}), 2)
 
+	def test_day_and_week_windows_count_separately(self):
+		# a moment where both windows start together, so only the length tells the rows apart
+		self.clock.return_value = float(int(NOW) // WEEK * WEEK)
+		self.assertEqual(cap.incr(self.member, "whatsapp", DAY, limit=1), 1)
+		self.assertEqual(cap.check(self.member, "whatsapp", WEEK), 0)
+		self.assertEqual([cap.incr(self.member, "whatsapp", WEEK, limit=2) for _ in range(3)], [1, 2, None])
+		self.assertIsNone(cap.incr(self.member, "whatsapp", DAY, limit=1))
+		self.assertEqual(cap.check(self.member, "whatsapp", DAY), 1)
+		self.assertEqual(cap.check(self.member, "whatsapp", WEEK), 2)
+		self.assertEqual(frappe.db.count(cap.DOCTYPE, {"member_key": self.member}), 2)
+
 	def test_a_rollback_after_the_claim_keeps_the_count(self):
 		cap.incr(self.member, "whatsapp", DAY, limit=1)
 		frappe.db.rollback()
@@ -62,11 +74,11 @@ class TestFlowFrequencyCap(IntegrationTestCase):
 
 	def test_database_rejects_a_second_row_for_the_same_key(self):
 		cap.incr(self.member, "whatsapp", DAY)
-		row = frappe.db.get_value(cap.DOCTYPE, {"member_key": self.member}, ["window_start"], as_dict=True)
+		row = frappe.db.get_value(cap.DOCTYPE, {"member_key": self.member}, ["window_seconds", "window_start"], as_dict=True)
 		with self.assertRaises(Exception) as raised:
 			frappe.db.sql(
-				f"insert into {cap.TABLE} (name, member_key, channel, window_start) values (%s, %s, %s, %s)",
-				(frappe.generate_hash(), self.member, "whatsapp", row.window_start),
+				f"insert into {cap.TABLE} (name, member_key, channel, window_seconds, window_start) values (%s, %s, %s, %s, %s)",
+				(frappe.generate_hash(), self.member, "whatsapp", row.window_seconds, row.window_start),
 			)
 		self.assertTrue(frappe.db.is_duplicate_entry(raised.exception))
 
