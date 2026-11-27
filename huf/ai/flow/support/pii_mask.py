@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import datetime
 import json
+import math
 import re
 from decimal import Decimal
 
@@ -72,7 +73,9 @@ _ISO_DATE = (
 )
 _PROTECTED = re.compile(f"({_HASH_ID}|{_ISO_DATE})")
 # Seven or more digits, allowing the usual separators between them.
-_PHONE = re.compile(r"(?<!\d)\+?\(?\d(?:[\s().\-]{0,3}\d){6,}(?!\d)")
+# ``_`` and ``/`` count too, so ``98765_43210`` or ``98765/43210`` is still a phone.
+_PHONE = re.compile(r"(?<!\d)\+?\(?\d(?:[\s().\-_/]{0,3}\d){6,}(?!\d)")
+_DIGIT = re.compile(r"\d")
 _CAMEL = re.compile(r"(?<=[a-z0-9])(?=[A-Z])")
 
 
@@ -110,6 +113,11 @@ def _kind(field: str | None) -> str | None:
 	return None
 
 
+def _is_docname(field: str | None, value) -> bool:
+	"""A ``name`` value holding a digit is a Frappe document name (``FLOW-RUN-0042``), not a person's name."""
+	return field == "name" and isinstance(value, str) and _DIGIT.search(value) is not None
+
+
 def _is_hash_id(value) -> bool:
 	return isinstance(value, str) and re.fullmatch(_HASH_ID, value) is not None
 
@@ -130,7 +138,10 @@ def _collect_names(value, names: set, depth: int, is_name: bool = False) -> None
 		return
 	if isinstance(value, dict):
 		for key, item in value.items():
-			_collect_names(item, names, depth + 1, is_name or _kind(_field(key)) == NAME_MASK)
+			field = _field(key)
+			if _is_docname(field, item):
+				continue
+			_collect_names(item, names, depth + 1, is_name or _kind(field) == NAME_MASK)
 	elif isinstance(value, list | tuple):
 		for item in value:
 			_collect_names(item, names, depth + 1, is_name)
@@ -141,6 +152,13 @@ def _collect_names(value, names: set, depth: int, is_name: bool = False) -> None
 		elif is_name and not _is_hash_id(value) and value != NAME_MASK:
 			parts = [value.strip(), *value.split()]
 			names.update(p for p in parts if len(p) >= MIN_NAME_PART and any(c.isalpha() for c in p))
+
+
+def _is_phone_number(value, field: str | None) -> bool:
+	"""A whole-number float or Decimal with as many digits as a phone (``919876543210.0`` from a spreadsheet)."""
+	if not math.isfinite(value) or value != int(value):
+		return False
+	return field in ID_KEYS or 10 <= len(str(abs(int(value)))) <= 15
 
 
 class _Masker:
@@ -160,7 +178,7 @@ class _Masker:
 			return value
 		if field in self.extra:
 			return "[redacted]" if value != "" else value
-		kind = _kind(field)
+		kind = None if _is_docname(field, value) else _kind(field)
 		if kind:
 			return self._sensitive(value, kind)
 		if isinstance(value, dict):
@@ -172,6 +190,8 @@ class _Masker:
 		if isinstance(value, int):
 			is_number = (field in ID_KEYS) or 10 <= len(str(abs(value))) <= 15
 			return mask_phone(value) if is_number else value
+		if isinstance(value, float | Decimal) and _is_phone_number(value, field):
+			return mask_phone(int(value))
 		if isinstance(value, float | Decimal | datetime.date | datetime.time | datetime.timedelta):
 			return value
 		raise _Drop

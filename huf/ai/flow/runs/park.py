@@ -21,6 +21,7 @@ from datetime import datetime, timezone
 import frappe
 from frappe.utils import get_datetime, now_datetime
 
+from huf.ai.flow.support.pii import log_flow_error
 from huf.ai.graph.executor import Outcome, PauseRequest
 from huf.ai.transaction import commit_if_background
 
@@ -302,5 +303,5 @@ def wake_chunk(names: list[str], due_by: datetime) -> list[str]:
 			if wake_run(name, "elapsed", due_by=due_by):
 				woken.append(name)
 		except Exception:
-			frappe.log_error(frappe.get_traceback(), f"Flow wait wake: {name}")
+			log_flow_error(frappe.get_traceback(), f"Flow wait wake: {name}")
 	return woken

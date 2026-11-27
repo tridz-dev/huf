@@ -22,6 +22,7 @@ from datetime import datetime, timedelta, timezone
 import frappe
 
 from huf.ai.flow.catalog.links import LINK_KEY, linked_values
+from huf.ai.flow.support.pii import log_flow_error
 
 WEBHOOK_TYPE = "trigger.webhook"
 SCHEDULE_TYPE = "trigger.schedule"
@@ -312,7 +313,7 @@ def run_due_schedule_flows(now: datetime | None = None) -> list[str]:
 				)
 				started.append(flow_id)
 			except Exception:
-				frappe.log_error(frappe.get_traceback(), f"Flow schedule dispatch: {flow_id}")
+				log_flow_error(frappe.get_traceback(), f"Flow schedule dispatch: {flow_id}")
 	return started
 
 
@@ -354,7 +355,7 @@ def expire_due_approvals(now: datetime | None = None, enqueue: bool = False) -> 
 			if expire_approval(name, now, enqueue=enqueue):
 				expired.append(name)
 		except Exception:
-			frappe.log_error(frappe.get_traceback(), f"Flow approval expiry: {name}")
+			log_flow_error(frappe.get_traceback(), f"Flow approval expiry: {name}")
 	return expired
 
 
@@ -492,4 +493,4 @@ def run_doc_event_flows(doc, method=None, *args, **kwargs):
 				run_as=owner,
 			)
 		except Exception:
-			frappe.log_error(frappe.get_traceback(), f"Flow doc-event dispatch: {entry['flow']}")
+			log_flow_error(frappe.get_traceback(), f"Flow doc-event dispatch: {entry['flow']}")

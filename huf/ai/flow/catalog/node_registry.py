@@ -34,6 +34,7 @@ import frappe
 
 from huf.ai.flow.nodes import split as split_node
 from huf.ai.flow.support import step_keys
+from huf.ai.flow.support.pii import log_flow_error
 from huf.ai.graph.error_copy import describe_exception, step_failed_sentence
 from huf.ai.graph.executor import Outcome, RoutingMode
 
@@ -93,7 +94,7 @@ class NodeType:
 
 
 def builtin_types() -> frozenset[str]:
-	from huf.ai.graph.validator import PROCEDURE_NODE_TYPES, FLOW_ONLY_NODE_TYPES
+	from huf.ai.graph.validator import FLOW_ONLY_NODE_TYPES, PROCEDURE_NODE_TYPES
 
 	return PROCEDURE_NODE_TYPES | FLOW_ONLY_NODE_TYPES
 
@@ -136,7 +137,7 @@ def _normalize(raw: dict, app: str, builtins: frozenset[str]) -> NodeType | None
 	elif "flow" not in (raw.get("profiles") or ["flow"]):
 		problem = "only the flow profile is supported"
 	if problem:
-		frappe.log_error(f"{HOOK}: ignored {type_id or raw!r} from {app}: {problem}", "Flow node hook")
+		log_flow_error(f"{HOOK}: ignored {type_id or raw!r} from {app}: {problem}", "Flow node hook")
 		return None
 	return NodeType(
 		type=type_id,
@@ -196,8 +197,8 @@ def executor_for(type_id: str | None):
 		return None
 
 	def execute(flow_run, node: dict, config: dict, settings: dict):
-		from huf.ai.flow.runs import park
 		from huf.ai.flow.engine import _context_of, _transition_run
+		from huf.ai.flow.runs import park
 		from huf.ai.flow.testrun import gate as test_gate
 
 		ctx = _context_of(flow_run, settings)
@@ -242,7 +243,7 @@ def executor_for(type_id: str | None):
 		try:
 			result = frappe.get_attr(path)(call)
 		except Exception as exc:  # the app's code failed: fail this step, never the worker
-			frappe.log_error(frappe.get_traceback(), f"Flow app step {node_type.type} raised")
+			log_flow_error(frappe.get_traceback(), f"Flow app step {node_type.type} raised")
 			return {"status": "failed", "error": step_failed_sentence(node_type.label, describe_exception(exc))}
 		if isinstance(result, (dict, Outcome)):
 			return result
