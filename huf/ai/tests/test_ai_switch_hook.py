@@ -66,7 +66,7 @@ class TestAISwitch(IntegrationTestCase):
 class TestMemoryPurge(IntegrationTestCase):
 	def make(self, age_days):
 		doc = frappe.get_doc(
-			{"doctype": "Memory Record", "title": f"purge {age_days}", "scope_type": "Global"}
+			{"doctype": "Memory Record", "title": f"purge {age_days}", "scope_type": "Global", "summary_text": "x"}
 		).insert(ignore_permissions=True)
 		frappe.db.set_value("Memory Record", doc.name, "modified", add_days(now_datetime(), -age_days), update_modified=False)
 		return doc.name
