@@ -62,6 +62,7 @@ class NodeCallContext:
 	park: Callable[..., Outcome]  # park(resume_at=None, token=False); only for ``can_wait`` types
 	is_resume: bool  # True when the run was woken after this step parked
 	waiting: dict | None  # the park record (``woke`` holds the wake reason and payload) when ``is_resume``
+	live: bool = False  # live_send AND NOT dry_run (G3); False in test runs and before live_send is on
 
 
 @dataclass(frozen=True)
@@ -225,6 +226,7 @@ def executor_for(type_id: str | None):
 			park=park_step,
 			is_resume=bool(waiting),
 			waiting=waiting,
+			live=test_gate.is_live(flow_run),
 		)
 		path = node_type.handler
 		if test_gate.is_test_run(flow_run) and node_type.test_simulate not in _TEST_MODES:
