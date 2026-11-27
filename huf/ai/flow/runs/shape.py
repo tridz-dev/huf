@@ -211,13 +211,17 @@ _UNDECIDABLE_KEEP = ("step_title", "flow_name", "test_run", "test_note")
 REDACTED = "[redacted]"
 
 
-def waiting_of_viewer(status, waiting):
+def waiting_of_viewer(status, waiting, flow):
 	"""``waiting`` as this user may see it, before field masking.
 
 	For an approval the user cannot decide, the rendered texts (title, message, summary) are left out and the
-	facts keep only their labels: they quote run data, in which a name cannot be recognised and masked.
+	facts keep only their labels: they quote run data, in which a name cannot be recognised and masked. A
+	cancelled run keeps its approval payload; nobody can decide it any more, so its texts are left out for
+	everyone, former approvers included.
 	"""
-	if status != "Waiting Approval" or not isinstance(waiting, dict) or approval_decision_rights(status, waiting)[0]:
+	if not isinstance(waiting, dict) or (status != "Waiting Approval" and waiting.get("type") != "approval"):
+		return waiting
+	if approval_decision_rights(status, waiting, flow)[0]:
 		return waiting
 	kept = {k: waiting[k] for k in (*_WAITING_KEEP, *_UNDECIDABLE_KEEP) if k in waiting}
 	kept["facts"] = [

@@ -430,8 +430,8 @@ def get_flow_run(flow_run_id: str) -> dict:
 		pass
 
 	stale = _is_stale(doc.status, doc.modified)
-	can_decide, cannot_decide_reason = approval_decision_rights(doc.status, waiting)
-	seen = waiting_of_viewer(doc.status, waiting)
+	can_decide, cannot_decide_reason = approval_decision_rights(doc.status, waiting, doc.flow_definition or doc.flow_id)
+	seen = waiting_of_viewer(doc.status, waiting, doc.flow_definition or doc.flow_id)
 	return {
 		"flow_run_id": doc.name,
 		"flow_id": doc.flow_id,
@@ -1045,7 +1045,7 @@ def handle_get_flow_run(flow_run_id: str, **kwargs) -> dict:
 			"current_node_id": doc.current_node_id,
 			# Masked before cutting, so a cut value cannot slip past the masker (G4).
 			"context_summary": {k: str(v)[:100] for k, v in mask_for_view(ctx).items()},
-			"waiting": waiting_for_view(waiting_of_viewer(doc.status, waiting)),
+			"waiting": waiting_for_view(waiting_of_viewer(doc.status, waiting, doc.flow_definition or doc.flow_id)),
 		}
 	except Exception as e:
 		log_flow_error(frappe.get_traceback(), "Get Flow Run Tool Error")
