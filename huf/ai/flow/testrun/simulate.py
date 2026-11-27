@@ -98,6 +98,18 @@ def simulated_document(doctype: Any) -> dict:
 	return {"simulated": True, "summary": summary, "note": NOTE, "doctype": kind or None, "name": f"(sample) {kind or 'record'}"}
 
 
+def simulated_update(doctype: Any) -> dict:
+	"""What a skipped ``doc.update`` hands to later steps."""
+	kind = str(doctype or "").strip()
+	summary = f"Would change a {kind} record" if kind else "Would change a record"
+	return {"simulated": True, "summary": summary, "note": NOTE, "doctype": kind or None, "name": f"(sample) {kind or 'record'}"}
+
+
+def simulated_handoff() -> dict:
+	"""What a skipped "Hand to a person" step hands to later steps."""
+	return {"simulated": True, "summary": "Would hand the conversation to a person", "note": NOTE, "released": False}
+
+
 def simulated_code(profile: Any) -> dict:
 	"""What a skipped ``code.run`` hands to later steps."""
 	return {
