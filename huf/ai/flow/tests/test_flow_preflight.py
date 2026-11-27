@@ -23,7 +23,7 @@ PHONE = "+919999999999"
 
 
 def hook_raises(defn, flow_id):
-	raise RuntimeError(f"could not reach {PHONE}")
+	raise RuntimeError(f"could not reach {PHONE}")  # noqa: TRY003
 
 
 def hook_returns_none(defn, flow_id):
@@ -47,7 +47,9 @@ def _hooks(*names):
 
 
 def _send(config):
-	return _graph([_trigger("s"), {"id": "s", "type": "send.message", "config": config, "next": "end"}, _end()])
+	return _graph(
+		[_trigger("s"), {"id": "s", "type": "send.message", "config": config, "next": "end"}, _end()]
+	)
 
 
 def _codes(findings, severity="error"):
@@ -116,8 +118,10 @@ class TestPublishBlocking(IntegrationTestCase):
 		if frappe.db.exists("Flow Definition", FLOW_ID):
 			frappe.delete_doc("Flow Definition", FLOW_ID, force=True)
 		self.addCleanup(
-			lambda: frappe.db.exists("Flow Definition", FLOW_ID)
-			and frappe.delete_doc("Flow Definition", FLOW_ID, force=True)
+			lambda: (
+				frappe.db.exists("Flow Definition", FLOW_ID)
+				and frappe.delete_doc("Flow Definition", FLOW_ID, force=True)
+			)
 		)
 		flow_api.save_flow_definition(FLOW_ID, finished_flow())
 

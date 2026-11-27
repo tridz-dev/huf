@@ -9,7 +9,7 @@ recipient can travel in it (no PII). Any ``error`` finding blocks publishing
 
 Apps add checks through the ``huf_flow_preflight`` hook, a list of dotted paths::
 
-	huf_flow_preflight = ["myapp.flows.preflight"]  # fn(defn: dict, flow_id: str | None) -> list[dict]
+        huf_flow_preflight = ["myapp.flows.preflight"]  # fn(defn: dict, flow_id: str | None) -> list[dict]
 
 Each returns a list of ``{"code": str, "severity": "error" | "warning" | "info", "node_id": str | None}``.
 Everything fails closed: a hook that cannot be imported, raises, or answers anything else is an ``error``
@@ -72,7 +72,8 @@ def _lint(defn, flow_id: str | None) -> list[Finding]:
 
 def template_exists(name: str) -> bool:
 	return any(
-		frappe.db.exists("DocType", doctype) and frappe.db.exists(doctype, name) for doctype in TEMPLATE_DOCTYPES
+		frappe.db.exists("DocType", doctype) and frappe.db.exists(doctype, name)
+		for doctype in TEMPLATE_DOCTYPES
 	)
 
 
@@ -118,7 +119,7 @@ def _log_failure(what: str, exc: Exception) -> None:
 def _app_checks(defn, flow_id: str | None) -> list[Finding]:
 	try:
 		paths = _hook_paths()
-	except Exception as exc:
+	except Exception as exc:  # noqa: BLE001 -- a broken check becomes an error finding
 		_log_failure(HOOK, exc)
 		return [Finding("PREFLIGHT_HOOK_ERROR")]
 	node_ids = {n.get("id") for n in _nodes(defn) if isinstance(n.get("id"), str)}
@@ -130,7 +131,7 @@ def _app_checks(defn, flow_id: str | None) -> list[Finding]:
 				found.append(Finding("PREFLIGHT_HOOK_BAD_RESULT"))
 				continue
 			found.extend(_app_finding(item, node_ids) for item in result)
-		except Exception as exc:
+		except Exception as exc:  # noqa: BLE001 -- a broken check becomes an error finding
 			_log_failure(str(path), exc)
 			found.append(Finding("PREFLIGHT_HOOK_ERROR"))
 	return found
@@ -142,7 +143,7 @@ def run_preflight(defn, flow_id: str | None = None) -> list[Finding]:
 	for check in (_lint, _send_checks):
 		try:
 			found.extend(check(defn, flow_id))
-		except Exception as exc:
+		except Exception as exc:  # noqa: BLE001 -- a broken check becomes an error finding
 			_log_failure(check.__name__, exc)
 			found.append(Finding("PREFLIGHT_CHECK_ERROR"))
 	found.extend(_app_checks(defn, flow_id))
