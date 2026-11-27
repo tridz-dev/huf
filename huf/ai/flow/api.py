@@ -27,7 +27,13 @@ from huf.ai.flow.runs.access import (
 	require_run_access,
 	run_reader,
 )
-from huf.ai.flow.runs.shape import _STEP_TYPE_TITLES, data_of_viewer, extras_for_detail, waiting_for_view, waiting_of_viewer
+from huf.ai.flow.runs.shape import (
+	_STEP_TYPE_TITLES,
+	data_of_viewer,
+	extras_for_detail,
+	waiting_for_view,
+	waiting_of_viewer,
+)
 from huf.ai.flow.support.approval_card import api_card, build_card
 from huf.ai.flow.support.decision_rights import approval_decision_rights
 from huf.ai.flow.support.node_schemas import _node_config_schema, build_node_schemas  # noqa: F401  (re-exported)
