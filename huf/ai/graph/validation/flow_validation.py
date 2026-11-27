@@ -231,7 +231,7 @@ def _hook_failed(what: str, exc: Exception | None = None) -> AppValidationError:
 	# Only the check's name and the exception class are logged: a message or traceback could carry personal data.
 	try:
 		frappe.log_error(title="Flow validator failed", message=f"{what}: {type(exc).__name__ if exc else 'bad result'}")
-	except Exception:
+	except Exception:  # noqa: BLE001, S110
 		pass  # the refusal below must reach the caller even when logging does not work
 	return AppValidationError("APP_VALIDATOR_FAILED", None, None, _("A check added by an installed app could not run. Ask your administrator to look at the error log."))
 
@@ -252,7 +252,7 @@ def _app_errors(defn: dict) -> tuple[ValidationError, ...]:
 	"""What installed apps refuse in ``defn``. Fail-closed: anything wrong with a hook is itself an error."""
 	try:
 		paths = list(frappe.get_hooks(VALIDATOR_HOOK) or [])
-	except Exception as exc:
+	except Exception as exc:  # noqa: BLE001 -- fail closed
 		return (_hook_failed(VALIDATOR_HOOK, exc),)
 	node_ids = {n["id"] for n in defn.get("nodes") or [] if isinstance(n, dict) and isinstance(n.get("id"), str)}
 	errors: list[ValidationError] = []
@@ -264,7 +264,7 @@ def _app_errors(defn: dict) -> tuple[ValidationError, ...]:
 				continue
 			for item in result:
 				errors.append(_app_error(item, node_ids) or _hook_failed(path))
-		except Exception as exc:
+		except Exception as exc:  # noqa: BLE001 -- fail closed
 			errors.append(_hook_failed(path, exc))
 	return tuple(errors)
 
