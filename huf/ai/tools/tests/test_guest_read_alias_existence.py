@@ -22,7 +22,9 @@ class TestGuestReadAliasExistence(unittest.TestCase):
 	def _call(self, alias, args):
 		frappe.clear_messages()
 		out = invoke_tool_sync(alias, args).as_dict()
-		return out, [str(m) for m in frappe.local.message_log]
+		# Text only (each entry carries a random exception id); the alias row lookup is about the tool.
+		texts = [m.get("message") for m in frappe.local.message_log]
+		return out, [m for m in texts if not str(m).startswith("Agent Tool Function ")]
 
 	def _probes(self, name):
 		return {

@@ -95,6 +95,33 @@ def _sanitize_for_doctype(doctype: str, data: dict) -> dict:
         return data or {}
 
 
+def _type_read_allowed(doctype: str, meta=None) -> bool:
+    """Doctype-level read check, to run before any record is looked up.
+
+    A child table has no permission of its own without a parent, so it is
+    left to the record-level check.
+    """
+    if meta is not None and meta.istable:
+        return True
+    return bool(frappe.has_permission(doctype, "read"))
+
+
+def _readable_name(doctype: str, name_or_filters):
+    """The record's name if it exists and may be read, else None (the caller cannot tell which)."""
+    name = frappe.db.exists(doctype, name_or_filters) if name_or_filters else None
+    if name and frappe.has_permission(doctype, "read", doc=name):
+        return name
+    return None
+
+
+def _read_denied(doctype: str) -> dict:
+    """One answer for a missing record and a forbidden one."""
+    return {
+        "success": False,
+        "error": f"You do not have read permission on {doctype}, or no matching record exists",
+    }
+
+
 # Standard CRUD function generators
 def create_get_function(doctype: str) -> Callable:
     """
@@ -552,9 +579,10 @@ def handle_get_document(document_id=None, reference_doctype=None, **filters):
         if not frappe.db.exists("DocType", reference_doctype):
             return {"success": False, "error": f"DocType '{reference_doctype}' does not exist."}
 
+        if not _type_read_allowed(reference_doctype, _meta):
+            return _read_denied(reference_doctype)
+
         if document_id:
-            if not frappe.db.exists(reference_doctype, document_id):
-                return {"success": False, "error": f"Document '{document_id}' not found in '{reference_doctype}'"}
             doc_name = document_id
         else:
             valid_fields = [f.fieldname for f in frappe.get_meta(reference_doctype).fields]
@@ -564,11 +592,10 @@ def handle_get_document(document_id=None, reference_doctype=None, **filters):
                 return {"success": False, "error": "No valid filter fields provided to find the document."}
 
             doc_name = frappe.db.get_value(reference_doctype, applied_filters, "name")
-            if not doc_name:
-                return {
-                    "success": False,
-                    "error": f"No {reference_doctype} found matching filters {applied_filters}",
-                }
+
+        doc_name = _readable_name(reference_doctype, doc_name)
+        if not doc_name:
+            return _read_denied(reference_doctype)
 
         doc = frappe.get_doc(reference_doctype, doc_name)
         doc.check_permission()
@@ -609,6 +636,11 @@ def handle_get_documents(reference_doctype: str = None, document_ids: list = Non
 
         if not ids:
             return {"success": False, "error": "No document_ids provided."}
+
+        if not _type_read_allowed(reference_doctype, _meta) or not all(
+            _readable_name(reference_doctype, doc_id) for doc_id in ids
+        ):
+            return _read_denied(reference_doctype)
 
         docs = get_documents(reference_doctype, ids)
         res_docs = [doc.as_dict() if callable(getattr(doc, "as_dict", None)) else doc for doc in docs]
@@ -750,21 +782,22 @@ def handle_get_value(doctype: str = None, filters: dict = None, fieldname=None, 
         return json.loads(_guard_err)
 
     try:
+        if not ignore_permissions and not _type_read_allowed(doctype, _meta):
+            return _read_denied(doctype)
+
         if isinstance(filters, dict):
             doc_name = frappe.db.get_value(doctype, filters, "name")
         else:
             doc_name = filters
 
-        if not doc_name:
+        if not ignore_permissions:
+            doc_name = _readable_name(doctype, doc_name)
+            if not doc_name:
+                return _read_denied(doctype)
+        elif not doc_name:
             return {
                 "success": False,
                 "error": f"No {doctype} found matching filters {filters}"
-            }
-
-        if not ignore_permissions and not frappe.has_permission(doctype, "read", doc=doc_name):
-            return {
-                "success": False,
-                "error": f"You do not have read permission on {doctype} {doc_name}"
             }
 
         value = frappe.db.get_value(doctype, doc_name, fieldname)
@@ -835,8 +868,8 @@ def handle_get_report_result(report_name: str, filters: dict | None = None, limi
     if _guard_err:
         return json.loads(_guard_err)
 
-    if not ignore_permissions and not frappe.has_permission("Report", "read", doc=report_name):
-        return {"success": False, "error": f"You do not have permission to read Report {report_name}"}
+    if not ignore_permissions and not (_type_read_allowed("Report") and _readable_name("Report", report_name)):
+        return _read_denied("Report")
     return get_report_result(report_name, filters=filters, limit=limit, user=frappe.session.user)
 
 
