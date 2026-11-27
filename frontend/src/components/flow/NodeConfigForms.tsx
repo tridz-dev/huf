@@ -14,6 +14,7 @@ import { FlowCallForm } from './forms/steps/FlowCallForm';
 import { DocGetForm } from './forms/data/DocGetForm';
 import { DocUpdateForm } from './forms/data/DocUpdateForm';
 import { MemberSetForm } from './forms/data/MemberSetForm';
+import { SendMessageForm } from './forms/SendMessageForm';
 import { TransformForm } from './forms/data/TransformForm';
 import { StateForm } from './forms/data/StateForm';
 import { DocCreateForm } from './forms/data/DocCreateForm';
@@ -66,6 +67,8 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
       return <DocUpdateForm {...common} />;
     case 'member-set':
       return <MemberSetForm {...common} />;
+    case 'send-message':
+      return <SendMessageForm {...common} />;
     case 'transform':
       return <TransformForm {...common} />;
     case 'state-get':

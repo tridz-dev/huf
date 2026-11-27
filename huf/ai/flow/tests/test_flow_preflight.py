@@ -80,6 +80,13 @@ class TestFlowPreflight(IntegrationTestCase):
 			codes = _codes(preflight.run_preflight(_send({"template": "welcome"})))
 		self.assertNotIn(("TEMPLATE_MISSING", "s"), codes)
 
+	def test_send_gateway_must_be_whatsapp(self):
+		config = {"gateway": "gw", "recipient": PHONE, "category": "service", "text": "hi"}
+		for channel, blocked in (("telegram", True), ("", True), ("whatsapp", False)):
+			with _hooks(), mock.patch.object(preflight, "gateway_channel", return_value=channel):
+				codes = _codes(preflight.run_preflight(_send(config)))
+			self.assertEqual(("SEND_GATEWAY_UNSUPPORTED", "s") in codes, blocked, channel)
+
 	def test_broken_hooks_are_error_findings(self):
 		cases = {
 			"hook_raises": "PREFLIGHT_HOOK_ERROR",

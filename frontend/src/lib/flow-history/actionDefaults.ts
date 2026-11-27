@@ -19,6 +19,7 @@ export function defaultActionConfig(actionId: string, defaultCodeProfile?: strin
     'doc-update': { type: 'doc-update', doctype: '', name: '', values: {} },
     'flow-call': { type: 'flow-call', flow_id: '', input: {}, mode: 'fire_and_forget' },
     'member-set': { type: 'member-set', vars: {} },
+    'send-message': { type: 'send-message', gateway: '', recipient: '', template: '', category: 'service' },
     end: { type: 'end' },
     'http-request': tool('http_request', { url: '', method: 'GET' }),
     transform: { type: 'transform', op: 'lower', input: {} },
