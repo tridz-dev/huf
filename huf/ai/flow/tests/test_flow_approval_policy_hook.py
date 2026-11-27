@@ -179,4 +179,4 @@ class TestApprovalNodeWithPolicy(WP11Base):
 	def test_hook_cannot_change_the_run(self):
 		run = self._run(500, "mutating_policy")
 		self._assert_parked(run, "no_policy")
-		self.assertEqual(json.loads(run.context_json)["input"]["audience"], 500)
+		self.assertEqual(json.loads(run.context_json)["audience"], 500)
