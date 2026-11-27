@@ -25,6 +25,7 @@ from __future__ import annotations
 import frappe
 
 from huf.ai.channels import guard, guard_steps, token_binder
+from huf.ai.flow.nodes import split as split_node
 from huf.ai.flow.runs import member as flow_member
 from huf.ai.flow.runs import park
 from huf.ai.flow.support import step_keys
@@ -96,6 +97,9 @@ def exec_send_message(flow_run, node: dict, config: dict, settings: dict):
 	done = step_keys.replay(ctx.data, key)
 	if done is not None:  # a re-delivered job: this step already completed, never send twice
 		return done
+	if config["category"] == "marketing" and split_node.is_holdout(ctx.data):  # decision 5: service still sends
+		_leave_waiting(flow_run, node, _transition_run)
+		return _final(flow_run, ctx, settings, node, key, {"status": "blocked", "reason": split_node.HOLDOUT_NO_CONTACT})
 	raw = ctx.resolve(config["recipient"])
 	recipient = guard_steps.normalise_recipient(raw) or (raw if isinstance(raw, str) else None)
 	template = config.get("template") or None
