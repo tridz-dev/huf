@@ -84,7 +84,7 @@ describe('trigger type tables', () => {
       expect(TRIGGER_CONFIG_KEYS[nodeType]).toBeDefined();
     }
     expect(Object.values(TRIGGER_TO_NODE_TYPE).sort()).toEqual(
-      ['trigger.doc-event', 'trigger.gateway', 'trigger.schedule', 'trigger.telegram', 'trigger.webhook', 'trigger.whatsapp']
+      ['trigger.app', 'trigger.doc-event', 'trigger.gateway', 'trigger.schedule', 'trigger.telegram', 'trigger.webhook', 'trigger.whatsapp']
     );
   });
 

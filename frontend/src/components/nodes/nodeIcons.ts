@@ -1,4 +1,5 @@
 import {
+  AppWindow,
   ArchiveRestore,
   ArchiveX,
   CheckCircle2,
@@ -36,7 +37,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { findActionOption } from '../../lib/flow-graph/appNodeTypes';
-import { triggerOptions } from '../../data/triggers';
+import { findTriggerOption } from '../../data/triggers';
 import { actionCardId } from '../../lib/flow/flowLabels';
 import type { FlowNodeData } from '../../types/flow.types';
 
@@ -45,6 +46,7 @@ import type { FlowNodeData } from '../../types/flow.types';
  * data/triggers.ts; the agent step is always SquareAsterisk (the product's agent icon), never a play triangle.
  */
 export const NODE_ICONS: Record<string, LucideIcon> = {
+  AppWindow,
   ArchiveRestore,
   ArchiveX,
   CheckCircle2,
@@ -96,7 +98,7 @@ export function paletteIcon(name: string | undefined): LucideIcon {
 export function cardIcon(data: FlowNodeData): LucideIcon {
   if (data.nodeType === 'trigger') {
     const t = data.triggerConfig?.type;
-    return paletteIcon(t ? triggerOptions.find((o) => o.id === t)?.icon : 'CircleDashed');
+    return paletteIcon(t ? findTriggerOption(t)?.icon : 'CircleDashed');
   }
   if (data.nodeType === 'end') return paletteIcon('Flag');
   const id = actionCardId(data.actionConfig as { type?: unknown; tool_id?: unknown; backend_type?: unknown } | undefined);
