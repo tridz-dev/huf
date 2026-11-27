@@ -60,6 +60,7 @@ class TestSendStepKey(IntegrationTestCase):
 			patch.object(send, "_enqueue", self.transport),
 			patch.object(send, "channel_of", return_value="whatsapp"),
 			patch("huf.ai.flow.testrun.gate.live_send_on", return_value=True),
+			patch("huf.ai.flow.testrun.gate.pin_is_current", return_value=True),  # H-W2-18: run is on the current version
 			patch.object(engine, "_context_of", side_effect=lambda *a: self.ctx),
 			patch.object(engine, "_persist_context"),
 			patch.object(engine, "_transition_run", return_value=True),
