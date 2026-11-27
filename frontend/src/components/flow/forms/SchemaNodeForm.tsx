@@ -3,6 +3,8 @@ import { fromTextRefs, toTextRefs } from '@/lib/flow-data/textRefs';
 import { appMissingMessage, getAppNodeType, missingAppStep } from '@/lib/flow-graph/appNodeTypes';
 import { HUF_APP } from '@/lib/flow-graph/builtinSchemaSteps';
 import { useFlowContext } from '@/contexts/FlowContext';
+import { edgeRoute, makeFlowEdge } from '@/services/flowSerializer';
+import type { FlowEdge } from '@/types/flow.types';
 import type { SchemaProp } from '@/services/flow/steps/nodeTypesApi';
 import { Checkbox } from '../../ui/checkbox';
 import { Input } from '../../ui/input';
@@ -48,9 +50,18 @@ function DoctypeRow({ prop, value, onChange, f, path, disabled, Err }: RowProps)
   );
 }
 
-function NodeRow({ prop, value, onChange, nodeId, f, path, disabled, Err }: RowProps) {
-  const { activeFlow } = useFlowContext();
+/** A step picker. `timeout_next` is the Timed out connection itself: choosing a step draws (or moves) that edge. */
+function NodeRow({ name, prop, value, onChange, nodeId, f, path, disabled, Err }: RowProps) {
+  const { activeFlow, updateEdges } = useFlowContext();
   const others = (activeFlow?.nodes ?? []).filter((n) => n.id !== nodeId);
+  if (name === 'timeout_next') {
+    const edges = activeFlow?.edges ?? [];
+    const isTimeout = (e: FlowEdge) => e.source === nodeId && edgeRoute(e) === 'timeout';
+    value = edges.find(isTimeout)?.target;
+    onChange = (to: unknown) => {
+      if (typeof to === 'string' && to) updateEdges([...edges.filter((e) => !isTimeout(e)), makeFlowEdge(nodeId, to, 'timeout')]);
+    };
+  }
   const id = `schema-${path.replace(/[^a-z0-9]+/gi, '-')}`;
   return (
     <div>
