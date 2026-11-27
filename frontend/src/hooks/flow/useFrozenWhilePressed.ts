@@ -27,7 +27,12 @@ export function useFrozenWhilePressed<T>(value: T): T {
     window.addEventListener('pointerdown', down, true);
     window.addEventListener('pointerup', up, true);
     window.addEventListener('pointercancel', up, true);
+    // A release outside the window (an embedded builder, a drag off the page) never sends pointerup: never stay frozen.
+    window.addEventListener('blur', up);
+    window.addEventListener('click', up, true);
     return () => {
+      window.removeEventListener('blur', up);
+      window.removeEventListener('click', up, true);
       window.removeEventListener('pointerdown', down, true);
       window.removeEventListener('pointerup', up, true);
       window.removeEventListener('pointercancel', up, true);
