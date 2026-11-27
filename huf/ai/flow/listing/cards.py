@@ -34,6 +34,7 @@ _TRIGGER_KEYS = {
 	"trigger.webhook": ("method",),
 	"trigger.schedule": ("cron",),
 	"trigger.doc-event": ("doctype", "event"),
+	"trigger.app": ("app",),
 	# The channel's name only: no credentials, ids or filter values.
 	"trigger.gateway": ("gateway",),
 	"trigger.whatsapp": ("gateway",),
