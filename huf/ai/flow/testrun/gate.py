@@ -37,6 +37,29 @@ def is_test_run(flow_run) -> bool:
 	return str(getattr(flow_run, "run_mode", "") or "") == STORED_TEST
 
 
+def is_dry_run(flow_run) -> bool:
+	"""A test run of the flow or a one-step test: nothing may go out."""
+	return is_test_run(flow_run) or step_test_active()
+
+
+def live_send_on(flow_id) -> bool:
+	"""The flow's ``live_send`` switch. Fails CLOSED: no flow, or a read error, means off."""
+	if not flow_id:
+		return False
+	try:
+		return bool(frappe.db.get_value("Flow Definition", flow_id, "live_send"))
+	except Exception as exc:
+		_log_doubt("live_send", exc)
+		return False
+
+
+def is_live(flow_run) -> bool:
+	"""G3, the one place it is decided: ``live = live_send AND NOT dry_run``. Anything else is preview only."""
+	if is_dry_run(flow_run):
+		return False
+	return live_send_on(getattr(flow_run, "flow_id", None))
+
+
 # --------------------------------------------------------------------------- testing one step on its own (UX-16)
 
 _STEP_TEST_FLAG = "huf_step_test"

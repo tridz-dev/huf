@@ -43,6 +43,8 @@ def _done(node: dict, output: dict) -> dict:
 
 def config_problem(config: dict) -> str | None:
 	"""A readable reason the step cannot send with ``config``, or None. Preflight uses the same rules."""
+	if "retry" in config:
+		return "A send step cannot try again: a blocked send is final. Remove the retry setting."
 	if set(config) - CONFIG_KEYS:
 		return "This send step has settings it does not use. Remove them and save again."
 	if not isinstance(config.get("gateway"), str) or not config["gateway"].strip():
@@ -68,8 +70,8 @@ def channel_of(gateway: str) -> str:
 
 
 def is_live(flow_run) -> bool:
-	"""Whether this send really goes out. H-W2-05 replaces this with ``live_send AND NOT dry_run``."""
-	return not test_gate.is_test_run(flow_run)
+	"""Whether this send really goes out: ``live_send AND NOT dry_run`` (G3, :func:`test_gate.is_live`)."""
+	return test_gate.is_live(flow_run)
 
 
 def exec_send_message(flow_run, node: dict, config: dict, settings: dict):

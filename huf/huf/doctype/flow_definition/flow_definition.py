@@ -53,6 +53,20 @@ class FlowDefinition(Document):
 	def before_save(self):
 		if not self.is_new():
 			self.version = (self.version or 0) + 1
+		self._reset_live_send_on_republish()
+
+	def _reset_live_send_on_republish(self):
+		"""G3: a republish (new definition, or becoming Active) turns ``live_send`` off; it is switched on again
+		on its own save, after the new version was looked at."""
+		before = None if self.is_new() else self.get_doc_before_save()
+		if before is None:
+			republished = self.status == "Active"
+		else:
+			republished = before.definition_json != self.definition_json or (
+				self.status == "Active" and before.status != "Active"
+			)
+		if republished:
+			self.live_send = 0
 
 	def on_update(self):
 		self._maybe_convert_to_procedure()

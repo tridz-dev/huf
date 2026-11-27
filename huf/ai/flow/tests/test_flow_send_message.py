@@ -45,6 +45,7 @@ class TestSendMessageNode(IntegrationTestCase):
 			patch.object(frappe, "get_attr", side_effect=lambda p: self.hooks[p]),
 			patch.object(send, "_transport", self.transport),
 			patch.object(send, "channel_of", return_value="whatsapp"),
+			patch("huf.ai.flow.testrun.gate.live_send_on", return_value=True),  # H-W2-05: live needs live_send
 			patch.object(engine, "_context_of", return_value=GraphContext()),
 			patch.object(engine, "_persist_context"),
 			patch.object(engine, "_transition_run", return_value=True),

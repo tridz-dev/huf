@@ -220,6 +220,36 @@ def remove_member(flow: str, key: str) -> bool:
 	return True
 
 
+OPT_OUT_REASON = "opt_out"
+
+
+def exit_on_opt_out(gateway: str | None = None, sender_id: str | None = None, kind: str = "opt_out", keyword: str = "", **_):
+	"""``huf_gateway_opt_out`` handler: on a STOP, cancel the sender's open runs in every flow and mark them Exited.
+
+	Reason ``opt_out``. ``opt_in`` does nothing (re-entry stays with each flow's entry policy). Writing the consent
+	revoke is the app's own handler. Returns the cancelled run names (ids only).
+	"""
+	key = _normalize_sender(sender_id)[:MAX_KEY_CHARS]
+	if kind != "opt_out" or not key:
+		return []
+	from huf.ai.flow.engine import TERMINAL_STATUSES
+	from huf.ai.flow.runs.park import cancel_run
+
+	runs = frappe.get_all(
+		"Agent Flow Run",
+		filters={"member_key": key, "status": ["not in", list(TERMINAL_STATUSES)]},
+		pluck="name",
+		limit_page_length=0,
+	)
+	cancelled = [run for run in runs if cancel_run(run, OPT_OUT_REASON)]
+	frappe.db.sql(
+		f"update `tab{DOCTYPE}` set status = 'Exited', current_node_id = null, active_flow_run = null,"  # noqa: S608 - constant table
+		" completed_at = %s where member_key = %s and status != 'Exited'",
+		(now_datetime(), key),
+	)
+	return cancelled
+
+
 def purge_inactive(days: int | None = None) -> int:
 	"""Delete members with no activity for ``days`` (site config ``huf_flow_member_retention_days``, default 365; 0 = keep)."""
 	if days is None:
