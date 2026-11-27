@@ -18,8 +18,11 @@ built-in steps only, from ``guard.evaluate(..., header=)``; None means "use the 
 
 from __future__ import annotations
 
+import contextlib
+import contextvars
 import copy
 import re
+from collections.abc import Callable, Iterator
 from datetime import datetime, time, timedelta, timezone
 from typing import Any
 from urllib.parse import urlsplit
@@ -45,6 +48,54 @@ MEDIA_TYPES = ("image", "video", "document")
 BLOCKING_EVENTS = frozenset({"FLAGGED"})
 _E164 = re.compile(r"\+[1-9][0-9]{6,14}")
 _SEPARATORS = re.compile(r"[ ()\-]")
+
+
+# Per-batch cache (H-W2-19). Only set inside :func:`batch`; outside it every send reads afresh.
+_BATCH: contextvars.ContextVar[dict | None] = contextvars.ContextVar("huf_guard_batch", default=None)
+
+
+@contextlib.contextmanager
+def batch() -> Iterator[None]:
+	"""Share template reads and consent allows between the guarded sends of one batch.
+
+	Nothing outlives the block: a consent allow is never reused by a later batch. Nested blocks reuse the
+	outer cache. A block decision is never cached, so it is always read again.
+	"""
+	if _BATCH.get() is not None:
+		yield
+		return
+	token = _BATCH.set({})
+	try:
+		yield
+	finally:
+		_BATCH.reset(token)
+
+
+def invalidate_consent(recipient: Any = None) -> None:
+	"""Forget cached consent allows for ``recipient`` (any form), or all of them. Call on an opt-out."""
+	cache = _BATCH.get()
+	if not cache:
+		return
+	digits = _digits(recipient) if recipient is not None else None
+	for key in [k for k in cache if k[0] == "consent" and (digits is None or k[-1] == digits)]:
+		cache.pop(key, None)
+
+
+def _digits(raw: Any) -> str:
+	value = str(raw or "").strip().lower()
+	return value if "@" in value else re.sub(r"[^0-9]", "", value)
+
+
+def _cached(key: tuple, load: Callable[[], Any], keep: Callable[[Any], bool] = lambda _: True) -> Any:
+	cache = _BATCH.get()
+	if cache is None:
+		return load()
+	if key in cache:
+		return copy.deepcopy(cache[key])
+	value = load()
+	if keep(value):
+		cache[key] = copy.deepcopy(value)
+	return value
 
 
 def _allow() -> dict:
@@ -77,7 +128,19 @@ def check_recipient(request: dict) -> dict:
 
 
 def check_consent(request: dict) -> dict:
-	"""Huf's own opt-out records. An app's consent rules stay in its ``huf_pre_send_hooks``."""
+	"""Huf's own opt-out records. An app's consent rules stay in its ``huf_pre_send_hooks``.
+
+	Inside :func:`batch` an allow is reused for the same recipient; a block drops that recipient's allows.
+	"""
+	channel, recipient = request.get("channel"), request.get("recipient")
+	key = ("consent", channel, request.get("gateway"), request.get("category") != "service", _digits(recipient))
+	verdict = _cached(key, lambda: _read_consent(request), keep=lambda v: v.get("allow") is True)
+	if verdict.get("allow") is not True:
+		invalidate_consent(recipient)
+	return verdict
+
+
+def _read_consent(request: dict) -> dict:
 	channel, recipient = request.get("channel"), request.get("recipient")
 	marketing = request.get("category") != "service"
 	if channel == "whatsapp":
@@ -109,14 +172,17 @@ def check_template(request: dict) -> dict:
 	if request.get("channel") != "whatsapp" or not template:
 		return _block("header_invalid") if header is not None else _allow()
 
-	found = _load_template(request.get("gateway"), template)
+	gateway = request.get("gateway")
+	found = _cached(("template", gateway, template), lambda: _load_template(gateway, template), keep=bool)
 	if not found:
 		return _block("template_not_approved")
 	docname, req = found
 	row = req["tpl"]
-	if str(row.get("status") or "").upper() != "APPROVED" or _state_blocks(
-		row.get("whatsapp_account"), docname
-	):
+	if str(row.get("status") or "").upper() != "APPROVED":
+		return _block("template_not_approved")
+	account = row.get("whatsapp_account")
+	# only "nothing contradicts APPROVED" is reused; a blocking state is read again every send
+	if _cached(("state", account, docname), lambda: _state_blocks(account, docname), keep=lambda v: v is False):
 		return _block("template_not_approved")
 
 	if str(row.get("category") or "").upper() == "MARKETING":
