@@ -20,6 +20,7 @@ import frappe
 
 from huf.ai.flow.runs import park
 from huf.ai.flow.runs.park import ParkRequest
+from huf.ai.flow.support.pii import log_flow_error
 
 MAX_DEPTH = 5
 KEYS = frozenset({"flow_id", "input", "mode"})
@@ -149,7 +150,7 @@ def on_child_finished(child_run, status: str, error: str | None = None) -> None:
 
 			_transition_run(SimpleNamespace(name=parent), {"resume_at": datetime.now(timezone.utc).replace(tzinfo=None)}, from_statuses=(park.WAIT_STATUS,))
 	except Exception:
-		frappe.log_error(title="Flow sub-flow completion hook")
+		log_flow_error(title="Flow sub-flow completion hook")
 
 
 def cancel_waited_child(flow_run, by: str) -> None:
@@ -160,4 +161,4 @@ def cancel_waited_child(flow_run, by: str) -> None:
 	try:
 		park.cancel_run(child, by)
 	except Exception:
-		frappe.log_error(title="Flow sub-flow cancel cascade")
+		log_flow_error(title="Flow sub-flow cancel cascade")

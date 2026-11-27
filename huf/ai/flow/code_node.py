@@ -36,6 +36,7 @@ from frappe import _
 from frappe.utils import add_to_date, get_datetime, now_datetime
 
 from huf.ai.flow.support.code_node_result import DEFAULT_TIMEOUT_S, error_text, output_from_call  # noqa: F401
+from huf.ai.flow.support.pii import log_flow_error
 
 NODE_TYPE = "code.run"
 EXECUTE_CAPABILITY = "flows.execute_code"
@@ -373,7 +374,7 @@ def continue_flow(flow_run_name: str) -> None:
 	try:
 		engine.resume_code_node(flow_run_name)
 	except Exception:
-		frappe.log_error(frappe.get_traceback(), f"Flow code step continue: {flow_run_name}")
+		log_flow_error(frappe.get_traceback(), f"Flow code step continue: {flow_run_name}")
 
 
 def on_call_closed(call_name: str) -> None:
@@ -421,7 +422,9 @@ def sweep_code_waits(now=None) -> list[str]:
 			if deadline and get_datetime(deadline) <= now:
 				approval = waiting.get("approval")
 				if approval and frappe.db.get_value("Agent Execution Approval", approval, "status") == "Pending":
-					from huf.huf.doctype.agent_execution_approval.agent_execution_approval import _mark_expired
+					from huf.huf.doctype.agent_execution_approval.agent_execution_approval import (
+						_mark_expired,
+					)
 
 					_mark_expired(frappe.get_doc("Agent Execution Approval", approval))
 				else:
@@ -437,7 +440,7 @@ def sweep_code_waits(now=None) -> list[str]:
 				engine.resume_code_node(name)
 				touched.append(name)
 		except Exception:
-			frappe.log_error(frappe.get_traceback(), f"Flow code wait sweep: {name}")
+			log_flow_error(frappe.get_traceback(), f"Flow code wait sweep: {name}")
 	return touched
 
 

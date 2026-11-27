@@ -51,39 +51,53 @@ from frappe import _
 from frappe.utils import now_datetime
 
 from huf.ai.flow import state as flow_state
-from huf.ai.flow.runs import member as flow_member
 from huf.ai.flow.catalog import node_registry
+from huf.ai.flow.integrations import friendly_tool_error
 from huf.ai.flow.nodes import adapters, subflow
 from huf.ai.flow.nodes.condition import exec_facts_condition
 from huf.ai.flow.nodes.error_handler import first_error, run_error_handler
-from huf.ai.flow.nodes.retry import policy_of as retry_policy_of, run_with_retry
+from huf.ai.flow.nodes.retry import policy_of as retry_policy_of
+from huf.ai.flow.nodes.retry import run_with_retry
 from huf.ai.flow.nodes.wait import exec_wait
-from huf.ai.flow.runs.outcome import record_outcome
-from huf.ai.flow.support import facts
-from huf.ai.flow.support.approval_card import waiting_fields
-from huf.ai.flow.runs.edges import edges_from_nodes
-from huf.ai.flow.support.approval_notifications import _clear_flow_notifications, _send_approval_notifications
-from huf.ai.flow.support.approvers import approval_expired, check_approver, evaluate_approval_policy
-from huf.ai.flow.integrations import friendly_tool_error
-from huf.ai.gateways.slack import flow_hooks
-from huf.ai.flow.support.router_text import (
-	build_router_llm_prompt,
-	choose_option,
-	render_text_refs,
-	resolve_router_model,
-	_router_completion,
-)
 from huf.ai.flow.orchestrator import (
 	build_flow_context_system_message,
 	build_router_prompt,
 )
-from huf.ai.flow.support.redact import pinned_json
-from huf.ai.flow.support.tool_result import normalize_tool_result
+from huf.ai.flow.runs import member as flow_member
+from huf.ai.flow.runs.edges import edges_from_nodes
+from huf.ai.flow.runs.outcome import record_outcome
+from huf.ai.flow.support import facts
+from huf.ai.flow.support.approval_card import waiting_fields
+from huf.ai.flow.support.approval_notifications import _clear_flow_notifications, _send_approval_notifications
+from huf.ai.flow.support.approvers import approval_expired, check_approver, evaluate_approval_policy
+from huf.ai.flow.support.pii import log_flow_error, mask_text
 from huf.ai.flow.support.plain.transform_text import plain_transform_error
-from huf.ai.flow.testrun import gate as test_gate, stored_mode
+from huf.ai.flow.support.redact import pinned_json
+from huf.ai.flow.support.router_text import (
+	_router_completion,
+	build_router_llm_prompt,
+	choose_option,
+	render_text_refs,
+	resolve_router_model,
+)
+from huf.ai.flow.support.tool_result import normalize_tool_result
 from huf.ai.flow.support.turned_off import is_turned_off, turned_off_result
-from huf.ai.flow.tool_executor import execute as execute_tool, with_step_limit
-from huf.ai.flow.tool_executor import tool_run_context
+from huf.ai.flow.testrun import gate as test_gate
+from huf.ai.flow.testrun import stored_mode
+from huf.ai.flow.tool_executor import execute as execute_tool
+from huf.ai.flow.tool_executor import tool_run_context, with_step_limit
+from huf.ai.gateways.slack import flow_hooks
+from huf.ai.graph.error_copy import (
+	approval_timeout_message,
+	describe_exception,
+	describe_run_error,
+	no_route_message,
+	plain_error,
+	step_failed_sentence,
+	step_ref,
+	step_title,
+	tool_timeout_message,
+)
 from huf.ai.graph.executor import (
 	ExecutionPolicy,
 	ExecutionResult,
@@ -95,22 +109,17 @@ from huf.ai.graph.executor import (
 	Outcome,
 	PauseRequest,
 	PinnedVersion,
+	Router,
 	RoutingError,
 	RoutingMode,
-	Router,
-)
-from huf.ai.graph.error_copy import (
-	approval_timeout_message, describe_exception, describe_run_error, no_route_message, plain_error,
-	step_failed_sentence, step_ref, step_title, tool_timeout_message,
 )
 from huf.ai.graph.expressions import ExpressionLimitError, evaluate_bool, parse_expression
-from huf.ai.graph.transforms import Limits as TransformLimits
 from huf.ai.graph.templates import TemplateError, render_template
+from huf.ai.graph.transforms import Limits as TransformLimits
 from huf.ai.graph.transforms import run_transform
 from huf.ai.output_budget import OutputBudget, OutputBudgetExceeded, enforce_output_budget
 from huf.ai.tools.invocation import RunContext
 from huf.ai.transaction import commit_if_background
-
 
 DEFAULT_MAX_HOPS = 100
 
@@ -363,7 +372,7 @@ def sweep_stale_runs(now=None, minutes: int | None = None) -> list[str]:
 			_fail_flow_run(flow_run, STALE_RUN_SWEEP_REASON)
 			failed.append(name)
 		except Exception:
-			frappe.log_error(frappe.get_traceback(), f"Flow stale run sweep: {name}")
+			log_flow_error(frappe.get_traceback(), f"Flow stale run sweep: {name}")
 	return failed
 
 
@@ -667,7 +676,7 @@ def run_flow(flow_run_name: str):
 			_execute_loop(flow_run, nodes_map, edges_list, run_ctx)
 		except Exception as e:
 			_fail_flow_run(flow_run, describe_exception(e))
-			frappe.log_error(f"Flow engine error: {frappe.get_traceback()}", "Flow Engine")
+			log_flow_error(f"Flow engine error: {frappe.get_traceback()}", "Flow Engine")
 	finally:
 		_release_run_lock(flow_run_name)
 
@@ -1098,7 +1107,7 @@ def failed_node_record(outcome: Outcome) -> dict:
 	if outcome.output is not None and not isinstance(outcome.output, dict):
 		record["result"] = outcome.output
 	record["status"] = "failed"
-	record["error"] = str(outcome.error or record.get("error") or "The step failed")
+	record["error"] = mask_text(str(outcome.error or record.get("error") or "The step failed"))
 	return record
 
 
@@ -1149,7 +1158,7 @@ def _make_node_handler(flow_run, settings):
 			try:
 				return _execute_node(flow_run, raw, settings)
 			except Exception as exc:
-				frappe.log_error(frappe.get_traceback(), f"Flow node {node.id} raised")
+				log_flow_error(frappe.get_traceback(), f"Flow node {node.id} raised")
 				return {"status": "failed", "error": describe_exception(exc)}
 
 		result = run_with_retry(flow_run, node.raw, settings, run_once)
@@ -1512,9 +1521,9 @@ def _exec_tool_call(flow_run, node: dict, config: dict, settings: dict) -> dict:
 
 	try:
 		if mcp_server:
-			from huf.ai.mcp_client import execute_mcp_tool
-
 			import asyncio
+
+			from huf.ai.mcp_client import execute_mcp_tool
 
 			# A Requires Approval tool only runs when the node is explicitly marked
 			# ``approved`` (the flow author places it behind a human.approval step).
@@ -2452,7 +2461,7 @@ def _fail_flow_run(flow_run, error_msg: str) -> bool:
 	"""
 	if not _transition_run(
 		flow_run,
-		{"status": "Failed", "last_error": error_msg, "completed_at": now_datetime()},
+		{"status": "Failed", "last_error": mask_text(error_msg), "completed_at": now_datetime()},
 		not_from_statuses=TERMINAL_STATUSES,
 	):
 		return False

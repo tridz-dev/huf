@@ -23,9 +23,9 @@ from huf.ai.flow.runs.shape import _STEP_TYPE_TITLES, extras_for_detail
 from huf.ai.flow.support.approval_card import api_card, build_card
 from huf.ai.flow.support.decision_rights import approval_decision_rights
 from huf.ai.flow.support.node_schemas import _node_config_schema, build_node_schemas  # noqa: F401  (re-exported)
+from huf.ai.flow.support.pii import log_flow_error
 from huf.ai.flow.support.redact import definition_for_user
 from huf.ai.flow.testrun import normalize_mode, stored_mode
-
 
 # ---------------------------------------------------------------------------
 # Time helpers
@@ -83,7 +83,7 @@ def _expire_overdue_approvals(flow_run_id: str | None = None) -> None:
 		else:
 			triggers.expire_due_approvals(enqueue=True)
 	except Exception:
-		frappe.log_error(frappe.get_traceback(), "Flow lazy approval expiry")
+		log_flow_error(frappe.get_traceback(), "Flow lazy approval expiry")
 
 
 def _is_stale(status: str | None, modified) -> bool:
@@ -226,8 +226,8 @@ def save_flow_definition(flow_id: str, definition_json: str | dict) -> dict:
 		)
 		doc.insert()
 
-	from huf.ai.graph.validation.flow_validation import unfinished_count
 	from huf.ai.flow.support.router_text import text_ref_warnings_for
+	from huf.ai.graph.validation.flow_validation import unfinished_count
 
 	warnings = text_ref_warnings_for(definition_json)
 	unfinished = unfinished_count(definition_json)
@@ -342,7 +342,8 @@ def run_flow(
 	except ValueError as exc:
 		frappe.throw(_(str(exc)))
 
-	from huf.ai.flow.engine import create_flow_run, run_flow as engine_run_flow
+	from huf.ai.flow.engine import create_flow_run
+	from huf.ai.flow.engine import run_flow as engine_run_flow
 
 	flow_run = create_flow_run(
 		flow_id=flow_id,
@@ -749,7 +750,7 @@ def _parse_webhook_payload() -> dict:
 		if raw:
 			payload = frappe.parse_json(raw)
 	except (json.JSONDecodeError, TypeError):
-		frappe.log_error(frappe.get_traceback(), "Flow Webhook Payload Parse Error")
+		log_flow_error(frappe.get_traceback(), "Flow Webhook Payload Parse Error")
 		payload = {}
 
 	if not payload:
@@ -897,7 +898,6 @@ def get_node_schemas() -> dict:
 
 from huf.ai.flow.listing.tools import list_flow_tools  # noqa: E402,F401  (whitelisted endpoint; lives in listing/ to keep this file small)
 
-
 # ---------------------------------------------------------------------------
 # Agent Tools (for agents to interact with flows)
 # ---------------------------------------------------------------------------
@@ -925,7 +925,8 @@ def handle_run_flow(flow_id: str, payload: str | dict | None = None, **kwargs) -
 			except (json.JSONDecodeError, TypeError):
 				payload = {}
 
-		from huf.ai.flow.engine import create_flow_run, run_flow as engine_run_flow
+		from huf.ai.flow.engine import create_flow_run
+		from huf.ai.flow.engine import run_flow as engine_run_flow
 
 		flow_run = create_flow_run(flow_id=flow_id, payload=payload or {})
 		
@@ -941,7 +942,7 @@ def handle_run_flow(flow_id: str, payload: str | dict | None = None, **kwargs) -
 			"current_node_id": flow_run.current_node_id,
 		}
 	except Exception as e:
-		frappe.log_error(frappe.get_traceback(), "Run Flow Tool Error")
+		log_flow_error(frappe.get_traceback(), "Run Flow Tool Error")
 		return {"success": False, "error": str(e)}
 
 
@@ -982,7 +983,7 @@ def handle_get_flow_run(flow_run_id: str, **kwargs) -> dict:
 			"waiting": waiting,
 		}
 	except Exception as e:
-		frappe.log_error(frappe.get_traceback(), "Get Flow Run Tool Error")
+		log_flow_error(frappe.get_traceback(), "Get Flow Run Tool Error")
 		return {"success": False, "error": str(e)}
 
 
@@ -1013,7 +1014,7 @@ def handle_resume_flow_run(flow_run_id: str, input: dict | None = None, **kwargs
 			"current_node_id": doc.current_node_id,
 		}
 	except Exception as e:
-		frappe.log_error(frappe.get_traceback(), "Resume Flow Run Tool Error")
+		log_flow_error(frappe.get_traceback(), "Resume Flow Run Tool Error")
 		return {"success": False, "error": str(e)}
 
 
@@ -1034,7 +1035,8 @@ def handle_approve_flow_run(flow_run_id: str, decision: str = "approved", commen
 		return {"error": "Insufficient permissions to approve flow runs"}
 
 	try:
-		from huf.ai.flow.engine import approve_flow_run as engine_approve, verify_approval_permission
+		from huf.ai.flow.engine import approve_flow_run as engine_approve
+		from huf.ai.flow.engine import verify_approval_permission
 
 		doc = frappe.get_doc("Agent Flow Run", flow_run_id)
 		verify_approval_permission(doc)
@@ -1048,7 +1050,7 @@ def handle_approve_flow_run(flow_run_id: str, decision: str = "approved", commen
 			"current_node_id": doc.current_node_id,
 		}
 	except Exception as e:
-		frappe.log_error(frappe.get_traceback(), "Approve Flow Run Tool Error")
+		log_flow_error(frappe.get_traceback(), "Approve Flow Run Tool Error")
 		return {"success": False, "error": str(e)}
 
 
