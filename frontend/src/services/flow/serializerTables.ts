@@ -11,6 +11,7 @@ export const TRIGGER_TO_NODE_TYPE: Record<TriggerType, string> = {
   webhook: 'trigger.webhook',
   schedule: 'trigger.schedule',
   'doc-event': 'trigger.doc-event',
+  app: 'trigger.app',
   ...Object.fromEntries(GATEWAY_TRIGGER_KINDS.map((k) => [k.id, k.nodeType])),
 } as Record<TriggerType, string>;
 
@@ -24,6 +25,7 @@ export const TRIGGER_CONFIG_KEYS: Record<string, string[]> = {
   'trigger.webhook': ['method', 'secret'],
   'trigger.schedule': ['cron', 'time_zone'],
   'trigger.doc-event': ['doctype', 'event'],
+  'trigger.app': ['app', 'entry_policy'],
   ...Object.fromEntries(GATEWAY_TRIGGER_KINDS.map((k) => [k.nodeType, ['gateway', 'entry_policy', 'params']])),
 };
 
@@ -42,6 +44,7 @@ export const REQUIRED_CONFIG_KEYS: Partial<Record<string, string[]>> = {
     'trigger.webhook': ['method', 'secret'],
     'trigger.schedule': ['cron'],
     'trigger.doc-event': ['doctype', 'event'],
+    'trigger.app': ['app'],
     ...Object.fromEntries(GATEWAY_TRIGGER_KINDS.map((k) => [k.nodeType, ['gateway']])),
     'agent.run': ['agent', 'prompt'],
     'tool.call': ['tool_id'],
@@ -74,6 +77,7 @@ export function getDefaultLabel(backendType: string): string {
         'trigger.gateway': 'Chat message',
         'trigger.whatsapp': 'WhatsApp message',
         'trigger.telegram': 'Telegram message',
+        'trigger.app': 'App trigger',
         'trigger.unset': 'Select trigger',
         'agent.run': 'Run agent',
         'tool.call': 'Call tool',
@@ -111,6 +115,7 @@ export function getDefaultIcon(backendType: string): string {
         'trigger.gateway': 'MessageSquare',
         'trigger.whatsapp': 'MessageCircle',
         'trigger.telegram': 'Send',
+        'trigger.app': 'AppWindow',
         'trigger.unset': 'CircleDashed',
         'agent.run': 'SquareAsterisk',
         'tool.call': 'Play',

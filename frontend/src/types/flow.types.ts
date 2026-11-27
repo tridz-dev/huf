@@ -13,7 +13,8 @@ export type TriggerType =
   | 'doc-event'
   | 'gateway'
   | 'whatsapp'
-  | 'telegram';
+  | 'telegram'
+  | 'app';
 
 /**
  * Value (FIELD_CONTRACT section 2): literal, `{$from}` reference, `{$template, vars}`,
@@ -117,8 +118,17 @@ export interface GatewayTriggerUiConfig {
   params?: Array<{ key: string; value: string | number | boolean | string[] | null }>;
 }
 
+/** `trigger.app`: only its app starts the flow (through start_flow_for_member); the builder shows it, never offers it. */
+export interface AppTriggerConfig {
+  type: 'app';
+  /** The app that starts the flow, shown as "Started by <app>". */
+  app?: string;
+  entry_policy?: 'new_run_each_time' | 'resume_if_waiting' | 'once_per_member' | 'one_active_per_member';
+}
+
 export type TriggerConfig =
   | WebhookTriggerConfig
+  | AppTriggerConfig
   | ScheduleTriggerConfig
   | DocEventTriggerConfig
   | GatewayTriggerUiConfig
