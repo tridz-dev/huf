@@ -205,7 +205,9 @@ def measure_wave(scale: Scale) -> dict:
 			)
 			raw_numbers[run.name] = phone(i)
 			config = {"gateway": "gw", "recipient": phone(i), "template": "promo", "category": "marketing"}
-			node = step_keys.with_key({"id": "s1", "type": "send.message", "config": config}, f"{run.name}:s1:1")
+			node = step_keys.with_key(
+				{"id": "s1", "type": "send.message", "config": config}, f"{run.name}:s1:1"
+			)
 			for _delivery in range(2 if i % DUPLICATE_EVERY == 0 else 1):
 				result = send.exec_send_message(run, node, dict(config), {})
 				scan(run.name, json.dumps(result, default=str))
@@ -242,7 +244,10 @@ def measure_guard(scale: Scale) -> dict:
 			}
 			allowed += guard.evaluate(request).allowed
 		elapsed = time.perf_counter() - started
-	return {"guard_sends_per_minute": len(addresses) * 60 / elapsed, "guard_blocked": len(addresses) - allowed}
+	return {
+		"guard_sends_per_minute": len(addresses) * 60 / elapsed,
+		"guard_blocked": len(addresses) - allowed,
+	}
 
 
 def measure_replay(scale: Scale) -> dict:
