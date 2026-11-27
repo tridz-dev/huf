@@ -12,7 +12,8 @@ Retry classes (:func:`classify`):
   again there, CONTRACTS.md section 7) is final with the cap slot already spent.
 
 Delivery error shape (:func:`delivery_error`): ``{"class", "code", "kind"}``. No message text, phone or
-value (G4). A row stores token names and the step's references (``recipient_ref``, ``text_ref``); the
+value (G4). A row stores token names and the step's references (``recipient_ref``, which may be
+``"$member"``, and ``text_ref``); the
 recipient, text and token values are resolved again from the run at delivery and handed only to the
 transport. The step key (H-W2-13) is the unique row key and the transport idempotency token, so a
 re-delivered job never makes a second transport effect for a row already sent (G5).
@@ -27,7 +28,7 @@ from typing import Any
 import frappe
 from frappe.utils import add_to_date, now_datetime
 
-from huf.ai.channels import guard_steps, token_binder
+from huf.ai.channels import guard_steps, recipient_binder, token_binder
 
 DOCTYPE = "Channel Outbox"
 TRANSIENT, PERMANENT, BLOCKED = "transient", "permanent", "blocked"
@@ -45,7 +46,7 @@ class LiteralRecipient(ValueError):
 
 def classify(error: Any) -> str:
 	"""The retry class of ``error``: a reason code string (guard/binder block), a classification dict, or an exception."""
-	if isinstance(error, str) or isinstance(error, token_binder.TokenUnbound):
+	if isinstance(error, (str, token_binder.TokenUnbound, recipient_binder.RecipientUnbound)):
 		return BLOCKED
 	classification = error if isinstance(error, dict) else _classify_exception(error)
 	return TRANSIENT if classification.get("retryable") else PERMANENT
@@ -55,6 +56,8 @@ def delivery_error(error: Any) -> dict:
 	"""``{"class", "code", "kind"}`` for ``error``; codes and kinds only, never message text (G4)."""
 	if isinstance(error, token_binder.TokenUnbound):
 		return {"class": BLOCKED, "code": token_binder.TOKEN_UNBOUND, "kind": "guard"}
+	if isinstance(error, recipient_binder.RecipientUnbound):
+		return {"class": BLOCKED, "code": recipient_binder.RECIPIENT_UNBOUND, "kind": "guard"}
 	if isinstance(error, str):
 		return {"class": BLOCKED, "code": error, "kind": "guard"}
 	classification = error if isinstance(error, dict) else _classify_exception(error)
@@ -147,6 +150,13 @@ def deliver(name: str, *, transport: Callable | None = None, resolver: Callable 
 			return _finish(row, "Blocked", delivery_error(exc))
 	try:
 		recipient, text = (resolver or resolve_from_run)(row)
+	except recipient_binder.RecipientUnbound as exc:
+		values = {}
+		return _finish(row, "Blocked", delivery_error(exc))
+	except Exception as exc:  # noqa: BLE001 - classified like a transport error
+		values = {}
+		return _failed_attempt(row, delivery_error(exc))
+	try:
 		answer = (transport or whatsapp_transport)(row, recipient, text, values)
 	except Exception as exc:  # noqa: BLE001 - every transport error is classified
 		return _failed_attempt(row, delivery_error(exc))
@@ -207,7 +217,10 @@ def resolve_from_run(row) -> tuple[str | None, str | None]:
 
 	flow_run = frappe.get_doc("Agent Flow Run", row.run_id)
 	ctx = _context_of(flow_run, None)
-	raw = ctx.resolve(row.recipient_ref)
+	if recipient_binder.is_member_ref(row.recipient_ref):
+		raw = recipient_binder.resolve(row.gateway, row.member_key, _refs(row, flow_run))
+	else:
+		raw = ctx.resolve(row.recipient_ref)
 	recipient = guard_steps.normalise_recipient(raw) or (raw if isinstance(raw, str) else None)
 	text = ctx.resolve(row.text_ref) if row.text_ref else None
 	return recipient, (str(text) if text is not None else None)
@@ -232,7 +245,7 @@ def whatsapp_transport(row, recipient, text, values) -> dict:
 			account,
 			phone,
 			row.template,
-			_body_params(token_names, values) if token_names else [],
+			_body_params(token_names, values, named=template_is_named(row.template)) if token_names else [],
 			[header] if header else [],
 			language_code=row.language or None,
 			gateway_name=row.gateway,
@@ -282,8 +295,28 @@ def _finish(row, status: str, error: dict | None, provider_message_id: str | Non
 	return status
 
 
-def _refs(row) -> dict:
-	return {"flow_id": None, "flow_version": "", "run_id": row.run_id, "node_id": row.node_id}
+def template_is_named(template: str | None) -> bool:
+	"""Whether the WhatsApp template takes NAMED parameters; positional (a list) when unknown."""
+	from huf.ai.gateway_adapters import whatsapp_bridge as bridge
+
+	if not template:
+		return False
+	row = bridge._template_row(template) or {}
+	return str(row.get("parameter_format") or "").upper() == "NAMED"
+
+
+def _refs(row, flow_run=None) -> dict:
+	"""All four binder context keys of ``row`` (CONTRACTS.md section 7), read from its run."""
+	if flow_run is None and row.run_id:
+		flow = frappe.db.get_value("Agent Flow Run", row.run_id, ["flow_id", "flow_version"], as_dict=True)
+	else:
+		flow = flow_run
+	return {
+		"flow_id": getattr(flow, "flow_id", None) if flow else None,
+		"flow_version": str((getattr(flow, "flow_version", "") if flow else "") or ""),
+		"run_id": row.run_id,
+		"node_id": row.node_id,
+	}
 
 
 def _classify_exception(exc: BaseException) -> dict:
