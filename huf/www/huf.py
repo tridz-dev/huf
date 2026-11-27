@@ -121,8 +121,24 @@ def _embed_path_segments() -> list[str] | None:
 	return segments[2:]
 
 
+class EmbedNotPermitted(Exception):
+	"""Embed access denied.
+
+	Deliberately not a ``frappe.PermissionError``: Frappe renders those with a Login
+	button that would navigate the iframe to /login, which the embed contract forbids
+	(docs/flow/BUILDER_EMBED.md). This goes to Frappe's plain error page as a 403.
+	"""
+
+	http_status_code = 403
+
+	def __init__(self):
+		self.title = _("Not Permitted")
+		self.message = _("You do not have access to this flow.")
+		super().__init__(self.message)
+
+
 def _check_embed_access(segments: list[str]) -> None:
-	"""Raise PermissionError unless the user could open this flow in the full editor."""
+	"""Raise EmbedNotPermitted unless the user could open this flow in the full editor."""
 	from huf.permissions import has_capability
 
 	allowed = (
@@ -138,7 +154,7 @@ def _check_embed_access(segments: list[str]) -> None:
 		if frappe.db.exists("Flow Definition", flow_id):
 			allowed = frappe.has_permission("Flow Definition", "read", doc=flow_id)
 	if not allowed:
-		frappe.throw(_("Not permitted"), frappe.PermissionError)
+		raise EmbedNotPermitted()
 
 
 def _embed_boot(segments: list[str]) -> dict:
