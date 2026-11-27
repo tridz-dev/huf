@@ -14,8 +14,11 @@ import frappe.client
 from frappe.tests import IntegrationTestCase
 
 from huf.ai.flow import api as flow_api
-from huf.ai.flow.app_scope import access, docperms
+from huf.ai.flow.app_scope import access, docperms, targets
+from huf.ai.flow.app_scope import gateways as app_gateway_list
 from huf.ai.flow.app_scope.ownership import create_app_flow
+from huf.ai.flow.gateways.api import get_app_flow_gateways
+from huf.ai.flow.preflight import run_preflight
 from huf.ai.flow.tests.test_flow_draft_validation import _end, _graph
 
 FLOW, OTHER = "test-secsave-a", "test-secsave-b"
@@ -145,6 +148,48 @@ class TestAppDraftSave(IntegrationTestCase):
 	def test_send_step_needs_authority_over_a_new_gateway(self):
 		config = {"gateway": "someone-elses-gw", "recipient": "$member"}
 		self._refused(_defn({"id": "tell", "type": "send.message", "config": config, "next": "end"}, first="tell"))
+
+	def _gateway(self):
+		doc = frappe.get_doc(
+			{"doctype": "Gateway", "gateway_name": f"AppGW {frappe.generate_hash(length=8)}", "provider": "Telegram"}
+		)
+		frappe.set_user("Administrator")
+		doc.insert(ignore_permissions=True, ignore_mandatory=True)
+		frappe.set_user(USER)
+		return doc.name
+
+	def _sending(self, gateway):
+		config = {"gateway": gateway, "recipient": "$member", "message": ""}
+		return _defn({"id": "human", "type": "handoff", "config": config, "next": "end"}, first="human")
+
+	def test_gateway_listed_by_the_app_saves_and_passes_preflight(self):
+		name = self._gateway()
+		self.assertEqual(get_app_flow_gateways(FLOW), {"restricted": True, "gateways": []})
+		self._refused(self._sending(name))  # no hook registered: nothing new may be named
+		self.assertIn("APP_GATEWAY_NOT_ALLOWED", self._codes(self._sending(name)))
+		with mock.patch.object(targets, "app_gateways", return_value={name}):
+			self.assertNotIn("APP_GATEWAY_NOT_ALLOWED", self._codes(self._sending(name)))
+			flow_api.save_flow_definition(FLOW, self._sending(name))
+		# Once stored it stays usable, without the hook.
+		self.assertNotIn("APP_GATEWAY_NOT_ALLOWED", self._codes(self._sending(name)))
+		self.assertEqual([g["name"] for g in get_app_flow_gateways(FLOW)["gateways"]], [name])
+
+	def _codes(self, definition):
+		return {f.code for f in run_preflight(definition, FLOW)}
+
+	def test_hook_answers_fail_closed(self):
+		def call(**kwargs):
+			with (
+				mock.patch.object(frappe, "get_hooks", return_value={"huf": ["a.b"]}),
+				mock.patch.object(frappe, "get_attr", **kwargs),
+			):
+				return app_gateway_list.app_gateways("huf", USER)
+
+		self.assertEqual(call(return_value=lambda app, user: ["gw"]), {"gw"})
+		self.assertEqual(call(return_value=lambda app, user: "gw"), set())
+		self.assertEqual(call(return_value=lambda app, user: [1]), set())
+		self.assertEqual(call(side_effect=ImportError), set())
+		self.assertEqual(app_gateway_list.app_gateways("huf", USER), set())
 
 	def test_malformed_definition_is_refused(self):
 		self._refused({**_defn(), "nodes": {"a": {"type": "code.run"}}})

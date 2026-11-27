@@ -152,7 +152,30 @@ def _facts_checks(defn, flow_id: str | None) -> list[Finding]:
 	return found
 
 
-def _app_target_checks(defn, owner_app: str | None) -> list[Finding]:
+def _stored_nodes(flow_id: str | None) -> list[dict]:
+	if not flow_id:
+		return []
+	stored = frappe.db.get_value("Flow Definition", flow_id, "definition_json")
+	return _nodes(frappe.parse_json(stored)) if stored else []
+
+
+def _app_gateway_checks(nodes: list[dict], flow_id: str | None, owner_app: str) -> list[Finding]:
+	"""For a user who is not privileged: every Gateway is one the stored flow already uses or the app lists."""
+	from huf.ai.flow.app_scope import targets
+	from huf.ai.flow.app_scope.access import is_privileged
+
+	user = frappe.session.user
+	if is_privileged(user) or not targets.gateway_names(nodes):
+		return []
+	refused = set(targets.unauthorised_gateways(_stored_nodes(flow_id), nodes, owner_app, user))
+	return [
+		Finding("APP_GATEWAY_NOT_ALLOWED", n.get("id"))
+		for n in nodes
+		if targets.gateway_names([n]) & refused
+	]
+
+
+def _app_target_checks(defn, flow_id: str | None, owner_app: str | None) -> list[Finding]:
 	"""In an app-owned flow, a step may only reach whom the app may reach (see ``app_scope/targets.py``)."""
 	if not owner_app:
 		return []
@@ -169,6 +192,9 @@ def _app_target_checks(defn, owner_app: str | None) -> list[Finding]:
 		and _blank(_config(n).get("gateway"))
 		and n.get("id") not in {f.node_id for f in found}
 	]
+	# A computed Gateway is already reported; its value is not a name to look up.
+	computed = set(targets.computed_gateways(nodes))
+	found += _app_gateway_checks([n for n in nodes if n.get("id") not in computed], flow_id, owner_app)
 	return found
 
 
@@ -227,7 +253,7 @@ def run_preflight(defn, flow_id: str | None = None, *, owner_app: str | None = N
 	try:
 		from huf.ai.flow.app_scope.ownership import owner_app_of
 
-		found.extend(_app_target_checks(defn, owner_app or owner_app_of(flow_id)))
+		found.extend(_app_target_checks(defn, flow_id, owner_app or owner_app_of(flow_id)))
 	except Exception as exc:  # noqa: BLE001 -- a broken check becomes an error finding
 		_log_failure("_app_target_checks", exc)
 		found.append(Finding("PREFLIGHT_CHECK_ERROR"))

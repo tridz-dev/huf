@@ -1,5 +1,6 @@
 import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
-import { useGatewayRegistry } from '@/hooks/flow/useGatewayRegistry';
+import { useStepGateways } from '@/hooks/flow/useStepGateways';
+import { useFlowContext } from '@/contexts/FlowContext';
 import { SEND_CATEGORIES, SEND_PROVIDERS } from '@/lib/flow-send/sendMessage';
 import { Combobox } from '../../ui/combobox';
 import { Input } from '../../ui/input';
@@ -15,9 +16,10 @@ import { type ActionFormProps, Section, str } from './formKit';
  */
 export function SendMessageForm({ nodeId, cfg, patch, f, Err, title }: ActionFormProps) {
   const { canManage } = useFlowPermissions();
-  const { registry, failed } = useGatewayRegistry(canManage);
+  const { activeFlow } = useFlowContext();
+  const { gateways, failed } = useStepGateways(activeFlow?.id, canManage);
   const gateway = str(cfg.gateway);
-  const options = (registry?.gateways ?? [])
+  const options = (gateways ?? [])
     .filter((g) => SEND_PROVIDERS.includes(g.provider.toLowerCase()))
     .map((g) => ({ value: g.name, label: g.label || g.name }));
   const usesText = cfg.text !== undefined && cfg.template === undefined;
@@ -34,9 +36,9 @@ export function SendMessageForm({ nodeId, cfg, patch, f, Err, title }: ActionFor
           testId={f('gateway')}
           options={gateway && !options.some((o) => o.value === gateway) ? [{ value: gateway, label: gateway }, ...options] : options}
           value={gateway}
-          disabled={disabled || (!registry && !failed)}
+          disabled={disabled || (!gateways && !failed)}
           onValueChange={(v) => v && patch({ gateway: v })}
-          placeholder={registry || failed ? 'Choose a WhatsApp number...' : 'Loading...'}
+          placeholder={gateways || failed ? 'Choose a WhatsApp number...' : 'Loading...'}
           searchPlaceholder="Search numbers..."
           emptyText={failed ? 'Could not load your channels. Try again.' : 'No WhatsApp number is connected yet.'}
         />
