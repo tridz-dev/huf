@@ -69,7 +69,8 @@ export type ActionType =
   | 'doc-get'
   | 'doc-update'
   | 'flow-call'
-  | 'member-set';
+  | 'member-set'
+  | 'send-message';
 
 /** Wait step config (graph-IR `WaitNode`). `until` is a literal, reference or template; the timeout branch is a routing pointer. */
 export type WaitMode = 'duration' | 'until' | 'resume';
@@ -269,6 +270,19 @@ export interface MemberSetActionConfig {
   vars?: Record<string, FlowValue>;
 }
 
+/** Send message (graph-IR `send.message`): one message to the run's person, always through the guard chain. */
+export interface SendMessageActionConfig {
+  type: 'send-message';
+  gateway?: string;
+  recipient?: FlowValue;
+  template?: FlowValue;
+  text?: FlowValue;
+  variables?: string[];
+  category?: 'marketing' | 'service';
+  header?: Record<string, unknown>;
+  language?: string;
+}
+
 /** Run another flow (graph-IR `flow.call`). */
 export interface FlowCallActionConfig {
   type: 'flow-call';
@@ -322,6 +336,7 @@ export type ActionConfig =
   | DocUpdateActionConfig
   | FlowCallActionConfig
   | MemberSetActionConfig
+  | SendMessageActionConfig
   | UnknownActionConfig
   | { type: undefined };
 

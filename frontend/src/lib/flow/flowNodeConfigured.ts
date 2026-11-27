@@ -1,4 +1,5 @@
 import type { ActionConfig, FlowNodeData } from '../../types/flow.types';
+import { sendMessageIssues } from '@/lib/flow-send/sendMessage';
 
 /**
  * Whether an action node carries user-entered configuration worth protecting
@@ -48,6 +49,8 @@ export function actionHasConfiguredContent(data: Pick<FlowNodeData, 'actionConfi
       return Boolean(config.flow_id);
     case 'member-set':
       return Object.keys(config.vars ?? {}).length > 0;
+    case 'send-message':
+      return sendMessageIssues(config as unknown as Record<string, unknown>).length === 0;
     case 'unknown':
       return true;
     default:

@@ -218,6 +218,8 @@ export function actionSubtitle(cfg: ActionConfig | undefined): string {
       const n = Object.keys(cfg.vars ?? {}).length;
       return n > 0 ? `Remembers ${n} ${n === 1 ? 'value' : 'values'} for this person` : 'Save values for this person';
     }
+    case 'send-message':
+      return cfg.category === 'marketing' ? 'Sends a marketing message' : 'Sends a message';
     case 'flow-call':
       return cfg.mode === 'wait' ? 'Runs another flow and waits' : 'Starts another flow';
     default:

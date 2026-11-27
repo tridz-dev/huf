@@ -2,6 +2,7 @@ import { Badge } from '@/components/ui/badge';
 import { HumanValue } from '@/components/common/HumanValue';
 import { asCodeStepOutput, titleNodeIds, withoutFailureKeys } from '@/lib/flow-run/flowRunFormat';
 import { humanize } from '@/lib/flow-run/humanize';
+import { sendOutcomeSummary } from '@/lib/flow-send/sendMessage';
 import { findSimulated, redactSecrets, summarizeToolOutput } from '@/lib/flow/flowToolSummary';
 
 /** Keys an approval step's output carries: its sentence ("Approved by Ana on ...") already says all of them. */
@@ -50,7 +51,7 @@ export function RunStepOutput({ stepId, output, reasonShown, failed, decisionSho
     const safe = redactSecrets(useInput ? dataReceived : shown);
     const safeOriginal = redactSecrets(useInput ? dataReceived : original);
     const simulated = failed ? null : findSimulated(output);
-    const summary = failed ? null : summarizeToolOutput(toolId, output) ?? (simulated ? `${simulated.summary} (skipped in test)` : null);
+    const summary = failed ? null : summarizeToolOutput(toolId, output) ?? sendOutcomeSummary(output) ?? (simulated ? `${simulated.summary} (skipped in test)` : null);
     const codeOut = asCodeStepOutput(safe);
 
     if (codeOut) {
