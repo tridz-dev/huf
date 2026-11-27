@@ -14,13 +14,13 @@ from huf.ai.flow import engine as flow_engine
 from huf.ai.flow import preflight
 from huf.ai.flow.runs.edges import edges_from_nodes
 from huf.ai.flow.support import facts, reason_codes
+from huf.ai.flow.tests.test_flow_draft_validation import _graph, _trigger
 from huf.ai.graph.expressions import ExpressionError, parse_expression
 from huf.ai.graph.validator import validate_graph
-from huf.ai.flow.tests.test_flow_draft_validation import _graph, _trigger
 
 M = "huf.ai.flow.tests.test_flow_condition_facts"
 CALLS = []
-SECRET = "tier-value-7f3a"
+MARK = "tier-value-7f3a"
 BEHAVIOUR = {"mode": "ok"}
 
 
@@ -28,12 +28,12 @@ def tier_provider(member_keys, names, context):
 	CALLS.append(("tier", list(member_keys), list(names), context))
 	mode = BEHAVIOUR["mode"]
 	if mode == "raise":
-		raise RuntimeError(SECRET)
+		raise RuntimeError(MARK)
 	if mode == "shape":
-		return [SECRET]
+		return [MARK]
 	if mode == "missing":
 		return {}
-	return {key: {"tier": SECRET, "tier_rank": 2, "points": 999} for key in member_keys}
+	return {key: {"tier": MARK, "tier_rank": 2, "points": 999} for key in member_keys}
 
 
 def points_provider(member_keys, names, context):
@@ -47,7 +47,7 @@ ENTRIES = [
 ]
 
 CONFIG = {
-	"expression": f"facts.tier == '{SECRET}' and facts.points > 10",
+	"expression": f"facts.tier == '{MARK}' and facts.points > 10",
 	"on_true": "yes",
 	"on_false": "no",
 	"fallback_next": "unknown_step",
@@ -104,7 +104,7 @@ class TestFlowConditionFacts(IntegrationTestCase):
 			self.assertEqual((result["next_node_id"], result["output"]), ("unknown_step", False), mode)
 			self.assertEqual(result["reason_code"], "facts_error", mode)
 			self.assertEqual(settings.context.data["_huf_reasons"], {"c": "facts_error"})
-			self.assertNotIn(SECRET, json.dumps(result))
+			self.assertNotIn(MARK, json.dumps(result))
 		result, _ = self._evaluate(member=None)
 		self.assertEqual(result["next_node_id"], "unknown_step")
 		BEHAVIOUR["mode"] = "ok"
@@ -158,7 +158,7 @@ class TestFlowConditionFacts(IntegrationTestCase):
 		settings.context.record_output("c", result["output"])
 		settings.save_context()
 		stored = json.dumps(frappe.get_doc("Agent Flow Run", run.name).as_dict(), default=str)
-		self.assertNotIn(SECRET, stored + json.dumps(result))
+		self.assertNotIn(MARK, stored + json.dumps(result))
 
 	def test_attribute_access_is_only_allowed_on_facts(self):
 		self.assertEqual(facts.names_used(parse_expression("facts.coupons['x'] == 'issued'")), (["coupons"], False))
