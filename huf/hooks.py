@@ -16,6 +16,9 @@ huf_decision_backends = {
     "fake": "huf.ai.decision.backends.fake.FakeDecisionBackend",
 }
 
+# A STOP keyword (existing ``huf_gateway_opt_out`` notify hook) also exits the sender from every flow.
+huf_gateway_opt_out = ["huf.ai.flow.runs.member.exit_on_opt_out"]
+
 # Apps
 # ------------------
 
