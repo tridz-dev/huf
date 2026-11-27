@@ -552,13 +552,15 @@ class TestQueueFirstRuns(unittest.TestCase):
         result = _exec_agent_run(
             flow_run,
             node={"id": "node-1"},
-            config={"agent_name": "Flow Agent", "input": {"prompt_template": "hello"}},
+            config={"agent": "Flow Agent", "prompt": "hello"},
             settings={},
         )
 
         self.assertEqual(result["status"], "success")
         self.assertEqual(result["agent_run_id"], "AR-FLOW-001")
         mock_run.assert_called_once()
+        self.assertEqual(mock_run.call_args.kwargs.get("agent_name"), "Flow Agent")
+        self.assertEqual(mock_run.call_args.kwargs.get("prompt"), "hello")
         self.assertTrue(mock_run.call_args.kwargs.get("now"))
 
     @patch("huf.ai.agent.scheduler.automation_runtime_is_new", return_value=False)

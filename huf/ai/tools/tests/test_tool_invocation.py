@@ -30,6 +30,7 @@ import asyncio
 import sys
 import types
 import unittest
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 
@@ -112,6 +113,12 @@ class _FakeDoc:
 		return self
 
 
+def _exception_class(name):
+	"""The real frappe exception on a bench; a local one under the frappe-free stub."""
+	real = getattr(sys.modules["frappe"], name, None)
+	return real if isinstance(real, type) else type(name, (Exception,), {})
+
+
 class _ToolInvocationFrappeDouble:
 	"""Minimal stand-in for the ``frappe`` module as ``huf/ai/tools/invocation.py`` uses it.
 
@@ -119,10 +126,21 @@ class _ToolInvocationFrappeDouble:
 	bench, so tests built against it prove the same thing in both environments.
 	"""
 
+	# The role check's except clause and a missing row use frappe's exception classes.
+	PermissionError = _exception_class("PermissionError")
+	DoesNotExistError = _exception_class("DoesNotExistError")
+
 	def __init__(self, user="Administrator"):
 		self.session = _FakeSession(user)
 		self.db = _FakeDB()
 		self.docs: list[_FakeDoc] = []
+
+	def get_cached_doc(self, doctype, name):
+		# Like frappe: a name with no stored row raises, it is never invented.
+		for row in self.db.tool_function_rows.values():
+			if doctype == "Agent Tool Function" and row.get("name") == name:
+				return SimpleNamespace(**row)
+		raise self.DoesNotExistError(f"{doctype} {name} not found")
 
 	def get_doc(self, data):
 		doc = _FakeDoc(data)
