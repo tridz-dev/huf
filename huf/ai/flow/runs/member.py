@@ -298,23 +298,34 @@ def exit_on_opt_out(gateway: str | None = None, sender_id: str | None = None, ki
 
 
 def purge_inactive(days: int | None = None) -> int:
-	"""Delete members with no activity for ``days`` (site config ``huf_flow_member_retention_days``, default 365; 0 = keep)."""
+	"""Delete members with no activity for ``days`` (site config ``huf_flow_member_retention_days``, default 365; 0 = keep).
+
+	A member with no ``last_event_at`` is aged by its creation date. Waiting members are kept. Returns the number removed.
+	"""
 	if days is None:
 		days = int(frappe.conf.get("huf_flow_member_retention_days", DEFAULT_RETENTION_DAYS) or 0)
 	if days <= 0:
 		return 0
 	cutoff = add_to_date(now_datetime(), days=-days)
-	inactive = {"last_event_at": ["<", cutoff], "status": ["!=", "Waiting"]}
+	# one condition for the read and the delete: a NULL last_event_at alone does not show that a row is old
+	inactive = "status != 'Waiting' and coalesce(last_event_at, creation) < %(cutoff)s"
 	removed = 0
+	last = ""
 	while True:
-		names = frappe.get_all(
-			DOCTYPE, filters=inactive, pluck="name", order_by="last_event_at asc", limit=PURGE_BATCH_SIZE
+		# ``name > last`` moves forward on every batch, so the loop ends even if a row is not deleted
+		names = frappe.db.sql_list(
+			f"select name from `tab{DOCTYPE}` where name > %(last)s and {inactive} order by name limit %(limit)s",  # noqa: S608 - constants
+			{"last": last, "cutoff": cutoff, "limit": PURGE_BATCH_SIZE},
 		)
 		if names:
 			# one short transaction per batch; a member active again since the read is left alone
-			frappe.db.delete(DOCTYPE, {"name": ["in", names], **inactive})
+			frappe.db.sql(
+				f"delete from `tab{DOCTYPE}` where name in %(names)s and {inactive}",  # noqa: S608 - constants
+				{"names": tuple(names), "cutoff": cutoff},
+			)
+			removed += frappe.db._cursor.rowcount
 			commit_if_background()
-			removed += len(names)
+			last = names[-1]
 		if len(names) < PURGE_BATCH_SIZE:
 			return removed
 
