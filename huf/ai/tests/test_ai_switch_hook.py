@@ -34,6 +34,15 @@ class TestAISwitch(IntegrationTestCase):
 				RunBudget.from_agent(Mock(max_turns=5))
 		self.assertEqual(str(caught.exception), "ai_disabled")
 
+	def test_switch_off_stops_an_already_queued_run_before_the_provider_call(self):
+		run = {"agent": "a1", "budget_deadline_at": add_days(now_datetime(), 1)}
+		with patch.dict(frappe.local.conf, {"huf_ai_disabled": 1}):
+			budget = RunBudget.from_run_doc(run)  # rebuilding must not raise
+		with self.assertRaises(AIDisabled) as caught:
+			budget.check_deadline()
+		self.assertEqual(str(caught.exception), "ai_disabled")
+		RunBudget.from_run_doc(run).check_deadline()  # switch back on: runs again
+
 	def test_provider_switches_off_only_its_agents(self):
 		def provider(agent=None):
 			return {"enabled": False} if agent == "mine" else None

@@ -46,7 +46,7 @@ def ai_policy(agent: str | None = None) -> dict:
                 enabled = False
             caps.append(flt(policy.get("spend_cap_usd")))
         except Exception:  # noqa: BLE001
-            frappe.logger("huf").warning(f"{FEATURE_MAP_HOOK}: provider {path} failed", exc_info=True)
+            frappe.logger("huf").error(f"{FEATURE_MAP_HOOK}: provider {path} failed", exc_info=True)
             enabled = False
     return {"enabled": enabled, "spend_cap_usd": min((c for c in caps if c > 0), default=0.0)}
 
@@ -75,13 +75,16 @@ class RunBudget:
         self.ancestry = ancestry  # list of parent run IDs
         self.spend_cap_usd = spend_cap_usd  # cumulative cap for the chain
         self.spend_so_far_usd = 0.0  # updated as runs complete
+        self.ai_disabled = False  # kill switch state of a rebuilt (queued) run
 
     def is_deadline_exceeded(self) -> bool:
         """Check if wall-clock deadline has passed."""
         return datetime.now() > self.deadline_at
 
     def check_deadline(self):
-        """Raise if deadline exceeded."""
+        """Raise if AI was switched off for this run, or if the deadline is exceeded."""
+        if self.ai_disabled:
+            frappe.throw(AI_DISABLED, AIDisabled)
         if self.is_deadline_exceeded():
             frappe.throw("Run budget deadline exceeded",
                        RunBudgetExceeded)
@@ -168,7 +171,8 @@ class RunBudget:
         # Fetch settings for spend cap
         spend_cap = frappe.db.get_single_value("Agent Settings", "spend_cap_usd")
         spend_cap = flt(spend_cap) if spend_cap is not None else 0
-        spend_cap = _lowest_cap(spend_cap, ai_policy(run_doc.get("agent"))["spend_cap_usd"])
+        policy = ai_policy(run_doc.get("agent"))
+        spend_cap = _lowest_cap(spend_cap, policy["spend_cap_usd"])
 
         budget = RunBudget(
             deadline_at=deadline_at,
@@ -178,6 +182,9 @@ class RunBudget:
             spend_cap_usd=spend_cap
         )
         budget.spend_so_far_usd = run_doc.get("budget_spend_usd") or 0.0
+        # Not raised here: the queued worker rebuilds the budget before it owns the run. The
+        # check_deadline() ahead of every provider call raises, so the run is failed normally.
+        budget.ai_disabled = not policy["enabled"]
         return budget
 
 
