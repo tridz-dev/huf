@@ -107,7 +107,7 @@ class TestFlowGatewayBinding(unittest.TestCase):
 			self.assertEqual(self._bound({"gateway": GW}), "")
 
 	def test_starting_gateway_event_binds_its_gateway(self):
-		row = {"gateway": GW, "sender_id": CONTACT}
+		row = {"gateway": GW, "sender_id": CONTACT, "flow_run": "FR"}
 		with patch.object(frappe.db, "get_value", return_value=row):
 			self.assertEqual(self._bound({"gateway_event": "EV-1", "gateway": "GW-OTHER"}), GW)
 
