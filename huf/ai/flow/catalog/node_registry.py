@@ -32,6 +32,7 @@ from typing import Callable
 
 import frappe
 
+from huf.ai.flow.nodes import split as split_node
 from huf.ai.flow.support import step_keys
 from huf.ai.graph.error_copy import describe_exception, step_failed_sentence
 from huf.ai.graph.executor import Outcome, RoutingMode
@@ -48,7 +49,7 @@ _TEST_MODES = ("skip", "run")
 #: (``code.run``, ``tool.call``, ``doc.create``, ``doc.update``) stay out; a new built-in is excluded until added here.
 EMBED_BUILTIN_TYPES = (
 	"trigger.unset", "trigger.schedule", "trigger.doc-event", "condition", "router.decision", "transform", "foreach",
-	"wait", "stop", "output", "human.approval", "member.set", "send.message", "knowledge.search",
+	"wait", "stop", "output", "human.approval", "member.set", "send.message", "knowledge.search", "split",
 )
 
 
@@ -66,6 +67,7 @@ class NodeCallContext:
 	node_id: str = ""  # the step's id in the flow (H-W2-13)
 	step_key: str = ""  # idempotency token for this try of this step (H-W2-13, CONTRACTS section 12)
 	live: bool = False  # live_send AND NOT dry_run (G3); False in test runs and before live_send is on
+	holdout: bool = False  # the run was held out by a split node (H-W2-07, CONTRACTS section 16)
 
 
 @dataclass(frozen=True)
@@ -230,6 +232,7 @@ def executor_for(type_id: str | None):
 			is_resume=bool(waiting),
 			waiting=waiting,
 			live=test_gate.is_live(flow_run),
+			holdout=split_node.is_holdout(ctx.data),
 			node_id=node.get("id") or "",
 			step_key=step_keys.key_of(node),
 		)

@@ -28,6 +28,7 @@ _NODE_DISPLAY = {
 	"flow.call": ("Run another flow", "Workflow", "advanced"),
 	"member.set": ("Remember for this person", "UserPen", "data"),
 	"send.message": ("Send message", "Send", "data"),
+	"split": ("Split / holdout", "Split", "control"),
 	"condition": ("Condition (IF)", "GitFork", "control"),
 	"foreach": ("Loop", "RotateCw", "control"),
 	"validate": ("Validate", "ShieldCheck", "control"),
