@@ -6,6 +6,7 @@ from frappe.model.document import Document
 from frappe.utils import now_datetime
 
 from huf.ai import system_records
+from huf.ai.flow.app_scope import ownership
 from huf.ai.graph.validation.flow_validation import validate_flow
 from huf.ai.graph.error_copy import describe_errors
 from huf.ai.graph.validator import FLOW_NODE_TYPES, MODE_DRAFT, MODE_PUBLISH
@@ -49,6 +50,11 @@ class FlowDefinition(Document):
 		self.updated_at = now_datetime()
 		system_records.guard_flag_tamper(self)
 		system_records.guard_field_immutability(self, unlocked_fields=SYSTEM_RECORD_UNLOCKED_FIELDS)
+		ownership.guard_owner_app(self)
+
+	def db_set(self, fieldname, value=None, *args, **kwargs):
+		ownership.guard_db_set(self, fieldname, value)
+		return super().db_set(fieldname, value, *args, **kwargs)
 
 	def before_save(self):
 		if not self.is_new():

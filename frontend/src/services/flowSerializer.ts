@@ -67,6 +67,8 @@ const ROUTING_KEYS: Partial<Record<BackendNodeType, string[]>> = {
     'human.approval': ['approve_next', 'reject_next', 'timeout_next'],
     'foreach': ['body'],
     'split': ['options'],
+    // Hand to a person: its "When time runs out" step is the Timed out connection on the canvas.
+    ['handoff' as BackendNodeType]: ['timeout_next'],
 };
 
 /** Node types with no `next` key at all. */
@@ -229,6 +231,9 @@ function serializeNode(node: FlowNode, outgoing: FlowEdge[], nextOf: Map<string,
             setIf('approve_next', first('approve'));
             setIf('reject_next', first('reject'));
             setIf('timeout_next', config.timeout_ms ? first('timeout') : undefined); // a Timed out path exists only with a time limit
+            break;
+        case 'handoff' as BackendNodeType:
+            setIf('timeout_next', config.timeout_ms ? first('timeout') : undefined);
             break;
         case 'wait': {
             // The Timed out path of a "until continued" wait lives inside `resume`; it exists only with a time limit.
@@ -467,6 +472,10 @@ function deserializeEdgesForNode(node: BackendNode, byId: Map<string, BackendNod
             break;
         case 'wait':
             push((cfg.resume as { timeout_next?: string } | undefined)?.timeout_next, 'timeout');
+            push(node.next, 'next');
+            break;
+        case 'handoff' as BackendNodeType:
+            push(cfg.timeout_next, 'timeout');
             push(node.next, 'next');
             break;
         case 'foreach':
