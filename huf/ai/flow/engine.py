@@ -1220,7 +1220,9 @@ def _make_node_handler(flow_run, settings):
 	"""Bridge one Flow node executor into the executor's handler contract."""
 
 	def handler(node: NodeSpec, context: GraphContext, state: ExecutionState):
-		if run_cancelled(flow_run.name):  # stop here: no step of a cancelled run starts
+		# stop here: no step of a cancelled run starts ("Cancelled" in memory: an earlier step reloaded the run)
+		status = getattr(flow_run, "status", None)
+		if status == "Cancelled" or (status == "Running" and run_cancelled(flow_run.name)):
 			flow_run.status = "Cancelled"
 			return Outcome.paused(PauseRequest(kind="user", status_label="Cancelled"))
 		raw = _with_step_key(flow_run, node.raw, settings)
