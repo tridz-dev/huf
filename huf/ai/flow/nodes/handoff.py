@@ -85,7 +85,9 @@ def exec_handoff(flow_run, node: dict, config: dict, settings: dict):
 	ctx = _context_of(flow_run, settings)
 	conversation = _find_conversation(ctx, config)
 	if not conversation:
-		return _failed("No open conversation was found to hand to a person. Choose the conversation, or the channel and contact.")
+		return _failed(
+			"No open conversation was found to hand to a person. Choose the conversation, or the channel and contact."
+		)
 	resume_at = None
 	if config.get("timeout_ms"):
 		try:
@@ -133,7 +135,10 @@ def parked_runs(conversation: str) -> list[str]:
 			waiting = json.loads(row.waiting or "{}")
 		except (TypeError, ValueError):
 			continue
-		if waiting.get("reason") == PARK_REASON and (waiting.get("extra") or {}).get("conversation") == conversation:
+		if (
+			waiting.get("reason") == PARK_REASON
+			and (waiting.get("extra") or {}).get("conversation") == conversation
+		):
 			names.append(row.name)
 	return names
 
