@@ -124,7 +124,7 @@ def open_conversation(gateway: str, contact: str) -> str | None:
 
 
 def exec_handoff(flow_run, node: dict, config: dict, settings: dict):
-	from huf.ai.flow.engine import _context_of, _persist_context, _transition_run
+	from huf.ai.flow.engine import _context_of, _persist_context, _transition_run, run_cancelled
 	from huf.ai.flow.support import reason_codes
 
 	waiting = park.is_reentry(flow_run, node)
@@ -170,12 +170,16 @@ def exec_handoff(flow_run, node: dict, config: dict, settings: dict):
 	summary = str(ctx.resolve(config.get("summary")) or "") if config.get("summary") else ""
 	_persist_context(flow_run, ctx, settings)  # a guard pass with a cap commits
 	message = _guarded_message(flow_run, node, config, conversation)
+	if run_cancelled(flow_run.name):  # cancelled (member removed) while this step ran: hand over and send nothing
+		return {"status": "success", "output": {"status": "blocked", "reason": "run_cancelled"}}
 	result = handoff_conversation(
 		conversation,
 		target=config.get("target"),
 		summary=summary,
 		priority=str(config.get("priority") or "normal"),
 		message=message,
+		# the adapter above can be slow. A cancel after this check can still let the message out (no lock over a send)
+		may_send=lambda: not run_cancelled(flow_run.name),
 	)
 	extra = {
 		"conversation": conversation,

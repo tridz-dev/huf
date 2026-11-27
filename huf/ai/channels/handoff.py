@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 import frappe
@@ -13,12 +14,18 @@ TARGETS = ("none", "helpdesk", "crm", "erpnext")
 
 
 def handoff_conversation(
-	conversation, target: str | None = None, summary: str = "", priority: str = "normal", message: str | None = None
+	conversation,
+	target: str | None = None,
+	summary: str = "",
+	priority: str = "normal",
+	message: str | None = None,
+	may_send: Callable[[], bool] | None = None,
 ) -> dict[str, Any]:
 	"""Hand ``conversation`` (doc or name) to a human. Idempotent: an already handed-off one is returned as is.
 
 	``target`` defaults to the gateway's ``handoff_target``; ``message`` to its ``handoff_message``
 	(sent once, best effort, through the outbound policy). Never raises for a failing adapter or send.
+	``may_send`` is asked just before the message goes out; False drops the message, the handoff itself stays.
 	"""
 	doc = frappe.get_doc("Channel Conversation", conversation) if isinstance(conversation, str) else conversation
 	if doc.status == "handed_off":
@@ -36,7 +43,7 @@ def handoff_conversation(
 		doctype, name = None, None
 	doc.db_set({"status": "handed_off", "handoff_doctype": doctype or None, "handoff_name": name or None})
 	text = (message if message is not None else gateway.get("handoff_message")) or ""
-	if text.strip():
+	if text.strip() and (may_send is None or may_send()):
 		try:
 			send_free_text(doc.gateway, doc.contact_handle, text)
 			from huf.ai.channels.conversation import touch_outbound

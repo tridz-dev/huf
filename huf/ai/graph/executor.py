@@ -756,19 +756,9 @@ class GraphExecutor:
 			state.completed_nodes.append(node.id)
 			self._charge_budget(node, state, charges_hop)
 
-			if node.routing == RoutingMode.TERMINAL:
-				if outcome.status != "failed":
-					return self._complete(state, node.id)
-				# A failed last step is a failed run (I7): its ``on_error`` runs, else the run fails.
-				on_error = node.raw.get("on_error")
-				if on_error:
-					state.cursor = on_error
-					self.store.save_cursor(on_error)
-					continue
-				detail = f": {outcome.error}" if outcome.error else ""
-				return self._fail(
-					state, f"Node '{node.id}' of type '{node.type}' failed and declares no on_error successor{detail}"
-				)
+			# a failed terminal node falls through to the fail-closed check below (on_error, else failed)
+			if node.routing == RoutingMode.TERMINAL and outcome.status != "failed":
+				return self._complete(state, node.id)
 
 			try:
 				next_node_id = self.router.resolve(node, outcome, context)

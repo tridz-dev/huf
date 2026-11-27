@@ -528,6 +528,16 @@ def _transition_run(
 	return changed
 
 
+def run_cancelled(flow_run_name: str, *, lock: bool = False) -> bool:
+	"""Whether the run was cancelled while this worker holds it.
+
+	With ``lock`` the run row stays locked until the transaction ends, so a send queued in it is committed before
+	a cancel can happen, and that cancel withdraws it.
+	"""
+	commit_if_background()  # a fresh snapshot
+	return frappe.db.get_value("Agent Flow Run", flow_run_name, "status", for_update=lock) == "Cancelled"
+
+
 # ---------------------------------------------------------------------------
 # Public entry points
 # ---------------------------------------------------------------------------
@@ -1210,6 +1220,11 @@ def _make_node_handler(flow_run, settings):
 	"""Bridge one Flow node executor into the executor's handler contract."""
 
 	def handler(node: NodeSpec, context: GraphContext, state: ExecutionState):
+		# stop here: no step of a cancelled run starts ("Cancelled" in memory: an earlier step reloaded the run)
+		status = getattr(flow_run, "status", None)
+		if status == "Cancelled" or (status == "Running" and run_cancelled(flow_run.name)):
+			flow_run.status = "Cancelled"
+			return Outcome.paused(PauseRequest(kind="user", status_label="Cancelled"))
 		raw = _with_step_key(flow_run, node.raw, settings)
 		if node.type == "send.message":
 			decided = _decided_send(flow_run, raw, settings)
@@ -1255,6 +1270,11 @@ def _with_reason_code(outcome: Outcome) -> Outcome:
 	return outcome
 
 
+def _loop_node_types() -> tuple:
+	"""Every step type the run loop can execute: engine built-ins, ``trigger.app`` and app-registered types."""
+	return (*_NODE_TYPES, node_registry.APP_TRIGGER_TYPE, *node_registry.registered_types())
+
+
 def _execute_loop(flow_run, nodes_map: dict, edges_list: list, settings: dict):
 	"""Drive a Flow run to completion, a pause, or a failure.
 
@@ -1270,8 +1290,7 @@ def _execute_loop(flow_run, nodes_map: dict, edges_list: list, settings: dict):
 	failed_node_ids: list = []
 	router = _build_router(flow_run, settings, edges_list, state, unhandled_failures, failed_node_ids)
 	handler = _make_node_handler(flow_run, settings)
-	handled_types = (*_NODE_TYPES, node_registry.APP_TRIGGER_TYPE, *node_registry.registered_types())
-	handlers = {node_type: handler for node_type in handled_types}
+	handlers = {node_type: handler for node_type in _loop_node_types()}
 
 	policy = ExecutionPolicy(
 		max_hops=getattr(flow_run, "max_hops", None) or DEFAULT_MAX_HOPS,
@@ -1297,6 +1316,8 @@ def _execute_loop(flow_run, nodes_map: dict, edges_list: list, settings: dict):
 	_persist_context(flow_run, _context_of(flow_run, settings), settings)
 
 	if result.status == ExecutionResult.PAUSED:
+		if getattr(flow_run, "status", None) == "Cancelled":
+			return result  # the cancel already published its own event
 		_publish_flow_event(
 			flow_run,
 			"flow_paused",

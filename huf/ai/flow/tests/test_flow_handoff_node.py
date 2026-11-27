@@ -151,6 +151,16 @@ class TestHandoffNode(IntegrationTestCase):
 		self._run(self._node(conversation=self.conv.name, message="hello"))
 		self.assertEqual(self.send.call_count, 1)
 
+	def test_a_run_cancelled_during_the_handoff_sends_nothing(self):
+		def cancel(*args):
+			frappe.db.set_value("Agent Flow Run", self.run_doc.name, "status", "Cancelled")
+			return None, None
+
+		with patch.object(channel_handoff.adapters, "get_adapter") as adapter:
+			adapter.return_value.handoff.side_effect = cancel
+			self._run(self._node(conversation=self.conv.name, message="hello"))
+		self.send.assert_not_called()
+
 	def test_member_recipient_is_bound_and_not_stored(self):
 		node = self._node(gateway=self.gw.name, recipient="$member")
 		with patch.object(recipient_binder, "resolve", return_value="+" + self.contact):

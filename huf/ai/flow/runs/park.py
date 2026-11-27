@@ -98,7 +98,7 @@ def park_run(flow_run, node: dict, req: ParkRequest) -> Outcome:
 		{
 			"status": WAIT_STATUS,
 			"resume_at": resume_at,
-			"member_key": req.member_key,
+			**({"member_key": req.member_key} if req.member_key else {}),  # a park never erases the run's member
 			"waiting": json.dumps(waiting, default=str),
 		},
 		not_from_statuses=TERMINAL_STATUSES,
@@ -192,8 +192,11 @@ def wake_run(
 	return True
 
 
-def cancel_run(flow_run_name: str, by: str) -> bool:
+def cancel_run(flow_run_name: str, by: str, *, running: bool = False) -> bool:
 	"""Cancel a Queued or waiting run. True only when this call moved it (a run that already finished is left alone).
+
+	With ``running`` a Running run is cancelled too. Its worker starts no further step and queues no send
+	(``engine.run_cancelled``) and cannot move the run again; the step it is inside is not interrupted.
 
 	Sends of a cancelled or finished run that still wait in the outbox are withdrawn.
 	"""
@@ -207,7 +210,7 @@ def cancel_run(flow_run_name: str, by: str) -> bool:
 	if not engine._transition_run(
 		flow_run,
 		{"status": "Cancelled", "last_error": message, "completed_at": now_datetime()},
-		from_statuses=("Queued", *engine.WAITING_STATUSES),
+		from_statuses=("Queued", *engine.WAITING_STATUSES, *(("Running",) if running else ())),
 	):
 		if frappe.db.get_value("Agent Flow Run", flow_run_name, "status") in engine.TERMINAL_STATUSES:
 			outbox.withdraw([flow_run_name], outbox.RUN_CANCELLED)
@@ -221,7 +224,7 @@ def cancel_run(flow_run_name: str, by: str) -> bool:
 		pass
 	engine._sync_gateway_event(flow_run, "Cancelled", error=message)
 	engine._publish_flow_event(flow_run, "flow_cancelled", {"error": message})
-	subflow.cancel_waited_child(flow_run, by)
+	subflow.cancel_waited_child(flow_run, by, running=running)
 	subflow.on_child_finished(flow_run, "Cancelled", message)
 	return True
 

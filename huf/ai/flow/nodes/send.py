@@ -84,7 +84,8 @@ def is_live(flow_run) -> bool:
 
 
 def exec_send_message(flow_run, node: dict, config: dict, settings: dict):
-	from huf.ai.flow.engine import _context_of, _persist_context, _transition_run
+	from huf.ai.channels.outbox import RUN_CANCELLED
+	from huf.ai.flow.engine import _context_of, _persist_context, _transition_run, run_cancelled
 
 	problem = config_problem(config)
 	if problem:
@@ -169,6 +170,8 @@ def exec_send_message(flow_run, node: dict, config: dict, settings: dict):
 
 	if not key:
 		return _failed("This send step has no step key, so it cannot be queued safely.")
+	if run_cancelled(flow_run.name, lock=True):  # cancelled (member removed) while this step ran
+		return blocked(RUN_CANCELLED)
 	refused = _enqueue(
 		{
 			**refs,

@@ -33,10 +33,12 @@ def app_flow():
 
 class TestAppTriggerPure(unittest.TestCase):
 	def test_validator_accepts_it_as_the_entry(self):
-		self.assertIn("trigger.app", get_flow_node_types())
-		for mode in ("draft", "publish"):
-			result = validate_flow(app_flow(), mode)
-			self.assertTrue(result.ok, (mode, result.errors, result.issues))
+		# app-registered node types and validators cannot be read with no site
+		with patch("frappe.get_installed_apps", return_value=[]), patch("frappe.get_hooks", return_value=[]):
+			self.assertIn("trigger.app", get_flow_node_types())
+			for mode in ("draft", "publish"):
+				result = validate_flow(app_flow(), mode)
+				self.assertTrue(result.ok, (mode, result.errors, result.issues))
 
 	def test_activatable_and_not_unset(self):
 		self.assertEqual(collect_activation_problems(app_flow()), [])
@@ -66,7 +68,9 @@ class TestAppTriggerPure(unittest.TestCase):
 class TestAppTriggerExecutor(unittest.TestCase):
 	def _run(self, trigger_type, run_mode="Real"):
 		run = SimpleNamespace(trigger_type=trigger_type, run_mode=run_mode)
-		with patch("huf.ai.flow.engine._context_of", return_value=SimpleNamespace(as_dict=lambda: {"input": {}})):
+		# the step-test flag fails closed ("it is a test") with no site; these runs are not step tests
+		with patch("huf.ai.flow.engine._context_of", return_value=SimpleNamespace(as_dict=lambda: {"input": {}})), \
+			patch("huf.ai.flow.testrun.gate.step_test_active", return_value=False):
 			return node_registry.executor_for("trigger.app")(run, TRIGGER, TRIGGER["config"], {})
 
 	def test_app_run_passes_through(self):
@@ -99,25 +103,38 @@ class TestAppTriggerStart(start_suite.TestFlowStartForMember):
 		self.assertEqual(run.trigger_type, "App")
 		self.assertEqual(run.current_node_id, "start")
 
-	def test_activation_passes_on_save(self):
-		flow = frappe.get_doc("Flow Definition", self.flow_id)
-		flow.status = "Active"
-		flow.save(ignore_permissions=True)  # raises if activation rules reject it
-
-	def test_engine_runs_the_app_trigger(self):
+	def test_run_flow_runs_an_app_run_to_success(self):
 		name = self._start(trigger_node_id="start")
 		engine.run_flow(name)
 		run = frappe.get_doc("Agent Flow Run", name)
 		self.assertEqual((run.status, run.last_error or ""), ("Success", ""))
+		self.assertEqual(run.current_node_id, "end")
 
 	def test_failed_output_step_fails_the_run(self):
+		defn = app_flow()
+		defn["contract"] = {"limits": {"max_rows": 1}}
+		for node in defn["nodes"]:
+			if node["type"] == "output":
+				node["config"] = {"value": [1, 2]}
+		frappe.db.set_value("Flow Definition", self.flow_id, "definition_json", json.dumps(defn))
+		frappe.db.commit()
 		name = self._start(trigger_node_id="start")
-		failed = {"status": "failed", "error": "too large"}
-		with patch.dict(engine._NODE_EXECUTORS, {"output": lambda *args: dict(failed)}):
-			engine.run_flow(name)
+		engine.run_flow(name)
 		run = frappe.get_doc("Agent Flow Run", name)
 		self.assertEqual(run.status, "Failed")
-		self.assertIn("too large", run.last_error)
+		self.assertTrue(run.last_error)
+		# final: neither a re-delivered job nor the same entry starts the steps (and their sends) again
+		with patch.object(engine, "_execute_node") as execute:
+			engine.run_flow(name)
+			self.assertIsNone(self._start(trigger_node_id="start"))
+		execute.assert_not_called()
+		self.assertEqual(frappe.db.get_value("Agent Flow Run", name, "status"), "Failed")
+		self.assertEqual(self._runs(), 1)
+
+	def test_activation_passes_on_save(self):
+		flow = frappe.get_doc("Flow Definition", self.flow_id)
+		flow.status = "Active"
+		flow.save(ignore_permissions=True)  # raises if activation rules reject it
 
 	def test_document_events_start_nothing(self):
 		self.assertNotIn(self.flow_id, json.dumps(triggers.get_doc_event_index()))
