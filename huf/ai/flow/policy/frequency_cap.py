@@ -2,8 +2,7 @@
 
 The key has no flow in it, so every flow counts against the same cap. ``window`` is the window length in
 seconds; windows are aligned to the Unix epoch (86400 = one UTC day). The row is keyed by the window's
-start, not its length, so use one window length per channel: two lengths that start at the same moment
-would share a row.
+length and start, so each length (day, week) counts on its own.
 
 ``incr`` COMMITS the current transaction, before and after counting. Before: MariaDB refuses to lock a row
 that changed after the transaction's snapshot (error 1020), which would fail parallel senders. After: the
@@ -25,11 +24,15 @@ from frappe.utils import now_datetime
 DOCTYPE = "Flow Send Counter"
 TABLE = f"`tab{DOCTYPE}`"
 MAX_KEY_CHARS = 140
-MATCH_KEY = "member_key = %(member_key)s and channel = %(channel)s and window_start = %(window_start)s"
+MATCH_KEY = (
+	"member_key = %(member_key)s and channel = %(channel)s"
+	" and window_seconds = %(window_seconds)s and window_start = %(window_start)s"
+)
 
 
-def counter_name(member_key: str, channel: str, window_start) -> str:
-	return hashlib.sha256(f"{member_key}\0{channel}\0{window_start}".encode()).hexdigest()[:40]
+def counter_name(member_key: str, channel: str, window_seconds: int, window_start) -> str:
+	key = f"{member_key}\0{channel}\0{window_seconds}\0{window_start}"
+	return hashlib.sha256(key.encode()).hexdigest()[:40]
 
 
 def _key(member_key: str, channel: str, window: int) -> dict:
@@ -42,6 +45,7 @@ def _key(member_key: str, channel: str, window: int) -> dict:
 	return {
 		"member_key": member_key,
 		"channel": channel,
+		"window_seconds": window,
 		"window_start": datetime.fromtimestamp(start, timezone.utc).replace(tzinfo=None),
 	}
 
@@ -63,7 +67,7 @@ def incr(member_key: str, channel: str, window: int, limit: int | None = None) -
 	values = _key(member_key, channel, window)
 	now = now_datetime()
 	values.update(
-		name=counter_name(member_key, channel, values["window_start"]),
+		name=counter_name(member_key, channel, window, values["window_start"]),
 		now=now,
 		user=frappe.session.user,
 	)
@@ -80,13 +84,16 @@ def incr(member_key: str, channel: str, window: int, limit: int | None = None) -
 def _claim(values: dict, limit: int | None) -> int | None:
 	# Creates the row or, on a duplicate, takes its exclusive lock: concurrent callers queue here.
 	frappe.db.sql(
-		f"insert into {TABLE} (name, creation, modified, owner, modified_by, member_key, channel, window_start, `count`)"
-		" values (%(name)s, %(now)s, %(now)s, %(user)s, %(user)s, %(member_key)s, %(channel)s, %(window_start)s, 0)"
+		f"insert into {TABLE} (name, creation, modified, owner, modified_by, member_key, channel, window_seconds, window_start, `count`)"
+		" values (%(name)s, %(now)s, %(now)s, %(user)s, %(user)s, %(member_key)s, %(channel)s, %(window_seconds)s, %(window_start)s, 0)"
 		" on duplicate key update `count` = `count`",
 		values,
 	)
 	count = frappe.db.sql(f"select `count` from {TABLE} where {MATCH_KEY} for update", values)[0][0]
 	if limit is not None and count >= limit:
 		return None
-	frappe.db.sql(f"update {TABLE} set `count` = %(count)s, modified = %(now)s where {MATCH_KEY}", {**values, "count": count + 1})
+	frappe.db.sql(
+		f"update {TABLE} set `count` = %(count)s, modified = %(now)s where {MATCH_KEY}",
+		{**values, "count": count + 1},
+	)
 	return count + 1
