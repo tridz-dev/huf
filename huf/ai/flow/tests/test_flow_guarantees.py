@@ -71,12 +71,18 @@ def send_harness(steps, live=True, hooks=None, ctx=None):
 		patch.object(send, "_enqueue", transport),
 		patch.object(send, "channel_of", return_value="whatsapp"),
 		patch.object(engine, "_context_of", return_value=context),
-		patch.object(engine, "_persist_context", side_effect=lambda r, c, s: persisted.append(json.dumps(c.data, default=str))),
+		patch.object(
+			engine,
+			"_persist_context",
+			side_effect=lambda r, c, s: persisted.append(json.dumps(c.data, default=str)),
+		),
 		patch.object(engine, "_transition_run", return_value=True),
 		patch("huf.ai.flow.runs.member.set_status"),
 	)
 	real_get_attr = frappe.get_attr
-	with patch.object(frappe, "get_attr", side_effect=lambda p: registry[p] if p in registry else real_get_attr(p)):
+	with patch.object(
+		frappe, "get_attr", side_effect=lambda p: registry[p] if p in registry else real_get_attr(p)
+	):
 		for p in patchers:
 			p.start()
 		try:
@@ -100,12 +106,33 @@ def happiol_like_ledger_policy(graph):
 	for n in graph["nodes"]:
 		config = n.get("config") or {}
 		if n["type"] == "ledger_write":
-			errors.append({"code": "LEDGER_RAW_WRITE", "node_id": n["id"], "field": "type", "message": "Raw ledger writes are not allowed."})
-		elif n["type"] in LEDGER_KINDS:
+			errors.append(
+				{
+					"code": "LEDGER_RAW_WRITE",
+					"node_id": n["id"],
+					"field": "type",
+					"message": "Raw ledger writes are not allowed.",
+				}
+			)
+		elif n["type"] in LEDGER_KINDS or config.get("ledger_kind") in LEDGER_KINDS:
 			if not config.get("idempotency_key"):
-				errors.append({"code": "LEDGER_NO_KEY", "node_id": n["id"], "field": "config.idempotency_key", "message": "A ledger step needs an idempotency key."})
+				errors.append(
+					{
+						"code": "LEDGER_NO_KEY",
+						"node_id": n["id"],
+						"field": "config.idempotency_key",
+						"message": "A ledger step needs an idempotency key.",
+					}
+				)
 			if not config.get("node_cap") or not config.get("flow_cap"):
-				errors.append({"code": "LEDGER_NO_CAP", "node_id": n["id"], "field": "config.node_cap", "message": "A ledger step needs budget caps."})
+				errors.append(
+					{
+						"code": "LEDGER_NO_CAP",
+						"node_id": n["id"],
+						"field": "config.node_cap",
+						"message": "A ledger step needs budget caps.",
+					}
+				)
 	return errors
 
 
@@ -143,18 +170,26 @@ class TestG1LedgerOnlyThroughGuardedPath(IntegrationTestCase):
 			for mode in ("draft", "publish"):
 				ok, codes = self.codes(g, mode)
 				self.assertFalse(ok, mode)
-				self.assertIn("LEDGER_RAW_WRITE", codes, mode)
+				# Core refuses the unregistered kind (SCHEMA) before any app policy; either refusal is G1.
+				self.assertTrue(codes & {"SCHEMA", "LEDGER_RAW_WRITE"}, (mode, codes))
+		self.assertEqual([e["code"] for e in happiol_like_ledger_policy(g)], ["LEDGER_RAW_WRITE"])
 
 	def test_ledger_node_without_key_or_caps_is_refused(self):
 		for kind in LEDGER_KINDS:
-			g = with_node({"id": "lg", "type": kind, "config": {"amount": 5}})
+			# A registered kind stands in for the app's ledger node (Huf has no ledger kinds of its own).
+			g = finished_flow()
+			g["nodes"][1]["config"]["ledger_kind"] = kind
 			with self.subTest(kind=kind), validators("happiol_like_ledger_policy"):
 				ok, codes = self.codes(g, "publish")
 				self.assertFalse(ok)
 				self.assertTrue({"LEDGER_NO_KEY", "LEDGER_NO_CAP"} <= codes, codes)
 
 	def test_ledger_node_with_key_and_caps_raises_no_policy_error(self):
-		node = {"id": "lg", "type": "grant_points", "config": {"idempotency_key": "run,node,member", "node_cap": 100, "flow_cap": 1000}}
+		node = {
+			"id": "lg",
+			"type": "grant_points",
+			"config": {"idempotency_key": "run,node,member", "node_cap": 100, "flow_cap": 1000},
+		}
 		self.assertEqual(happiol_like_ledger_policy(with_node(node)), [])
 
 	def test_broken_policy_fails_closed(self):
@@ -178,9 +213,14 @@ class TestG2BlockedIsFinal(IntegrationTestCase):
 		return {"allow": False, "reason": "opted_out"}
 
 	def test_blocked_not_retried_by_retry_wrapper(self):
-		node = {**NODE, "config": {**CONFIG, "retry": {"attempts": 3, "backoff": "fixed", "delay_seconds": 60}}}
+		node = {
+			**NODE,
+			"config": {**CONFIG, "retry": {"attempts": 3, "backoff": "fixed", "delay_seconds": 60}},
+		}
 		with send_harness([("block", self.block)]) as h, patch.object(park, "park_run") as park_run:
-			result = retry.run_with_retry(run_doc(), node, {}, lambda: send.exec_send_message(run_doc(), NODE, dict(CONFIG), {}))
+			result = retry.run_with_retry(
+				run_doc(), node, {}, lambda: send.exec_send_message(run_doc(), NODE, dict(CONFIG), {})
+			)
 		self.assertEqual(result["output"], {"status": "blocked", "reason": "opted_out"})
 		self.assertEqual(h.transport.call_count, 0)
 		self.assertEqual(park_run.call_count, 0)
@@ -220,7 +260,12 @@ class TestG2BlockedIsFinal(IntegrationTestCase):
 
 class TestG3LiveMatrix(IntegrationTestCase):
 	def test_truth_table_and_transport(self):
-		for dry, live_send, expected in ((True, True, False), (True, False, False), (False, False, False), (False, True, True)):
+		for dry, live_send, expected in (
+			(True, True, False),
+			(True, False, False),
+			(False, False, False),
+			(False, True, True),
+		):
 			mode = gate.STORED_TEST if dry else ""
 			with self.subTest(dry=dry, live_send=live_send):
 				with patch.object(gate, "live_send_on", return_value=live_send):
@@ -269,7 +314,9 @@ class TestG4NoPiiInTraceOrLog(IntegrationTestCase):
 		self.assertEqual(result["output"]["reason"], "unknown")
 
 	def test_trace_and_error_log_writers_mask(self):
-		masked = mask_pii({"customer_name": NAME, "mobile_no": PHONE, "email": EMAIL, "note": f"call {PHONE}"})
+		masked = mask_pii(
+			{"customer_name": NAME, "mobile_no": PHONE, "email": EMAIL, "note": f"call {PHONE}"}
+		)
 		self.assertClean(json.dumps(masked))
 		self.assertNotIn(NAME, json.dumps(masked))
 		self.assertClean(pii.mask_text(f"failed for {DIGITS} ({EMAIL})"))
@@ -313,9 +360,14 @@ class TestG5FailClosedGuard(IntegrationTestCase):
 
 	def test_missing_consent_blocks(self):
 		# WhatsApp consent with no gateway on the request: Huf's own consent step refuses.
-		self.assertEqual(guard_steps.check_consent({"channel": "whatsapp", "recipient": PHONE}), {"allow": False, "reason": "blocked_by_hook"})
+		self.assertEqual(
+			guard_steps.check_consent({"channel": "whatsapp", "recipient": PHONE}),
+			{"allow": False, "reason": "blocked_by_hook"},
+		)
 		with patch("huf.ai.channels.channel_consent.has_consent", return_value=(False, "opted_out")):
-			verdict = guard_steps.check_consent({"channel": "sms", "recipient": PHONE, "category": "marketing"})
+			verdict = guard_steps.check_consent(
+				{"channel": "sms", "recipient": PHONE, "category": "marketing"}
+			)
 		self.assertIs(verdict.get("allow"), False)
 		consent_step = [("consent", lambda r: {"allow": False, "reason": "marketing_opted_out"})]
 		self.assertBlockedSend(steps=consent_step, reason="marketing_opted_out")
