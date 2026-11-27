@@ -103,6 +103,104 @@ class TestGuardChain(IntegrationTestCase):
 			self.assertEqual(guard._hook_paths(), ["a.b"])
 		get_hooks.assert_called_once_with("huf_pre_send_hooks")
 
+	def test_consent_hooks_are_read_from_their_own_hook(self):
+		with patch.object(frappe, "get_hooks", return_value="a.b") as get_hooks:
+			self.assertEqual(guard._consent_hook_paths(), ["a.b"])
+		get_hooks.assert_called_once_with("huf_pre_send_consent_hooks")
+
+	def run_ordered(self, verdicts=None, consent=("app.consent",), **kwargs):
+		"""Run built-ins, a consent hook, a window and an app hook; ``(result, names in run order)``."""
+		seen, verdicts = [], verdicts or {}
+
+		def step(name):
+			def run(request):
+				seen.append(name)
+				verdict = verdicts.get(name, {"allow": True})
+				return verdict(request) if callable(verdict) else verdict
+
+			return run
+
+		def window(request, resolvers):
+			seen.append("window")
+
+		builtin = [(name, step(name)) for name in ("recipient", "consent", "template")]
+		with (
+			patch.object(guard, "BUILTIN_STEPS", builtin),
+			patch.object(guard, "_consent_hook_paths", return_value=list(consent)),
+			patch.object(guard, "_hook_paths", return_value=["app.step"]),
+			patch.object(guard.guard_steps, "window_resolvers", return_value=["app.window"]),
+			patch.object(guard.guard_steps, "window_deferral", side_effect=window),
+			patch.object(guard.guard_steps, "resolve_caps", return_value=[]),
+			patch.object(frappe, "get_attr", side_effect=step),
+		):
+			return guard.evaluate({"to": RECIPIENT}, **kwargs), seen
+
+	def test_consent_hooks_run_after_consent_and_before_template_and_window(self):
+		result, seen = self.run_ordered()
+		self.assertTrue(result.allowed)
+		self.assertEqual(
+			seen, ["recipient", "consent", "app.consent", "template", "window", "app.step"]
+		)
+
+	def test_consent_hooks_get_the_app_request_without_header(self):
+		seen = []
+		self.run_ordered(
+			{"app.consent": lambda r: seen.append(r) or {"allow": True}}, header={"type": "image"}
+		)
+		self.assertEqual(seen, [{"to": RECIPIENT}])
+
+	def test_consent_hook_block_wins_over_template_and_window(self):
+		result, seen = self.run_ordered(
+			{
+				"app.consent": {"allow": False, "reason": "no_opt_in"},
+				"template": {"allow": False, "reason": "template_not_approved"},
+			}
+		)
+		self.assertEqual(result, guard.GuardResult(False, "no_opt_in", "app.consent"))
+		self.assertEqual(seen, ["recipient", "consent", "app.consent"])
+
+	def test_consent_present_leaves_the_template_block(self):
+		result, _ = self.run_ordered({"template": {"allow": False, "reason": "template_not_approved"}})
+		self.assertEqual(result, guard.GuardResult(False, "template_not_approved", "template"))
+
+	def test_failing_consent_hook_blocks(self):
+		def boom(request):
+			raise ValueError
+
+		release = threading.Event()
+		self.addCleanup(release.set)
+		cases = (
+			("hook_error", boom, {}),
+			("hook_error", None, {}),
+			("hook_timeout", lambda r: release.wait(5), {"timeout": 0.05}),
+		)
+		for reason, verdict, kwargs in cases:
+			with self.subTest(reason=reason):
+				result, seen = self.run_ordered({"app.consent": verdict}, **kwargs)
+				self.assertEqual(result, guard.GuardResult(False, reason, "app.consent"))
+				self.assertEqual(seen[-1], "app.consent")
+
+	def test_consent_hooks_run_without_a_builtin_consent_step(self):
+		result = self.run_chain_with_consent({"allow": False, "reason": "no_opt_in"})
+		self.assertEqual(result, guard.GuardResult(False, "no_opt_in", "app.consent"))
+
+	def run_chain_with_consent(self, verdict):
+		with (
+			patch.object(guard, "_consent_hook_paths", return_value=["app.consent"]),
+			patch.object(guard, "_hook_paths", return_value=[]),
+			patch.object(frappe, "get_attr", return_value=lambda r: verdict),
+		):
+			return guard.evaluate({})
+
+	def test_failing_consent_lookup_blocks_before_any_step(self):
+		ran = []
+		with (
+			patch.object(guard, "BUILTIN_STEPS", [("builtin", lambda r: ran.append(1) or allow(r))]),
+			patch.object(guard, "_consent_hook_paths", side_effect=RuntimeError),
+		):
+			self.assertEqual(guard.evaluate({}), guard.GuardResult(False, "hook_error"))
+		self.assertEqual(ran, [])
+
 	def test_timeout_blocks_and_the_abandoned_step_loses_the_database(self):
 		release, done, errors, later = threading.Event(), threading.Event(), [], []
 

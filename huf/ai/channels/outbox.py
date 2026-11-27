@@ -378,10 +378,11 @@ def _recheck(request: dict, header: dict | None) -> str | datetime | None:
 	slot), so this walks the same steps in the same order with the same runner.
 	"""
 	seconds = guard._timeout(None)
+	consent_hooks = guard._consent_hook_paths()
 	hooks = guard._hook_paths()
 	resolvers = guard_steps.window_resolvers()
-	for name, step in guard.BUILTIN_STEPS:
-		reason = guard._run_step(name, step, copy.deepcopy({**request, "header": header}), seconds)
+	for name, step, args in guard._leading_steps(request, header, consent_hooks):
+		reason = guard._run_step(name, step or frappe.get_attr(name), copy.deepcopy(args), seconds)
 		if reason:
 			return reason
 	if resolvers:
