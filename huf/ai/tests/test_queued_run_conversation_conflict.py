@@ -7,7 +7,7 @@ Run with: bench --site <site> run-tests --app huf --module huf.ai.tests.test_que
 """
 
 import unittest
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, wait
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -147,6 +147,33 @@ class TestQueuedRunConversationConflict(unittest.TestCase):
 		)
 		self.assertTrue(saved)
 		self.assertTrue(frappe.db.exists("Agent Message", {"agent_run": self.run.name, "content": "partial"}))
+
+	def test_partial_reply_saved_when_another_write_arrives_mid_save(self):
+		conversation = frappe.get_doc("Agent Conversation", self.conversation.name)
+		has_permission = frappe.has_permission
+		writer = ThreadPoolExecutor(max_workers=1)
+		self.addCleanup(writer.shutdown)
+		writes = []
+
+		def _write_mid_save(*args, **kwargs):
+			if not writes:  # does not return until the save commits if the row is locked
+				writes.append(writer.submit(_write_from_other_connection, conversation.name, "second"))
+				wait(writes, timeout=2)
+			return has_permission(*args, **kwargs)
+
+		with patch("frappe.has_permission", new=_write_mid_save):
+			saved = _save_partial_reply(
+				ConversationManager(agent_name=self.agent.name),
+				conversation,
+				"partial",
+				self.provider,
+				self.model,
+				self.agent.name,
+				self.run.name,
+			)
+		frappe.db.commit()  # nosemgrep: release the row lock for the second connection
+		writes[0].result(timeout=30)
+		self.assertTrue(saved)
 
 	def _generate_title(self, field, value):
 		"""Run title generation while another request writes ``field`` during the model call."""

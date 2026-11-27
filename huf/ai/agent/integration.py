@@ -1161,7 +1161,6 @@ def generate_conversation_title(conversation_name, agent_name):
         model = agent_doc.model
 
         from huf.ai.providers.litellm import get_simple_completion
-
         messages = [{"role": "user", "content": prompt}]
         title = _run_async_safely(get_simple_completion(model, messages, provider))
         if title:
@@ -2968,7 +2967,8 @@ def _guarded_fail_started_run(run_name: str, message: str) -> bool:
 def _save_partial_reply(conv_manager, conversation, text, provider, model, agent_name, run_name) -> bool:
     """Best-effort save of a partial reply; never raises so the guarded fail that follows always runs."""
     try:
-        safe_commit()  # the stream's snapshot may predate a newer write to the conversation (1020)
+        safe_commit()  # new snapshot, then lock the row so no write lands mid-save (MariaDB 1020)
+        frappe.db.get_value("Agent Conversation", conversation.name, "name", for_update=True)
         conv_manager.add_message(conversation, "agent", text, provider, model, agent_name, run_name)
         return True
     except Exception as exc:
