@@ -30,6 +30,7 @@ import asyncio
 import inspect
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from types import SimpleNamespace
 from typing import Any
 
 import frappe
@@ -179,6 +180,7 @@ def resolve_tool_doc(tool_name: str) -> dict | None:
 			"allowed_for_guest": False,
 			"blocking": False,
 			"base_url": None,
+			"is_alias": True,
 		}
 	return None
 
@@ -343,7 +345,17 @@ async def invoke_tool(
 		from huf.ai.tools.registry import assert_tool_role
 
 		try:
-			assert_tool_role(frappe.get_cached_doc("Agent Tool Function", tool_doc["name"]))
+			try:
+				role_subject = frappe.get_cached_doc("Agent Tool Function", tool_doc["name"])
+			except frappe.DoesNotExistError:
+				if not tool_doc.get("is_alias"):
+					# A resolved row that cannot be loaded has unknown roles: fail closed.
+					return ToolResult(success=False, error=f"Tool '{tool_name}' could not be loaded", denied=True)
+				# A bare alias declares no roles and is not outbound. A row stored under
+				# this name (loaded above) would have been enforced instead; the guest
+				# gate below and the handler's own DocType permissions still apply.
+				role_subject = SimpleNamespace(name=tool_name, required_roles=None, is_outbound=0)
+			assert_tool_role(role_subject)
 		except frappe.PermissionError as e:
 			return ToolResult(success=False, error=str(e), denied=True)
 
