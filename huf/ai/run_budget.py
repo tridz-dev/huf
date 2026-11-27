@@ -22,7 +22,7 @@ class AIDisabled(RunBudgetExceeded):
     pass
 
 
-def ai_policy(agent: str = None) -> dict:
+def ai_policy(agent: str | None = None) -> dict:
     """The kill switch and spend cap that apply to ``agent``: ``{"enabled": bool, "spend_cap_usd": float}``.
 
     Site switch: site config ``huf_ai_disabled``. Apps declare providers in ``hooks.py``::
@@ -45,13 +45,13 @@ def ai_policy(agent: str = None) -> dict:
             if not policy.get("enabled", True):
                 enabled = False
             caps.append(flt(policy.get("spend_cap_usd")))
-        except Exception:
+        except Exception:  # noqa: BLE001
             frappe.logger("huf").warning(f"{FEATURE_MAP_HOOK}: provider {path} failed", exc_info=True)
             enabled = False
     return {"enabled": enabled, "spend_cap_usd": min((c for c in caps if c > 0), default=0.0)}
 
 
-def assert_ai_enabled(agent: str = None) -> dict:
+def assert_ai_enabled(agent: str | None = None) -> dict:
     """Return the policy for ``agent``, or raise :class:`AIDisabled` when AI is switched off."""
     policy = ai_policy(agent)
     if not policy["enabled"]:

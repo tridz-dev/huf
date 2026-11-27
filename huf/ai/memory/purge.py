@@ -35,7 +35,7 @@ def purge_expired_memory(days: int | None = None, limit: int = BATCH) -> int:
 			if row.knowledge_input and frappe.db.exists("Knowledge Input", row.knowledge_input):
 				frappe.delete_doc("Knowledge Input", row.knowledge_input, force=True, ignore_permissions=True)
 			deleted += 1
-		except Exception:
+		except Exception:  # noqa: BLE001
 			frappe.db.rollback(save_point="memory_purge")
 			frappe.log_error(title="Memory purge failed", message=f"{row.name}\n{frappe.get_traceback()}")
 	return deleted
