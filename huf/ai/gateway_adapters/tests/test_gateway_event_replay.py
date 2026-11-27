@@ -1,9 +1,8 @@
 # Copyright (c) 2026, Huf and contributors
 # For license information, please see license.txt
 
-"""Replayed provider events and status callbacks cause no second effect. Load runs at 10k, not 100k."""
+"""Replayed provider events and status callbacks cause no second effect. The 10k load and timing run belongs to the pre-PR gate."""
 
-import time
 from unittest.mock import patch
 
 import frappe
@@ -14,9 +13,8 @@ from huf.ai import gateway_webhook
 from huf.ai.gateway_adapters.tests.test_gateway_pairing_hardening import _GatewayFixture
 from huf.patches.v1 import gateway_event_unique_provider_id as patch_module
 
-TOTAL_POSTS = 10_000
+TOTAL_POSTS = 50
 DUPLICATE_EVERY = 10  # every 10th post replays an earlier event (10% duplicates)
-MAX_DUPLICATE_MS = 5.0
 
 
 class TestGatewayEventReplay(_GatewayFixture, IntegrationTestCase):
@@ -39,16 +37,17 @@ class TestGatewayEventReplay(_GatewayFixture, IntegrationTestCase):
 	def run_counts(self):
 		return frappe.db.count("Agent Run"), frappe.db.count("Agent Flow Run")
 
-	def test_10k_posts_with_10_percent_duplicates_queue_each_event_once(self):
+	def test_posts_with_10_percent_duplicates_queue_each_event_once(self):
 		gateway = self.admitting_gateway()
 		runs_before = self.run_counts()
-		sent, duplicate_seconds = [], []
+		sent, replays = [], 0
 		for i in range(TOTAL_POSTS):
 			if i % DUPLICATE_EVERY == DUPLICATE_EVERY - 1:
 				event_id = sent[i // 2 % len(sent)]
-				started = time.perf_counter()
-				result = self.post(gateway, event_id)
-				duplicate_seconds.append(time.perf_counter() - started)
+				# a replay costs one indexed lookup and nothing else
+				with self.assertQueryCount(1):
+					result = self.post(gateway, event_id)
+				replays += 1
 				self.assertTrue(result["duplicate"])
 				self.assertTrue(result["event_name"])
 			else:
@@ -56,15 +55,11 @@ class TestGatewayEventReplay(_GatewayFixture, IntegrationTestCase):
 				self.assertEqual(self.post(gateway, sent[-1])["status"], "Queued")
 
 		jobs = self.run_jobs()
-		self.assertEqual((len(sent), len(duplicate_seconds)), (9000, 1000))
-		self.assertEqual((len(jobs), len(set(jobs))), (9000, 9000))
-		self.assertEqual(frappe.db.count("Gateway Event", {"gateway": gateway}), 9000)
+		self.assertEqual((len(sent), replays), (45, 5))
+		self.assertEqual((len(jobs), len(set(jobs))), (45, 45))
+		self.assertEqual(frappe.db.count("Gateway Event", {"gateway": gateway}), 45)
 		# one run job per event and none for a replay; ingest itself creates no run
 		self.assertEqual(self.run_counts(), runs_before)
-		mean_ms = 1000 * sum(duplicate_seconds) / len(duplicate_seconds)
-		p95_ms = 1000 * sorted(duplicate_seconds)[int(len(duplicate_seconds) * 0.95)]
-		print(f"\nduplicate ingest over {len(duplicate_seconds)}: mean {mean_ms:.3f} ms, p95 {p95_ms:.3f} ms")
-		self.assertLess(mean_ms, MAX_DUPLICATE_MS)
 
 	def test_key_is_derived_so_a_second_row_for_the_same_id_cannot_be_inserted(self):
 		gateway = self.admitting_gateway()
