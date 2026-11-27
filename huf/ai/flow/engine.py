@@ -242,9 +242,25 @@ The key is split back out by :func:`load_context` and is never visible as run in
 def dump_context(ctx: GraphContext) -> str:
 	"""Serialise the run context together with the node outputs recorded so far."""
 	payload = dict(ctx.data)
+	payload.pop(NODE_OUTPUTS_KEY, None)  # only recorded outputs are ever stored under it
 	if ctx.node_outputs:
 		payload[NODE_OUTPUTS_KEY] = ctx.node_outputs
 	return json.dumps(payload, default=str)
+
+
+def strip_reserved_keys(values: dict) -> dict:
+	"""``values`` from a caller without the keys only the engine writes: node outputs, ``_huf_*`` run state
+	(``_huf_entry`` is set by ``runs.start``, before the run exists) and the document write counter. Anything
+	else would be restored as the run's own state, for example a forged approval decision.
+	"""
+	from huf.ai.flow.runs.start import ENTRY_MARKER
+
+	return {
+		key: value
+		for key, value in values.items()
+		if key not in (NODE_OUTPUTS_KEY, _WRITES_KEY)
+		and not (str(key).startswith("_huf_") and key != ENTRY_MARKER)
+	}
 
 
 def load_context(raw, **kwargs) -> GraphContext:
@@ -581,6 +597,8 @@ def create_flow_run(
 	Returns:
 	    Flow Run document
 	"""
+	if isinstance(payload, dict):
+		payload = strip_reserved_keys(payload)
 	defn_doc = frappe.get_doc("Flow Definition", flow_id)
 	defn = json.loads(defn_doc.definition_json) if isinstance(defn_doc.definition_json, str) else defn_doc.definition_json
 
@@ -782,7 +800,7 @@ def resume_flow_run(flow_run_name: str, user_input: dict | None = None):
 			frappe.throw(_("This run was already resumed by someone else."))
 
 		if user_input:
-			run_ctx.context.update(user_input)
+			run_ctx.context.update(strip_reserved_keys(dict(user_input)))
 			run_ctx.save_context()
 		complete = not next_node_id
 		if complete:
@@ -1095,11 +1113,19 @@ class _FlowStateStore:
 	on its hot path.
 	"""
 
-	def __init__(self, flow_run):
+	def __init__(self, flow_run, settings=None):
 		self.flow_run = flow_run
+		self.settings = settings
 
 	def save_cursor(self, cursor: str) -> None:
-		self.flow_run.db_set("current_node_id", cursor)
+		from huf.ai.flow.support import step_keys
+
+		# the visit of the step being left counts now, in the same write as the cursor (G2)
+		context = _context_of(self.flow_run, self.settings)
+		if step_keys.advance(context.data, self.flow_run.current_node_id):
+			self.flow_run.db_set({"current_node_id": cursor, "context_json": dump_context(context)})
+		else:
+			self.flow_run.db_set("current_node_id", cursor)
 
 	def save_hops(self, hop_count: int) -> None:
 		self.flow_run.db_set("hop_count", hop_count)
@@ -1253,7 +1279,7 @@ def _execute_loop(flow_run, nodes_map: dict, edges_list: list, settings: dict):
 		handlers,
 		router=router,
 		policy=policy,
-		store=_FlowStateStore(flow_run),
+		store=_FlowStateStore(flow_run, settings),
 		listener=_FlowEventListener(flow_run),
 	)
 

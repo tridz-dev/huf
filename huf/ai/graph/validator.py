@@ -342,6 +342,8 @@ def _control_flow_targets(node: dict) -> list[tuple[str, str | None]]:
 		targets.append(("config.approve_next", config.get("approve_next")))
 		targets.append(("config.reject_next", config.get("reject_next")))
 		targets.append(("config.timeout_next", config.get("timeout_next")))
+	elif ntype == "handoff":
+		targets.append(("config.timeout_next", config.get("timeout_next")))
 	elif ntype == "wait":
 		targets.append(("config.resume.timeout_next", (config.get("resume") or {}).get("timeout_next")))
 	elif ntype == "foreach":

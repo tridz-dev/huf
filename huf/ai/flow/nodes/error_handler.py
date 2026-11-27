@@ -47,7 +47,7 @@ def run_error_handler(flow_run, program, router, handlers, policy, settings, nod
 		handlers,
 		router=router,
 		policy=policy,
-		store=engine._FlowStateStore(flow_run),
+		store=engine._FlowStateStore(flow_run, settings),
 		listener=engine._FlowEventListener(flow_run),
 	).run(context, state)
 	engine._persist_context(flow_run, context, settings)

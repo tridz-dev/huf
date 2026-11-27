@@ -175,6 +175,7 @@ class TestMemberDelivery(ProviderMixin, IntegrationTestCase):
 	def setUp(self):
 		patch.object(frappe, "logger").start()
 		patch.object(frappe.db, "commit").start()
+		patch.object(outbox, "_blocked_now", return_value=None).start()  # covered in test_outbox
 		self.bound_ctx = []
 		patch.object(
 			token_binder,
@@ -263,6 +264,7 @@ class TestBodyParams(IntegrationTestCase):
 			header=None,
 			language=None,
 			run_id="r",
+			step_key="sk",
 		)
 		values = {"first_name": "Sam", "points_earned": "40"}
 		for fmt, expected in (
