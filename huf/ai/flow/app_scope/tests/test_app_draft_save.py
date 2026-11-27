@@ -15,9 +15,8 @@ from frappe.tests import IntegrationTestCase
 
 from huf.ai.flow import api as flow_api
 from huf.ai.flow.app_scope import access, docperms
-from huf.ai.flow.app_scope.access import set_app_flow_status
 from huf.ai.flow.app_scope.ownership import create_app_flow
-from huf.ai.flow.tests.test_flow_draft_validation import _end, _graph, _trigger
+from huf.ai.flow.tests.test_flow_draft_validation import _end, _graph
 
 FLOW, OTHER = "test-secsave-a", "test-secsave-b"
 ROLE, USER = "SecSave App Editor", "secsave-a@example.com"
@@ -28,7 +27,8 @@ def _grants():
 
 
 def _defn(*extra, first="end"):
-	return _graph([_trigger(first), *extra, _end()])
+	trigger = {"id": "start", "type": "trigger.unset", "config": {}, "next": first}
+	return _graph([trigger, *extra, _end()])
 
 
 class TestAppDraftSave(IntegrationTestCase):
@@ -104,14 +104,18 @@ class TestAppDraftSave(IntegrationTestCase):
 		hook["nodes"][0] = {**hook["nodes"][0], "type": "trigger.webhook"}
 		self._refused(hook)
 
+	def test_trigger_may_be_chosen(self):
+		chosen = _defn()
+		chosen["nodes"][0]["type"] = "trigger.app"
+		chosen["nodes"][0]["config"] = {"app": "huf"}
+		flow_api.save_flow_definition(FLOW, chosen)
+		self.assertEqual(self._stored()["nodes"][0]["type"], "trigger.app")
+
 	def test_malformed_definition_is_refused(self):
 		self._refused({**_defn(), "nodes": {"a": {"type": "code.run"}}})
 
 	def test_active_flow_definition_cannot_change(self):
-		frappe.set_user("Administrator")
-		with mock.patch("huf.ai.flow.publish_guard.check_preflight"):
-			set_app_flow_status("huf", FLOW, "Active")
-		frappe.set_user(USER)
+		frappe.db.set_value("Flow Definition", FLOW, "status", "Active")  # activation itself is not under test
 		self._refused(self._labelled())
 
 	def test_rename_merge_and_flow_id_change_are_refused(self):
@@ -124,9 +128,7 @@ class TestAppDraftSave(IntegrationTestCase):
 			frappe.rename_doc("Flow Definition", FLOW, OTHER, merge=True)
 		try:
 			frappe.client.set_value("Flow Definition", FLOW, "flow_id", FLOW + "-renamed")
-		except frappe.ValidationError:
-			pass
-		except frappe.PermissionError:
+		except (frappe.ValidationError, frappe.PermissionError):
 			pass
 		self.assertEqual(frappe.db.get_value("Flow Definition", FLOW, "flow_id"), FLOW)
 		self.assertTrue(frappe.db.exists("Flow Definition", FLOW))

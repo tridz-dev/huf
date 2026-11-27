@@ -38,7 +38,7 @@ READ_PTYPES = frozenset({"read", "select", "report", "print", "email"})
 RUN_DOCTYPES = ("Agent Flow Run", "Flow Member State")
 _FLOW_FIELD = {"Agent Flow Run": "flow_definition", "Flow Member State": "flow"}
 #: Flow Definition fields that only the app's server path (or a Huf Manager) may change on an app flow.
-SERVER_ONLY_FIELDS = ("status", "live_send")
+SERVER_ONLY_FIELDS = ("status", "live_send", "flow_id")
 
 
 # --- grants -------------------------------------------------------------------------------------------------
@@ -211,12 +211,21 @@ def guard_server_only_fields(doc) -> None:
 			)
 
 
+def guard_app_flow_rename(doc, old_name: str, new_name: str, merge: bool = False) -> None:
+	"""Refuse a rename or merge of (or into) an app flow: the app finds its flow, and parked runs their pin, by
+	name. ``rename_doc`` needs only write permission and never runs ``validate``."""
+	if doc.flags.get(SERVER_FLAG) or is_privileged():
+		return
+	if owner_app_of(old_name) or (merge and owner_app_of(new_name)):
+		frappe.throw(_("Only the owning app can rename or merge this flow."), frappe.PermissionError)
+
+
 def guard_server_only_db_set(doc, fieldname, value) -> None:
 	if is_privileged() or not owner_app_of(doc.name):
 		return
 	changes = fieldname if isinstance(fieldname, dict) else {fieldname: value}
 	if any(f in changes for f in SERVER_ONLY_FIELDS):
-		frappe.throw(_("Only the owning app can change this flow's status."), frappe.PermissionError)
+		frappe.throw(_("Only the owning app can change this on the flow."), frappe.PermissionError)
 
 
 def set_app_flow_status(app: str, flow_id: str, status: str, *, live_send: bool | None = None):

@@ -207,8 +207,11 @@ def save_flow_definition(flow_id: str, definition_json: str | dict) -> dict:
 
 	Returns: dict with the version number and how many things are left to finish.
 	"""
-	from huf.ai.flow.app_scope.api_guards import guard_flow
+	from huf.ai.flow.app_scope.api_guards import guard_flow, is_app_flow
 	guard_flow(flow_id, "edit")
+	from huf.ai.flow.app_scope.access import is_privileged
+	from huf.ai.flow.app_scope.drafts import save_app_draft
+
 	if not frappe.has_permission("Flow Definition", "write"):
 		frappe.throw(_("Not permitted"), frappe.PermissionError)
 
@@ -218,8 +221,12 @@ def save_flow_definition(flow_id: str, definition_json: str | dict) -> dict:
 
 	if frappe.db.exists("Flow Definition", flow_id):
 		doc = frappe.get_doc("Flow Definition", flow_id)
-		doc.definition_json = definition_json
-		doc.save()
+		if is_app_flow(flow_id) and not is_privileged():
+			# definition_json is permlevel 1: a plain save would silently keep the stored graph
+			save_app_draft(doc, definition_json)
+		else:
+			doc.definition_json = definition_json
+			doc.save()
 	else:
 		defn = json.loads(definition_json)
 		doc = frappe.get_doc(
