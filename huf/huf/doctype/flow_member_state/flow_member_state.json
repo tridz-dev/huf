@@ -6,6 +6,7 @@
  "field_order": [
   "flow",
   "member_key",
+  "entry_window",
   "status",
   "current_node_id",
   "active_flow_run",
@@ -18,7 +19,8 @@
  ],
  "fields": [
   {"fieldname": "flow", "fieldtype": "Link", "in_list_view": 1, "label": "Flow", "options": "Flow Definition", "read_only": 1, "reqd": 1, "search_index": 1},
-  {"fieldname": "member_key", "fieldtype": "Data", "in_list_view": 1, "label": "Member", "length": 140, "read_only": 1, "reqd": 1},
+  {"fieldname": "member_key", "fieldtype": "Data", "in_list_view": 1, "label": "Member", "length": 140, "read_only": 1, "reqd": 1, "search_index": 1},
+  {"fieldname": "entry_window", "fieldtype": "Data", "label": "Entry Window", "length": 140, "read_only": 1},
   {"default": "Active", "fieldname": "status", "fieldtype": "Select", "in_list_view": 1, "label": "Status", "options": "Active\nWaiting\nCompleted\nExited", "read_only": 1},
   {"fieldname": "current_node_id", "fieldtype": "Data", "label": "Current Step", "read_only": 1},
   {"fieldname": "active_flow_run", "fieldtype": "Link", "label": "Active Run", "options": "Agent Flow Run", "read_only": 1},
@@ -31,7 +33,7 @@
  ],
  "index_web_pages_for_search": 0,
  "links": [],
- "modified": "2026-11-25 10:00:00.000000",
+ "modified": "2026-11-27 10:00:00.000000",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Flow Member State",
