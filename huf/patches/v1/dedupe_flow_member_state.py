@@ -10,13 +10,13 @@ import frappe
 
 from huf.ai.flow.runs.member import DOCTYPE, MAX_HISTORY, MAX_VARS_BYTES, member_name
 
-TABLE = f"`tab{DOCTYPE}`"
-
 
 def execute():
 	if not frappe.db.table_exists(DOCTYPE):
 		return
-	duplicates = frappe.db.sql(f"select flow, member_key from {TABLE} group by flow, member_key having count(*) > 1")
+	duplicates = frappe.db.sql(
+		"select flow, member_key from `tabFlow Member State` group by flow, member_key having count(*) > 1"
+	)
 	for flow, key in duplicates:
 		_merge(flow, key)
 
@@ -24,8 +24,8 @@ def execute():
 def _merge(flow: str, key: str) -> None:
 	# Oldest first, so later rows win.
 	rows = frappe.db.sql(
-		f"select name, flow, member_key, entered_at, last_event_at, run_count, vars_json, history_json from {TABLE}"
-		" where flow = %s and member_key = %s order by coalesce(last_event_at, modified), modified, name",
+		"select name, flow, member_key, entered_at, last_event_at, run_count, vars_json, history_json"
+		" from `tabFlow Member State` where flow = %s and member_key = %s order by coalesce(last_event_at, modified), modified, name",
 		(flow, key),
 		as_dict=True,
 	)
@@ -40,9 +40,10 @@ def _merge(flow: str, key: str) -> None:
 	history.sort(key=lambda entry: str(entry.get("at") or ""))
 
 	for row in rows[:-1]:
-		frappe.db.sql(f"delete from {TABLE} where name = %s", row.name)
+		frappe.db.sql("delete from `tabFlow Member State` where name = %s", row.name)
 	frappe.db.sql(
-		f"update {TABLE} set name = %s, run_count = %s, entered_at = %s, vars_json = %s, history_json = %s where name = %s",
+		"update `tabFlow Member State` set name = %s, run_count = %s, entered_at = %s,"
+		" vars_json = %s, history_json = %s where name = %s",
 		(
 			member_name(latest.flow, latest.member_key),
 			sum(row.run_count or 0 for row in rows),
