@@ -122,6 +122,7 @@ def _create_run(
 			"trigger.webhook": "Webhook",
 			"trigger.schedule": "Schedule",
 			"trigger.doc-event": "Doc Event",
+			"trigger.app": "App",
 		}.get(node.get("type"), "Manual")
 		run = engine.create_flow_run(
 			flow_id=flow_id,

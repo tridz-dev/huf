@@ -1067,6 +1067,43 @@
         }
       ]
     },
+    "TriggerAppNode": {
+      "description": "Started only by the named app through start_flow_for_member. No event, schedule or webhook starts it.",
+      "allOf": [
+        {
+          "$ref": "#/$defs/NodeCommon"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "trigger.app"
+            },
+            "config": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "app"
+              ],
+              "properties": {
+                "app": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The app that starts this flow. Shown as Started by <app>."
+                },
+                "entry_policy": {
+                  "enum": [
+                    "new_run_each_time",
+                    "resume_if_waiting",
+                    "once_per_member",
+                    "one_active_per_member"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
     "TriggerScheduleNode": {
       "allOf": [
         {
@@ -1299,6 +1336,9 @@
         },
         {
           "$ref": "#/$defs/TriggerUnsetNode"
+        },
+        {
+          "$ref": "#/$defs/TriggerAppNode"
         },
         {
           "$ref": "#/$defs/TriggerGatewayNode"

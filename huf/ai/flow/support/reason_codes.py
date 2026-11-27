@@ -33,6 +33,10 @@ HUF_CODES = frozenset(
 		"media_host_not_allowed",
 		"no_opt_in",
 		"window_defer_exhausted",
+		# a send the window deferred: the run is parked (runs.park.SEND_WINDOW_REASON)
+		"send_window",
+		# a step that is turned off was skipped (support.turned_off)
+		"turned_off",
 		# send step: no outbox transport for this channel; a send step cannot be retried (G2)
 		"channel_unsupported",
 		"SEND_RETRY_FORBIDDEN",
@@ -73,6 +77,39 @@ def normalize(code: object) -> str:
 	# The rejected value is not logged: a caller that passed free text may have passed personal data.
 	_warn("unregistered flow reason code stored as unknown")
 	return UNKNOWN
+
+
+FIELD = "reason_code"
+"""The step record key the trace reads the code from."""
+
+_REASONED_STATUSES = frozenset({"blocked", "deferred", "skipped"})
+
+
+def code_for(record: object) -> str | None:
+	"""The reason code a step record explains itself with, or None for a step that needs none.
+
+	A blocked, deferred or skipped record always gets a registered code (``unknown`` when its reason is not one).
+	"""
+	if not isinstance(record, dict):
+		return None
+	status = record.get("status")
+	if record.get("skipped") is True and status not in _REASONED_STATUSES:
+		return "turned_off"
+	if status not in _REASONED_STATUSES:
+		return None
+	return normalize(record.get(FIELD) or record.get("reason"))
+
+
+def stamp(record: object) -> object:
+	"""``record`` with its ``reason_code`` set (a new dict); any other value unchanged. Never raises."""
+	try:
+		code = code_for(record)
+	except Exception:  # noqa: BLE001 - a trace write must never fail a run
+		_warn("flow reason code could not be read")
+		code = UNKNOWN if isinstance(record, dict) else None
+	if code is None:
+		return record
+	return {**record, FIELD: code}
 
 
 def _app_codes() -> frozenset[str]:

@@ -13,6 +13,7 @@ _NODE_DISPLAY = {
 	"trigger.schedule": ("Schedule Trigger", "Clock", "trigger"),
 	"trigger.doc-event": ("Doc Event Trigger", "FileText", "trigger"),
 	"trigger.unset": ("Unset Trigger", "CircleDashed", "trigger"),
+	"trigger.app": ("App Trigger", "AppWindow", "trigger"),
 	"trigger.gateway": ("Chat Message Trigger", "MessageSquare", "trigger"),
 	"trigger.whatsapp": ("WhatsApp Message Trigger", "MessageCircle", "trigger"),
 	"trigger.telegram": ("Telegram Message Trigger", "Send", "trigger"),
@@ -40,6 +41,9 @@ _NODE_DISPLAY = {
 	"doc.create": ("Create Document", "FilePlus", "data"),
 	"code.run": ("Execute Code", "Terminal", "data"),
 }
+
+#: Types only an app can start (start_flow_for_member); the palette marks them "app only".
+APP_ONLY_TYPES = frozenset({"trigger.app"})
 
 _SCHEMA_FILE = None
 
@@ -149,4 +153,6 @@ def build_node_schemas(schema: dict | None = None) -> dict:
 			"config_schema": fields,
 			"json_schema": config,
 		}
+		if node_type in APP_ONLY_TYPES:
+			out[node_type]["app_only"] = True
 	return out
