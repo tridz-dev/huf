@@ -4,7 +4,13 @@
 """Huf's built-in pre-send steps (H-W2-02), run by :mod:`huf.ai.channels.guard` before any app hook.
 
 Each step takes the request dict and answers ``{"allow": True}`` or ``{"allow": False, "reason": code}``.
-They only read. Anything they raise is turned into a ``hook_error`` block by the chain.
+The steps in ``STEPS`` only read. Anything they raise is turned into a ``hook_error`` block by the chain.
+
+The frequency cap (H-W2-08) is not in ``STEPS``: the chain runs it last, after every app hook, as
+:func:`resolve_caps` (reads app hooks) and then :func:`apply_caps` (counts; a live send commits).
+
+The send window (H-W2-06) is not in ``STEPS`` either: its answer can be "later", so the chain runs it as
+:func:`window_deferral`, after these steps and before any app hook.
 
 Order: recipient, consent, template. ``header`` is not part of the app hook request: the chain adds it for
 built-in steps only, from ``guard.evaluate(..., header=)``; None means "use the template's default media".
@@ -12,12 +18,26 @@ built-in steps only, from ``guard.evaluate(..., header=)``; None means "use the 
 
 from __future__ import annotations
 
+import copy
 import re
+from datetime import datetime, time, timedelta, timezone
 from typing import Any
 from urllib.parse import urlsplit
 
 import frappe
 
+from huf.ai.flow.policy import frequency_cap, send_window
+
+WINDOW_STEP = "send_window"
+WINDOW_HOOK = "huf_send_window_resolver"
+WINDOW_KEYS = frozenset({"zone", "windows", "exempt_categories"})
+WINDOW_ENTRY_KEYS = frozenset({"start", "end", "weekdays"})
+WINDOW_RETRY = timedelta(hours=1)  # closed with no known next opening
+_CLOCK = re.compile(r"([01][0-9]|2[0-3]):([0-5][0-9])")
+CAP_STEP = "frequency_cap"
+CAP_HOOK = "huf_frequency_cap_resolver"
+CAP_KEYS = frozenset({"limit", "window_seconds", "bucket"})
+MAX_WINDOW_SECONDS = 31622400  # 366 days
 MEDIA_HOSTS_CONF = (
 	"huf_send_media_hosts"  # list or comma string of hosts (``host:port`` for a port other than 443)
 )
@@ -198,6 +218,107 @@ def media_host_allowed(link: Any) -> bool:
 	raw = frappe.conf.get(MEDIA_HOSTS_CONF) or []
 	hosts = raw.split(",") if isinstance(raw, str) else raw
 	return host in {str(h).strip().lower() for h in hosts}
+
+
+def window_resolvers() -> list[str]:
+	paths = frappe.get_hooks(WINDOW_HOOK) or []
+	return [paths] if isinstance(paths, str) else list(paths)
+
+
+def window_deferral(request: dict, resolvers: list[str]) -> datetime | None:
+	"""None when the send may leave now, else the aware UTC moment to try again.
+
+	The first resolver answer that is not None decides; none is "always open". Raises on any invalid answer.
+	"""
+	for path in resolvers:
+		answer = frappe.get_attr(path)(copy.deepcopy(request))
+		if answer is not None:
+			break
+	else:
+		return None
+	zone, windows, exempt = _parse_window_answer(answer)
+	now = datetime.now(timezone.utc)
+	# evaluated even for an exempt category, so a bad zone or window never passes unnoticed
+	decision = send_window.check_send_window(now, zone, windows)
+	if decision.allowed or request.get("category") in exempt:
+		return None
+	return decision.next_open or now + WINDOW_RETRY
+
+
+def _parse_window_answer(answer: Any) -> tuple[str, list[send_window.Window], list[str]]:
+	if not isinstance(answer, dict) or not set(answer) <= WINDOW_KEYS:
+		raise ValueError("invalid send window")  # noqa: TRY003
+	zone, windows = answer.get("zone"), answer.get("windows")
+	exempt = answer.get("exempt_categories", [])
+	if not isinstance(zone, str) or not isinstance(windows, list) or not isinstance(exempt, list):
+		raise ValueError("invalid send window")  # noqa: TRY003, TRY004
+	if not all(isinstance(category, str) for category in exempt):
+		raise ValueError("invalid send window")  # noqa: TRY003
+	return zone, [_parse_window(entry) for entry in windows], exempt
+
+
+def _parse_window(entry: Any) -> send_window.Window:
+	if not isinstance(entry, dict) or not set(entry) <= WINDOW_ENTRY_KEYS:
+		raise ValueError("invalid send window")  # noqa: TRY003
+	weekdays = entry.get("weekdays", list(send_window.ALL_WEEKDAYS))
+	if not isinstance(weekdays, list) or not all(type(day) is int for day in weekdays):
+		raise ValueError("invalid send window")  # noqa: TRY003
+	return send_window.Window(_clock(entry.get("start")), _clock(entry.get("end")), frozenset(weekdays))
+
+
+def _clock(value: Any) -> time:
+	match = _CLOCK.fullmatch(value) if isinstance(value, str) else None
+	if not match:
+		raise ValueError("invalid send window")  # noqa: TRY003
+	return time(int(match[1]), int(match[2]))
+
+
+def resolve_caps(request: dict) -> list[tuple[int, str, int]]:
+	"""``(window_seconds, counter channel, limit)`` of every cap on this send, shortest window first.
+
+	Apps answer through ``huf_frequency_cap_resolver``; None, or no resolver, is no cap. Caps sharing a
+	counter are merged to the lowest limit, so one send is counted there once. Raises on any invalid answer.
+	"""
+	paths = frappe.get_hooks(CAP_HOOK) or []
+	limits: dict[tuple[int, str], int] = {}
+	for path in [paths] if isinstance(paths, str) else paths:
+		answer = frappe.get_attr(path)(copy.deepcopy(request))
+		if answer is None:
+			continue
+		for cap in answer if isinstance(answer, list) else [answer]:
+			window, channel, limit = _parse_cap(cap, request)
+			key = (window, channel)
+			limits[key] = min(limit, limits.get(key, limit))
+	return [(window, channel, limit) for (window, channel), limit in sorted(limits.items())]
+
+
+def _parse_cap(cap: Any, request: dict) -> tuple[int, str, int]:
+	if not isinstance(cap, dict) or not set(cap) <= CAP_KEYS:
+		raise ValueError("invalid frequency cap")  # noqa: TRY003
+	limit, window = cap.get("limit"), cap.get("window_seconds")
+	channel = cap["bucket"] if "bucket" in cap else request.get("channel")
+	if type(limit) is not int or limit < 0 or type(window) is not int or not 0 < window <= MAX_WINDOW_SECONDS:
+		raise ValueError("invalid frequency cap")  # noqa: TRY003
+	if not isinstance(channel, str) or not channel.strip() or len(channel) > frequency_cap.MAX_KEY_CHARS:
+		raise ValueError("invalid frequency cap")  # noqa: TRY003
+	return window, channel, limit
+
+
+def apply_caps(request: dict, caps: list[tuple[int, str, int]]) -> dict:
+	"""Claim one send under every cap when ``request["live"] is True``; otherwise only look.
+
+	A claim COMMITS the current transaction (see :mod:`huf.ai.flow.policy.frequency_cap`). A send refused by
+	a later window keeps the earlier windows' counts. Store errors propagate, which blocks the send.
+	"""
+	member, live = request.get("member_key"), request.get("live") is True
+	for window, channel, limit in caps:
+		if live:
+			full = frequency_cap.incr(member, channel, window, limit=limit) is None
+		else:
+			full = frequency_cap.check(member, channel, window) >= limit
+		if full:
+			return _block("freq_cap")
+	return _allow()
 
 
 STEPS = (

@@ -54,10 +54,12 @@ from huf.ai.flow import state as flow_state
 from huf.ai.flow.runs import member as flow_member
 from huf.ai.flow.catalog import node_registry
 from huf.ai.flow.nodes import adapters, subflow
+from huf.ai.flow.nodes.condition import exec_facts_condition
 from huf.ai.flow.nodes.error_handler import first_error, run_error_handler
 from huf.ai.flow.nodes.retry import policy_of as retry_policy_of, run_with_retry
 from huf.ai.flow.nodes.wait import exec_wait
 from huf.ai.flow.runs.outcome import record_outcome
+from huf.ai.flow.support import facts
 from huf.ai.flow.support.approval_card import waiting_fields
 from huf.ai.flow.runs.edges import edges_from_nodes
 from huf.ai.flow.support.approval_notifications import _clear_flow_notifications, _send_approval_notifications
@@ -1834,7 +1836,7 @@ def fail_waiting_code_run(flow_run_name: str, reason: str) -> bool:
 
 def _exec_condition(flow_run, node: dict, config: dict, settings: dict) -> dict:
 	"""
-	Execute condition node (config: ``expression``, ``on_true``, ``on_false``).
+	Execute condition node (config: ``expression``, ``on_true``, ``on_false``, ``fallback_next``).
 
 	The expression is the shared graph-IR expression language
 	(``huf.ai.graph.expressions``, e.g. ``input['amount'] > 100``) evaluated against the run's
@@ -1853,7 +1855,10 @@ def _exec_condition(flow_run, node: dict, config: dict, settings: dict) -> dict:
 	ctx = _context_of(flow_run, settings)
 
 	try:
-		result = evaluate_bool(parse_expression(expression), ctx.reference_roots(), raise_limits=True)
+		parsed = parse_expression(expression)
+		if any(facts.names_used(parsed)):  # reads app facts: fetched for this evaluation only, fail closed
+			return exec_facts_condition(flow_run, node, config, ctx, parsed)
+		result = evaluate_bool(parsed, ctx.reference_roots(), raise_limits=True)
 	except Exception as e:
 		return {"status": "failed", "error": str(e) if isinstance(e, ExpressionLimitError) else "This condition could not be checked against the data it received. Check what you compare, and that earlier steps give it that data."}
 

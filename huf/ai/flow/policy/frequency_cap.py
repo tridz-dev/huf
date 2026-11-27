@@ -9,6 +9,8 @@ that changed after the transaction's snapshot (error 1020), which would fail par
 claim is durable before the message leaves, so a later rollback cannot let the cap be exceeded, and the row
 lock is not held during the send. Call it where committing the work so far is safe. ``check`` only reads.
 
+``purge_expired`` (daily scheduler) deletes the counters of windows that ended over a day ago.
+
 Every error propagates: a caller guarding a send must treat it as a block. Errors never carry the member key.
 """
 
@@ -16,7 +18,7 @@ from __future__ import annotations
 
 import hashlib
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import frappe
 from frappe.utils import now_datetime
@@ -24,6 +26,8 @@ from frappe.utils import now_datetime
 DOCTYPE = "Flow Send Counter"
 TABLE = f"`tab{DOCTYPE}`"
 MAX_KEY_CHARS = 140
+PURGE_GRACE = timedelta(days=1)  # slack for clock differences between workers
+PURGE_BATCH = 1000
 MATCH_KEY = (
 	"member_key = %(member_key)s and channel = %(channel)s"
 	" and window_seconds = %(window_seconds)s and window_start = %(window_start)s"
@@ -79,6 +83,24 @@ def incr(member_key: str, channel: str, window: int, limit: int | None = None) -
 		raise
 	frappe.db.commit()  # nosemgrep  make the claim durable and release the row lock
 	return count
+
+
+def purge_expired(batch_size: int = PURGE_BATCH) -> int:
+	"""Scheduler entry point (daily): delete ended windows' counters, committing between batches."""
+	cutoff = datetime.fromtimestamp(time.time(), timezone.utc).replace(tzinfo=None) - PURGE_GRACE
+	removed = 0
+	while True:
+		# window_start < cutoff is implied by the second test; it lets the index narrow the scan
+		frappe.db.sql(
+			f"delete from {TABLE} where window_start < %(cutoff)s"  # noqa: S608
+			" and timestampadd(second, window_seconds, window_start) <= %(cutoff)s limit %(batch)s",
+			{"cutoff": cutoff, "batch": batch_size},
+		)
+		deleted = frappe.db._cursor.rowcount
+		frappe.db.commit()  # nosemgrep  keep each batch's locks short
+		removed += deleted
+		if deleted < batch_size:
+			return removed
 
 
 def _claim(values: dict, limit: int | None) -> int | None:

@@ -317,6 +317,7 @@ def _control_flow_targets(node: dict) -> list[tuple[str, str | None]]:
 	if ntype == "condition":
 		targets.append(("config.on_true", config.get("on_true")))
 		targets.append(("config.on_false", config.get("on_false")))
+		targets.append(("config.fallback_next", config.get("fallback_next")))
 	elif ntype in {"router.llm", "router.decision"}:
 		for i, option in enumerate(config.get("options", []) or []):
 			if isinstance(option, dict):
