@@ -90,7 +90,7 @@ class TestGatewayEventForge(IntegrationTestCase):
 			is_read_only=0,
 		)
 		flow_id = f"_test-wa-forge-{sfx}"
-		hook_token = "test-webhook-secret-0123456789abcdef"
+		hook_token = "test-webhook-secret-0123456789abcdef"  # noqa: S105
 		flow_api.save_flow_definition(
 			flow_id,
 			{
