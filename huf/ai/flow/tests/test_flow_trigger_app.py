@@ -33,10 +33,12 @@ def app_flow():
 
 class TestAppTriggerPure(unittest.TestCase):
 	def test_validator_accepts_it_as_the_entry(self):
-		self.assertIn("trigger.app", get_flow_node_types())
-		for mode in ("draft", "publish"):
-			result = validate_flow(app_flow(), mode)
-			self.assertTrue(result.ok, (mode, result.errors, result.issues))
+		# app-registered node types and validators cannot be read with no site
+		with patch("frappe.get_installed_apps", return_value=[]), patch("frappe.get_hooks", return_value=[]):
+			self.assertIn("trigger.app", get_flow_node_types())
+			for mode in ("draft", "publish"):
+				result = validate_flow(app_flow(), mode)
+				self.assertTrue(result.ok, (mode, result.errors, result.issues))
 
 	def test_activatable_and_not_unset(self):
 		self.assertEqual(collect_activation_problems(app_flow()), [])
@@ -66,7 +68,9 @@ class TestAppTriggerPure(unittest.TestCase):
 class TestAppTriggerExecutor(unittest.TestCase):
 	def _run(self, trigger_type, run_mode="Real"):
 		run = SimpleNamespace(trigger_type=trigger_type, run_mode=run_mode)
-		with patch("huf.ai.flow.engine._context_of", return_value=SimpleNamespace(as_dict=lambda: {"input": {}})):
+		# the step-test flag fails closed ("it is a test") with no site; these runs are not step tests
+		with patch("huf.ai.flow.engine._context_of", return_value=SimpleNamespace(as_dict=lambda: {"input": {}})), \
+			patch("huf.ai.flow.testrun.gate.step_test_active", return_value=False):
 			return node_registry.executor_for("trigger.app")(run, TRIGGER, TRIGGER["config"], {})
 
 	def test_app_run_passes_through(self):
