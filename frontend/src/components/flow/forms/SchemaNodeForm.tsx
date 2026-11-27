@@ -1,3 +1,4 @@
+import { embedPolicy } from '@/embed/bridge';
 import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
 import { fromTextRefs, toTextRefs } from '@/lib/flow-data/textRefs';
 import { appMissingMessage, getAppNodeType, missingAppStep } from '@/lib/flow-graph/appNodeTypes';
@@ -15,6 +16,7 @@ import { DoctypePicker } from '../DoctypePicker';
 import { FieldHint } from '../FieldHint';
 import { ValueField } from './fields';
 import { type ActionFormProps, type Cfg, asObj, Section } from './formKit';
+import { AppHandoffFields, HANDOFF_FIXED_FIELDS } from './steps/HandoffForm';
 import { useDoctypeOptions } from './data/DocGetForm';
 import { useAsValue } from './useAsValue';
 
@@ -175,10 +177,12 @@ export function SchemaNodeForm({ nodeId, cfg, patch, f, Err, title }: ActionForm
       </div>
     );
   }
-  const entries = Object.entries(def.config_schema?.properties ?? {});
+  const appHandoff = cfg.backend_type === 'handoff' && embedPolicy() !== null;
+  const entries = Object.entries(def.config_schema?.properties ?? {}).filter(([name]) => !appHandoff || !HANDOFF_FIXED_FIELDS.includes(name));
   return (
     <Section title={title} hint={def.description}>
       {def.app !== HUF_APP && <FieldHint testId="flow-schema-app">Added by {def.app}</FieldHint>}
+      {appHandoff && <AppHandoffFields cfg={cfg} patch={patch} f={f} Err={Err} />}
       {entries.length === 0 && <p className="text-xs text-muted-foreground" data-testid="flow-schema-empty">This step has no settings.</p>}
       {entries.map(([name, prop]) => (
         <SchemaRow key={name} name={name} prop={prop} path={name} value={cfg[name]} onChange={(v) => patch({ [name]: v })} nodeId={nodeId} f={f} Err={Err} disabled={!canManage} />
