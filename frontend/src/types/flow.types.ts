@@ -70,7 +70,8 @@ export type ActionType =
   | 'doc-update'
   | 'flow-call'
   | 'member-set'
-  | 'send-message';
+  | 'send-message'
+  | 'split';
 
 /** Wait step config (graph-IR `WaitNode`). `until` is a literal, reference or template; the timeout branch is a routing pointer. */
 export type WaitMode = 'duration' | 'until' | 'resume';
@@ -162,6 +163,15 @@ export interface RouterLlmActionConfig {
    * node; otherwise the serializer falls back to the first option target.
    */
   default?: string;
+}
+
+/** Split / holdout (graph-IR `split`): weighted branches (the option edges, each with a `weight` in percent) and a holdout share. */
+export interface SplitActionConfig {
+  type: 'split';
+  /** Percent of people held out (0-100); held-out runs still walk the graph but skip marketing sends. */
+  holdout?: number;
+  /** Bucketing salt; defaults to the flow version on the server. */
+  salt?: string;
 }
 
 export interface RouterDecisionActionConfig {
@@ -336,6 +346,7 @@ export type ActionConfig =
   | DocUpdateActionConfig
   | FlowCallActionConfig
   | MemberSetActionConfig
+  | SplitActionConfig
   | SendMessageActionConfig
   | UnknownActionConfig
   | { type: undefined };
@@ -377,6 +388,8 @@ export interface FlowEdgeData {
   route?: FlowEdgeRoute;
   /** Switch rule check (route 'option' of router.decision); written to the option's `expression`. */
   expression?: string;
+  /** Split branch share in percent (route 'option' of split); written to the option's `weight`. */
+  weight?: number;
 }
 
 export interface FlowNodeData {
