@@ -10,10 +10,13 @@ The frequency cap (H-W2-08) is not in ``STEPS``: the chain runs it last, after e
 :func:`resolve_caps` (reads app hooks) and then :func:`apply_caps` (counts; a live send commits).
 
 The send window (H-W2-06) is not in ``STEPS`` either: its answer can be "later", so the chain runs it as
-:func:`window_deferral`, after these steps and before any app hook.
+:func:`window_deferral`, after these steps and before any ``huf_pre_send_hooks`` handler.
 
-Order: recipient, consent, template. ``header`` is not part of the app hook request: the chain adds it for
-built-in steps only, from ``guard.evaluate(..., header=)``; None means "use the template's default media".
+Order of the whole chain: recipient, consent, ``huf_pre_send_consent_hooks``, template, send window, app
+hooks (``huf_pre_send_hooks``), frequency cap.
+
+``header`` is not part of the app hook request: the chain adds it for built-in steps only, from
+``guard.evaluate(..., header=)``; None means "use the template's default media".
 """
 
 from __future__ import annotations
