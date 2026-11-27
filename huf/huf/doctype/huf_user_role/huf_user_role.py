@@ -187,7 +187,7 @@ def app_declared_roles() -> set[str]:
 	"""
 	roles = frappe.get_hooks(APP_ROLES_HOOK) or []
 	if not isinstance(roles, (list, tuple)) or not all(isinstance(role, str) and role for role in roles):
-		raise ValueError(f"{APP_ROLES_HOOK} must be a list of role names")
+		raise ValueError(f"{APP_ROLES_HOOK} must be a list of role names")  # noqa: TRY003
 	return set(roles) - _NOT_APP_ROLES
 
 
@@ -242,7 +242,7 @@ def ensure_default_huf_roles(
 	roles = set(frappe.get_all("Has Role", {"parent": user, "parenttype": "User"}, pluck="role"))
 	try:
 		app_user = bool(roles & app_declared_roles())
-	except Exception:
+	except Exception:  # noqa: BLE001 - fail closed on any hook error
 		frappe.log_error(title=f"{APP_ROLES_HOOK}: no default Huf role granted")
 		return False
 	if app_user:
