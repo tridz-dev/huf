@@ -1,4 +1,4 @@
-import { Component, useCallback, useEffect, useRef, useSyncExternalStore, type ReactNode } from 'react';
+import { Component, useCallback, useContext, useEffect, useMemo, useRef, useSyncExternalStore, type ReactNode } from 'react';
 import { useBlocker, useLocation, useNavigate, useParams, type Location } from 'react-router-dom';
 import { AuthenticatingPage } from '@/components/AuthenticatingPage';
 import { FlowsHeaderActions } from '@/components/FlowsHeaderActions';
@@ -8,13 +8,14 @@ import { Button } from '@/components/ui/button';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { FlowProvider, useFlowContext } from '@/contexts/FlowContext';
 import { ModalProvider } from '@/contexts/ModalContext';
-import { usePermissions } from '@/contexts/PermissionsContext';
+import { PermissionsContext, usePermissions } from '@/contexts/PermissionsContext';
 import { useUser } from '@/contexts/UserContext';
 import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
 import { isEmbedSessionExpired, subscribeEmbedSession } from '@/lib/sessionInvalidation';
 import { FlowCanvasPage } from '@/pages/FlowCanvasPage';
-import { embedBoot, postToHost, type ErrorCode } from './bridge';
-import { classifyEmbedNavigation } from './navigation';
+import { embedBoot, embedPolicy, postToHost, type EmbedPolicy, type ErrorCode } from './bridge';
+import { classifyEmbedHref, classifyEmbedNavigation, type EmbedNavigation } from './navigation';
+import { EmbedToolbar } from './EmbedToolbar';
 import { useEmbedLoad } from './useEmbedLoad';
 
 const FAILURES = {
@@ -64,10 +65,22 @@ class EmbedErrorBoundary extends Component<{ children: ReactNode }, { failed: bo
   }
 }
 
+/** Acts on a navigation decision: rewrite inside the frame, or tell the host. */
+function useFollow() {
+  const navigate = useNavigate();
+  return useCallback(
+    (decision: EmbedNavigation) => {
+      if (decision.kind === 'rewrite') navigate(decision.to);
+      else if (decision.kind === 'leave' && decision.target) postToHost('guest.navigate', decision.target);
+    },
+    [navigate],
+  );
+}
+
 /** No in-app navigation leaves the editor; links that would are reported to the host. */
 function useStayInEditor() {
-  const navigate = useNavigate();
   const location = useLocation();
+  const follow = useFollow();
   const blocker = useBlocker(
     useCallback(
       ({ currentLocation, nextLocation }: { currentLocation: Location; nextLocation: Location }) =>
@@ -80,9 +93,44 @@ function useStayInEditor() {
     if (blocker.state !== 'blocked') return;
     const decision = classifyEmbedNavigation(location, blocker.location);
     blocker.reset();
-    if (decision.kind === 'rewrite') navigate(decision.to);
-    else if (decision.kind === 'leave' && decision.target) postToHost('guest.navigate', { target: decision.target });
-  }, [blocker, location, navigate]);
+    follow(decision);
+  }, [blocker, location, follow]);
+
+  // Plain links (a rendered `<a href="/huf/...">` or `/app/...`) never replace the frame either.
+  useEffect(() => {
+    const onClick = (event: MouseEvent) => {
+      const anchor = (event.target as Element | null)?.closest?.('a[href]');
+      if (!anchor || event.defaultPrevented) return;
+      const decision = classifyEmbedHref(anchor.getAttribute('href') ?? '', window.location);
+      if (!decision || decision.kind === 'stay') return;
+      event.preventDefault();
+      if (decision.kind === 'rewrite') follow({ kind: 'rewrite', to: decision.to.replace(/^\/huf(?=\/)/, '') });
+      else follow(decision);
+    };
+    document.addEventListener('click', onClick, true);
+    return () => document.removeEventListener('click', onClick, true);
+  }, [follow]);
+}
+
+/**
+ * For an app-owned flow the server's policy, not a Huf role, says what the user may do (H-W7-09). The editor's own
+ * checks read capabilities, so they are derived from the policy here. The server checks every call again.
+ */
+function PolicyPermissions({ policy, children }: { policy: EmbedPolicy; children: ReactNode }) {
+  const parent = useContext(PermissionsContext);
+  const value = useMemo(() => {
+    const granted = new Set(['flows.use', ...(policy.can_edit ? ['flows.manage'] : [])]);
+    return {
+      hufRole: parent?.hufRole ?? null,
+      capabilities: [...granted],
+      withheldCapabilities: [],
+      docPermissions: parent?.docPermissions,
+      isLoading: false,
+      hasCapability: (capability: string) => granted.has(capability),
+      refresh: parent?.refresh ?? (async () => undefined),
+    };
+  }, [policy.can_edit, parent]);
+  return <PermissionsContext.Provider value={value}>{children}</PermissionsContext.Provider>;
 }
 
 /** Tells the host that the flow is on screen, then about each change of its unsaved state. */
@@ -107,7 +155,7 @@ function useReportFlow(version: number) {
   }, [flowId, hasUnsavedChanges]);
 }
 
-function EmbedEditor({ version }: { version: number }) {
+function EmbedEditor({ version, policy }: { version: number; policy: EmbedPolicy | null }) {
   const { activeFlow } = useFlowContext();
   useStayInEditor();
   useReportFlow(version);
@@ -118,7 +166,7 @@ function EmbedEditor({ version }: { version: number }) {
         <span className="min-w-0 flex-1 truncate text-ui-text font-medium text-ink" data-testid="flow-name">
           {activeFlow?.name}
         </span>
-        <FlowsHeaderActions />
+        {policy ? <EmbedToolbar policy={policy} /> : <FlowsHeaderActions />}
       </header>
       <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <FlowCanvasPage />
@@ -128,7 +176,7 @@ function EmbedEditor({ version }: { version: number }) {
 }
 
 /** Loads the palette scope and the flow before the editor, so a failure is shown instead of an empty editor. */
-function EmbedFlow({ flowId }: { flowId: string }) {
+function EmbedFlow({ flowId, policy }: { flowId: string; policy: EmbedPolicy | null }) {
   const { result, retry } = useEmbedLoad(flowId, embedApp());
 
   if (result.state === 'loading') return <AuthenticatingPage />;
@@ -141,19 +189,20 @@ function EmbedFlow({ flowId }: { flowId: string }) {
     );
   }
 
-  return (
+  const editor = (
     <EmbedErrorBoundary>
       <TooltipProvider>
         <ShortcutsHelpProvider>
           <FlowProvider>
             <ModalProvider>
-              <EmbedEditor version={result.version} />
+              <EmbedEditor version={result.version} policy={policy} />
             </ModalProvider>
           </FlowProvider>
         </ShortcutsHelpProvider>
       </TooltipProvider>
     </EmbedErrorBoundary>
   );
+  return policy ? <PolicyPermissions policy={policy}>{editor}</PolicyPermissions> : editor;
 }
 
 export default function EmbedFlowPage() {
@@ -168,9 +217,11 @@ export default function EmbedFlowPage() {
   if (!isAuthenticated) return <EmbedState testId="embed-signed-out" code="session_expired" message="You are signed out." />;
   if (!flowId) return <EmbedState {...FAILURES.not_found} code="not_found" />;
   // Without the server's embed boot data its frame and access checks did not run.
-  if (!embedBoot() || !hasCapability('flows.use')) {
+  // An app-owned flow carries the server's policy: its access check already ran, without a Huf role.
+  const policy = embedPolicy();
+  if (!embedBoot() || (!policy && !hasCapability('flows.use'))) {
     return <EmbedState {...FAILURES.not_permitted} code="not_permitted" />;
   }
 
-  return <EmbedFlow key={flowId} flowId={flowId} />;
+  return <EmbedFlow key={flowId} flowId={flowId} policy={policy} />;
 }

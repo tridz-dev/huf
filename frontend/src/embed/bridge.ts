@@ -4,7 +4,14 @@
  * content or server text (G4).
  */
 
-export type NavigateTarget = 'flow_list' | 'connections' | 'providers' | 'gateways' | 'procedure';
+export type NavigateTarget =
+  | 'flow_list' | 'connections' | 'providers' | 'gateways' | 'procedure'
+  /** A run of this flow; the only target that carries an id (`run_id`). */
+  | 'run'
+  /** The host's approval list. */
+  | 'approvals';
+
+export type NavigatePayload = { target: Exclude<NavigateTarget, 'run'> } | { target: 'run'; run_id: string };
 
 export type ErrorCode =
   | 'session_expired' | 'not_permitted' | 'not_found' | 'unknown_app'
@@ -18,7 +25,7 @@ type GuestMessage = {
   'guest.dirty': { flow_id: string; dirty: boolean };
   'guest.saved': { flow_id: string; version: number; unfinished: number };
   'guest.publish_state': { flow_id: string; status: FlowStatusName };
-  'guest.navigate': { target: NavigateTarget };
+  'guest.navigate': NavigatePayload;
   'guest.error': { code: ErrorCode; flow_id?: string };
 };
 
@@ -50,4 +57,29 @@ export function postToHost<T extends keyof GuestMessage>(type: T, payload: Guest
   for (const origin of hostOrigin && allowed.includes(hostOrigin) ? [hostOrigin] : allowed) {
     window.parent.postMessage({ ns: 'huf.flow.embed', v: 1, type, payload }, origin);
   }
+}
+
+/** What an app-owned flow allows in the frame (server boot, H-W7-09). Booleans and fixed values only. */
+export interface EmbedPolicy {
+  publish: 'host';
+  test: 'dry_run';
+  can_edit: boolean;
+  can_test: boolean;
+  can_approve: boolean;
+}
+
+/** The policy for an app-owned flow, or null for a Huf-native flow or outside the embed. */
+export function embedPolicy(): EmbedPolicy | null {
+  if (!embedBoot()) return null;
+  const policy = (window as unknown as {
+    frappe?: { boot?: { huf_embed?: { policy?: Record<string, unknown> } } };
+  }).frappe?.boot?.huf_embed?.policy;
+  if (!policy || typeof policy !== 'object') return null;
+  return {
+    publish: 'host',
+    test: 'dry_run',
+    can_edit: policy.can_edit === true,
+    can_test: policy.can_test === true,
+    can_approve: policy.can_approve === true,
+  };
 }

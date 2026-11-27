@@ -142,7 +142,7 @@ describe('embed flow route', () => {
     });
     expect(classifyEmbedNavigation(here, { pathname: '/flows/f2', search: '' })).toEqual({
       kind: 'leave',
-      target: 'flow_list',
+      target: { target: 'flow_list' },
     });
     expect(classifyEmbedNavigation(here, { pathname: '/embed/flow/f1', search: '' })).toEqual({ kind: 'stay' });
   });
