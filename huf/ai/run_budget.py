@@ -82,8 +82,11 @@ class RunBudget:
         return datetime.now() > self.deadline_at
 
     def check_deadline(self):
-        """Raise if AI was switched off for this run, or if the deadline is exceeded."""
-        if self.ai_disabled:
+        """Raise if AI was switched off for this run, or if the deadline is exceeded.
+
+        The site switch is read live: the streaming path never builds a budget and checks the default one.
+        """
+        if self.ai_disabled or cint(frappe.conf.get("huf_ai_disabled")):
             frappe.throw(AI_DISABLED, AIDisabled)
         if self.is_deadline_exceeded():
             frappe.throw("Run budget deadline exceeded",
