@@ -123,6 +123,13 @@ class TestAppTriggerStart(start_suite.TestFlowStartForMember):
 		run = frappe.get_doc("Agent Flow Run", name)
 		self.assertEqual(run.status, "Failed")
 		self.assertTrue(run.last_error)
+		# final: neither a re-delivered job nor the same entry starts the steps (and their sends) again
+		with patch.object(engine, "_execute_node") as execute:
+			engine.run_flow(name)
+			self.assertIsNone(self._start(trigger_node_id="start"))
+		execute.assert_not_called()
+		self.assertEqual(frappe.db.get_value("Agent Flow Run", name, "status"), "Failed")
+		self.assertEqual(self._runs(), 1)
 
 	def test_activation_passes_on_save(self):
 		flow = frappe.get_doc("Flow Definition", self.flow_id)
