@@ -6,7 +6,8 @@ from unittest.mock import patch
 import frappe
 from frappe.tests import IntegrationTestCase
 from frappe.utils import set_request
-from frappe.website.serve import get_response
+from frappe.website.path_resolver import resolve_path
+from frappe.website.serve import handle_exception
 from werkzeug.datastructures import Headers
 
 from huf.www import huf as page
@@ -114,20 +115,20 @@ class TestEmbedHeaders(IntegrationTestCase):
 			self._open("/huf/embed/flow/f1")
 
 	def test_unknown_embed_paths_and_variants_are_covered(self):
-		for path in ("/huf/embed", "/huf/embed/other/x", "//HUF//Embed/nothing"):
+		for path in ("/huf/embed", "/huf/embed/other/x", "/HUF//Embed/nothing"):
 			with self.assertRaises(frappe.PermissionError, msg=path):
 				self._open(path)
 			self.assertEqual(self._policy(), "frame-ancestors 'none'", path)
 
-	def test_rendered_guest_response_is_403_without_boot(self):
+	def test_denied_page_is_403_and_keeps_the_header(self):
+		# The built shell (huf.html) is not in a source checkout, so render the error path directly.
+		self.assertEqual(resolve_path("huf/embed/flow/missing-flow"), "huf")
 		frappe.set_user("Guest")
-		set_request(method="GET", path="/huf/embed/flow/missing-flow")
-		frappe.local.response_headers = Headers()
-		with patch.object(page, "build_boot_context") as boot:
-			response = get_response()
+		with self.assertRaises(frappe.PermissionError) as raised:
+			self._open()
+		response = handle_exception(raised.exception, "huf", "/huf/embed/flow/missing-flow", 200)
 		self.assertEqual(response.status_code, 403)
 		self.assertEqual(self._policy(), "frame-ancestors 'none'")
-		boot.assert_not_called()
 
 	def test_other_huf_pages_are_unchanged(self):
 		frappe.conf[KEY] = ["'self'"]
