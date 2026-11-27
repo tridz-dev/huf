@@ -67,7 +67,6 @@ class TestRunLockTTL(IntegrationTestCase):
 		self.assertIn(self.name, engine.sweep_stale_runs())
 		self.assertEqual(frappe.db.get_value("Agent Flow Run", self.name, "status"), "Failed")
 
-
 	def _expire_and_retake(self) -> str:
 		"""The old holder's lock expires and another worker takes it; returns the new owner's token."""
 		self._kill_worker()
