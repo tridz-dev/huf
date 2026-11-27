@@ -71,6 +71,7 @@ from huf.ai.flow.runs.outcome import record_outcome
 from huf.ai.flow.support import facts
 from huf.ai.flow.support.approval_card import waiting_fields
 from huf.ai.flow.support.approval_notifications import _clear_flow_notifications, _send_approval_notifications
+from huf.ai.flow.support.approver_veto import refuse_if_vetoed
 from huf.ai.flow.support.approvers import approval_expired, check_approver, evaluate_approval_policy
 from huf.ai.flow.support.pii import log_flow_error, mask_text
 from huf.ai.flow.support.plain.transform_text import plain_transform_error
@@ -895,6 +896,9 @@ def approve_flow_run(flow_run_name: str, decision: str, comment: str | None = No
 
 		if approval_expired(waiting, now_datetime()):
 			frappe.throw(_("This approval has expired"))
+
+		# The owning app may refuse this decider; asked before anything is claimed or changed.
+		refuse_if_vetoed(flow_run, frappe.session.user, decision)
 
 		version = _pinned_version(flow_run)
 		run_ctx = _build_run_context(flow_run, version)
