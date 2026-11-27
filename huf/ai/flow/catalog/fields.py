@@ -165,7 +165,7 @@ def _targets(node: dict) -> list[str]:
 	ntype = node.get("type")
 	out = [node.get("next"), node.get("on_error")]
 	if ntype == "condition":
-		out += [config.get("on_true"), config.get("on_false")]
+		out += [config.get("on_true"), config.get("on_false"), config.get("fallback_next")]
 	elif ntype in ("router.llm", "router.decision"):
 		out += [o.get("node_id") for o in config.get("options") or [] if isinstance(o, dict)]
 		out.append(config.get("default"))
