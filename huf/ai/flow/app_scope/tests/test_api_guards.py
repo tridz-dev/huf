@@ -209,7 +209,7 @@ class TestApiGuards(IntegrationTestCase):
 			result = run_flow(A_FLOW, payload={}, mode="real")
 		enqueue.assert_not_called()
 		frappe.set_user("Administrator")
-		self.assertEqual(frappe.db.get_value("Agent Flow Run", result["flow_run_id"], "mode"), "test")
+		self.assertEqual(frappe.db.get_value("Agent Flow Run", result["flow_run_id"], "run_mode"), "Test")
 
 	# --- /huf lockout and embed -----------------------------------------------------------------------------
 
