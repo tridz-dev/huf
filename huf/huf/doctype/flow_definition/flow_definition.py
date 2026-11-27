@@ -284,7 +284,7 @@ class FlowDefinition(Document):
 			except (json.JSONDecodeError, TypeError):
 				previous = None
 		check_can_publish(defn, previous)
-		check_preflight(defn, self.name)  # after the permission checks: app checks run only for a permitted publish
+		check_preflight(defn, self.name, owner_app=self.get("owner_app"))  # after the permission checks: app checks run only for a permitted publish
 
 	def _validate_activation(self, defn: dict):
 		"""Active flows must be runnable: Draft/Archived saves stay permissive. Reports

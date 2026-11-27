@@ -111,13 +111,40 @@ class TestAppDraftSave(IntegrationTestCase):
 		flow_api.save_flow_definition(FLOW, chosen)
 		self.assertEqual(self._stored()["nodes"][0]["type"], "trigger.app")
 
+	def _bound(self, step):
+		"""The step as the app's server stored it: its Gateway is already bound to this flow."""
+		frappe.db.set_value(
+			"Flow Definition", FLOW, "definition_json", json.dumps(_defn(step, first=step["id"]))
+		)
+
 	def test_handoff_step_can_be_saved_and_edited(self):
 		config = {"gateway": "test-secsave-gw", "recipient": "$member", "message": ""}
 		step = {"id": "human", "type": "handoff", "config": config, "next": "end"}
-		flow_api.save_flow_definition(FLOW, _defn(step, first="human"))
+		self._bound(step)
 		step["config"] = {**config, "summary": "Needs a person"}
 		flow_api.save_flow_definition(FLOW, _defn(step, first="human"))
 		self.assertEqual(self._stored()["nodes"][1]["config"]["summary"], "Needs a person")
+
+	def test_handoff_may_only_target_the_runs_member(self):
+		good = {"gateway": "test-secsave-gw", "recipient": "$member", "message": ""}
+		step = {"id": "human", "type": "handoff", "config": good, "next": "end"}
+		self._bound(step)
+		bad = {
+			"literal recipient": {**good, "recipient": "+919999999999"},
+			"referenced recipient": {**good, "recipient": {"$from": "trigger.phone"}},
+			"conversation": {**good, "conversation": "CONV-0001"},
+			"message": {**good, "message": "Hello"},
+			"gateway default message": {k: v for k, v in good.items() if k != "message"},
+			"another gateway": {**good, "gateway": "someone-elses-gw"},
+			"computed gateway": {**good, "gateway": {"$from": "trigger.gateway"}},
+		}
+		for label, config in bad.items():
+			with self.subTest(label):
+				self._refused(_defn({**step, "config": config}, first="human"))
+
+	def test_send_step_needs_authority_over_a_new_gateway(self):
+		config = {"gateway": "someone-elses-gw", "recipient": "$member"}
+		self._refused(_defn({"id": "tell", "type": "send.message", "config": config, "next": "end"}, first="tell"))
 
 	def test_malformed_definition_is_refused(self):
 		self._refused({**_defn(), "nodes": {"a": {"type": "code.run"}}})
