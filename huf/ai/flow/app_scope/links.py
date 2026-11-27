@@ -31,22 +31,26 @@ def flow_link(kind: str, flow_id: str, run_id: str | None = None, owner_app: str
 
 
 def _resolve(app: str, kind: str, flow_id: str, run_id: str | None) -> str:
+	path = (frappe.get_hooks(HOOK, app_name=app) or {}).get(app)
+	path = path[-1] if isinstance(path, list) and path else path
+	if not isinstance(path, str) or not path:
+		return _fallback(app, "no resolver declared")
 	try:
-		path = (frappe.get_hooks(HOOK, app_name=app) or {}).get(app)
-		path = path[-1] if isinstance(path, list) and path else path
-		if not isinstance(path, str) or not path:
-			raise LookupError(f"no {HOOK} resolver declared by app {app}")
 		link = frappe.get_attr(path)(kind, flow_id, run_id)
-		if not _is_safe(link):
-			raise ValueError(f"resolver of app {app} returned an unsafe link")
-		return link
-	except Exception as exc:
-		frappe.logger("huf").warning(f"Flow link resolver for app {app} failed ({exc}); using {SAFE_FALLBACK}")
-		return SAFE_FALLBACK
+	except Exception as exc:  # noqa: BLE001 - any resolver failure must fall back, never break a notification
+		return _fallback(app, f"resolver raised {exc!r}")
+	return link if _is_safe(link) else _fallback(app, "resolver returned an unsafe link")
+
+
+def _fallback(app: str, reason: str) -> str:
+	frappe.logger("huf").warning(f"Flow link resolver for app {app}: {reason}; using {SAFE_FALLBACK}")
+	return SAFE_FALLBACK
 
 
 def _is_safe(link) -> bool:
 	"""Site-relative only (no scheme, no ``//host``), and never a Huf screen."""
 	if not isinstance(link, str) or not link.startswith("/") or link.startswith("//") or "\\" in link:
 		return False
-	return not (link == "/huf" or link.startswith(("/huf/", "/huf?", "/app/agent-flow-run", "/app/flow-definition")))
+	return not (
+		link == "/huf" or link.startswith(("/huf/", "/huf?", "/app/agent-flow-run", "/app/flow-definition"))
+	)
