@@ -4,7 +4,10 @@
 """Huf's built-in pre-send steps (H-W2-02), run by :mod:`huf.ai.channels.guard` before any app hook.
 
 Each step takes the request dict and answers ``{"allow": True}`` or ``{"allow": False, "reason": code}``.
-They only read. Anything they raise is turned into a ``hook_error`` block by the chain.
+The steps in ``STEPS`` only read. Anything they raise is turned into a ``hook_error`` block by the chain.
+
+The frequency cap (H-W2-08) is not in ``STEPS``: the chain runs it last, after every app hook, as
+:func:`resolve_caps` (reads app hooks) and then :func:`apply_caps` (counts; a live send commits).
 
 Order: recipient, consent, template. ``header`` is not part of the app hook request: the chain adds it for
 built-in steps only, from ``guard.evaluate(..., header=)``; None means "use the template's default media".
@@ -12,12 +15,19 @@ built-in steps only, from ``guard.evaluate(..., header=)``; None means "use the 
 
 from __future__ import annotations
 
+import copy
 import re
 from typing import Any
 from urllib.parse import urlsplit
 
 import frappe
 
+from huf.ai.flow.policy import frequency_cap
+
+CAP_STEP = "frequency_cap"
+CAP_HOOK = "huf_frequency_cap_resolver"
+CAP_KEYS = frozenset({"limit", "window_seconds", "bucket"})
+MAX_WINDOW_SECONDS = 31622400  # 366 days
 MEDIA_HOSTS_CONF = (
 	"huf_send_media_hosts"  # list or comma string of hosts (``host:port`` for a port other than 443)
 )
@@ -198,6 +208,54 @@ def media_host_allowed(link: Any) -> bool:
 	raw = frappe.conf.get(MEDIA_HOSTS_CONF) or []
 	hosts = raw.split(",") if isinstance(raw, str) else raw
 	return host in {str(h).strip().lower() for h in hosts}
+
+
+def resolve_caps(request: dict) -> list[tuple[int, str, int]]:
+	"""``(window_seconds, counter channel, limit)`` of every cap on this send, shortest window first.
+
+	Apps answer through ``huf_frequency_cap_resolver``; None, or no resolver, is no cap. Caps sharing a
+	counter are merged to the lowest limit, so one send is counted there once. Raises on any invalid answer.
+	"""
+	paths = frappe.get_hooks(CAP_HOOK) or []
+	limits: dict[tuple[int, str], int] = {}
+	for path in [paths] if isinstance(paths, str) else paths:
+		answer = frappe.get_attr(path)(copy.deepcopy(request))
+		if answer is None:
+			continue
+		for cap in answer if isinstance(answer, list) else [answer]:
+			window, channel, limit = _parse_cap(cap, request)
+			key = (window, channel)
+			limits[key] = min(limit, limits.get(key, limit))
+	return [(window, channel, limit) for (window, channel), limit in sorted(limits.items())]
+
+
+def _parse_cap(cap: Any, request: dict) -> tuple[int, str, int]:
+	if not isinstance(cap, dict) or not set(cap) <= CAP_KEYS:
+		raise ValueError("invalid frequency cap")
+	limit, window = cap.get("limit"), cap.get("window_seconds")
+	channel = cap["bucket"] if "bucket" in cap else request.get("channel")
+	if type(limit) is not int or limit < 0 or type(window) is not int or not 0 < window <= MAX_WINDOW_SECONDS:
+		raise ValueError("invalid frequency cap")
+	if not isinstance(channel, str) or not channel.strip() or len(channel) > frequency_cap.MAX_KEY_CHARS:
+		raise ValueError("invalid frequency cap")
+	return window, channel, limit
+
+
+def apply_caps(request: dict, caps: list[tuple[int, str, int]]) -> dict:
+	"""Claim one send under every cap when ``request["live"] is True``; otherwise only look.
+
+	A claim COMMITS the current transaction (see :mod:`huf.ai.flow.policy.frequency_cap`). A send refused by
+	a later window keeps the earlier windows' counts. Store errors propagate, which blocks the send.
+	"""
+	member, live = request.get("member_key"), request.get("live") is True
+	for window, channel, limit in caps:
+		if live:
+			full = frequency_cap.incr(member, channel, window, limit=limit) is None
+		else:
+			full = frequency_cap.check(member, channel, window) >= limit
+		if full:
+			return _block("freq_cap")
+	return _allow()
 
 
 STEPS = (
