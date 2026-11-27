@@ -44,3 +44,4 @@ huf.patches.v1.refresh_model_catalogue
 huf.patches.v1.rewrite_moved_module_paths
 huf.patches.v1.gateway_event_unique_provider_id
 huf.patches.v1.add_agent_flow_run_status_resume_index
+huf.patches.v1.flow_owner_app_empty
