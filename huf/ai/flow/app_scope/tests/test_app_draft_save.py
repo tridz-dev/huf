@@ -111,6 +111,14 @@ class TestAppDraftSave(IntegrationTestCase):
 		flow_api.save_flow_definition(FLOW, chosen)
 		self.assertEqual(self._stored()["nodes"][0]["type"], "trigger.app")
 
+	def test_handoff_step_can_be_saved_and_edited(self):
+		config = {"gateway": "test-secsave-gw", "recipient": "$member", "message": ""}
+		step = {"id": "human", "type": "handoff", "config": config, "next": "end"}
+		flow_api.save_flow_definition(FLOW, _defn(step, first="human"))
+		step["config"] = {**config, "summary": "Needs a person"}
+		flow_api.save_flow_definition(FLOW, _defn(step, first="human"))
+		self.assertEqual(self._stored()["nodes"][1]["config"]["summary"], "Needs a person")
+
 	def test_malformed_definition_is_refused(self):
 		self._refused({**_defn(), "nodes": {"a": {"type": "code.run"}}})
 
