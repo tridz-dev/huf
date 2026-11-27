@@ -13,6 +13,7 @@ from frappe import _
 from frappe.desk.doctype.notification_log.notification_log import enqueue_create_notification
 from frappe.desk.doctype.notification_settings.notification_settings import is_email_notifications_enabled
 
+from huf.ai.flow.app_scope.links import flow_link
 from huf.ai.flow.support.approval_card import build_card, facts_html, flow_name_of
 from huf.ai.flow.support.approvers import approver_roles_of
 from huf.ai.transaction import commit_if_background
@@ -77,7 +78,7 @@ def _send_approval_notifications(flow_run, node: dict, config: dict, waiting_dat
 	card = build_card(waiting_data.get("flow_name") or flow_name_of(flow_run), waiting_data)
 	headline, lead, facts = card["headline"], card["lead"], card["facts"]
 
-	flow_run_path = f"/huf/flows/{flow_run.flow_id}?run={flow_run.name}"
+	flow_run_path = flow_link("approval", flow_run.flow_id, flow_run.name, owner_app=flow_run.get("owner_app"))
 
 	_host = (frappe.conf.get("host_name") or frappe.utils.get_url()).rstrip("/")
 	flow_run_url = f"{_host}{flow_run_path}"
@@ -97,6 +98,8 @@ def _send_approval_notifications(flow_run, node: dict, config: dict, waiting_dat
 				"type": "Assignment",
 				"document_type": "Agent Flow Run",
 				"document_name": flow_run.name,
+				# The bell opens ``link`` (the owner app's route for an app flow), not the Agent Flow Run form.
+				"link": flow_run_path,
 				"subject": headline,
 				"email_content": f"""
 					{body}
