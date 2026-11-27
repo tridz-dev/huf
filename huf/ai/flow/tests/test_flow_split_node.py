@@ -8,10 +8,10 @@ import frappe
 from frappe.tests import IntegrationTestCase
 
 from huf.ai.flow import engine
-from huf.ai.flow.tests.test_flow_draft_validation import _graph
 from huf.ai.flow.catalog import node_registry
 from huf.ai.flow.nodes import send, split
 from huf.ai.flow.support import reason_codes, step_keys
+from huf.ai.flow.tests.test_flow_draft_validation import _graph
 from huf.ai.graph.executor import GraphContext
 from huf.ai.graph.validator import MODE_DRAFT, validate_flow_graph
 
