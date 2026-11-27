@@ -8,6 +8,7 @@ __pycache__
 **/yarn.lock
 
 huf/public/frontend
+huf/public/embed
 huf/public/docs
 huf/www/huf.html
 huf/www/chat.html

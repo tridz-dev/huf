@@ -28,9 +28,11 @@ import {
   publishFlow as apiPublishFlow,
   unpublishFlow as apiUnpublishFlow,
 } from './flowApi';
-import type { FlowRunSummary, FlowRunDetail } from './flowApi';
+import type { FlowRunSummary, FlowRunDetail, FlowDefinitionDoc } from './flowApi';
 import { serializeFlow, deserializeFlow, mapBackendStatusToFrontend, defaultContract } from './flowSerializer';
 import type { BackendFlowGraph } from './flowApi';
+import { isEmbedPath, postToHost as reportToHost } from '@/embed/bridge';
+import { validateFlow } from '@/lib/flow-graph/flowValidation';
 
 class FlowService {
   private listeners: Set<() => void> = new Set();
@@ -70,19 +72,24 @@ class FlowService {
       const doc = await getFlowDefinition(id);
       if (!doc) return null;
 
-      const graph = typeof doc.definition_json === 'string'
-        ? JSON.parse(doc.definition_json) as BackendFlowGraph
-        : doc.definition_json;
-
-      const flow = deserializeFlow(doc.flow_id, doc.flow_name, doc.status, graph);
-      // Name, description and category live on the Flow Definition record, not in the graph.
-      flow.description = doc.description || '';
-      flow.category = doc.category || 'Uncategorized';
-      this.flowCache.set(id, flow);
-      return flow;
+      return this.cacheDefinition(id, doc);
     } catch {
       return null;
     }
+  }
+
+  /** Put an already fetched Flow Definition in the cache. */
+  cacheDefinition(id: string, doc: FlowDefinitionDoc): Flow {
+    const graph = typeof doc.definition_json === 'string'
+      ? JSON.parse(doc.definition_json) as BackendFlowGraph
+      : doc.definition_json;
+
+    const flow = deserializeFlow(doc.flow_id, doc.flow_name, doc.status, graph);
+    // Name, description and category live on the Flow Definition record, not in the graph.
+    flow.description = doc.description || '';
+    flow.category = doc.category || 'Uncategorized';
+    this.flowCache.set(id, flow);
+    return flow;
   }
 
   /** Get a flow from the local cache (no API call) */
@@ -153,7 +160,14 @@ class FlowService {
   /** Save the current flow state to the backend */
   async saveFlow(flow: Flow): Promise<void> {
     const graph = serializeFlow(flow);
-    await saveFlowDefinition(flow.id, graph);
+    let saved: { version: number };
+    try {
+      saved = await saveFlowDefinition(flow.id, graph);
+    } catch (error) {
+      reportToHost('guest.error', { code: 'save_failed', flow_id: flow.id });
+      throw error;
+    }
+    reportToHost('guest.saved', { flow_id: flow.id, version: saved?.version, unfinished: isEmbedPath() ? validateFlow(flow.nodes, flow.edges).length : 0 });
     this.flowCache.set(flow.id, { ...flow, updatedAt: new Date() });
     this.notifyListeners();
   }
@@ -214,8 +228,15 @@ class FlowService {
 
   /** Publish (status Active) or unpublish (back to Draft) a flow, then mirror the status in the cache. */
   async setPublished(id: string, published: boolean): Promise<Flow | null> {
-    if (published) await apiPublishFlow(id);
-    else await apiUnpublishFlow(id);
+    if (published) {
+      try {
+        await apiPublishFlow(id);
+      } catch (error) {
+        reportToHost('guest.error', { code: 'publish_refused', flow_id: id });
+        throw error;
+      }
+    } else await apiUnpublishFlow(id);
+    reportToHost('guest.publish_state', { flow_id: id, status: published ? 'Active' : 'Draft' });
     return this.updateFlowLocal(id, { status: published ? 'active' : 'draft' });
   }
 
