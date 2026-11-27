@@ -32,6 +32,8 @@ WAKE_CHUNK_SIZE = 100
 WAKE_BUDGET_SECONDS = 40  # the sweeper ticks every minute
 WAKE_LOCK_KEY = "huf:flow:wake_sweeper"
 WAKE_LOCK_TTL_SECONDS = 55  # above the budget, below the tick: a killed sweeper never costs the next minute
+SEND_WINDOW_REASON = "send_window"
+SEND_MAX_DEFERS_DEFAULT = 24  # site config: huf_flow_send_max_defers
 
 
 @dataclass
@@ -112,6 +114,39 @@ def is_reentry(flow_run, node: dict) -> dict | None:
 	if waiting.get("node_id") != node.get("id") or not waiting.get("woke"):
 		return None
 	return waiting
+
+
+def max_send_defers() -> int:
+	value = frappe.conf.get("huf_flow_send_max_defers")
+	try:
+		value = int(value)
+	except (TypeError, ValueError):
+		return SEND_MAX_DEFERS_DEFAULT
+	return value if value >= 0 else SEND_MAX_DEFERS_DEFAULT
+
+
+def defer_send(flow_run, node: dict, defer_until: datetime, member_key: str | None = None) -> Outcome | None:
+	"""Park a send the guard deferred (``GuardResult.defer_until``, aware UTC) until then.
+
+	None once the node has been deferred ``max_send_defers()`` times: the caller must then block the send with
+	``window_defer_exhausted``. On wake the node runs again and must run the whole guard chain again.
+	"""
+	waiting = is_reentry(flow_run, node)
+	defers = 0
+	if waiting and waiting.get("reason") == SEND_WINDOW_REASON:
+		defers = int((waiting.get("extra") or {}).get("defers") or 0)
+	if defers >= max_send_defers():
+		return None
+	return park_run(
+		flow_run,
+		node,
+		ParkRequest(
+			reason=SEND_WINDOW_REASON,
+			resume_at=defer_until.astimezone(timezone.utc).replace(tzinfo=None),
+			member_key=member_key or getattr(flow_run, "member_key", None),
+			extra={"defers": defers + 1},
+		),
+	)
 
 
 def verify_token(flow_run, token: str) -> bool:
