@@ -130,10 +130,11 @@ def measure_drain(scale: Scale, now: datetime) -> dict:
 			continued[kwargs["flow_run_name"]] += 1
 
 	started = time.perf_counter()
-	with patch("frappe.enqueue", side_effect=enqueue):
+	with patch("frappe.enqueue", new=enqueue):
 		while park.wake_due_waits(now=now):
 			frappe.db.commit()
 			while chunks:
+				seed.new_job()
 				park.wake_chunk(*chunks.pop(0))
 				frappe.db.commit()
 	elapsed = time.perf_counter() - started

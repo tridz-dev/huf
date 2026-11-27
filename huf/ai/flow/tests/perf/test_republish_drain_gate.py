@@ -155,12 +155,13 @@ def drain() -> dict:
 		return frappe.db.count("Agent Flow Run", {"flow_id": FLOW, "status": park.WAIT_STATUS})
 
 	stalled = False
-	with patch("frappe.enqueue", side_effect=enqueue), patch.object(engine, "_pinned_version", pinned):
+	with patch("frappe.enqueue", new=enqueue), patch.object(engine, "_pinned_version", pinned):
 		started = time.perf_counter()
 		while waiting():
 			taken = park.wake_due_waits()
 			while jobs:
 				method, kwargs = jobs.popleft()
+				seed.new_job()
 				if method.endswith("wake_chunk"):
 					park.wake_chunk(kwargs["names"], kwargs["due_by"])
 				else:
@@ -202,7 +203,7 @@ class TestRepublishDrainGate(IntegrationTestCase):
 			frappe.throw("The drain gate only runs on a site with allow_tests enabled.")
 		cleanup()
 		self.addCleanup(cleanup)
-		check = patch("huf.ai.graph.validation.flow_validation.check_runnable")
+		check = patch("huf.ai.graph.validation.flow_validation.check_runnable", new=lambda *args: None)
 		check.start()
 		self.addCleanup(check.stop)
 		make_flow()

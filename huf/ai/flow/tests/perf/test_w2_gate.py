@@ -115,12 +115,13 @@ def measure_bulk_entry(scale: Scale, flows: list[str]) -> dict:
 			bulk_entry.enter_members(flow, keys)
 		while jobs:
 			job = jobs.pop(0)
+			seed.new_job()
 			bulk_entry.run_chunk(job["flow_id"], job["member_keys"], job["entry_key"], job["batch_id"])
 			frappe.db.commit()
 
 	with (
-		patch("frappe.enqueue", side_effect=enqueue),
-		patch("huf.ai.graph.validation.flow_validation.check_runnable"),
+		patch("frappe.enqueue", new=enqueue),
+		patch("huf.ai.graph.validation.flow_validation.check_runnable", new=lambda *args: None),
 	):
 		started = time.perf_counter()
 		submit()

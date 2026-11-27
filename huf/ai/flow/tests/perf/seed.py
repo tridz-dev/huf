@@ -47,6 +47,12 @@ def replay_event_ids(total: int = 10_000, stored: int = 10_000, duplicate_every:
 		yield provider_event_id(i % stored if i % duplicate_every == 0 else stored + i)
 
 
+def new_job() -> None:
+	"""Forget per-job state before a job run inline here. A worker starts every job with fresh flags; without
+	this, ``currently_saving`` grows with every insert of the whole load and slows the later ones."""
+	frappe.flags.currently_saving = []
+
+
 def _bulk_insert(doctype: str, rows: list[dict]) -> None:
 	if not rows:
 		return
