@@ -31,6 +31,8 @@ def enter_members(flow: str, member_keys, entry_key: str | None = None) -> dict:
 
 	``entry_key`` applies to every member (default: each member's own key, so one entry per member).
 	"""
+	from huf.ai.flow.app_scope.api_guards import guard_huf_flow
+	guard_huf_flow(flow)
 	keys = _clean_keys(member_keys)
 	_require_flow_write(flow)
 	if entry_key is not None and (not isinstance(entry_key, str) or not entry_key.strip()):
@@ -57,6 +59,8 @@ def enter_members(flow: str, member_keys, entry_key: str | None = None) -> dict:
 @frappe.whitelist()
 def get_bulk_entry_progress(flow: str, batch_id: str) -> dict:
 	"""``{"total", "done", "started", "skipped", "failed"}`` of a batch (zeros once it expired). Needs read on the flow."""
+	from huf.ai.flow.app_scope.api_guards import guard_flow
+	guard_flow(flow, "view")
 	require_flow_read(flow)
 	if not frappe.db.exists("Flow Definition", flow):
 		frappe.throw(_("Flow not found"), frappe.DoesNotExistError)

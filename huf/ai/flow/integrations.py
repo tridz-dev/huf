@@ -64,6 +64,8 @@ def is_connected(service: str) -> bool:
 @frappe.whitelist()
 def get_flow_integration_status() -> dict:
 	"""``{service: {label, connected}}`` for the integrations Flow steps use. Never returns credential values."""
+	from huf.ai.flow.app_scope.api_guards import guard_huf_only
+	guard_huf_only()
 	if not frappe.has_permission("Flow Definition", "read"):
 		frappe.throw(_("Not permitted"), frappe.PermissionError)
 	return {

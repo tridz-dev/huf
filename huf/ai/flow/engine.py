@@ -610,7 +610,7 @@ def create_flow_run(
 	max_hops = DEFAULT_MAX_HOPS
 
 	# Every run owns a shared conversation for its agent steps
-	conversation = _create_flow_conversation(flow_id, entry_node)
+	conversation = _create_flow_conversation(flow_id, entry_node, ignore_permissions)
 
 	fields = {
 		"doctype": "Agent Flow Run",
@@ -833,6 +833,8 @@ def approve_flow_run(flow_run_name: str, decision: str, comment: str | None = No
 	    decision: "approved" or "rejected"
 	    comment: Optional comment
 	"""
+	from huf.ai.flow.app_scope.api_guards import guard_run
+	guard_run(flow_run_name, "approve")
 	if decision not in APPROVAL_DECISIONS:
 		frappe.throw(_("Choose Approve or Reject."))
 
@@ -2452,8 +2454,8 @@ def _create_flow_agent_run(flow_run, node: dict, run_kind: str, prompt: str = ""
 	return run_doc
 
 
-def _create_flow_conversation(flow_id: str, entry_node_id: str) -> "frappe.Document":
-	"""Create a shared Agent Conversation for a flow run."""
+def _create_flow_conversation(flow_id: str, entry_node_id: str, ignore_permissions: bool = False) -> "frappe.Document":
+	"""Create a shared Agent Conversation for a flow run (``ignore_permissions``: the caller already authorised the run)."""
 	from uuid import uuid4
 
 	conv = frappe.get_doc(
@@ -2466,7 +2468,7 @@ def _create_flow_conversation(flow_id: str, entry_node_id: str) -> "frappe.Docum
 	)
 	# Flow conversations are created by the engine. Authenticated callers
 	# use standard permissions; Guest/webhook triggers rely on the system.
-	if frappe.session.user == "Guest":
+	if ignore_permissions or frappe.session.user == "Guest":
 		conv.insert(ignore_permissions=True)
 	else:
 		if not frappe.has_permission("Agent Conversation", "create", doc=conv):

@@ -104,6 +104,8 @@ def get_code_flow_status() -> dict:
 	Open to every signed-in user (it reveals no secret: two booleans and the profile names), because
 	the editor of a Huf Manager must hide the card and Agent Settings itself is not readable for them.
 	"""
+	from huf.ai.flow.app_scope.api_guards import guard_huf_only
+	guard_huf_only()
 	if frappe.session.user == "Guest":
 		frappe.throw(_("Login required"), frappe.AuthenticationError)
 	user = frappe.session.user

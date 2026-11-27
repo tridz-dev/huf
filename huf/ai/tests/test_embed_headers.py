@@ -102,17 +102,21 @@ class TestEmbedHeaders(IntegrationTestCase):
 			self.assertEqual(self._policy(), "frame-ancestors 'self'", user)
 
 	def test_user_without_flow_read_is_denied(self):
-		real = frappe.has_permission
-
-		def no_read_on_flow(doctype, ptype="read", doc=None, **kwargs):
-			if doc == "f1":
-				return False
-			return real(doctype, ptype, doc=doc, **kwargs)
+		# H-W7-09: embed access is ``flow_access(user, flow, "view")``.
+		from huf.ai.flow.app_scope import access
 
 		with patch.object(frappe.db, "exists", return_value=True), patch.object(
-			frappe, "has_permission", side_effect=no_read_on_flow
-		), self.assertRaises(page.EmbedNotPermitted):
+			access, "flow_access", return_value=False
+		) as checked, self.assertRaises(page.EmbedNotPermitted):
 			self._open("/huf/embed/flow/f1")
+		checked.assert_called_once_with(frappe.session.user, "f1", "view")
+
+	def test_no_role_user_gets_403_on_the_full_app(self):
+		frappe.set_user(NO_ROLE_USER)
+		set_request(method="GET", path="/huf/flows")
+		with patch.object(page, "build_boot_context") as boot, self.assertRaises(page.HufNotPermitted):
+			page.get_context(frappe._dict())
+		boot.assert_not_called()
 
 	def test_unknown_embed_paths_and_variants_are_covered(self):
 		for path in ("/huf/embed", "/huf/embed/other/x", "/HUF//Embed/nothing"):

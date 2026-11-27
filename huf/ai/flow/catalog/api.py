@@ -192,6 +192,8 @@ def build_catalog(graph: dict, node_id: str, flow_id: str, run: dict | None) -> 
 @frappe.whitelist()
 def get_data_catalog(flow_id: str, node_id: str) -> dict:
 	"""Steps before ``node_id`` and the data each offers, for the "Use data" picker. Editors of the flow only."""
+	from huf.ai.flow.app_scope.api_guards import guard_flow
+	guard_flow(flow_id, "view")
 	if not flow_id or not frappe.db.exists("Flow Definition", flow_id):
 		frappe.throw(_("Flow not found"), frappe.DoesNotExistError)
 	if not frappe.has_permission("Flow Definition", "write", doc=flow_id):
@@ -207,6 +209,8 @@ def list_node_types(app: str | None = None) -> list[dict]:
 	"""Step types for the editor palette. Without ``app``: those installed apps add through ``huf_flow_nodes`` (built-ins
 	are not listed). With ``app`` (embed mode): that app's types, then ``{"type", "builtin": True}`` for each allow-listed
 	built-in. This only narrows what the palette offers; publish checks decide what a flow may contain."""
+	from huf.ai.flow.app_scope.api_guards import guard_app_named
+	guard_app_named(app)
 	require_permission(frappe.has_permission("Flow Definition", "read"), "Not permitted")
 	scoped = app is not None
 	if scoped and app not in frappe.get_installed_apps():
