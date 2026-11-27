@@ -44,6 +44,8 @@ HUF_CODES = frozenset(
 		"SEND_RETRY_FORBIDDEN",
 		# member exited every flow on a STOP keyword (H-W2-14)
 		"opt_out",
+		# the run was cancelled (member removed) while its send step ran
+		"run_cancelled",
 		# condition facts providers
 		"facts_error",
 		"facts_timeout",

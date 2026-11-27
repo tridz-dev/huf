@@ -109,6 +109,11 @@ class TestNodeTypeAllowListMatchesSchemaIntent(unittest.TestCase):
 		missing = sorted(t for t in allowed - set(flow_engine._NODE_EXECUTORS) if node_registry.executor_for(t) is None)
 		self.assertEqual(missing, [], f"FLOW_NODE_TYPES has no flow_engine executor for: {missing}")
 
+	def test_every_advertised_type_is_known_to_the_run_loop(self):
+		"""The loop looks handlers up by type: an executor alone is not enough (trigger.app was missing)."""
+		missing = sorted(get_flow_node_types() - set(flow_engine._loop_node_types()))
+		self.assertEqual(missing, [], f"the run loop has no handler for: {missing}")
+
 
 class TestExecOutput(unittest.TestCase):
 	def test_resolves_value_and_is_terminal(self):

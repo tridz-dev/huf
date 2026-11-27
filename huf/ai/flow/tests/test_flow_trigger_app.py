@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import frappe
 
-from huf.ai.flow import triggers
+from huf.ai.flow import engine, triggers
 from huf.ai.flow.catalog import node_registry
 from huf.ai.flow.listing.cards import summarize_definition
 from huf.ai.flow.support.node_schemas import build_node_schemas
@@ -98,6 +98,27 @@ class TestAppTriggerStart(start_suite.TestFlowStartForMember):
 		run = frappe.get_doc("Agent Flow Run", name)
 		self.assertEqual(run.trigger_type, "App")
 		self.assertEqual(run.current_node_id, "start")
+
+	def test_run_flow_runs_an_app_run_to_success(self):
+		name = self._start(trigger_node_id="start")
+		engine.run_flow(name)
+		run = frappe.get_doc("Agent Flow Run", name)
+		self.assertEqual((run.status, run.last_error or ""), ("Success", ""))
+		self.assertEqual(run.current_node_id, "end")
+
+	def test_failed_output_step_fails_the_run(self):
+		defn = app_flow()
+		defn["contract"] = {"limits": {"max_rows": 1}}
+		for node in defn["nodes"]:
+			if node["type"] == "output":
+				node["config"] = {"value": [1, 2]}
+		frappe.db.set_value("Flow Definition", self.flow_id, "definition_json", json.dumps(defn))
+		frappe.db.commit()
+		name = self._start(trigger_node_id="start")
+		engine.run_flow(name)
+		run = frappe.get_doc("Agent Flow Run", name)
+		self.assertEqual(run.status, "Failed")
+		self.assertTrue(run.last_error)
 
 	def test_activation_passes_on_save(self):
 		flow = frappe.get_doc("Flow Definition", self.flow_id)

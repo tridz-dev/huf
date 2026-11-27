@@ -153,12 +153,12 @@ def on_child_finished(child_run, status: str, error: str | None = None) -> None:
 		log_flow_error(title="Flow sub-flow completion hook")
 
 
-def cancel_waited_child(flow_run, by: str) -> None:
-	"""When a parent is cancelled while it waits for its child, cancel that child."""
+def cancel_waited_child(flow_run, by: str, *, running: bool = False) -> None:
+	"""When a parent is cancelled while it waits for its child, cancel that child (``running``: even a Running one)."""
 	child = (park._waiting(flow_run).get("extra") or {}).get("child") if park._waiting(flow_run).get("reason") == "child" else None
 	if not child or not frappe.db.exists("Agent Flow Run", child):
 		return
 	try:
-		park.cancel_run(child, by)
+		park.cancel_run(child, by, running=running)
 	except Exception:
 		log_flow_error(title="Flow sub-flow cancel cascade")
