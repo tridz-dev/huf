@@ -251,6 +251,13 @@ class TestNotify(Base):
 		self.assertEqual(self.w.sessions[0]["kind"], "approval:flow")
 		self.assertEqual(self.w.sessions[0]["payload"]["name"], "FR-1")
 
+	def test_flow_run_notify_all_policy_roles(self):
+		self.role_users["Auditor"] = ["carol@x.com"]
+		fr = SimpleNamespace(name="FR-2", waiting=json.dumps({"approver_type": "role",
+			"approver_role": "Approver", "approver_roles": ["Approver", "Auditor"], "approver_users": []}))
+		ap.notify_flow_run_approvers(fr)
+		self.assertEqual(sorted(s["intended_user"] for s in self.w.sessions), ["bob@x.com", "carol@x.com"])
+
 	def test_flow_run_bad_waiting_no_raise(self):
 		self.assertEqual(ap.notify_flow_run_approvers(SimpleNamespace(name="FR", waiting="{bad")), 0)
 

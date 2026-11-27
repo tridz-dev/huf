@@ -71,8 +71,10 @@ def notify_flow_run_approvers(flow_run) -> int:
 		waiting = _waiting(flow_run)
 		approver_type = waiting.get("approver_type")
 		users = []
-		if approver_type == "role" and waiting.get("approver_role"):
-			users += _role_users(waiting["approver_role"])
+		roles = _waiting_roles(waiting)
+		if approver_type == "role" and roles:
+			for role in roles:
+				users += _role_users(role)
 		elif approver_type == "user" and waiting.get("approver_users"):
 			users += [u for u in waiting["approver_users"] if isinstance(u, str)]
 		else:  # no declared approver: System Manager only (engine.check_approver)
@@ -85,6 +87,16 @@ def notify_flow_run_approvers(flow_run) -> int:
 	except Exception:
 		_log("Slack flow approval notify failed")
 		return 0
+
+
+def _waiting_roles(waiting) -> list:
+	"""Every approver role of a waiting run: ``approver_roles`` (policy) first, then ``approver_role``."""
+	roles = waiting.get("approver_roles")
+	roles = [r for r in roles if isinstance(r, str) and r] if isinstance(roles, list) else []
+	single = waiting.get("approver_role")
+	if isinstance(single, str) and single:
+		roles.append(single)
+	return list(dict.fromkeys(roles))
 
 
 def _notify(kind, name, users, title, details, ttl) -> int:
