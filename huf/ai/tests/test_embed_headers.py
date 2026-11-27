@@ -93,11 +93,11 @@ class TestEmbedHeaders(IntegrationTestCase):
 		self._open()
 		self.assertEqual(self._policy(), "frame-ancestors http://a.example")
 
-	def test_denied_users_get_permission_error_with_header(self):
+	def test_denied_users_get_embed_error_with_header(self):
 		frappe.conf[KEY] = ["'self'"]
 		for user in ("Guest", NO_ROLE_USER):
 			frappe.set_user(user)
-			with self.assertRaises(frappe.PermissionError):
+			with self.assertRaises(page.EmbedNotPermitted):
 				self._open()
 			self.assertEqual(self._policy(), "frame-ancestors 'self'", user)
 
@@ -111,12 +111,12 @@ class TestEmbedHeaders(IntegrationTestCase):
 
 		with patch.object(frappe.db, "exists", return_value=True), patch.object(
 			frappe, "has_permission", side_effect=no_read_on_flow
-		), self.assertRaises(frappe.PermissionError):
+		), self.assertRaises(page.EmbedNotPermitted):
 			self._open("/huf/embed/flow/f1")
 
 	def test_unknown_embed_paths_and_variants_are_covered(self):
 		for path in ("/huf/embed", "/huf/embed/other/x", "/HUF//Embed/nothing"):
-			with self.assertRaises(frappe.PermissionError, msg=path):
+			with self.assertRaises(page.EmbedNotPermitted, msg=path):
 				self._open(path)
 			self.assertEqual(self._policy(), "frame-ancestors 'none'", path)
 
@@ -125,11 +125,16 @@ class TestEmbedHeaders(IntegrationTestCase):
 		set_request(method="GET", path="/huf/embed/flow/missing-flow")
 		self.assertEqual(resolve_path("huf/embed/flow/missing-flow"), "huf")
 		frappe.set_user("Guest")
-		with self.assertRaises(frappe.PermissionError) as raised:
+		with self.assertRaises(page.EmbedNotPermitted) as raised:
 			self._open()
 		response = handle_exception(raised.exception, "huf", "/huf/embed/flow/missing-flow", 200)
 		self.assertEqual(response.status_code, 403)
 		self.assertEqual(self._policy(), "frame-ancestors 'none'")
+		body = response.get_data(as_text=True)
+		self.assertIn("Not Permitted", body)
+		# No Login button: it would navigate the iframe to /login.
+		self.assertNotIn("/login", body)
+		self.assertNotIn("redirect-to", body)
 
 	def test_other_huf_pages_are_unchanged(self):
 		frappe.conf[KEY] = ["'self'"]
