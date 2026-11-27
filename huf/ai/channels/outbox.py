@@ -22,6 +22,9 @@ recipient, text and token values are resolved again from the run at delivery and
 transport. The step key (H-W2-13) is the unique row key, so a re-delivered job finds the row and never
 posts it twice (G5). WhatsApp does not deduplicate; template sends carry the key as the opaque reference
 echoed on status webhooks, for reconciliation only.
+
+A cancelled run, a run a person marked as failed and a removed member send nothing more: :func:`withdraw`
+closes their waiting rows, and a row being posted at that moment is not tried again.
 """
 
 from __future__ import annotations
@@ -49,6 +52,11 @@ STALE_SENDING_MINUTES = 10
 STALE_SENDING = "stale_sending"
 GATEWAY_DISABLED = "gateway_disabled"
 NOT_LIVE = "not_live"
+RUN_CANCELLED = "run_cancelled"
+RUN_FAILED = "run_failed"
+MEMBER_REMOVED = "member_removed"
+WITHDRAWN = (RUN_CANCELLED, RUN_FAILED, MEMBER_REMOVED)
+FAILED_BY_PERSON = "failed_by_person"  # key in the run's ``waiting`` record
 WINDOW_MAX_PARK_DAYS = 7  # a row has no deferral counter, so its age bounds the parking
 
 
@@ -194,6 +202,29 @@ def deliver(name: str, *, transport: Callable | None = None, resolver: Callable 
 	return _finish(row, "Sent", None, provider_message_id=message_id)
 
 
+def withdraw(run_ids: list[str], code: str) -> None:
+	"""Close the waiting rows of these runs as Blocked with ``code``. The caller commits.
+
+	A row being posted now is only marked: if that post would be tried again, it is closed instead.
+	"""
+	if not run_ids:
+		return
+	names = frappe.get_all(
+		DOCTYPE,
+		filters={"run_id": ["in", run_ids], "status": ["in", [*DELIVERABLE, "Sending"]]},
+		pluck="name",
+		limit_page_length=0,
+	)
+	for name in names:
+		status = frappe.db.get_value(DOCTYPE, name, "status", for_update=True)
+		if status in DELIVERABLE:
+			values = {"status": "Blocked", "next_attempt_at": None, "error_class": BLOCKED, "error_code": code}
+			frappe.db.set_value(DOCTYPE, name, values)
+		elif status == "Sending":
+			# ``modified`` stays: it dates the claim, which closes a dead worker's row
+			frappe.db.set_value(DOCTYPE, name, "error_code", code, update_modified=False)
+
+
 def retry_due(limit: int = 500) -> int:
 	"""Enqueue rows whose backoff has passed, and rows left in Sending so :func:`deliver` closes them. Scheduler job."""
 	stale = add_to_date(now_datetime(), minutes=-STALE_SENDING_MINUTES)
@@ -291,6 +322,9 @@ def _blocked_now(row, recipient) -> str | datetime | None:
 		from huf.ai.flow.testrun import gate
 
 		flow_run = frappe.get_doc("Agent Flow Run", row.run_id)
+		ended = _ended_by_person(flow_run)
+		if ended:
+			return ended
 		if not gate.is_live(flow_run):
 			return NOT_LIVE
 		request = {
@@ -309,6 +343,24 @@ def _blocked_now(row, recipient) -> str | datetime | None:
 	except Exception as exc:  # noqa: BLE001 - fail closed
 		frappe.logger("huf.outbox").warning("delivery guard: %s", type(exc).__name__)
 		return guard.HOOK_ERROR
+
+
+def _ended_by_person(flow_run) -> str | None:
+	"""The block code of a run that was cancelled or marked as failed; a finished or crashed run still delivers."""
+	from huf.ai.flow.runs.park import _waiting
+
+	status = getattr(flow_run, "status", None)
+	if status == "Cancelled":
+		return RUN_CANCELLED
+	if status == "Failed" and _waiting(flow_run).get(FAILED_BY_PERSON):
+		return RUN_FAILED
+	return None
+
+
+def _close_if_withdrawn(row) -> str | None:
+	"""Close a row :func:`withdraw` marked while it was being posted, instead of trying it again."""
+	code = frappe.db.get_value(DOCTYPE, row.name, "error_code", for_update=True)
+	return _finish(row, "Blocked", delivery_error(code)) if code in WITHDRAWN else None
 
 
 def _recheck(request: dict, header: dict | None) -> str | datetime | None:
@@ -339,6 +391,8 @@ def _park(row, defer_until: datetime) -> str:
 	"""Outside the send window: try again when it opens. Nothing was posted, so no attempt is spent."""
 	if get_datetime(row.creation) < add_to_date(now_datetime(), days=-WINDOW_MAX_PARK_DAYS):
 		return _finish(row, "Blocked", delivery_error("window_defer_exhausted"))
+	if withdrawn := _close_if_withdrawn(row):
+		return withdrawn
 	utc = defer_until.astimezone(timezone.utc).replace(tzinfo=None)
 	row.db_set(
 		{
@@ -373,6 +427,8 @@ def _claim(name: str):
 
 def _failed_attempt(row, error: dict) -> str:
 	if error["class"] == TRANSIENT and row.attempts < MAX_ATTEMPTS:
+		if withdrawn := _close_if_withdrawn(row):
+			return withdrawn
 		row.db_set(
 			{
 				"status": "Retrying",

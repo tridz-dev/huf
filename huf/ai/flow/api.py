@@ -467,6 +467,16 @@ def get_flow_run(flow_run_id: str) -> dict:
 	}
 
 
+def _stop_unsent_messages(doc) -> None:
+	"""Record that a person failed this run and withdraw its unsent messages. The caller commits."""
+	from huf.ai.channels import outbox
+	from huf.ai.flow.runs.park import _waiting
+
+	waiting = {**_waiting(doc), outbox.FAILED_BY_PERSON: True}
+	frappe.db.set_value("Agent Flow Run", doc.name, "waiting", json.dumps(waiting, default=str))
+	outbox.withdraw([doc.name], outbox.RUN_FAILED)
+
+
 @frappe.whitelist()
 def mark_flow_run_failed(flow_run_id: str) -> dict:
 	"""Fail a Flow Run that is stuck in Queued/Running (System Manager only).
@@ -508,6 +518,7 @@ def mark_flow_run_failed(flow_run_id: str) -> dict:
 		)
 		if not failed:
 			frappe.throw(_("This run has already finished, so it was left as it is."))
+		_stop_unsent_messages(doc)
 		frappe.db.commit()  # nosemgrep -- the change must be durable before the lock is released
 	finally:
 		engine._release_run_lock(flow_run_id)

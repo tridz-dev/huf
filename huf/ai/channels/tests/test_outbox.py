@@ -14,6 +14,8 @@ from frappe.utils import add_to_date, now_datetime
 from urllib3.exceptions import MaxRetryError, NewConnectionError, ProtocolError
 
 from huf.ai.channels import guard, outbox, token_binder
+from huf.ai.flow import api as flow_api
+from huf.ai.flow.runs import member, park
 from huf.ai.flow.testrun import gate
 from huf.ai.gateway_adapters import whatsapp_bridge as bridge
 
@@ -275,6 +277,11 @@ class TestDeliveryRecheck(IntegrationTestCase):
 		self.enabled = 0
 		self.assertEqual(self.check(), outbox.GATEWAY_DISABLED)
 
+	def test_cancelled_run_blocks(self):
+		frappe.get_doc.return_value = SimpleNamespace(flow_id="f", flow_version="1", status="Cancelled")
+		self.assertEqual(self.check(), outbox.RUN_CANCELLED)
+		self.assertEqual(self.seen, [])
+
 	def test_app_hook_blocks(self):
 		with patch.object(guard, "_hook_paths", return_value=["app.hook"]), patch.object(
 			frappe, "get_attr", return_value=lambda req: {"allow": False, "reason": "freq_cap"}
@@ -291,3 +298,78 @@ class TestDeliveryRecheck(IntegrationTestCase):
 		) as send:
 			outbox.whatsapp_transport(row, PHONE, None, {})
 		self.assertEqual(send.call_args.kwargs["opaque_ref"], "sk-1")
+
+
+class TestWithdraw(IntegrationTestCase):
+	"""A cancelled or person-failed run and a removed member send nothing more."""
+
+	def setUp(self):
+		patch.object(token_binder, "bind", return_value={"1": SENTINEL}).start()
+		patch.object(frappe.db, "commit").start()
+		patch.object(outbox, "_blocked_now", return_value=None).start()
+		self.addCleanup(patch.stopall)
+		self.flow = "_test-withdraw-" + frappe.generate_hash(length=8)
+
+	def run_doc(self, status, **values):
+		doc = frappe.get_doc(
+			{"doctype": "Agent Flow Run", "flow_id": self.flow, "status": status, "trigger_type": "Manual", **values}
+		)
+		doc.flags.ignore_links = doc.flags.ignore_mandatory = True
+		return doc.insert(ignore_permissions=True).name
+
+	def queued(self, run_id):
+		return outbox.enqueue(request(run_id=run_id), deliver_now=False)
+
+	def row(self, name):
+		return frappe.db.get_value(outbox.DOCTYPE, name, ["status", "error_code"])
+
+	def test_cancel_run_withdraws_waiting_and_finished_runs_not_running(self):
+		for status, expected in (("Waiting Timer", "Blocked"), ("Success", "Blocked"), ("Running", "Queued")):
+			run = self.run_doc(status)
+			row = self.queued(run)
+			park.cancel_run(run, "Administrator")
+			self.assertEqual(self.row(row)[0], expected, status)
+
+	def test_remove_member_withdraws_finished_runs(self):
+		row = self.queued(self.run_doc("Success", member_key="m-1"))
+		other = self.queued(self.run_doc("Success", member_key="m-2"))
+		member.remove_member(self.flow, "m-1")
+		self.assertEqual(self.row(row), ("Blocked", outbox.MEMBER_REMOVED))
+		self.assertEqual(self.row(other)[0], "Queued")
+
+	def test_a_row_being_posted_is_not_tried_again(self):
+		run = self.run_doc("Success")
+		for outcome in ("retry", "park"):
+			name = self.queued(run)
+
+			def transport(*_args):
+				outbox.withdraw([run], outbox.MEMBER_REMOVED)
+				raise connect_error()
+
+			def verdict(*_args):
+				outbox.withdraw([run], outbox.MEMBER_REMOVED)
+				return datetime.now(timezone.utc) + timedelta(hours=8)
+
+			if outcome == "retry":
+				outbox.deliver(name, transport=transport, resolver=resolver)
+			else:
+				with patch.object(outbox, "_blocked_now", side_effect=verdict):
+					outbox.deliver(name, transport=FakeTransport(), resolver=resolver)
+			self.assertEqual(self.row(name), ("Blocked", outbox.MEMBER_REMOVED), outcome)
+
+	def test_delivery_blocks_cancelled_and_person_failed_runs_only(self):
+		for status, waiting, expected in (
+			("Cancelled", None, outbox.RUN_CANCELLED),
+			("Failed", {outbox.FAILED_BY_PERSON: True}, outbox.RUN_FAILED),
+			("Failed", None, None),
+			("Success", None, None),
+		):
+			run = SimpleNamespace(status=status, waiting=waiting)
+			self.assertEqual(outbox._ended_by_person(run), expected, status)
+
+	def test_mark_failed_records_the_person(self):
+		run = self.run_doc("Failed")
+		row = self.queued(run)
+		flow_api._stop_unsent_messages(frappe.get_doc("Agent Flow Run", run))
+		self.assertEqual(self.row(row), ("Blocked", outbox.RUN_FAILED))
+		self.assertEqual(outbox._ended_by_person(frappe.get_doc("Agent Flow Run", run)), outbox.RUN_FAILED)
