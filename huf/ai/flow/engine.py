@@ -255,20 +255,41 @@ GATEWAY_EVENT_KEY = "gateway_event"
 """Payload key naming the Gateway Event a run answers; it selects the run's trusted send binding."""
 
 
-def strip_reserved_keys(values: dict) -> dict:
-	"""``values`` from a caller without the keys only the server writes: node outputs, ``_huf_*`` run state
-	(``_huf_entry`` is set by ``runs.start``, before the run exists), the document write counter and
-	``gateway_event`` (set by gateway ingestion through ``create_flow_run``). Anything else would be restored
-	as the run's own state, for example a forged approval decision or a borrowed gateway send binding.
-	"""
-	from huf.ai.flow.runs.start import ENTRY_MARKER
-
-	return {
-		key: value
-		for key, value in values.items()
-		if key not in (NODE_OUTPUTS_KEY, _WRITES_KEY, GATEWAY_EVENT_KEY)
-		and not (str(key).startswith("_huf_") and key != ENTRY_MARKER)
+ENGINE_KEYS = frozenset(
+	{
+		NODE_OUTPUTS_KEY,
+		GATEWAY_EVENT_KEY,  # set by gateway ingestion through ``create_flow_run``
+		"_schedule_trigger",
+		"_doc_event_trigger",
+		"member",  # reference roots: without a run member / loop frame, these would be read from the payload
+		"foreach",
 	}
+)
+"""Context keys only the engine writes (with ``_huf_*`` and ``_WRITES_KEY``)."""
+
+
+def strip_reserved_keys(values: dict, graph: dict | None = None, trigger_type: str | None = None) -> dict:
+	"""``values`` from a caller without anything the engine owns, so they are never read as the run's own state
+	(a forged approval decision, a skipped error handler, a borrowed gateway send binding).
+
+	Dropped: :data:`ENGINE_KEYS`, ``_huf_*`` run state, the document write counter, an ``error`` shaped like the
+	error handler's record, the name of every non-trigger step of ``graph`` (node outputs are read by step id, and a
+	step that has not run falls back to the context) and ``_trigger`` unless a Doc Event run is being created.
+	"""
+	steps = {
+		node.get("id")
+		for node in (graph or {}).get("nodes") or []
+		if not str(node.get("type") or "").startswith("trigger.")
+	}
+
+	def owned(key, value) -> bool:
+		if key in ENGINE_KEYS or key == _WRITES_KEY or key in steps or str(key).startswith("_huf_"):
+			return True
+		if key == "_trigger":
+			return trigger_type != "Doc Event"
+		return key == "error" and isinstance(value, dict) and "node_id" in value and "message" in value
+
+	return {key: value for key, value in values.items() if not owned(key, value)}
 
 
 def load_context(raw, **kwargs) -> GraphContext:
@@ -591,6 +612,7 @@ def create_flow_run(
 	mode: str = "real",
 	member_key: str | None = None,
 	gateway_event: str | None = None,
+	entry_marker: str | None = None,
 ) -> "frappe.Document":
 	"""
 	Create a new FlowRun document from a FlowDefinition. This is the public
@@ -614,16 +636,22 @@ def create_flow_run(
 	        told from the trigger.
 	    gateway_event: the inbound Gateway Event this run answers. Only gateway ingestion passes it; the same
 	        key in ``payload`` is dropped.
+	    entry_marker: ``runs.start``'s once-per-entry marker; the same key in ``payload`` is dropped.
 
 	Returns:
 	    Flow Run document
 	"""
-	if isinstance(payload, dict):
-		payload = strip_reserved_keys(payload)
-	if gateway_event:
-		payload = {**(payload or {}), GATEWAY_EVENT_KEY: gateway_event}
 	defn_doc = frappe.get_doc("Flow Definition", flow_id)
 	defn = json.loads(defn_doc.definition_json) if isinstance(defn_doc.definition_json, str) else defn_doc.definition_json
+
+	if isinstance(payload, dict):
+		payload = strip_reserved_keys(payload, defn, trigger_type)
+	if gateway_event:
+		payload = {**(payload or {}), GATEWAY_EVENT_KEY: gateway_event}
+	if entry_marker:
+		from huf.ai.flow.runs.start import ENTRY_MARKER
+
+		payload = {**(payload or {}), ENTRY_MARKER: entry_marker}
 
 	from huf.ai.graph.validation.flow_validation import check_runnable
 	from huf.huf.doctype.flow_definition.activation_rules import entry_is_unset
@@ -687,7 +715,9 @@ def create_flow_run(
 	else:
 		if not frappe.has_permission("Agent Flow Run", "create", doc=flow_run):
 			frappe.throw(_("You do not have permission to run flows. Ask an admin for access."), frappe.PermissionError)
-		flow_run.insert()
+		# checked above; the controller only accepts inserts made by server code (runs.write_guard)
+		flow_run.insert(ignore_permissions=True)
+		flow_run.flags.ignore_permissions = False  # later saves of the returned document are checked again
 	if member_key:
 		flow_member.upsert_member(flow_id, member_key, flow_run.name)
 	commit_if_background()
@@ -823,7 +853,7 @@ def resume_flow_run(flow_run_name: str, user_input: dict | None = None):
 			frappe.throw(_("This run was already resumed by someone else."))
 
 		if user_input:
-			run_ctx.context.update(strip_reserved_keys(dict(user_input)))
+			run_ctx.context.update(strip_reserved_keys(dict(user_input), version.graph))
 			run_ctx.save_context()
 		complete = not next_node_id
 		if complete:
