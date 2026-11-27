@@ -44,6 +44,14 @@ export const actionOptions: ActionOption[] = [
     keywords: ['switch', 'case', 'route', 'rules', 'multiple'],
   },
   {
+    id: 'split',
+    name: 'Split audience',
+    description: 'Send people down weighted paths, with a holdout.',
+    icon: 'Split',
+    category: 'control',
+    keywords: ['split', 'a/b', 'ab test', 'experiment', 'holdout', 'percent', 'weight', 'control group'],
+  },
+  {
     id: 'loop',
     name: 'Repeat for each item',
     description: 'Run some steps once for every item in a list.',
@@ -261,6 +269,7 @@ export const ACTION_CARD_CONTRACT: Record<string, ActionCardContract> = {
   'router': { configType: 'router', backendType: 'router.llm' },
   'condition': { configType: 'condition', backendType: 'condition' },
   'switch': { configType: 'router-decision', backendType: 'router.decision' },
+  'split': { configType: 'split', backendType: 'split' },
   'loop': { configType: 'foreach', backendType: 'foreach' },
   'human.approval': { configType: 'human.approval', backendType: 'human.approval' },
   'wait': { configType: 'wait', backendType: 'wait' },

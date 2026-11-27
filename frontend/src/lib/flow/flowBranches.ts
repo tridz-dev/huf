@@ -61,8 +61,8 @@ export function branchHandlesFor(actionType: string | undefined, config?: Record
 /** Whether a node type keeps a single free-form fan-out handle (router: one 'option' edge per path). */
 export const ROUTER_HANDLE = 'option';
 
-/** Steps whose paths are free-form `option` connections from one handle: Choose with AI and Choose by rules. */
-export const isPathRouter = (type: string | undefined): boolean => type === 'router' || type === 'router-decision';
+/** Steps whose paths are free-form `option` connections from one handle: Choose with AI, Choose by rules and Split audience. */
+export const isPathRouter = (type: string | undefined): boolean => type === 'router' || type === 'router-decision' || type === 'split';
 
 /** Colour family of a branch name pill. */
 export type BranchTone = 'good' | 'bad' | 'warn' | 'loop' | 'neutral';

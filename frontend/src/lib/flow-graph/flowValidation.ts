@@ -3,6 +3,7 @@
  * docs/flow/FIELD_CONTRACT.md so a user sees "Choose an agent" next to the field instead of a raw
  * JSON-schema error after Save. Field names are the contract's config keys.
  */
+import { splitProblems } from '@/lib/flow/splitConfig';
 import { getTransformOp } from './flowTransformOps';
 import { transformParamHelp } from '../flow/flowHelp';
 import { branchHandlesFor } from '../flow/flowBranches';
@@ -205,6 +206,11 @@ export function validateNode(node: NodeLike, edges: EdgeLike[]): FlowIssue[] {
         if (new Set(names).size !== names.length) add('options', 'Give each rule a different name.');
       }
       if (!out.some((e) => edgeRoute(e as FlowEdge) === 'default')) add('default', 'Choose where to go when no rule matches.');
+      break;
+    }
+    case 'split': {
+      const arms = out.filter((e) => edgeRoute(e as FlowEdge) === 'option').map((e) => ({ label: e.label, weight: asObj((e as { data?: unknown }).data).weight }));
+      for (const p of splitProblems(arms, c.holdout, c.salt)) add(p.field, p.message);
       break;
     }
     case 'condition':
