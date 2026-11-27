@@ -80,6 +80,15 @@ class TestGuestReadAliasExistence(unittest.TestCase):
 					self.assertFalse(existing["result"]["success"])
 				self.assertEqual(existing_log, other_log)
 
+	def test_permitted_reads_still_work(self):
+		shared = self._todo("shared")
+		frappe.share.add_docshare("ToDo", shared, "Guest", read=1, flags={"ignore_share_permission": True})
+		frappe.set_user("Guest")
+		for label, (alias, args) in self._probes(shared).items():
+			with self.subTest(label):
+				out, _ = self._call(alias, args)
+				self.assertTrue(out["result"]["success"], out)
+
 	def test_guest_report_alias(self):
 		frappe.set_user("Guest")
 		self._assert_indistinguishable(
