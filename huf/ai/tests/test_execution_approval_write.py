@@ -13,16 +13,18 @@ from unittest.mock import patch
 
 import frappe
 from frappe import client
+from frappe.api import v1
 from frappe.desk.form.save import savedocs
 from frappe.tests import IntegrationTestCase
 from frappe.utils import add_to_date, now_datetime
 
+from huf.ai.handlers import crud
 from huf.ai.tools.code_execution import _sha256, stash_pending_execution
 from huf.huf.doctype.agent_execution_approval.agent_execution_approval import (
 	approve_execution,
 	reject_execution,
 )
-from huf.testing.factories import make_user
+from huf.testing.factories import make_agent, make_user
 
 APPROVAL = "Agent Execution Approval"
 CALL = "Agent Tool Call"
@@ -113,6 +115,88 @@ class TestExecutionApprovalWrite(IntegrationTestCase):
 		row = {"doctype": "Agent User", "parenttype": APPROVAL, "parentfield": "approver_users", "parent": self.name, "user": self.manager}
 		self._refused(lambda: client.insert(dict(row)))
 		self.assertEqual(frappe.get_doc(APPROVAL, self.name).approver_users, [])
+
+	def _child(self, **extra):
+		return {"doctype": "Agent User", "parenttype": APPROVAL, "parentfield": "approver_users", "parent": self.name, **extra}
+
+	def _row(self, **values):
+		return frappe.get_doc(self._child(user=self.manager, **values)).insert(ignore_permissions=True).name
+
+	def _approver_rows(self):
+		fields = ["name", "parent", "parenttype", "parentfield", "user"]
+		return frappe.get_all("Agent User", {"parenttype": APPROVAL, "parent": self.name}, fields, order_by="name")
+
+	def _agent(self, **fields):
+		agent = make_agent(**fields)
+		self.addCleanup(frappe.db.commit)
+		self.addCleanup(frappe.delete_doc, "Agent", agent.name, ignore_permissions=True, force=True)
+		self.addCleanup(frappe.set_user, "Administrator")
+		return agent
+
+	def test_direct_child_inserts_cannot_add_an_approver(self):
+		row = self._child(user=self.manager)
+
+		def rest():
+			frappe.local.form_dict = frappe._dict(data=frappe.as_json(row))
+			v1.create_doc("Agent User")
+
+		self.addCleanup(setattr, frappe.local, "form_dict", frappe.local.form_dict)
+		self._refused(rest)
+		self._refused(lambda: savedocs(frappe.as_json({**row, "__islocal": 1, "name": "new-agent-user-1"}), "Save"))
+		self.assertEqual(self._approver_rows(), [])
+
+	def test_direct_child_writes_cannot_change_or_remove_an_approver(self):
+		child = self._row()
+		before = self._approver_rows()
+		changed = lambda **extra: frappe.as_json({**frappe.get_doc("Agent User", child).as_dict(), **extra})
+		self._refused(lambda: client.save(changed(user=self.requester)))
+		self._refused(lambda: v1.delete_doc("Agent User", child))
+		self._refused(lambda: client.delete("Agent User", child))
+		self.assertEqual(self._approver_rows(), before)
+
+	def test_rows_cannot_move_to_or_from_an_approval(self):
+		child = self._row()
+		agent = self._agent(allowed_users=[{"user": self.manager}])
+		agent_row = agent.allowed_users[0].name
+		before = self._approver_rows()
+		moved = lambda name, **extra: frappe.as_json({**frappe.get_doc("Agent User", name).as_dict(), **extra})
+		self._refused(lambda: client.save(moved(child, parenttype="Agent", parentfield="allowed_users", parent=agent.name)))
+		self._refused(lambda: client.save(moved(agent_row, parenttype=APPROVAL, parentfield="approver_users", parent=self.name)))
+		# saving another parent that names the approval's row would take it over without any child hook
+		frappe.db.savepoint("steal")
+		doc = frappe.get_doc("Agent", agent.name)
+		doc.allowed_users[0].name = child
+		with self.assertRaises(frappe.PermissionError):
+			doc.save()
+		frappe.db.rollback(save_point="steal")
+		self.assertEqual(self._approver_rows(), before)
+
+	def test_agent_rows_are_still_written_directly_and_through_the_agent(self):
+		agent = self._agent(allowed_users=[{"user": self.manager}])
+		row = client.insert(
+			{"doctype": "Agent User", "parenttype": "Agent", "parentfield": "allowed_users", "parent": agent.name, "user": self.requester}
+		)
+		doc = frappe.get_doc("Agent User", row.name)
+		doc.user = self.manager
+		doc.save()
+		frappe.delete_doc("Agent User", row.name)
+		parent = frappe.get_doc("Agent", agent.name)
+		parent.allowed_users[0].user = self.requester
+		parent.save()
+		self.assertEqual(frappe.get_all("Agent User", {"parent": agent.name}, pluck="user"), [self.requester])
+
+	def test_generic_agent_tools_cannot_write_approver_rows(self):
+		child = self._row()
+		before = self._approver_rows()
+		pinned = {"reference_doctype": "Agent User", "ignore_permissions": True}
+		values = {k: v for k, v in self._child(user=self.requester).items() if k != "doctype"}
+		for result in (
+			crud.handle_create_document(**pinned, **values),
+			crud.handle_update_document(document_id=child, data={"user": self.requester}, **pinned),
+			crud.handle_delete_document(document_id=child, **pinned),
+		):
+			self.assertIn("is not permitted through this tool", str(result))
+		self.assertEqual(self._approver_rows(), before)
 
 	def test_generic_insert_cannot_create_an_approval(self):
 		for status in ("Approved", "Pending"):
