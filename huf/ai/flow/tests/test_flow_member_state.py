@@ -75,7 +75,7 @@ class TestFlowMemberState(IntegrationTestCase):
 			frappe.get_doc({"doctype": "Flow Member State", "flow": self.flow_id, "member_key": "k1"}).insert(ignore_permissions=True)
 
 	def test_indexes_present(self):
-		for index in ("unique_flow_member_key", "flow_status_index", "member_key"):
+		for index in ("unique_flow_member_key", "flow_status_index", "member_key_index"):
 			self.assertTrue(frappe.db.has_index("tabFlow Member State", index), index)
 
 	def test_dedupe_patch_merges_duplicates_then_unique_index_holds(self):
