@@ -6,7 +6,7 @@
 
 /** `null`: not the embedded editor. `''`: embedded without a usable `app`. */
 export function readEmbedApp(loc: { pathname: string; search: string }): string | null {
-  if (!/\/embed\/flow\//.test(loc.pathname)) return null;
+  if (!/\/embed\/+flow\//i.test(loc.pathname)) return null;
   const app = new URLSearchParams(loc.search).get('app') ?? '';
   return /^[a-z][a-z0-9_]*$/.test(app) ? app : '';
 }

@@ -164,7 +164,7 @@ describe('messages', () => {
   });
 
   describe('listener', () => {
-    const parent = {} as Window;
+    const parent = { postMessage: () => {} } as unknown as Window;
     const origin = 'https://host.example';
     let stop = () => {};
 
