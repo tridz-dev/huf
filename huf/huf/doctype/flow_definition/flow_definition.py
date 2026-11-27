@@ -90,6 +90,7 @@ class FlowDefinition(Document):
 
 	def before_rename(self, old_name: str, new_name: str, merge: bool = False):
 		system_records.guard_rename(self, old_name, new_name, merge)
+		app_access.guard_app_flow_rename(self, old_name, new_name, merge)
 
 	def _maybe_convert_to_procedure(self):
 		"""On save, if the checkbox is set, (re)compile this Flow into a Draft Agent
