@@ -231,11 +231,13 @@ def _app_member_keys(gateway: str | None, sender_id: str) -> list[str]:
 	for path in frappe.get_hooks(OPT_OUT_KEYS_HOOK) or []:
 		try:
 			answer = frappe.get_attr(path)(gateway=gateway, sender_id=sender_id)
-			if not isinstance(answer, list | tuple):
-				raise TypeError
-			keys += [k for k in answer if isinstance(k, str) and k and len(k) <= MAX_KEY_CHARS]
-		except Exception as exc:
-			frappe.log_error(title="Flow opt-out member hook failed", message=f"{path}: {type(exc).__name__}")
+			if isinstance(answer, list | tuple):
+				keys += [k for k in answer if isinstance(k, str) and k and len(k) <= MAX_KEY_CHARS]
+				continue
+			problem = "not a list"
+		except Exception as exc:  # noqa: BLE001 - one app's failure must not keep the sender's runs open
+			problem = type(exc).__name__
+		frappe.log_error(title="Flow opt-out member hook failed", message=f"{path}: {problem}")
 	return keys
 
 

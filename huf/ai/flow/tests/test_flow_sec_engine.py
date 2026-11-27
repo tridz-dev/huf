@@ -21,7 +21,6 @@ FORGED = {
 	"_doc_create_count": -1000,
 }
 SENDER = "15550100999"
-APP_KEY = "APP-MEMBER-0001"
 
 
 class Run(SimpleNamespace):
@@ -103,6 +102,7 @@ class TestReplayUntilCursorAdvances(IntegrationTestCase):
 class TestOptOutMemberKeys(IntegrationTestCase):
 	def setUp(self):
 		frappe.set_user("Administrator")
+		self.app_key = f"APP-{frappe.generate_hash(length=10)}"  # opt-out commits in background mode
 		self.flow = f"_test-sec-optout-{frappe.generate_hash(length=8)}"
 		doc = frappe.get_doc(
 			{
@@ -122,19 +122,20 @@ class TestOptOutMemberKeys(IntegrationTestCase):
 					"flow_id": self.flow,
 					"flow_definition": self.flow,
 					"status": park.WAIT_STATUS,
-					"member_key": APP_KEY,
+					"member_key": self.app_key,
 					"waiting": json.dumps({"node_id": "w1"}),
 				}
 			)
 			.insert(ignore_permissions=True)
 			.name
 		)
-		member.upsert_member(self.flow, APP_KEY, self.run_name)
+		member.upsert_member(self.flow, self.app_key, self.run_name)
 
 	def tearDown(self):
 		frappe.db.delete("Agent Flow Run", {"flow_id": self.flow})
 		frappe.db.delete("Flow Member State", {"flow": self.flow})
 		frappe.db.delete("Flow Definition", {"name": self.flow})
+		frappe.db.commit()
 
 	def _opt_out(self, *answers):
 		hooks = {f"app.hook{i}": answer for i, answer in enumerate(answers)}
@@ -151,14 +152,14 @@ class TestOptOutMemberKeys(IntegrationTestCase):
 
 	def test_hook_maps_sender_to_app_member_keys(self):
 		seen = []
-		cancelled = self._opt_out(lambda gateway, sender_id: seen.append((gateway, sender_id)) or [APP_KEY])
+		cancelled = self._opt_out(lambda gateway, sender_id: seen.append((gateway, sender_id)) or [self.app_key])
 		self.assertEqual(seen, [("GW", SENDER)])
 		self.assertEqual(cancelled, [self.run_name])
-		self.assertEqual(member.get_member(self.flow, APP_KEY).status, "Exited")
+		self.assertEqual(member.get_member(self.flow, self.app_key).status, "Exited")
 
 	def test_bad_hook_does_not_stop_the_others(self):
 		def broken(**_):
 			raise RuntimeError(SENDER)
 
-		cancelled = self._opt_out(broken, lambda **_: APP_KEY, lambda **_: [None, "", APP_KEY])
+		cancelled = self._opt_out(broken, lambda **_: self.app_key, lambda **_: [None, "", self.app_key])
 		self.assertEqual(cancelled, [self.run_name])
