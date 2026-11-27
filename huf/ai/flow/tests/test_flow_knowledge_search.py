@@ -91,7 +91,7 @@ class TestFlowKnowledgeSearch(IntegrationTestCase):
 	def test_spent_run_budget_blocks_search(self):
 		class _Budget:
 			def check_deadline(self):
-				raise node_mod.RunBudgetExceeded("Run budget deadline exceeded")
+				raise node_mod.RunBudgetExceeded
 
 		out, search = self._run({"query": "$q", "knowledge_source": SOURCE},
 			run_ctx=SimpleNamespace(budget=_Budget()))
