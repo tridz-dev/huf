@@ -71,7 +71,7 @@ class TestOutbox(IntegrationTestCase):
 	def setUp(self):
 		self.bind = patch.object(token_binder, "bind", return_value={"1": SENTINEL}).start()
 		patch.object(frappe.db, "commit").start()
-		self.recheck = patch.object(outbox, "_blocked_now", return_value=None).start()
+		self.recheck = patch.object(outbox, "_blocked_now", return_value=None, create=True).start()
 		self.addCleanup(patch.stopall)
 
 	def deliver(self, name, transport):
