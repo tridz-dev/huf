@@ -43,7 +43,7 @@ class TestSendMessageNode(IntegrationTestCase):
 			patch.object(guard_steps, "window_resolvers", return_value=[]),
 			patch.object(guard_steps, "resolve_caps", return_value=[]),
 			patch.object(frappe, "get_attr", side_effect=lambda p: self.hooks[p]),
-			patch.object(send, "_transport", self.transport),
+			patch.object(send, "_enqueue", self.transport),
 			patch.object(send, "channel_of", return_value="whatsapp"),
 			patch("huf.ai.flow.testrun.gate.live_send_on", return_value=True),  # H-W2-05: live needs live_send
 			patch.object(engine, "_context_of", return_value=GraphContext()),
@@ -60,9 +60,9 @@ class TestSendMessageNode(IntegrationTestCase):
 	def run_node(self, flow_run=None, **config):
 		return send.exec_send_message(flow_run or run_doc(), NODE, {**CONFIG, **config}, {})
 
-	def test_allowed_send_reaches_transport_exactly_once(self):
+	def test_allowed_send_is_queued_exactly_once(self):
 		result = self.run_node()
-		self.assertEqual(result["output"], {"status": "sent"})
+		self.assertEqual(result["output"], {"status": "queued"})
 		self.assertEqual(result["next_node_id"], "n2")
 		self.transport.assert_called_once()
 		request = self.requests[0]
@@ -101,7 +101,8 @@ class TestSendMessageNode(IntegrationTestCase):
 		self.assertEqual(self.requests[0]["token_names"], ["1"])
 		self.assertNotIn(SENTINEL, frappe.as_json(self.requests[0]))
 		self.assertNotIn(SENTINEL, frappe.as_json(result))
-		self.assertEqual(self.transport.call_args.args[6], {"1": SENTINEL})
+		# values are bound again at delivery, never queued
+		self.assertNotIn(SENTINEL, frappe.as_json(self.transport.call_args.args[0]))
 
 	def test_unbound_token_blocks_before_guard(self):
 		with patch.object(token_binder, "bind", side_effect=token_binder.TokenUnbound(["1"])):
@@ -154,3 +155,37 @@ class TestSendMessageNode(IntegrationTestCase):
 		defn["nodes"][0]["config"] = {"text": "hi", "gateway": "gw", "recipient": "+1", "category": "service"}
 		codes = {f.code for f in preflight._send_checks(defn, None)}
 		self.assertNotIn("SEND_GUARD_CONFIG_MISSING", codes)
+
+
+class TestSendOutboxWiring(IntegrationTestCase):
+	"""H-W2-15 wiring: the send step queues on the outbox; a decided send is never run again (G2)."""
+
+	def test_enqueue_maps_literal_recipient_to_block_and_other_channels_refused(self):
+		from huf.ai.channels import outbox
+
+		with patch.object(outbox, "enqueue", side_effect=outbox.LiteralRecipient("recipient_ref")):
+			self.assertEqual(send._enqueue({"channel": "whatsapp"}), "bad_recipient")
+		with patch.object(outbox, "enqueue") as enqueue:
+			self.assertEqual(send._enqueue({"channel": "telegram"}), "channel_unsupported")
+			self.assertIsNone(send._enqueue({"channel": "whatsapp", "step_key": "k"}))
+		enqueue.assert_called_once_with({"channel": "whatsapp", "step_key": "k"})
+
+	def test_engine_replays_decided_send_inside_error_handler(self):
+		from huf.ai.flow.support import step_keys
+
+		ctx = GraphContext()
+		first = step_keys.step_key("RUN-1", "s1", 1)
+		decided = {"status": "success", "output": {"status": "blocked", "reason": "opted_out"}}
+		step_keys.record(ctx.data, "s1", first, decided)
+		second = step_keys.with_key(NODE, step_keys.key_for("RUN-1", "s1", ctx.data))
+		with (
+			patch.object(engine, "_context_of", return_value=ctx),
+			patch("huf.ai.flow.nodes.error_handler.first_error", return_value=None),
+		):
+			self.assertIsNone(engine._decided_send(run_doc(), second, {}))  # a forward loop visit may send
+			self.assertEqual(engine._decided_send(run_doc(), step_keys.with_key(NODE, first), {}), decided)
+		with (
+			patch.object(engine, "_context_of", return_value=ctx),
+			patch("huf.ai.flow.nodes.error_handler.first_error", return_value={"node_id": "x"}),
+		):
+			self.assertEqual(engine._decided_send(run_doc(), second, {}), decided)

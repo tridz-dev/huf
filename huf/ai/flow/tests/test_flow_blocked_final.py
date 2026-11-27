@@ -40,7 +40,7 @@ class TestBlockedIsFinal(IntegrationTestCase):
 			patch.object(guard_steps, "window_resolvers", return_value=[]),
 			patch.object(guard_steps, "resolve_caps", return_value=[]),
 			patch.object(gate, "live_send_on", return_value=True),
-			patch.object(send, "_transport", self.transport),
+			patch.object(send, "_enqueue", self.transport),
 			patch.object(send, "channel_of", return_value="whatsapp"),
 			patch.object(engine, "_context_of", return_value=GraphContext()),
 			patch.object(engine, "_persist_context"),

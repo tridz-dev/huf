@@ -57,7 +57,7 @@ class TestSendStepKey(IntegrationTestCase):
 			patch.object(guard, "_hook_paths", return_value=[]),
 			patch.object(guard_steps, "window_resolvers", return_value=[]),
 			patch.object(guard_steps, "resolve_caps", return_value=[]),
-			patch.object(send, "_transport", self.transport),
+			patch.object(send, "_enqueue", self.transport),
 			patch.object(send, "channel_of", return_value="whatsapp"),
 			patch("huf.ai.flow.testrun.gate.live_send_on", return_value=True),
 			patch.object(engine, "_context_of", side_effect=lambda *a: self.ctx),
@@ -83,7 +83,7 @@ class TestSendStepKey(IntegrationTestCase):
 		self.assertEqual(first, second)
 		self.transport.assert_called_once()
 		self.assertEqual(self.requests[0]["step_key"], key)
-		self.assertEqual(self.transport.call_args.args[-1]["step_key"], key)
+		self.assertEqual(self.transport.call_args.args[0]["step_key"], key)
 
 	def test_explicit_retry_new_key(self):
 		node, _key = self.keyed(retry=1)

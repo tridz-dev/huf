@@ -70,7 +70,7 @@ class TestSendHonoursLive(IntegrationTestCase):
 			patch.object(guard, "_hook_paths", return_value=[]),
 			patch.object(guard_steps, "window_resolvers", return_value=[]),
 			patch.object(guard_steps, "resolve_caps", return_value=[]),
-			patch.object(send, "_transport", self.transport),
+			patch.object(send, "_enqueue", self.transport),
 			patch.object(send, "channel_of", return_value="whatsapp"),
 			patch.object(engine, "_context_of", return_value=GraphContext()),
 			patch.object(engine, "_persist_context"),
@@ -92,7 +92,7 @@ class TestSendHonoursLive(IntegrationTestCase):
 		self.assertEqual(self.transport.call_count, 0)
 
 	def test_live_send_on_and_not_dry_sends_once(self):
-		self.assertEqual(self.run_node(True)["output"], {"status": "sent"})
+		self.assertEqual(self.run_node(True)["output"], {"status": "queued"})
 		self.assertEqual(self.transport.call_count, 1)
 
 

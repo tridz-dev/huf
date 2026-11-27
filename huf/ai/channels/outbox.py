@@ -222,7 +222,7 @@ def whatsapp_transport(row, recipient, text, values) -> dict:
 	if row.channel != "whatsapp":
 		raise ValueError("channel")
 	if management._send_authority(row.gateway):
-		raise PermissionError("send_authority")
+		raise frappe.PermissionError("send_authority")
 	account = frappe.db.get_value("Gateway", row.gateway, "whatsapp_account")
 	phone = bridge.normalize_phone(recipient)
 	if row.template:
@@ -289,7 +289,7 @@ def _refs(row) -> dict:
 def _classify_exception(exc: BaseException) -> dict:
 	from huf.ai.gateway_adapters.whatsapp_parts.send_errors import classify_send_exception
 
-	if isinstance(exc, PermissionError):
+	if isinstance(exc, frappe.PermissionError):
 		return {"kind": "permission", "retryable": False, "code": "no_send_authority"}
 	try:
 		return classify_send_exception(exc)

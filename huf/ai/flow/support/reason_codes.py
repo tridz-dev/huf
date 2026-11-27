@@ -33,6 +33,9 @@ HUF_CODES = frozenset(
 		"media_host_not_allowed",
 		"no_opt_in",
 		"window_defer_exhausted",
+		# send step: no outbox transport for this channel; a send step cannot be retried (G2)
+		"channel_unsupported",
+		"SEND_RETRY_FORBIDDEN",
 		# member exited every flow on a STOP keyword (H-W2-14)
 		"opt_out",
 		# condition facts providers
