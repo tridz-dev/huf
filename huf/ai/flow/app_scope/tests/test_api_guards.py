@@ -203,7 +203,7 @@ class TestApiGuards(IntegrationTestCase):
 				call()
 		from huf.ai.flow.listing.cards import list_flow_cards
 
-		ids = {item["flow_id"] for item in list_flow_cards(search="test-hw709")["items"]}
+		ids = {item["flow_id"] for item in list_flow_cards(search="HW709")["items"]}
 		self.assertEqual(ids, {NATIVE_FLOW})
 
 	def test_list_node_types_refuses_an_app_the_user_may_not_view(self):
