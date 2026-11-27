@@ -5,6 +5,8 @@ A Guest-pinned tool runs with ``ignore_permissions`` (which the run write guard 
 denylist is the only thing between those paths and these records.
 """
 
+import json
+
 import frappe
 from frappe.tests import IntegrationTestCase
 from frappe.utils import now_datetime
@@ -26,16 +28,24 @@ PROTECTED = (
 class TestRunDenylist(IntegrationTestCase):
 	def setUp(self):
 		frappe.set_user("Administrator")
-		# db_insert: a bare row is enough, no flow definition or controller is involved
+		flow_id = f"_test-denylist-{frappe.generate_hash(length=6)}"
+		flow = frappe.get_doc({
+			"doctype": "Flow Definition",
+			"flow_id": flow_id,
+			"flow_name": "Denylist",
+			"status": "Draft",
+			"definition_json": json.dumps({"nodes": [{"id": "n1", "type": "output", "config": {}}]}),
+		})
+		flow.flags.ignore_validate = True
+		flow.insert(ignore_permissions=True)
 		run = frappe.get_doc({
 			"doctype": "Agent Flow Run",
-			"name": f"denylist-{frappe.generate_hash(length=10)}",
-			"flow_id": "denylist",
+			"flow_definition": flow.name,
+			"flow_id": flow.name,
 			"status": "Queued",
 			"trigger_type": "Manual",
 			"started_at": now_datetime(),
-		})
-		run.db_insert()
+		}).insert(ignore_permissions=True)
 		self.run_name = run.name
 
 	def tearDown(self):
