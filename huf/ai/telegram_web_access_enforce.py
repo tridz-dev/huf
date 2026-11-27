@@ -11,6 +11,7 @@ module); the marker key and path rules come from the pure ``telegram_web_access_
 
 import json
 import time
+from typing import Any
 
 import frappe
 
@@ -242,10 +243,27 @@ def _is_privileged(user: str) -> bool:
 	return _cached(_roles_cache, user, load)
 
 
+def _stored_sid(sid: str) -> str:
+	"""``sid`` as keyed in ``tabSessions`` and the session cache (newer Frappe stores a hash of it)."""
+	from frappe import sessions
+
+	hasher = getattr(sessions, "hash_sid", None)
+	return hasher(sid) if hasher else sid
+
+
+def _session_row_data(raw: str | None) -> Any:
+	"""Parse ``tabSessions.sessiondata``: JSON on newer Frappe, a Python repr on older."""
+	try:
+		return json.loads(raw or "{}")
+	except ValueError:
+		return frappe.safe_eval(raw)
+
+
 def _revoke_current_session() -> None:
 	try:
 		sid = frappe.local.session.get("sid") or frappe.session.sid
 		if sid:
+			sid = _stored_sid(sid)  # the request holds the raw sid
 			frappe.db.delete("Sessions", {"sid": sid})
 			frappe.cache.hdel("session", sid)
 			frappe.db.commit()
@@ -523,7 +541,7 @@ def revoke_binding_sessions(
 	sids = []
 	for sid, raw in rows:
 		try:
-			data = frappe.safe_eval(raw or "{}")  # Frappe stores str(data) (a Python repr, not JSON)
+			data = _session_row_data(raw)
 		except Exception:
 			continue
 		m = data.get(MARKER_KEY) if isinstance(data, dict) else None

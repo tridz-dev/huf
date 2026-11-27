@@ -51,7 +51,8 @@ class TestConversationTitleAutonaming(unittest.TestCase):
 		generate_conversation_title("CONV-0001", "Demo Agent")
 
 		mock_set_value.assert_called_once_with("Agent Conversation", "CONV-0001", "title", "Invoice help")
-		mock_commit.assert_called_once()
+		# one commit to refresh the snapshot before re-reading the title, one to persist it
+		self.assertEqual(mock_commit.call_count, 2)
 		mock_emit.assert_called_once_with("CONV-0001", "Invoice help")
 
 	@patch("huf.ai.agent.integration._emit_conversation_title_updated")

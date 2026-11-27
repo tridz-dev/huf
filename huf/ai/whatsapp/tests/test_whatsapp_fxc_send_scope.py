@@ -92,22 +92,24 @@ class TestTrustedFlowIsScopedAndCapped(_Base):
 		self.assertEqual(frappe.db.count("WhatsApp Send Key", {"gateway": GW}), 1)
 
 
-class TestFlowAuthorGatewayBinding(unittest.TestCase):
-	def test_author_without_write_access_cannot_bind_config_gateway(self):
+class TestFlowGatewayBinding(unittest.TestCase):
+	"""Only the gateway that started the flow is trusted; nothing the flow author writes selects one."""
+
+	def _bound(self, payload):
 		from huf.ai.flow import engine as flow_engine
 
-		flow_run = SimpleNamespace(owner="nobody@example.com", name="FR", get=lambda k, d=None: None)
-		with patch.object(frappe, "has_permission", return_value=False), patch.object(frappe.db, "exists", return_value=True):
-			with flow_engine._bound_gateway(flow_run, {"gateway": GW}):
-				self.assertEqual(whatsapp._trusted_gateway.get(), "")
+		flow_run = SimpleNamespace(owner="a@example.com", name="FR", get=lambda k, d=None: payload)
+		with flow_engine._bound_gateway(flow_run, "FLOWRUN-1"):
+			return whatsapp._trusted_gateway.get()
 
-	def test_author_with_write_access_binds_config_gateway(self):
-		from huf.ai.flow import engine as flow_engine
-
-		flow_run = SimpleNamespace(owner="a@example.com", name="FR", get=lambda k, d=None: None)
+	def test_author_with_write_access_cannot_bind_a_gateway_without_a_gateway_event(self):
 		with patch.object(frappe, "has_permission", return_value=True), patch.object(frappe.db, "exists", return_value=True):
-			with flow_engine._bound_gateway(flow_run, {"gateway": GW}):
-				self.assertEqual(whatsapp._trusted_gateway.get(), GW)
+			self.assertEqual(self._bound({"gateway": GW}), "")
+
+	def test_starting_gateway_event_binds_its_gateway(self):
+		row = {"gateway": GW, "sender_id": CONTACT}
+		with patch.object(frappe.db, "get_value", return_value=row):
+			self.assertEqual(self._bound({"gateway_event": "EV-1", "gateway": "GW-OTHER"}), GW)
 
 
 class TestOutreachMarker(_Base):

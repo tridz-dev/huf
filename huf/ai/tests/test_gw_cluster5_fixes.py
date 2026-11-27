@@ -142,7 +142,8 @@ class TestRegisterIntegrationServicesDB(IntegrationTestCase):
 
 		slack = frappe.get_doc("Integration Service", "slack")
 		slack_creds = {c["key"]: c["required"] for c in json.loads(slack.required_credentials)}
-		self.assertTrue(slack_creds.get("signing_secret"))
+		# optional on the service (only receiving events needs it); Gateway.validate still requires it
+		self.assertIs(slack_creds.get("signing_secret"), False)
 
 		telegram = frappe.get_doc("Integration Service", "telegram")
 		telegram_creds = {c["key"]: c["required"] for c in json.loads(telegram.required_credentials)}
