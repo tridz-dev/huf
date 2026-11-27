@@ -2,7 +2,7 @@
 
 A host app (Happiol) shows a programme-wide view of its runs without sending its users to ``/huf``. Both APIs are
 scoped to the flows whose ``owner_app`` is ``app`` and that the caller may ``view`` (``flow_access``). They return
-ids, status, the final reason code, timestamps and a masked member key: never step outputs, context or payloads.
+ids (including the node the run is at), status, the final reason code, timestamps and a masked member key: never step outputs, context or payloads.
 
 The caller's User Permissions and the app's ``huf_flow_app_narrow`` hook apply to both.
 
@@ -23,7 +23,10 @@ from huf.ai.flow.runs.access import get_user_permitted_runs
 DOCTYPE = "Agent Flow Run"
 NODE_OUTPUTS_KEY = "__node_outputs__"
 MAX_LIMIT = 500
-GROUP_FIELDS = ("flow", "status", "reason")
+GROUP_FIELDS = ("flow", "status", "reason", "node")
+# group key -> run column (``reason`` is derived from the context, so it has none) and -> ``_row`` key
+GROUP_COLUMNS = {"flow": "flow_definition", "status": "status", "node": "current_node_id"}
+ROW_KEYS = {"flow": "flow_id", "node": "end_node"}
 MASK_PREFIX = "****"
 MASK_KEEP = 4
 
@@ -41,14 +44,14 @@ def list_app_runs(app, status=None, flow_ids=None, member_key=None, since=None, 
 def count_app_runs(
 	app, group_by="flow,status,reason", status=None, flow_ids=None, since=None, include_test=0
 ) -> list[dict]:
-	"""Run counts of ``app``'s viewable flows grouped by any of ``flow``, ``status``, ``reason``.
+	"""Run counts of ``app``'s viewable flows grouped by any of ``flow``, ``status``, ``reason``, ``node``.
 
 	Test runs are left out unless ``include_test`` is set; a run with no ``run_mode`` counts.
 	"""
 	guard_app_named(app)
 	keys = [k.strip() for k in str(group_by or "").split(",") if k.strip()]
 	if not keys or any(k not in GROUP_FIELDS for k in keys):
-		frappe.throw(frappe._("group_by takes flow, status and reason"), frappe.ValidationError)
+		frappe.throw(frappe._("group_by takes flow, status, reason and node"), frappe.ValidationError)
 	flows = _viewable_flows(app, flow_ids)
 	if not flows:
 		return []
@@ -58,7 +61,7 @@ def count_app_runs(
 	counts: dict[tuple, int] = {}
 	for r in _runs(app, status, flows, None, since, limit=None, exclude_test=exclude_test):
 		row = _row(r)
-		key = tuple(row[k if k != "flow" else "flow_id"] for k in keys)
+		key = tuple(row[ROW_KEYS.get(k, k)] for k in keys)
 		counts[key] = counts.get(key, 0) + 1
 	return [{**dict(zip(keys, key, strict=True)), "count": n} for key, n in sorted(counts.items(), key=str)]
 
@@ -121,12 +124,12 @@ def _runs(app, status, flow_ids, member_key, since, *, limit, exclude_test=False
 
 
 def _sql_counts(app, flows, keys, status, since, exclude_test) -> list[dict]:
-	columns = {"flow": "flow_definition as flow", "status": "status"}
-	group = [{"flow": "flow_definition", "status": "status"}[k] for k in keys]
+	group = [GROUP_COLUMNS[k] for k in keys]
+	columns = [c if c == k else f"{c} as {k}" for k, c in zip(keys, group, strict=True)]
 	return get_user_permitted_runs(
 		DOCTYPE,
 		filters=_filters(app, flows, status, None, since, exclude_test),
-		fields=[columns[k] for k in keys] + [{"COUNT": "name", "as": "count"}],
+		fields=[*columns, {"COUNT": "name", "as": "count"}],
 		group_by=", ".join(group),
 		order_by=", ".join(group),
 		ignore_permissions=True,
@@ -172,6 +175,7 @@ def _row(r) -> dict:
 		"status": r.status,
 		"run_mode": r.run_mode,
 		"reason": final_reason(r.context_json),
+		"end_node": r.current_node_id,
 		"member": mask_member(r.member_key),
 		"started_at": _iso(r.started_at),
 		"completed_at": _iso(r.completed_at),
