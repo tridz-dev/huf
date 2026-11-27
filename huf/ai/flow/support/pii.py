@@ -35,6 +35,20 @@ def mask_value(value):
 	return mask_pii(value, app_pii_fields())
 
 
+def mask_for_view(value):
+	"""A masked copy of a stored trace value for a read API; the stored value is never changed.
+
+	Run input and step outputs stay raw in the run so resume and ``$from`` keep working (G4); only what
+	a reader sees is masked. A value that cannot be masked reads as an empty value of the same shape.
+	"""
+	if value is None or value == "" or value == {} or value == []:
+		return value
+	masked = mask_value(value)
+	if masked is None:
+		return {} if isinstance(value, dict) else [] if isinstance(value, list) else DROPPED
+	return masked
+
+
 def mask_text(text) -> str:
 	"""``text`` with personal data masked; ``[redacted]`` when it cannot be masked."""
 	if text is None or text == "":
