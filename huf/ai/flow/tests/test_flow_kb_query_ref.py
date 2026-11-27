@@ -17,13 +17,14 @@ SECRET = "test-webhook-secret-0123456789abcdef"
 
 def _definition(query):
 	return {
-		"version": "1.0",
+		"schema_version": "1.0.0",
 		"profile": "flow",
+		"fingerprint": "0" * 64,
 		"entry": "start",
-		"metadata": {"name": "KB ref test"},
 		"nodes": [
 			{"id": "start", "type": "trigger.webhook", "config": {"method": "POST", "secret": SECRET}, "next": "kb"},
-			{"id": "kb", "type": "knowledge.search", "config": {"query": query, "knowledge_source": SOURCE, "top_k": 2}},
+			{"id": "kb", "type": "knowledge.search", "config": {"query": query, "knowledge_source": SOURCE, "top_k": 2}, "next": "end"},
+			{"id": "end", "type": "output", "config": {"value": "done"}},
 		],
 		"contract": {
 			"input_schema": {"type": "object"},
