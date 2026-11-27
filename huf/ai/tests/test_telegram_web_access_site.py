@@ -10,7 +10,7 @@ from unittest import mock
 
 import frappe
 from frappe.auth import CookieManager
-from frappe.sessions import Session
+from frappe.sessions import Session, hash_sid
 from frappe.tests import IntegrationTestCase
 from werkzeug.test import EnvironBuilder
 from werkzeug.wrappers import Request
@@ -21,7 +21,7 @@ EMAIL = "tg-web-access-test@example.com"
 
 
 def _sessiondata(sid):
-	rows = frappe.db.sql("select sessiondata from tabSessions where sid=%s", (sid,))
+	rows = frappe.db.sql("select sessiondata from tabSessions where sid=%s", (hash_sid(sid),))
 	return rows[0][0] if rows else None
 
 
@@ -54,8 +54,8 @@ class TestTelegramWebAccessSite(IntegrationTestCase):
 	def tearDown(self):
 		frappe.set_user("Administrator")
 		for sid in self.sids:
-			frappe.db.delete("Sessions", {"sid": sid})
-			frappe.cache.hdel("session", sid)
+			frappe.db.delete("Sessions", {"sid": hash_sid(sid)})
+			frappe.cache.hdel("session", hash_sid(sid))
 		frappe.delete_doc("User", EMAIL, force=True, ignore_permissions=True)
 		frappe.db.commit()
 
@@ -80,7 +80,7 @@ class TestTelegramWebAccessSite(IntegrationTestCase):
 		self.assertFalse(cookie["secure"])  # a client-supplied X-Forwarded-Proto is not trusted
 		self.assertEqual(cookie["max_age"], 7200)
 		row = _sessiondata(sid)
-		data = frappe.safe_eval(row)  # Frappe stores str(dict), not JSON
+		data = json.loads(row)
 		self.assertEqual(data["audit_user"], "telegram:4242")
 		end = datetime.fromisoformat(data["session_end"])
 		self.assertIsNotNone(end.tzinfo)
@@ -100,7 +100,7 @@ class TestTelegramWebAccessSite(IntegrationTestCase):
 		# resume from the cache path and from the database path
 		for drop_cache in (False, True):
 			if drop_cache:
-				frappe.cache.hdel("session", sid)
+				frappe.cache.hdel("session", hash_sid(sid))
 			frappe.local.request = _request({"Cookie": f"sid={sid}"})
 			frappe.local.cookie_manager = CookieManager()
 			resumed = Session(user=None, resume=True)
@@ -123,10 +123,11 @@ class TestTelegramWebAccessSite(IntegrationTestCase):
 
 	def test_expired_session_end_rejected_on_resume(self):
 		sid = self._login()
-		session_data = frappe.safe_eval(_sessiondata(sid))  # Frappe stores str(dict), not JSON
+		session_data = json.loads(_sessiondata(sid))
 		session_data["session_end"] = (datetime.now(UTC) - timedelta(minutes=1)).isoformat()
-		frappe.db.sql("update tabSessions set sessiondata=%s where sid=%s", (str(session_data), sid))
-		frappe.cache.hset("session", sid, frappe._dict(user=EMAIL, sid=sid, data=frappe._dict(session_data)))
+		frappe.db.sql("update tabSessions set sessiondata=%s where sid=%s", (json.dumps(session_data), hash_sid(sid)))
+		# the session cache holds the inner data dict, keyed by the hashed sid
+		frappe.cache.hset("session", hash_sid(sid), frappe._dict(session_data))
 		frappe.local.request = _request({"Cookie": f"sid={sid}"})
 		frappe.local.cookie_manager = CookieManager()
 		frappe.local.response = frappe._dict()
