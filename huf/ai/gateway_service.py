@@ -7,7 +7,6 @@ does not expose a guest endpoint: each adapter owns its verification contract.
 
 from __future__ import annotations
 
-import hashlib
 import inspect
 import json
 import os
@@ -83,7 +82,7 @@ def _gateway_fallback_reply_text(gateway) -> str:
     return ""
 
 
-from huf.ai.gateway_core.event_helpers import _conversation_race_errors, _flow_trigger_payload, _lang_code
+from huf.ai.gateway_core.event_helpers import _conversation_race_errors, _flow_trigger_payload, _idempotency_key, _lang_code
 from huf.ai.gateway_core.fallback_texts import _FALLBACK_TEXTS, ATTACHMENT_UNAVAILABLE_NOTE  # noqa: F401
 
 
@@ -191,11 +190,6 @@ def _call_instructions_hook(hook, gateway) -> str | None:
 			f"Agent instructions hook failed for provider {getattr(gateway, 'provider', None)}: {type(exc).__name__}"
 		)
 		return None
-
-
-def _idempotency_key(gateway_name: str, provider_event_id: str) -> str:
-    value = f"{gateway_name}:{provider_event_id}".encode()
-    return hashlib.sha256(value).hexdigest()
 
 
 # GW-07: a provider outbound call's HTTPError can carry the request URL
@@ -1940,7 +1934,8 @@ def ingest_gateway_event(
         event.insert(ignore_permissions=True)
     except (frappe.DuplicateEntryError, frappe.UniqueValidationError):
         # A unique-index race surfaces as UniqueValidationError (DuplicateEntryError's sibling).
-        existing = frappe.db.get_value("Gateway Event", {"idempotency_key": key}, "name")
+        # Locking read: the winner's row is newer than this transaction's snapshot.
+        existing = frappe.db.get_value("Gateway Event", {"idempotency_key": key}, "name", for_update=True)
         return {"duplicate": True, "event_name": existing}
 
     if _filter_reason:
@@ -2404,7 +2399,11 @@ def store_ingest_dead_letter(
             "error_message": reason,
         }
     )
-    doc.insert(ignore_permissions=True)
+    try:
+        doc.insert(ignore_permissions=True)
+    except (frappe.DuplicateEntryError, frappe.UniqueValidationError):
+        # Another delivery of the same event stored it first; its outcome stands.
+        return frappe.db.get_value("Gateway Event", {"idempotency_key": key}, "name", for_update=True)
     return doc.name
 
 

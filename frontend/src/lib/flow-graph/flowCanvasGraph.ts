@@ -6,6 +6,7 @@ import { CARD_WIDTH, COLUMN_GAP, ROW_GAP } from '../flow/flowLayout';
 import { unreachableNodeIds } from '../flow/flowEdit';
 import { makeFlowEdge, edgeRoute } from '../../services/flowSerializer';
 import { findActionOption } from './appNodeTypes';
+import { isActionAllowed } from '../../components/flow/palette/scopeFilter';
 import type { ActionConfig, FlowEdgeRoute, FlowNodeData } from '../../types/flow.types';
 
 /** Ids of cards and lines that exist only on screen; they are never written back to the flow. */
@@ -203,7 +204,7 @@ export function addActionStep(
   config: ActionConfig,
 ): { nodes: Node<FlowNodeData>[]; edges: Edge[] } | 'end-in-front' | null {
   const sourceNode = nodes.find((n) => n.id === sourceId);
-  if (!sourceNode) return null;
+  if (!sourceNode || !isActionAllowed(actionId)) return null;
 
   const newNodeId = `node_${Date.now()}`;
   const option = findActionOption(actionId);
