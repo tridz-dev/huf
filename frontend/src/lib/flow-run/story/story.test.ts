@@ -125,6 +125,18 @@ describe('buildRunStory', () => {
     expect(last.sentence).toBe('Waiting for someone with the System Manager role');
   });
 
+  it('names every policy role a waiting step waits for', () => {
+    const r = run({
+      status: 'Waiting Approval', current_node_id: 'h', completed_at: null,
+      waiting: { type: 'approval', approver_type: 'role', approver_role: 'Sales Manager', approver_roles: ['Sales Manager', 'Auditor'] },
+      context_json: { a: 1, __node_outputs__: { t: { a: 1 } } },
+      node_labels: { t: 'Webhook', h: 'Wait for approval' },
+      step_meta: { t: { type: 'trigger.webhook' }, h: { type: 'human.approval' } },
+    });
+    const last = buildRunStory(r, { titleOf: titleOf(r) }).steps.at(-1)!;
+    expect(last.sentence).toBe('Waiting for someone with one of these roles: Sales Manager, Auditor');
+  });
+
   it('gives a failed run exactly one reason, in plain words', () => {
     const r = run({
       status: 'Failed', current_node_id: 'f', last_error: "Node 'f' of type 'tool.call' failed and declares no on_error successor: Fetch page failed: Requests to private/internal addresses are not allowed",

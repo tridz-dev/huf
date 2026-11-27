@@ -27,6 +27,8 @@ export function edgeRule(route: FlowEdgeRoute, from: string, to: string, fromCfg
       return { heading: 'If rejected', sentence: `When someone rejects "${from}", "${to}" runs.`, loop: false };
     case 'timeout':
       return { heading: 'If nobody answers', sentence: `When nobody answers "${from}" in time, "${to}" runs.`, loop: false };
+    case 'fallback':
+      return { heading: "If it can't tell", sentence: `When "${from}" cannot check its facts, "${to}" runs.`, loop: false };
     case 'body':
       return { heading: 'Loop: for each item', sentence: `"${to}" runs once for each item in "${from}".`, loop: true };
     case 'option':

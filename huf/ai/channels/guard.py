@@ -18,6 +18,7 @@ dotted path or a failing hook lookup blocks with ``hook_error``; a step that run
 stricter than ``huf_gateway_pre_send``, where ``None`` allows.
 
 Huf's own steps (:mod:`huf.ai.channels.guard_steps`) run first. Steps must only observe and decide.
+Inside :func:`batch` they reuse template reads and consent allows; nothing is reused after the block.
 
 The send window (``huf_send_window_resolver``) runs between Huf's steps and the app hooks. Outside it the
 result is not allowed, has no reason and carries ``defer_until``: the send is to be parked, not dropped
@@ -49,6 +50,9 @@ from huf.ai.channels import guard_steps
 from huf.ai.flow.support import reason_codes
 
 HOOK = "huf_pre_send_hooks"
+# ``with guard.batch(): ...`` shares template reads and consent allows between sends (H-W2-19).
+batch = guard_steps.batch
+invalidate_consent = guard_steps.invalidate_consent
 TIMEOUT_CONF = "huf_pre_send_hook_timeout_s"
 DEFAULT_TIMEOUT_SECONDS = 2.0
 HOOK_ERROR = "hook_error"
