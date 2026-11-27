@@ -125,7 +125,7 @@ class TestTokenBinder(IntegrationTestCase):
 		self.providers(values(a=SENTINEL))
 		sent = []
 		bound = bind("tpl", ["a"], MEMBER, CTX)
-		verdict = guard.evaluate({"token_names": ["a"]})
+		verdict = guard.evaluate({"channel": "sms", "recipient": "+15550100100", "category": "service", "token_names": ["a"]})
 		if verdict.allowed:
 			sent.append(bound)
 		with self.assertRaises(TokenUnbound):
