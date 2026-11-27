@@ -3,7 +3,7 @@
 
 """Channel outbox (H-W2-15): retry classes, backoff, blocked never retried (G2), names only (G4), one effect (G5)."""
 
-from datetime import timedelta, timezone, datetime
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -11,7 +11,6 @@ import frappe
 import requests
 from frappe.tests import IntegrationTestCase
 from frappe.utils import add_to_date, now_datetime
-
 from urllib3.exceptions import MaxRetryError, NewConnectionError, ProtocolError
 
 from huf.ai.channels import guard, outbox, token_binder
@@ -255,7 +254,8 @@ class TestDeliveryRecheck(IntegrationTestCase):
 	def check(self):
 		row = SimpleNamespace(
 			gateway="g", channel="whatsapp", category="marketing", member_key="m", template="t",
-			token_names='["1"]', header=None, run_id="r", node_id="n", step_key="k",
+			token_names='["1"]', header=None,  # noqa: S106
+			run_id="r", node_id="n", step_key="k",
 		)
 		return outbox._blocked_now(row, PHONE)
 
@@ -283,7 +283,7 @@ class TestDeliveryRecheck(IntegrationTestCase):
 
 	def test_transport_passes_the_step_key(self):
 		row = SimpleNamespace(
-			channel="whatsapp", gateway="g", template="t", token_names="[]", header=None,
+			channel="whatsapp", gateway="g", template="t", token_names="[]", header=None,  # noqa: S106
 			language=None, run_id="r", step_key="sk-1",
 		)
 		with patch("huf.ai.whatsapp.management._send_authority", return_value=None), patch.object(
