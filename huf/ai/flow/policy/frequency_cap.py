@@ -92,7 +92,7 @@ def purge_expired(batch_size: int = PURGE_BATCH) -> int:
 	while True:
 		# window_start < cutoff is implied by the second test; it lets the index narrow the scan
 		frappe.db.sql(
-			f"delete from {TABLE} where window_start < %(cutoff)s"
+			f"delete from {TABLE} where window_start < %(cutoff)s"  # noqa: S608
 			" and timestampadd(second, window_seconds, window_start) <= %(cutoff)s limit %(batch)s",
 			{"cutoff": cutoff, "batch": batch_size},
 		)

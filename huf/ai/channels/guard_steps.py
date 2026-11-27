@@ -231,13 +231,13 @@ def resolve_caps(request: dict) -> list[tuple[int, str, int]]:
 
 def _parse_cap(cap: Any, request: dict) -> tuple[int, str, int]:
 	if not isinstance(cap, dict) or not set(cap) <= CAP_KEYS:
-		raise ValueError("invalid frequency cap")
+		raise ValueError("invalid frequency cap")  # noqa: TRY003
 	limit, window = cap.get("limit"), cap.get("window_seconds")
 	channel = cap["bucket"] if "bucket" in cap else request.get("channel")
 	if type(limit) is not int or limit < 0 or type(window) is not int or not 0 < window <= MAX_WINDOW_SECONDS:
-		raise ValueError("invalid frequency cap")
+		raise ValueError("invalid frequency cap")  # noqa: TRY003
 	if not isinstance(channel, str) or not channel.strip() or len(channel) > frequency_cap.MAX_KEY_CHARS:
-		raise ValueError("invalid frequency cap")
+		raise ValueError("invalid frequency cap")  # noqa: TRY003
 	return window, channel, limit
 
 
