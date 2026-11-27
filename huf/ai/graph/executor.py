@@ -756,7 +756,8 @@ class GraphExecutor:
 			state.completed_nodes.append(node.id)
 			self._charge_budget(node, state, charges_hop)
 
-			if node.routing == RoutingMode.TERMINAL:
+			# a failed terminal node falls through to the fail-closed check below (on_error, else failed)
+			if node.routing == RoutingMode.TERMINAL and outcome.status != "failed":
 				return self._complete(state, node.id)
 
 			try:
