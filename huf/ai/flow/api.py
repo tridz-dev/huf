@@ -19,7 +19,7 @@ from frappe.utils import add_to_date, now_datetime
 
 from huf.ai.api_support import require_permission
 from huf.ai.flow.runs.access import can_access_run, require_flow_read, require_run_access
-from huf.ai.flow.runs.shape import _STEP_TYPE_TITLES, extras_for_detail
+from huf.ai.flow.runs.shape import _STEP_TYPE_TITLES, extras_for_detail, waiting_for_view
 from huf.ai.flow.support.approval_card import api_card, build_card
 from huf.ai.flow.support.decision_rights import approval_decision_rights
 from huf.ai.flow.support.node_schemas import _node_config_schema, build_node_schemas  # noqa: F401  (re-exported)
@@ -405,7 +405,7 @@ def get_flow_run(flow_run_id: str) -> dict:
 		"current_node_id": doc.current_node_id,
 		"hop_count": doc.hop_count,
 		"context_json": mask_for_view(ctx),
-		"waiting": waiting,
+		"waiting": waiting_for_view(waiting),
 		"node_labels": _node_labels(doc.flow_id),
 		"trigger_event": _trigger_event(doc, ctx),
 		"last_error": doc.last_error,
