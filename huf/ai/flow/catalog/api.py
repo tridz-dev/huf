@@ -17,9 +17,8 @@ import frappe
 from frappe import _
 
 from huf.ai.api_support import require_permission
+from huf.ai.flow.catalog import doc_fields, gateway_fields, node_registry
 from huf.ai.flow.catalog import fields as cat
-from huf.ai.flow.catalog import node_registry
-from huf.ai.flow.catalog import doc_fields, gateway_fields
 from huf.ai.flow.runs.access import can_access_run, is_delegated_flow
 from huf.ai.flow.runs.shape import data_of_viewer
 from huf.ai.flow.support.pii import mask_for_view
