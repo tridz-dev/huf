@@ -19,6 +19,10 @@ stricter than ``huf_gateway_pre_send``, where ``None`` allows.
 
 Huf's own steps (:mod:`huf.ai.channels.guard_steps`) run first. Steps must only observe and decide.
 
+The send window (``huf_send_window_resolver``) runs between Huf's steps and the app hooks. Outside it the
+result is not allowed, has no reason and carries ``defer_until``: the send is to be parked, not dropped
+(:func:`huf.ai.flow.runs.park.defer_send`). It is the only result that is not final.
+
 The frequency cap runs last, only when every step allowed. For a live send (``request["live"] is True``)
 with a cap it counts the send and COMMITS the current transaction, so call :func:`evaluate` only where
 committing the work so far is safe. A preview never counts. Neither the result nor the log line holds request data or exception text.
@@ -71,13 +75,21 @@ def evaluate(request: dict, *, header: dict | None = None, timeout: float | None
 	step_name = None
 	try:
 		seconds = _timeout(timeout)
-		# Both lists are read before any step runs, so a broken hook lookup blocks without side effects.
-		steps = [*BUILTIN_STEPS, *((path, None) for path in _hook_paths())]
-		builtins = len(BUILTIN_STEPS)
-		for index, (step_name, step) in enumerate(steps):
+		# Every hook list is read before any step runs, so a broken lookup blocks without side effects.
+		hooks = [(path, None) for path in _hook_paths()]
+		resolvers = guard_steps.window_resolvers()
+		for step_name, step in BUILTIN_STEPS:
+			reason = _run_step(step_name, step, copy.deepcopy({**request, "header": header}), seconds)
+			if reason:
+				return GuardResult(False, reason, step_name)
+		if resolvers:
+			step_name = guard_steps.WINDOW_STEP
+			reason, defer_until = _window_step(copy.deepcopy(request), resolvers, seconds)
+			if reason or defer_until:
+				return GuardResult(False, reason, step_name, defer_until)
+		for step_name, step in hooks:
 			step = step or frappe.get_attr(step_name)
-			args = {**request, "header": header} if index < builtins else request
-			reason = _run_step(step_name, step, copy.deepcopy(args), seconds)
+			reason = _run_step(step_name, step, copy.deepcopy(request), seconds)
 			if reason:
 				return GuardResult(False, reason, step_name)
 		step_name = guard_steps.CAP_STEP
@@ -86,6 +98,18 @@ def evaluate(request: dict, *, header: dict | None = None, timeout: float | None
 	except Exception as error:  # noqa: BLE001 - fail closed, never raise out
 		_warn(step_name, type(error).__name__)
 		return GuardResult(False, HOOK_ERROR, step_name if isinstance(step_name, str) else None)
+
+
+def _window_step(request: dict, resolvers: list[str], seconds: float) -> tuple[str | None, datetime | None]:
+	"""``(block reason, defer_until)``; both None when the window is open."""
+	deferrals = []
+
+	def check(args: dict) -> dict:
+		deferrals.append(guard_steps.window_deferral(args, resolvers))
+		return {"allow": True}
+
+	reason = _run_step(guard_steps.WINDOW_STEP, check, request, seconds)
+	return (reason, None) if reason else (None, deferrals[0])
 
 
 def _cap_step(request: dict, seconds: float) -> str | None:

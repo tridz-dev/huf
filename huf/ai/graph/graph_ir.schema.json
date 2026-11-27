@@ -523,6 +523,9 @@
                 },
                 "on_false": {
                   "$ref": "#/$defs/NodeId"
+                },
+                "fallback_next": {
+                  "$ref": "#/$defs/NodeId"
                 }
               }
             }

@@ -24,6 +24,8 @@ HUF_CODES = frozenset(
 		# pre-send guard chain and send policy
 		"hook_error",
 		"hook_timeout",
+		# AI kill switch (huf.ai.run_budget.AI_DISABLED)
+		"ai_disabled",
 		"bad_recipient",
 		"freq_cap",
 		"template_params_invalid",
@@ -31,6 +33,9 @@ HUF_CODES = frozenset(
 		"media_host_not_allowed",
 		"no_opt_in",
 		"window_defer_exhausted",
+		# condition facts providers
+		"facts_error",
+		"facts_timeout",
 		# send-time token binder
 		"token_unbound",
 		# codes the WhatsApp outbound policy already refuses with
