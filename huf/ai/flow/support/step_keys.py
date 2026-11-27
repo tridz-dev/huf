@@ -2,12 +2,15 @@
 
 ``step_key(run_id, node_id, attempt)`` is opaque, deterministic and at most 64 characters. A re-delivered job (worker
 crash, double wake) computes the same key; an explicit retry (new attempt) computes a new one. A node visited again by
-a loop folds the visit into ``attempt``: the visit is the number of times the node already COMPLETED in this run, so a
-re-delivery before completion keeps the key and a later loop visit gets a new one.
+a loop folds the visit into ``attempt``: the visit is the number of times the run's cursor already LEFT the node
+after completing it, so a re-delivery before the cursor moved (even after the result was recorded) keeps the key and
+a later loop visit gets a new one.
 
-The ledger lives in the run context under ``_huf_steps`` = ``{"visits": {node_id: n}, "done": {step_key: result}}``.
+The ledger lives in the run context under ``_huf_steps`` =
+``{"visits": {node_id: n}, "open": {node_id: step_key}, "done": {step_key: result}}``.
 A side-effecting executor calls :func:`replay` first (a completed step returns its recorded result, no side effect
-again) and :func:`record` after it succeeded. Pure: no frappe import.
+again) and :func:`record` after it succeeded; the engine calls :func:`advance` when it saves the cursor.
+Pure: no frappe import.
 """
 
 import hashlib
@@ -30,6 +33,7 @@ def _ledger(data: dict) -> dict:
 		data[LEDGER_KEY] = ledger
 	ledger.setdefault("visits", {})
 	ledger.setdefault("done", {})
+	ledger.setdefault("open", {})
 	return ledger
 
 
@@ -41,7 +45,7 @@ def visits(data: dict, node_id: str) -> int:
 
 
 def key_for(run_id: str, node_id: str, data: dict, retry_attempt: int = 1) -> str:
-	"""The key for the current try: completed visits folded with the retry attempt (1-based)."""
+	"""The key for the current try: past visits folded with the retry attempt (1-based)."""
 	return step_key(run_id, node_id, visits(data, node_id) * VISIT_STRIDE + int(retry_attempt or 1))
 
 
@@ -66,11 +70,21 @@ def replay(data: dict, key: str) -> dict | None:
 
 
 def record(data: dict, node_id: str, key: str, result: dict) -> None:
-	"""Mark the step with ``key`` completed with ``result`` and count the node's visit once."""
+	"""Mark the step with ``key`` completed with ``result``; its visit counts at :func:`advance`."""
 	if not key:
 		return
 	ledger = _ledger(data)
 	if key in ledger["done"]:
 		return
 	ledger["done"][key] = result
+	ledger["open"][node_id] = key
+
+
+def advance(data: dict, node_id: str) -> bool:
+	"""The cursor leaves ``node_id``: count its completed visit. True when the ledger changed."""
+	ledger = data.get(LEDGER_KEY) if isinstance(data, dict) else None
+	if not isinstance(ledger, dict) or not (ledger.get("open") or {}).pop(node_id, None):
+		return False
+	ledger = _ledger(data)
 	ledger["visits"][node_id] = int(ledger["visits"].get(node_id) or 0) + 1
+	return True

@@ -221,12 +221,31 @@ def remove_member(flow: str, key: str) -> bool:
 
 
 OPT_OUT_REASON = "opt_out"
+# ``handler(gateway=, sender_id=) -> list[str]``: the app's own member keys for the sender who opted out. Read-only.
+OPT_OUT_KEYS_HOOK = "huf_flow_opt_out_member_keys"
+
+
+def _app_member_keys(gateway: str | None, sender_id: str) -> list[str]:
+	"""Member keys apps know the sender by. A failing or malformed hook is logged (no PII) and skipped."""
+	keys = []
+	for path in frappe.get_hooks(OPT_OUT_KEYS_HOOK) or []:
+		try:
+			answer = frappe.get_attr(path)(gateway=gateway, sender_id=sender_id)
+			if isinstance(answer, list | tuple):
+				keys += [k for k in answer if isinstance(k, str) and k and len(k) <= MAX_KEY_CHARS]
+				continue
+			problem = "not a list"
+		except Exception as exc:  # noqa: BLE001 - one app's failure must not keep the sender's runs open
+			problem = type(exc).__name__
+		frappe.log_error(title="Flow opt-out member hook failed", message=f"{path}: {problem}")
+	return keys
 
 
 def exit_on_opt_out(gateway: str | None = None, sender_id: str | None = None, kind: str = "opt_out", keyword: str = "", **_):
 	"""``huf_gateway_opt_out`` handler: on a STOP, cancel the sender's open runs in every flow and mark them Exited.
 
-	Reason ``opt_out``. ``opt_in`` does nothing (re-entry stays with each flow's entry policy). Writing the consent
+	The sender's runs are those keyed by the normalised sender or by a key an app returns from
+	``huf_flow_opt_out_member_keys``. Reason ``opt_out``. ``opt_in`` does nothing (re-entry stays with each flow's entry policy). Writing the consent
 	revoke is the app's own handler. Returns the cancelled run names (ids only).
 	"""
 	key = _normalize_sender(sender_id)[:MAX_KEY_CHARS]
@@ -238,17 +257,18 @@ def exit_on_opt_out(gateway: str | None = None, sender_id: str | None = None, ki
 	from huf.ai.flow.engine import TERMINAL_STATUSES
 	from huf.ai.flow.runs.park import cancel_run
 
+	keys = tuple(dict.fromkeys([key, *_app_member_keys(gateway, sender_id)]))
 	runs = frappe.get_all(
 		"Agent Flow Run",
-		filters={"member_key": key, "status": ["not in", list(TERMINAL_STATUSES)]},
+		filters={"member_key": ["in", keys], "status": ["not in", list(TERMINAL_STATUSES)]},
 		pluck="name",
 		limit_page_length=0,
 	)
 	cancelled = [run for run in runs if cancel_run(run, OPT_OUT_REASON)]
 	frappe.db.sql(
 		f"update `tab{DOCTYPE}` set status = 'Exited', current_node_id = null, active_flow_run = null,"  # noqa: S608 - constant table
-		" completed_at = %s where member_key = %s and status != 'Exited'",
-		(now_datetime(), key),
+		" completed_at = %s where member_key in %s and status != 'Exited'",
+		(now_datetime(), keys),
 	)
 	return cancelled
 
