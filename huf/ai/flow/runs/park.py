@@ -193,7 +193,11 @@ def wake_run(
 
 
 def cancel_run(flow_run_name: str, by: str) -> bool:
-	"""Cancel a Queued or waiting run. True only when this call moved it (a run that already finished is left alone)."""
+	"""Cancel a Queued or waiting run. True only when this call moved it (a run that already finished is left alone).
+
+	Sends of a cancelled or finished run that still wait in the outbox are withdrawn.
+	"""
+	from huf.ai.channels import outbox
 	from huf.ai.flow import engine
 	from huf.ai.flow.nodes import subflow
 	from huf.ai.flow.support.approval_notifications import _clear_flow_notifications
@@ -205,7 +209,11 @@ def cancel_run(flow_run_name: str, by: str) -> bool:
 		{"status": "Cancelled", "last_error": message, "completed_at": now_datetime()},
 		from_statuses=("Queued", *engine.WAITING_STATUSES),
 	):
+		if frappe.db.get_value("Agent Flow Run", flow_run_name, "status") in engine.TERMINAL_STATUSES:
+			outbox.withdraw([flow_run_name], outbox.RUN_CANCELLED)
+			commit_if_background()
 		return False
+	outbox.withdraw([flow_run_name], outbox.RUN_CANCELLED)
 	commit_if_background()
 	try:
 		_clear_flow_notifications(flow_run)  # best effort: approvers stop seeing a request that no longer exists

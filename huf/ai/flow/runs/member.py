@@ -207,13 +207,22 @@ def record_history(flow: str, key: str, node: str, run: str | None = None) -> No
 
 
 def remove_member(flow: str, key: str) -> bool:
-	"""Forget a member: cancel their waiting run, then delete the row. True when a row existed."""
+	"""Forget a member: cancel their waiting run, withdraw their unsent messages, then delete the row.
+
+	True when a row existed.
+	"""
+	from huf.ai.channels import outbox
 	from huf.ai.flow.runs.park import cancel_run
 
 	name = member_name(flow, key)
 	run = frappe.db.get_value(DOCTYPE, name, "active_flow_run")
+	# before the cancel, so these rows carry the removal as their reason; finished runs included
+	runs = frappe.get_all(
+		"Agent Flow Run", filters={"flow_id": flow, "member_key": key}, pluck="name", limit_page_length=0
+	)
+	outbox.withdraw(runs, outbox.MEMBER_REMOVED)
 	if run and frappe.db.exists("Agent Flow Run", run):
-		cancel_run(run, frappe.session.user)  # no-op when the run already finished
+		cancel_run(run, frappe.session.user)  # leaves a finished run's status alone
 	if not frappe.db.exists(DOCTYPE, name):
 		return False
 	frappe.db.delete(DOCTYPE, {"name": name})
