@@ -1338,6 +1338,9 @@
         },
         {
           "$ref": "#/$defs/MemberSetNode"
+        },
+        {
+          "$ref": "#/$defs/SendMessageNode"
         }
       ]
     },
@@ -1955,6 +1958,66 @@
                   "additionalProperties": {
                     "$ref": "#/$defs/Value"
                   }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "SendMessageNode": {
+      "description": "Send one message to the run's person. Always passes the pre-send guard chain.",
+      "allOf": [
+        {
+          "$ref": "#/$defs/NodeCommon"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "send.message"
+            },
+            "config": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "gateway",
+                "recipient",
+                "category"
+              ],
+              "properties": {
+                "gateway": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Gateway to send from"
+                },
+                "recipient": {
+                  "$ref": "#/$defs/Value"
+                },
+                "template": {
+                  "$ref": "#/$defs/Value"
+                },
+                "text": {
+                  "$ref": "#/$defs/Value"
+                },
+                "variables": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "description": "Template token names, bound at send time"
+                },
+                "category": {
+                  "enum": [
+                    "marketing",
+                    "service"
+                  ]
+                },
+                "header": {
+                  "type": "object"
+                },
+                "language": {
+                  "type": "string"
                 }
               }
             }

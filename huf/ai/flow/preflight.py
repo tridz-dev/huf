@@ -85,6 +85,10 @@ def _send_checks(defn, flow_id: str | None) -> list[Finding]:
 	sends = [n for n in _nodes(defn) if n.get("type") in SEND_NODE_TYPES]
 	for node in sends:
 		node_id, config = node.get("id"), _config(node)
+		category = config.get("category")
+		if _blank(config.get("gateway")) or _blank(config.get("recipient")) or category not in ("marketing", "service"):
+			# What the guard chain needs to judge the send: without it the send cannot be checked.
+			found.append(Finding("SEND_GUARD_CONFIG_MISSING", node_id))
 		template = config.get("template")
 		if _blank(template):
 			if _blank(config.get("text")):

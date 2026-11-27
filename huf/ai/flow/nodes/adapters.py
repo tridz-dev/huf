@@ -39,6 +39,13 @@ def exec_member_set(flow_run, node: dict, config: dict, settings: dict) -> dict:
 	return run_member_set(flow_run, node, config, _ctx(flow_run, settings))
 
 
+def exec_send_message(flow_run, node: dict, config: dict, settings: dict):
+	"""``send.message``: bind, guard chain, transport, see ``nodes/send.py``."""
+	from huf.ai.flow.nodes.send import exec_send_message as run_send
+
+	return run_send(flow_run, node, config, settings)
+
+
 def exec_doc_get(flow_run, node: dict, config: dict, settings: dict) -> dict:
 	"""``doc.get``: read one document as the run user, see ``nodes/docops.py``."""
 	from huf.ai.flow.engine import _run_context
