@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import frappe
 
-from huf.ai.flow import triggers
+from huf.ai.flow import engine, triggers
 from huf.ai.flow.catalog import node_registry
 from huf.ai.flow.listing.cards import summarize_definition
 from huf.ai.flow.support.node_schemas import build_node_schemas
@@ -103,6 +103,21 @@ class TestAppTriggerStart(start_suite.TestFlowStartForMember):
 		flow = frappe.get_doc("Flow Definition", self.flow_id)
 		flow.status = "Active"
 		flow.save(ignore_permissions=True)  # raises if activation rules reject it
+
+	def test_engine_runs_the_app_trigger(self):
+		name = self._start(trigger_node_id="start")
+		engine.run_flow(name)
+		run = frappe.get_doc("Agent Flow Run", name)
+		self.assertEqual((run.status, run.last_error or ""), ("Success", ""))
+
+	def test_failed_output_step_fails_the_run(self):
+		name = self._start(trigger_node_id="start")
+		failing = lambda *args: {"status": "failed", "error": "too large"}
+		with patch.dict(engine._NODE_EXECUTORS, {"output": failing}):
+			engine.run_flow(name)
+		run = frappe.get_doc("Agent Flow Run", name)
+		self.assertEqual(run.status, "Failed")
+		self.assertIn("too large", run.last_error)
 
 	def test_document_events_start_nothing(self):
 		self.assertNotIn(self.flow_id, json.dumps(triggers.get_doc_event_index()))
