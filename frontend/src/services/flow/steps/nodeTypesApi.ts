@@ -7,7 +7,7 @@ export interface SchemaProp {
   items?: SchemaProp;
   properties?: Record<string, SchemaProp>;
   required?: string[];
-  'x-huf-widget'?: 'data-ref' | 'doctype' | 'template';
+  'x-huf-widget'?: 'data-ref' | 'doctype' | 'template' | 'node';
 }
 
 /** A step type an installed app adds (huf.ai.flow.catalog.api.list_node_types). */

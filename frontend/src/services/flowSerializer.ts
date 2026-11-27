@@ -205,6 +205,17 @@ function serializeNode(node: FlowNode, outgoing: FlowEdge[], nextOf: Map<string,
             const wanted = first('default') ?? (typeof config.default === 'string' ? config.default : undefined);
             delete config.default;
             setIf('default', wanted && routed.has(wanted) ? wanted : options[0]?.node_id);
+            // Let AI decide: the rule paths are the choices and the Otherwise path is taken when it is unsure.
+            if (type === 'router.decision' && config.decision && typeof config.decision === 'object') {
+                const decision: Record<string, unknown> = { ...(config.decision as Record<string, unknown>) };
+                decision.candidates = options.map((o) => ({ node_id: o.node_id, label: o.label }));
+                delete decision.uncertain_next;
+                const unsure = first('default');
+                if (unsure) decision.uncertain_next = unsure;
+                config.decision = decision;
+                // Rule checks are not used in this mode: an empty one must not reach the server.
+                config.options = options.map((o) => (o.expression ? o : { label: o.label, node_id: o.node_id }));
+            }
             break;
         }
         case 'split':
