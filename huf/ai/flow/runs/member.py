@@ -22,6 +22,7 @@ MAX_KEY_CHARS = 140
 MAX_VARS_BYTES = 64 * 1024
 MAX_HISTORY = 100
 DEFAULT_RETENTION_DAYS = 365
+PURGE_BATCH_SIZE = 1000
 # ``active_flow_run`` of a member whose entry was granted but whose run is not recorded yet. It expires, so a run
 # that failed to be created does not keep the member out.
 ENTRY_CLAIM = "entry-claimed"
@@ -226,10 +227,19 @@ def purge_inactive(days: int | None = None) -> int:
 	if days <= 0:
 		return 0
 	cutoff = add_to_date(now_datetime(), days=-days)
-	names = frappe.get_all(DOCTYPE, filters={"last_event_at": ["<", cutoff], "status": ["!=", "Waiting"]}, pluck="name")
-	for name in names:
-		frappe.db.delete(DOCTYPE, {"name": name})
-	return len(names)
+	inactive = {"last_event_at": ["<", cutoff], "status": ["!=", "Waiting"]}
+	removed = 0
+	while True:
+		names = frappe.get_all(
+			DOCTYPE, filters=inactive, pluck="name", order_by="last_event_at asc", limit=PURGE_BATCH_SIZE
+		)
+		if names:
+			# one short transaction per batch; a member active again since the read is left alone
+			frappe.db.delete(DOCTYPE, {"name": ["in", names], **inactive})
+			commit_if_background()
+			removed += len(names)
+		if len(names) < PURGE_BATCH_SIZE:
+			return removed
 
 
 def run_member_context(flow_run) -> dict | None:
