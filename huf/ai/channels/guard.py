@@ -17,7 +17,11 @@ dotted path or a failing hook lookup blocks with ``hook_error``; a step that run
 (2 s, site config ``huf_pre_send_hook_timeout_s``) blocks with ``hook_timeout``. A block is final. This is
 stricter than ``huf_gateway_pre_send``, where ``None`` allows.
 
-Huf's own steps (:mod:`huf.ai.channels.guard_steps`) run first. Steps must only observe and decide. Neither the result nor the log line holds request data or exception text.
+Huf's own steps (:mod:`huf.ai.channels.guard_steps`) run first. Steps must only observe and decide.
+
+The frequency cap runs last, only when every step allowed. For a live send (``request["live"] is True``)
+with a cap it counts the send and COMMITS the current transaction, so call :func:`evaluate` only where
+committing the work so far is safe. A preview never counts. Neither the result nor the log line holds request data or exception text.
 
 A step runs in its own thread so the wait can be bounded. A thread cannot be killed: one that timed out is
 abandoned and refused any further ``frappe.db`` call, and a query it already has in flight is waited for,
@@ -76,10 +80,27 @@ def evaluate(request: dict, *, header: dict | None = None, timeout: float | None
 			reason = _run_step(step_name, step, copy.deepcopy(args), seconds)
 			if reason:
 				return GuardResult(False, reason, step_name)
-		return GuardResult(True)
+		step_name = guard_steps.CAP_STEP
+		reason = _cap_step(copy.deepcopy(request), seconds)
+		return GuardResult(False, reason, step_name) if reason else GuardResult(True)
 	except Exception as error:  # noqa: BLE001 - fail closed, never raise out
 		_warn(step_name, type(error).__name__)
 		return GuardResult(False, HOOK_ERROR, step_name if isinstance(step_name, str) else None)
+
+
+def _cap_step(request: dict, seconds: float) -> str | None:
+	"""Resolver hooks run under the step timeout; the counting runs on the caller's thread.
+
+	A step thread can be abandoned, which would leave a half-made claim and its row lock in the transaction.
+	"""
+	name, caps = guard_steps.CAP_STEP, []
+
+	def resolve(args: dict) -> dict:
+		caps.extend(guard_steps.resolve_caps(args))
+		return {"allow": True}
+
+	reason = _run_step(name, resolve, request, seconds)
+	return reason or _reason(name, guard_steps.apply_caps(request, caps))
 
 
 def _hook_paths() -> list[str]:
