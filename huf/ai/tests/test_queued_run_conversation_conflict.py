@@ -28,9 +28,9 @@ from huf.testing.factories import (
 )
 
 
-def _write_from_other_connection(conversation_id, value, field="title"):
+def _write_from_other_connection(conversation_id, value, field="title", site=None):
 	"""Commit a change to the conversation row on a separate DB connection."""
-	site = frappe.local.site
+	site = site or frappe.local.site  # pass it when calling from a thread
 
 	def _worker():
 		frappe.init(site)
@@ -153,11 +153,11 @@ class TestQueuedRunConversationConflict(unittest.TestCase):
 		has_permission = frappe.has_permission
 		writer = ThreadPoolExecutor(max_workers=1)
 		self.addCleanup(writer.shutdown)
-		writes = []
+		writes, site = [], frappe.local.site
 
 		def _write_mid_save(*args, **kwargs):
 			if not writes:  # does not return until the save commits if the row is locked
-				writes.append(writer.submit(_write_from_other_connection, conversation.name, "second"))
+				writes.append(writer.submit(_write_from_other_connection, conversation.name, "second", site=site))
 				wait(writes, timeout=2)
 			return has_permission(*args, **kwargs)
 
