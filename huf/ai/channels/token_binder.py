@@ -20,11 +20,11 @@ It raises only from frames that hold no value, so a traceback dumped with locals
 import frappe
 
 HOOK = "huf_send_token_providers"
-TOKEN_UNBOUND = "token_unbound"
+TOKEN_UNBOUND = "token_unbound"  # noqa: S105 - a reason code, not a password
 CONTEXT_KEYS = ("flow_id", "flow_version", "run_id", "node_id")
 
 
-class TokenUnbound(Exception):  # noqa: N818 - name fixed by CONTRACTS.md section 7
+class TokenUnbound(Exception):
 	"""The send is blocked: ``token_names`` could not be bound."""
 
 	code = TOKEN_UNBOUND
