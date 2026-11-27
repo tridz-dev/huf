@@ -11,6 +11,7 @@ from unittest.mock import MagicMock, patch
 import frappe
 from frappe.tests import IntegrationTestCase
 
+from huf.ai import gateway_service
 from huf.ai.flow import api as flow_api
 from huf.ai.flow import engine
 from huf.ai.tools import whatsapp
@@ -152,3 +153,12 @@ class TestGatewayEventForge(IntegrationTestCase):
 		frappe.db.set_value("Gateway Event", self.event, "flow_run", run.name)
 		self.assertEqual(json.loads(run.trigger_payload), {"gateway_event": self.event})
 		self.assertEqual(self._bound(run.name), (self.gateway, VICTIM))
+
+	def test_gateway_ingestion_run_still_replies_to_its_sender(self):
+		frappe.db.set_value("Gateway Event", self.event, "target_flow", self.flow_id)
+		event = frappe.get_doc("Gateway Event", self.event)
+		with patch.object(frappe, "enqueue"):  # no worker: the run is driven here
+			result = gateway_service._start_flow_for_event(event, frappe.get_doc("Gateway", self.gateway))
+		self.assertEqual(result["status"], "Running")
+		engine.run_flow(result["flow_run_id"])
+		self.assertEqual([c.args[0].get("to") for c in self.sent.call_args_list], [VICTIM])
