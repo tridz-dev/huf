@@ -64,7 +64,7 @@ class TestReservedPayloadKeys(IntegrationTestCase):
 		run = engine.create_flow_run(self.flow_id, payload=payload, trigger_type="Webhook", ignore_permissions=True)
 		context = engine.load_context(run.context_json)
 		self.assertEqual(context.node_outputs, {})
-		self.assertEqual(context.data, {"amount": 5, "_huf_entry": "marker"})
+		self.assertEqual(context.data, {"amount": 5})
 		self.assertEqual(json.loads(run.trigger_payload), context.data)
 		self.assertIn("__node_outputs__", payload)  # the caller's dict is left alone
 

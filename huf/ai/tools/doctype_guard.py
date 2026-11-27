@@ -25,6 +25,14 @@ _DENYLISTED_DOCTYPES = {
 	"server script",
 	"property setter",
 	"file",
+	# Run, approval and channel records feed trusted decisions (recorded approvals, live or test mode,
+	# what gets sent). Generic tools can run with ``ignore_permissions`` or ``db.set_value``, which
+	# the controllers' write guards do not see.
+	"agent flow run",
+	"flow member state",
+	"agent execution approval",
+	"channel outbox",
+	"gateway event",
 }
 
 #: Doctype name PREFIXES (case-insensitive) that are denied wholesale, since
@@ -37,6 +45,12 @@ _DENYLISTED_PREFIXES = ("oauth", "integration")
 def _error(msg: str) -> str:
 	"""Format a security denial as JSON error."""
 	return json.dumps({"success": False, "error": msg}, default=str)
+
+
+def is_denylisted(doctype: str) -> bool:
+	"""Name-only check: is ``doctype`` on the exact or prefix denylist?"""
+	normalized = doctype.strip().lower()
+	return normalized in _DENYLISTED_DOCTYPES or normalized.startswith(_DENYLISTED_PREFIXES)
 
 
 def _check_doctype_allowed(doctype: str):
@@ -56,15 +70,17 @@ def _check_doctype_allowed(doctype: str):
 	if not doctype or not isinstance(doctype, str):
 		return None, _error("'doctype' is required")
 
-	normalized = doctype.strip().lower()
-	if normalized in _DENYLISTED_DOCTYPES:
-		return None, _error(f"Access to doctype '{doctype}' is not permitted through this tool.")
-	if normalized.startswith(_DENYLISTED_PREFIXES):
-		return None, _error(f"Access to doctype '{doctype}' is not permitted through this tool.")
+	denied = _error(f"Access to doctype '{doctype}' is not permitted through this tool.")
+	if is_denylisted(doctype):
+		return None, denied
 
 	try:
-		if not frappe.db.exists("DocType", doctype):
+		stored = frappe.db.exists("DocType", doctype)
+		if not stored:
 			return None, _error(f"DocType '{doctype}' does not exist.")
+		# The database collation also matches other spellings (accents), so check the stored name too.
+		if isinstance(stored, str) and is_denylisted(stored):
+			return None, denied
 		meta = frappe.get_meta(doctype)
 	except Exception as e:
 		return None, _error(f"Could not load DocType '{doctype}': {e}")

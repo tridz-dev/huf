@@ -23,7 +23,7 @@ import json
 
 import frappe
 from frappe.model import default_fields
-from huf.ai.tools.doctype_guard import _check_doctype_allowed, _DENYLISTED_DOCTYPES, _DENYLISTED_PREFIXES
+from huf.ai.tools.doctype_guard import _DENYLISTED_DOCTYPES, _DENYLISTED_PREFIXES, is_denylisted
 
 logger = frappe.logger("huf")
 
@@ -56,8 +56,11 @@ def _check_doctype_allowed(doctype: str):
         return None, _error(f"Access to doctype '{doctype}' is not permitted through this tool.")
 
     try:
-        if not frappe.db.exists("DocType", doctype):
+        stored = frappe.db.exists("DocType", doctype)
+        if not stored:
             return None, _error(f"DocType '{doctype}' does not exist.")
+        if isinstance(stored, str) and is_denylisted(stored):
+            return None, _error(f"Access to doctype '{doctype}' is not permitted through this tool.")
         meta = frappe.get_meta(doctype)
     except Exception as e:
         return None, _error(f"Could not load DocType '{doctype}': {e}")
