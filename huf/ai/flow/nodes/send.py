@@ -1,6 +1,8 @@
 """``send.message`` node: send one message to the person the run is about, always through the guard chain.
 
-Config: ``gateway`` (Gateway name), ``recipient`` (value or reference, a phone number), ``template`` or ``text``
+Config: ``gateway`` (Gateway name), ``recipient`` (a reference resolving to a phone number, or ``"$member"``:
+the run's member, resolved by ``huf_send_recipient_providers`` at send time and again at delivery),
+``template`` or ``text``
 (exactly one), ``variables`` (token names, bound at send time by ``huf_send_token_providers``), ``category``
 (``marketing`` | ``service``), optional ``header`` (media or location header) and ``language``.
 
@@ -24,7 +26,7 @@ from __future__ import annotations
 
 import frappe
 
-from huf.ai.channels import guard, guard_steps, token_binder
+from huf.ai.channels import guard, guard_steps, recipient_binder, token_binder
 from huf.ai.flow.nodes import split as split_node
 from huf.ai.flow.runs import member as flow_member
 from huf.ai.flow.runs import park
@@ -100,8 +102,11 @@ def exec_send_message(flow_run, node: dict, config: dict, settings: dict):
 	if config["category"] == "marketing" and split_node.is_holdout(ctx.data):  # decision 5: service still sends
 		_leave_waiting(flow_run, node, _transition_run)
 		return _final(flow_run, ctx, settings, node, key, {"status": "blocked", "reason": split_node.HOLDOUT_NO_CONTACT})
-	raw = ctx.resolve(config["recipient"])
-	recipient = guard_steps.normalise_recipient(raw) or (raw if isinstance(raw, str) else None)
+	member_ref = recipient_binder.is_member_ref(config["recipient"])
+	recipient = None
+	if not member_ref:
+		raw = ctx.resolve(config["recipient"])
+		recipient = guard_steps.normalise_recipient(raw) or (raw if isinstance(raw, str) else None)
 	template = config.get("template") or None
 	if template is not None:
 		template = ctx.resolve(template)
@@ -118,6 +123,13 @@ def exec_send_message(flow_run, node: dict, config: dict, settings: dict):
 	def blocked(reason: str) -> dict:
 		_leave_waiting(flow_run, node, _transition_run)
 		return _final(flow_run, ctx, settings, node, key, {"status": "blocked", "reason": reason})
+
+	if member_ref:  # the number is resolved here and again at delivery, never stored (G4)
+		try:
+			raw = recipient_binder.resolve(gateway, member_key, refs)
+		except recipient_binder.RecipientUnbound:
+			return blocked(recipient_binder.RECIPIENT_UNBOUND)
+		recipient = guard_steps.normalise_recipient(raw) or raw
 
 	if token_names:  # values are bound again at delivery; here only "can every token be bound" (G4)
 		if not member_key:
@@ -188,11 +200,15 @@ def _leave_waiting(flow_run, node: dict, transition) -> None:
 		flow_member.set_status(flow_run.flow_id, flow_run.member_key, "Active")
 
 
-def _body_params(token_names: list[str], values: dict):
-	"""Positional templates (``1``, ``2``...) take a list in order; named ones a map."""
-	if all(name.isdigit() for name in token_names):
-		return [values[name] for name in sorted(token_names, key=int)]
-	return {name: values[name] for name in token_names}
+def _body_params(token_names: list[str], values: dict, named: bool = False):
+	"""A NAMED WhatsApp template takes a ``{token: value}`` map; any other a list in ``token_names`` order.
+
+	``token_names`` is already in slot order (the compiler emits one name per slot), so the list is never
+	re-sorted by name.
+	"""
+	if named:
+		return {name: values[name] for name in token_names}
+	return [values[name] for name in token_names]
 
 
 def _final(flow_run, ctx, settings, node: dict, key: str, output: dict) -> dict:
