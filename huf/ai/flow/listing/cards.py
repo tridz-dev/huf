@@ -59,7 +59,7 @@ def _links(node: dict) -> list[str]:
 			found.append(value)
 
 	add(node.get("next"))
-	for key in ("on_true", "on_false", "approve_next", "reject_next", "timeout_next", "default"):
+	for key in ("on_true", "on_false", "fallback_next", "approve_next", "reject_next", "timeout_next", "default"):
 		add(config.get(key))
 	for option in config.get("options") or []:
 		if isinstance(option, dict):

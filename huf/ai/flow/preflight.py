@@ -24,6 +24,9 @@ import re
 
 import frappe
 
+from huf.ai.flow.support import facts
+from huf.ai.graph.expressions import ExpressionError, parse_expression
+
 HOOK = "huf_flow_preflight"
 
 ERROR = "error"
@@ -97,6 +100,30 @@ def _send_checks(defn, flow_id: str | None) -> list[Finding]:
 	return found
 
 
+def _facts_checks(defn, flow_id: str | None) -> list[Finding]:
+	"""Conditions that read ``facts.<name>``: every name must be offered and a fallback step chosen."""
+	found: list[Finding] = []
+	offered = None
+	for node in _nodes(defn):
+		config = _config(node)
+		if node.get("type") != "condition" or _blank(config.get("expression")):
+			continue
+		try:
+			names, dynamic = facts.names_used(parse_expression(config["expression"]))
+		except ExpressionError:
+			continue  # the lint above reports it
+		if not names and not dynamic:
+			continue
+		node_id = node.get("id")
+		if offered is None:
+			offered = facts.offered_names()
+		if dynamic or any(name not in offered for name in names):
+			found.append(Finding("CONDITION_FACT_UNKNOWN", node_id))
+		if _blank(config.get("fallback_next")):
+			found.append(Finding("CONDITION_FALLBACK_MISSING", node_id))
+	return found
+
+
 def _hook_paths() -> list[str]:
 	return list(frappe.get_hooks(HOOK) or [])
 
@@ -140,7 +167,7 @@ def _app_checks(defn, flow_id: str | None) -> list[Finding]:
 def run_preflight(defn, flow_id: str | None = None) -> list[Finding]:
 	"""Every finding for ``defn``, built-in checks first. Never raises: a check that breaks is a finding."""
 	found: list[Finding] = []
-	for check in (_lint, _send_checks):
+	for check in (_lint, _send_checks, _facts_checks):
 		try:
 			found.extend(check(defn, flow_id))
 		except Exception as exc:  # noqa: BLE001 -- a broken check becomes an error finding
