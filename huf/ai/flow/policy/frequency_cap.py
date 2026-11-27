@@ -92,5 +92,8 @@ def _claim(values: dict, limit: int | None) -> int | None:
 	count = frappe.db.sql(f"select `count` from {TABLE} where {MATCH_KEY} for update", values)[0][0]
 	if limit is not None and count >= limit:
 		return None
-	frappe.db.sql(f"update {TABLE} set `count` = %(count)s, modified = %(now)s where {MATCH_KEY}", {**values, "count": count + 1})
+	frappe.db.sql(
+		f"update {TABLE} set `count` = %(count)s, modified = %(now)s where {MATCH_KEY}",
+		{**values, "count": count + 1},
+	)
 	return count + 1

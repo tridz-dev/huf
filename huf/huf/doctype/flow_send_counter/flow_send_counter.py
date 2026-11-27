@@ -17,5 +17,7 @@ class FlowSendCounter(Document):
 def on_doctype_update():
 	# add_unique never removes an index: the one without the window length would still make day and week collide.
 	if frappe.db.has_index("tabFlow Send Counter", "unique_member_key_channel_window_start"):
-		frappe.db.sql_ddl("alter table `tabFlow Send Counter` drop index `unique_member_key_channel_window_start`")
+		frappe.db.sql_ddl(
+			"alter table `tabFlow Send Counter` drop index `unique_member_key_channel_window_start`"
+		)
 	frappe.db.add_unique("Flow Send Counter", ["member_key", "channel", "window_seconds", "window_start"])

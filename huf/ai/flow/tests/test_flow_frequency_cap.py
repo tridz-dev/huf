@@ -74,7 +74,9 @@ class TestFlowFrequencyCap(IntegrationTestCase):
 
 	def test_database_rejects_a_second_row_for_the_same_key(self):
 		cap.incr(self.member, "whatsapp", DAY)
-		row = frappe.db.get_value(cap.DOCTYPE, {"member_key": self.member}, ["window_seconds", "window_start"], as_dict=True)
+		row = frappe.db.get_value(
+			cap.DOCTYPE, {"member_key": self.member}, ["window_seconds", "window_start"], as_dict=True
+		)
 		with self.assertRaises(Exception) as raised:
 			frappe.db.sql(
 				f"insert into {cap.TABLE} (name, member_key, channel, window_seconds, window_start) values (%s, %s, %s, %s, %s)",
@@ -84,7 +86,13 @@ class TestFlowFrequencyCap(IntegrationTestCase):
 
 	def test_bad_input_raises_without_naming_the_member(self):
 		secret = "15550100999"
-		for args in (("", "whatsapp", DAY), (secret, "", DAY), (secret * 20, "whatsapp", DAY), (secret, "whatsapp", 0), (secret, "whatsapp", "1d")):
+		for args in (
+			("", "whatsapp", DAY),
+			(secret, "", DAY),
+			(secret * 20, "whatsapp", DAY),
+			(secret, "whatsapp", 0),
+			(secret, "whatsapp", "1d"),
+		):
 			for call in (cap.incr, cap.check):
 				with self.assertRaises(ValueError) as raised:
 					call(*args)
