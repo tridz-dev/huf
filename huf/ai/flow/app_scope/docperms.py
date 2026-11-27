@@ -5,7 +5,8 @@ Rows granted, at permlevel 0 only:
 - Flow Definition: read for ``view`` roles, read and write for ``edit`` roles.
 - Agent Flow Run and Flow Member State: read for ``view`` roles.
 
-Never create, delete, share, export, import, report or permlevel 1. The scope to ``owner_app`` is applied
+Never create, delete, share, export, import, report or permlevel 1 (``definition_json`` is saved for editors only
+through :mod:`huf.ai.flow.app_scope.drafts`). The scope to ``owner_app`` is applied
 by :mod:`huf.ai.flow.app_scope.access`. Rows are upserted (no duplicates on a re-run). A role that was synced
 earlier and is no longer declared loses its rows. The synced set is kept in a global default.
 """
