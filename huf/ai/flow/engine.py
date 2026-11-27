@@ -1101,13 +1101,26 @@ def failed_node_record(outcome: Outcome) -> dict:
 	return record
 
 
+def _with_step_key(flow_run, node: dict, settings) -> dict:
+	"""``node`` carrying its step key (H-W2-13): completed visits folded with the retry attempt."""
+	from huf.ai.flow.runs import park
+	from huf.ai.flow.support import step_keys
+
+	waiting = park.is_reentry(flow_run, node) or {}
+	retry = int((waiting.get("extra") or {}).get("attempt") or 0) + 1 if waiting.get("reason") == "retry" else 1
+	data = _context_of(flow_run, settings).data
+	return step_keys.with_key(node, step_keys.key_for(flow_run.name, node.get("id") or "", data, retry))
+
+
 def _make_node_handler(flow_run, settings):
 	"""Bridge one Flow node executor into the executor's handler contract."""
 
 	def handler(node: NodeSpec, context: GraphContext, state: ExecutionState):
+		raw = _with_step_key(flow_run, node.raw, settings)
+
 		def run_once():
 			try:
-				return _execute_node(flow_run, node.raw, settings)
+				return _execute_node(flow_run, raw, settings)
 			except Exception as exc:
 				frappe.log_error(frappe.get_traceback(), f"Flow node {node.id} raised")
 				return {"status": "failed", "error": describe_exception(exc)}

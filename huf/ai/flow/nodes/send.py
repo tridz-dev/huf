@@ -24,6 +24,7 @@ import frappe
 from huf.ai.channels import guard, guard_steps, token_binder
 from huf.ai.flow.runs import member as flow_member
 from huf.ai.flow.runs import park
+from huf.ai.flow.support import step_keys
 from huf.ai.flow.testrun import gate as test_gate
 
 CONFIG_KEYS = frozenset(
@@ -86,6 +87,10 @@ def exec_send_message(flow_run, node: dict, config: dict, settings: dict):
 		return _failed("The channel (gateway) this step sends from was not found.")
 
 	ctx = _context_of(flow_run, settings)
+	key = step_keys.key_of(node)
+	done = step_keys.replay(ctx.data, key)
+	if done is not None:  # a re-delivered job: this step already completed, never send twice
+		return done
 	raw = ctx.resolve(config["recipient"])
 	recipient = guard_steps.normalise_recipient(raw) or (raw if isinstance(raw, str) else None)
 	template = config.get("template") or None
@@ -125,7 +130,7 @@ def exec_send_message(flow_run, node: dict, config: dict, settings: dict):
 		"template": template,
 		"token_names": token_names,
 		**refs,
-		"step_key": "",
+		"step_key": key,
 		"live": live,
 	}
 	_persist_context(flow_run, ctx, settings)  # a live guard pass with a cap commits
@@ -143,10 +148,16 @@ def exec_send_message(flow_run, node: dict, config: dict, settings: dict):
 	if not live:
 		return _done(node, {"status": "previewed"})
 
-	refused = _transport(gateway, channel, recipient, template, text, token_names, values, config, refs)
+	refused = _transport(
+		gateway, channel, recipient, template, text, token_names, values, config, {**refs, "step_key": key}
+	)
 	if refused:
 		return _failed(refused)
-	return _done(node, {"status": "sent"})
+	sent = _done(node, {"status": "sent"})
+	if key:
+		step_keys.record(ctx.data, node_id, key, sent)
+		_persist_context(flow_run, ctx, settings)
+	return sent
 
 
 def _leave_waiting(flow_run, node: dict, transition) -> None:
