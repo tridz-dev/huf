@@ -11,9 +11,10 @@ from huf.ai.flow import triggers
 from huf.ai.flow.catalog import node_registry
 from huf.ai.flow.listing.cards import summarize_definition
 from huf.ai.flow.support.node_schemas import build_node_schemas
+from huf.ai.flow.tests import test_flow_start_for_member as start_suite
 from huf.ai.flow.tests.test_flow_draft_validation import _end, _graph
-from huf.ai.flow.tests.test_flow_start_for_member import TestFlowStartForMember
-from huf.ai.graph.validator import get_flow_node_types, validate_flow
+from huf.ai.graph.validation.flow_validation import validate_flow
+from huf.ai.graph.validator import get_flow_node_types
 from huf.huf.doctype.flow_definition.activation_rules import collect_activation_problems, entry_is_unset
 
 TRIGGER = {"id": "start", "type": "trigger.app", "config": {"app": "happiol"}, "next": "cond"}
@@ -81,7 +82,7 @@ class TestAppTriggerExecutor(unittest.TestCase):
 		self.assertEqual(self._run("Manual", run_mode="Test")["status"], "success")
 
 
-class TestAppTriggerStart(TestFlowStartForMember):
+class TestAppTriggerStart(start_suite.TestFlowStartForMember):
 	"""The start_flow_for_member suite (incl. 20 parallel calls -> one run) against an app-trigger flow."""
 
 	def setUp(self):
