@@ -4,7 +4,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
 import { routeEdge, routeLoopBack, shortLinePill, type Rect } from '@/lib/flow-graph/edgeRouting';
-import { PLACED_PILLS, boxAt, controlCandidates, forgetPill, forgetRuns, levelRuns, recordRuns, runsOfOthers, getPlacedVersion, pillCandidates, pillsBefore, placeClear, recordPill, subscribePlaced, type Size } from '@/lib/flow-graph/canvas/edgePlacement';
+import { PLACED_PILLS, boxAt, controlCandidates, forgetPill, forgetRuns, levelRuns, recordRuns, runsOfOthers, getPlacedVersion, pillCandidatesOnLine, pillsBefore, placeClear, recordPill, subscribePlaced, type Size } from '@/lib/flow-graph/canvas/edgePlacement';
 import type { BranchTone } from '@/lib/flow/flowBranches';
 import type { FlowEdgeRoute } from '../../types/flow.types';
 import { counterScale, lodForZoom } from '@/lib/flow-canvas/zoomLod';
@@ -171,7 +171,7 @@ export const InsertableEdge = memo(
     // keeps off the names of the connections before it.
     const placedVersion = useSyncExternalStore(subscribePlaced, getPlacedVersion);
     const pillPos = useMemo(
-      () => (pill && !loopBack ? placeClear(pillSize, [...stepBoxes, ...pillsBefore(id).map(breathe), ...runsOfOthers(id), ...arrowHeadBox(routed.points)], pillWanted, pillCandidates(pillWanted)) : pillWanted),
+      () => (pill && !loopBack ? placeClear(pillSize, [...stepBoxes, ...pillsBefore(id).map(breathe), ...runsOfOthers(id), ...arrowHeadBox(routed.points)], pillWanted, pillCandidatesOnLine(routed.points, pillWanted, pillSize)) : pillWanted),
       [id, pill, loopBack, pillSize, stepBoxes, routed, pillWanted.x, pillWanted.y, placedVersion], // eslint-disable-line react-hooks/exhaustive-deps
     );
     // Recorded by value (not by object), and only forgotten when the name goes away: a name that did not move must not tell
