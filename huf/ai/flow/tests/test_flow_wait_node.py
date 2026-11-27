@@ -200,19 +200,16 @@ class TestWaitSweeper(IntegrationTestCase):
 		self.assertEqual(self._status(due), "Running")
 		self.assertEqual(self._status(later), "Waiting Timer")
 
-	def test_sweeper_limit_500(self):
-		import inspect
+	def test_sweeper_limit_is_a_page_size_default_500(self):
+		from huf.ai.flow.runs.park import WAKE_PAGE_SIZE_DEFAULT, wake_due_waits
 
-		from huf.ai.flow.runs.park import wake_due_waits
-
-		self.assertEqual(inspect.signature(wake_due_waits).parameters["limit"].default, 500)
+		self.assertEqual(WAKE_PAGE_SIZE_DEFAULT, 500)
 		first = self._parked(self.NOW - timedelta(minutes=2))
 		second = self._parked(self.NOW - timedelta(minutes=1))
 		with patch("frappe.enqueue"):
-			woken = wake_due_waits(now=self.NOW, limit=1)
-		self.assertEqual(len(woken), 1)
-		self.assertEqual(self._status(first if first in woken else second), "Running")
-		self.assertEqual(len(set(woken) & {first, second}), len(woken))
+			taken = wake_due_waits(now=self.NOW, limit=1)
+		# one run per page, and the sweeper keeps paging until nothing due is left
+		self.assertEqual([name for name in taken if name in (first, second)], [first, second])
 
 	def test_sweeper_enqueues_not_inline(self):
 		from huf.ai.flow.runs.park import wake_due_waits
