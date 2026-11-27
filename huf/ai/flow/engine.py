@@ -48,9 +48,11 @@ import threading
 
 import frappe
 from frappe import _
+from frappe.realtime import get_doc_room, get_user_room
 from frappe.utils import now_datetime
 
 from huf.ai.flow import state as flow_state
+from huf.ai.flow.app_scope.access import flow_access
 from huf.ai.flow.catalog import node_registry
 from huf.ai.flow.integrations import friendly_tool_error
 from huf.ai.flow.nodes import adapters, subflow
@@ -2582,17 +2584,27 @@ def _fail_flow_run(flow_run, error_msg: str) -> bool:
 
 
 def _publish_flow_event(flow_run, event_type: str, data: dict):
-	"""Publish a Frappe Realtime event for live flow UI tracking."""
+	"""Publish a Frappe Realtime event for live flow UI tracking.
+
+	Never to the site room (every desk user joins it). It goes to the run's document room, where subscribing
+	needs read permission on the run, and to the person who started the run while they may still view its flow
+	(app editors never read run documents, but follow their own runs on the canvas). Error text is masked.
+	"""
 	try:
-		frappe.publish_realtime(
-			event=event_type,
-			message={
-				"flow_run_id": flow_run.name,
-				"flow_id": flow_run.flow_id,
-				**data,
-			},
-			after_commit=False,
-		)
+		message = {"flow_run_id": flow_run.name, "flow_id": flow_run.flow_id, **data}
+		if message.get("error"):
+			message["error"] = plain_error(mask_text(str(message["error"])))
+		for room in _flow_event_rooms(flow_run):
+			# An explicit room: inside a background task Frappe would otherwise pick the task's room.
+			frappe.publish_realtime(event=event_type, message=message, room=room, after_commit=False)
 	except Exception:
 		# Realtime is best-effort; don't break execution if it fails
 		pass
+
+
+def _flow_event_rooms(flow_run) -> list[str]:
+	rooms = [get_doc_room("Agent Flow Run", flow_run.name)]
+	user = flow_run.owner
+	if user and user != "Guest" and flow_access(user, flow_run.flow_definition, "view"):
+		rooms.append(get_user_room(user))
+	return rooms
