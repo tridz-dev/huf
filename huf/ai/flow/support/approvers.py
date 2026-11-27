@@ -90,12 +90,14 @@ def _read_answer(answer) -> tuple[bool, list[str]]:
 		and isinstance(answer.get("required"), bool)
 		and (
 			named is None
-			or isinstance(named, (list, tuple))
-			and all(isinstance(r, str) and r.strip() and r not in _OPEN_ROLES for r in named)
+			or (
+				isinstance(named, (list, tuple))
+				and all(isinstance(r, str) and r.strip() and r not in _OPEN_ROLES for r in named)
+			)
 		)
 	)
 	if not valid:
-		raise ValueError("bad policy answer")
+		raise ValueError
 	return answer["required"], list(named or [])
 
 
