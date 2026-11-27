@@ -90,7 +90,7 @@ class TestGatewayEventForge(IntegrationTestCase):
 			is_read_only=0,
 		)
 		flow_id = f"_test-wa-forge-{sfx}"
-		secret = "test-webhook-secret-0123456789abcdef"
+		hook_token = "test-webhook-secret-0123456789abcdef"
 		flow_api.save_flow_definition(
 			flow_id,
 			{
@@ -99,7 +99,7 @@ class TestGatewayEventForge(IntegrationTestCase):
 				"fingerprint": "0" * 64,
 				"entry": "start",
 				"nodes": [
-					{"id": "start", "type": "trigger.webhook", "config": {"method": "POST", "secret": secret}, "next": "send"},
+					{"id": "start", "type": "trigger.webhook", "config": {"method": "POST", "secret": hook_token}, "next": "send"},
 					{
 						"id": "send",
 						"type": "tool.call",
