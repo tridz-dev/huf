@@ -16,6 +16,7 @@ from huf.ai.transaction import commit_if_background
 
 ENTRY_MARKER = "_huf_entry"
 LOCK_TIMEOUT_SECONDS = 30
+JOIN_ATTEMPTS = 5
 
 
 def start_flow_for_member(
@@ -98,12 +99,13 @@ def _create_run(flow_id: str, member_key: str, payload: dict, entry_key: str | N
 		return None
 	with _member_lock(flow_id, key):
 		marker = hashlib.sha256(f"{flow_id}\0{key if entry_key is None else entry_key}".encode()).hexdigest()
-		# a locking read sees runs committed after this transaction's first read
+		# Outside a request, commit for a fresh snapshot; in one, a locking read sees what was committed since.
+		commit_if_background()
 		if frappe.db.get_value(
 			"Agent Flow Run",
 			{"flow_id": flow_id, "member_key": key, "trigger_payload": ["like", f"%{marker}%"]},
 			"name",
-			for_update=True,
+			for_update=bool(getattr(frappe.local, "request", None)),
 		):
 			return None
 		policy = entry.entry_policy_of(node.get("config"))
@@ -132,16 +134,26 @@ def _join_member(flow_id: str, member_key: str) -> str | None:
 	The unique ``(flow, member_key)`` index ignores case while the row name hashes it, so a key that differs only in
 	case belongs to the existing member and must be used with its stored spelling.
 	"""
-	commit_if_background()  # see member.claim_entry
-	try:
-		member.lock_member(flow_id, member_key)
-	except (frappe.UniqueValidationError, frappe.DuplicateEntryError):
-		pass  # the member exists under another spelling
-	key = frappe.db.get_value(
-		member.DOCTYPE, {"flow": flow_id, "member_key": member_key}, "member_key", for_update=True
-	)
-	commit_if_background()
-	return key
+	in_request = bool(getattr(frappe.local, "request", None))
+	filters = {"flow": flow_id, "member_key": member_key}
+	for attempt in range(JOIN_ATTEMPTS):
+		commit_if_background()  # a fresh snapshot; also the lock must come first, see member.claim_entry
+		key = frappe.db.get_value(member.DOCTYPE, filters, "member_key")
+		if key:
+			return key  # no write for a known member: concurrent upserts under two spellings can deadlock
+		try:
+			member.lock_member(flow_id, member_key)
+			# in a request the snapshot may predate a row another caller committed: read it with a lock
+			key = frappe.db.get_value(member.DOCTYPE, filters, "member_key", for_update=in_request)
+			commit_if_background()
+			return key
+		except (frappe.UniqueValidationError, frappe.DuplicateEntryError):
+			pass  # created meanwhile under another spelling: read it on the next attempt
+		except frappe.QueryDeadlockError:
+			if in_request or attempt == JOIN_ATTEMPTS - 1:
+				raise  # the caller's transaction is gone, it cannot be retried here
+			frappe.db.rollback()
+	return None
 
 
 @contextmanager
