@@ -5,14 +5,21 @@ Run with:
     bench --site <site> run-tests --app huf --module huf.ai.flow.app_scope.tests.test_read_followups
 """
 
+from unittest import mock
+
 import frappe
 
-from huf.ai.flow import api
-from huf.ai.flow.app_scope import runs_api
+from huf.ai.flow import api, engine
+from huf.ai.flow.app_scope.access import flow_access
+from huf.ai.flow.app_scope import access, runs_api
 from huf.ai.flow.app_scope.tests import test_app_read as base
 from huf.ai.flow.runs import member, members_api
 
 NAME = "Zelda Quillfeather"
+
+
+def no_approve(request):
+	return request["action"] != "approve"
 
 
 class TestReadFollowups(base.AppReadFixture):
@@ -97,6 +104,49 @@ class TestReadFollowups(base.AppReadFixture):
 		with self.assertRaises(frappe.PermissionError):
 			api.get_pending_approvals(flow_id=base.FLOW_2)
 		frappe.set_user("Administrator")
+
+	# --- cancelled approvals and the app approve grant ----------------------------------------------------
+
+	def _assert_redacted(self, run, user):
+		frappe.set_user(user)
+		detail = api.get_flow_run(run)
+		self.assertFalse(detail["can_decide"])
+		for part in (detail["approval_card"], detail["waiting"], api.handle_get_flow_run(run)["waiting"]):
+			text = frappe.as_json(part)
+			self.assertNotIn(NAME, text)
+			self.assertNotIn(base.PHONE, text)
+
+	def test_card_stays_masked_after_member_removal_cancels_the_run(self):
+		run = self.runs[base.FLOW_1]
+		self._park_for_approval(run, base.USER_APPROVER)
+		member.upsert_member(base.FLOW_1, base.PHONE, run=run)
+		frappe.db.set_value("Agent Flow Run", run, "member_key", base.PHONE)
+		frappe.set_user(base.USER)
+		row = next(r for r in members_api.list_flow_members(base.FLOW_1) if r["member_key"] == "****3210")
+		members_api.remove_flow_member(base.FLOW_1, member_ref=row["member_ref"])
+		self.assertEqual(frappe.db.get_value("Agent Flow Run", run, "status"), "Cancelled")
+		self._assert_redacted(run, base.USER)
+		# Once the approval is closed nobody can decide it, so its texts are left out for everyone.
+		self._assert_redacted(run, "Administrator")
+
+	def test_named_approver_without_app_approve_grant_cannot_decide(self):
+		run = self.runs[base.FLOW_1]
+		self._park_for_approval(run, base.USER)
+		frappe.get_doc("User", base.USER).remove_roles(base.ROLE_APPROVE)
+		self._assert_redacted(run, base.USER)
+		self.assertFalse(flow_access(base.USER, base.FLOW_1, "approve"))
+		with self.assertRaises(frappe.PermissionError):
+			engine.approve_flow_run(run, "approved")
+
+	def test_narrow_refusing_approve_cannot_decide(self):
+		run = self.runs[base.FLOW_1]
+		self._approver_sees_both()
+		patcher = mock.patch.object(access, "narrowers", return_value=[f"{__name__}.no_approve"])
+		patcher.start()
+		self.addCleanup(patcher.stop)
+		self._assert_redacted(run, base.USER)
+		with self.assertRaises(frappe.PermissionError):
+			engine.approve_flow_run(run, "approved")
 
 	# --- members ------------------------------------------------------------------------------------------
 
