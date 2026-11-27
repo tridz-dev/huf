@@ -516,6 +516,7 @@ def create_flow_run(
 	trigger_type: str = "Manual",
 	ignore_permissions: bool = False,
 	mode: str = "real",
+	member_key: str | None = None,
 ) -> "frappe.Document":
 	"""
 	Create a new FlowRun document from a FlowDefinition. This is the public
@@ -535,6 +536,8 @@ def create_flow_run(
 	    ignore_permissions: for trusted callers that already authorised the route (Gateway)
 	    mode: ``"real"`` or ``"test"``. A test run skips every step that would send or change something
 	        outside the flow (see :mod:`huf.ai.flow.testrun`); every later continuation reads it from the run.
+	    member_key: the member a real run is about, when the caller knows it (``runs.start``); otherwise it is
+	        told from the trigger.
 
 	Returns:
 	    Flow Run document
@@ -591,7 +594,7 @@ def create_flow_run(
 		fields["pinned_fingerprint"] = version.fingerprint
 		fields["pinned_definition"] = pinned_json(version)
 
-	member_key = flow_member.key_for_new_run(trigger_type, payload, mode)
+	member_key = member_key or flow_member.key_for_new_run(trigger_type, payload, mode)
 	if member_key:
 		fields["member_key"] = member_key
 
