@@ -2223,7 +2223,7 @@
               ],
               "properties": {
                 "query": {
-                  "$ref": "#/$defs/Expression",
+                  "$ref": "#/$defs/Value",
                   "description": "The text to search for."
                 },
                 "knowledge_source": {
