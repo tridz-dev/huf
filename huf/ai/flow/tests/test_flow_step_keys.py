@@ -37,6 +37,9 @@ class TestStepKeyPure(IntegrationTestCase):
 		first = step_keys.key_for("RUN-1", "s1", data)
 		self.assertEqual(first, step_keys.key_for("RUN-1", "s1", data))  # not completed: same key
 		step_keys.record(data, "s1", first, {"status": "success"})
+		self.assertEqual(first, step_keys.key_for("RUN-1", "s1", data))  # recorded, cursor not moved: same key
+		self.assertTrue(step_keys.advance(data, "s1"))
+		self.assertFalse(step_keys.advance(data, "s1"))
 		second = step_keys.key_for("RUN-1", "s1", data)
 		self.assertNotEqual(first, second)
 		self.assertNotEqual(second, step_keys.key_for("RUN-1", "s1", data, retry_attempt=2))
