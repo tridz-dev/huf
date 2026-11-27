@@ -38,8 +38,13 @@ def list_app_runs(app, status=None, flow_ids=None, member_key=None, since=None, 
 
 
 @frappe.whitelist()
-def count_app_runs(app, group_by="flow,status,reason", status=None, flow_ids=None, since=None) -> list[dict]:
-	"""Run counts of ``app``'s viewable flows grouped by any of ``flow``, ``status``, ``reason``."""
+def count_app_runs(
+	app, group_by="flow,status,reason", status=None, flow_ids=None, since=None, include_test=0
+) -> list[dict]:
+	"""Run counts of ``app``'s viewable flows grouped by any of ``flow``, ``status``, ``reason``.
+
+	Test runs are left out unless ``include_test`` is set; a run with no ``run_mode`` counts.
+	"""
 	guard_app_named(app)
 	keys = [k.strip() for k in str(group_by or "").split(",") if k.strip()]
 	if not keys or any(k not in GROUP_FIELDS for k in keys):
@@ -47,10 +52,11 @@ def count_app_runs(app, group_by="flow,status,reason", status=None, flow_ids=Non
 	flows = _viewable_flows(app, flow_ids)
 	if not flows:
 		return []
+	exclude_test = not cint(include_test)
 	if "reason" not in keys:
-		return _sql_counts(app, flows, keys, status, since)
+		return _sql_counts(app, flows, keys, status, since, exclude_test)
 	counts: dict[tuple, int] = {}
-	for r in _runs(app, status, flows, None, since, limit=None):
+	for r in _runs(app, status, flows, None, since, limit=None, exclude_test=exclude_test):
 		row = _row(r)
 		key = tuple(row[k if k != "flow" else "flow_id"] for k in keys)
 		counts[key] = counts.get(key, 0) + 1
@@ -83,7 +89,7 @@ def _viewable_flows(app: str, flow_ids=None) -> list[str]:
 	return sorted(n for n in names if flow_access(user, n, "view"))
 
 
-def _filters(app, flows, status, member_key, since) -> dict:
+def _filters(app, flows, status, member_key, since, exclude_test=False) -> dict:
 	filters = {"owner_app": app, "flow_definition": ("in", flows)}
 	statuses = _as_list(status)
 	if statuses:
@@ -92,16 +98,18 @@ def _filters(app, flows, status, member_key, since) -> dict:
 		filters["modified"] = (">=", get_datetime(since))
 	if member_key:
 		filters["member_key"] = str(member_key)
+	if exclude_test:
+		filters["run_mode"] = ("!=", "Test")
 	return filters
 
 
-def _runs(app, status, flow_ids, member_key, since, *, limit):
+def _runs(app, status, flow_ids, member_key, since, *, limit, exclude_test=False):
 	flows = _viewable_flows(app, flow_ids)
 	if not flows:
 		return []
 	return get_user_permitted_runs(
 		DOCTYPE,
-		filters=_filters(app, flows, status, member_key, since),
+		filters=_filters(app, flows, status, member_key, since, exclude_test),
 		fields=[
 			"name", "flow_definition", "flow_version", "status", "run_mode", "member_key",
 			"current_node_id", "context_json", "started_at", "completed_at", "creation", "modified",
@@ -112,12 +120,12 @@ def _runs(app, status, flow_ids, member_key, since, *, limit):
 	)  # fmt: skip
 
 
-def _sql_counts(app, flows, keys, status, since) -> list[dict]:
+def _sql_counts(app, flows, keys, status, since, exclude_test) -> list[dict]:
 	columns = {"flow": "flow_definition as flow", "status": "status"}
 	group = [{"flow": "flow_definition", "status": "status"}[k] for k in keys]
 	return get_user_permitted_runs(
 		DOCTYPE,
-		filters=_filters(app, flows, status, None, since),
+		filters=_filters(app, flows, status, None, since, exclude_test),
 		fields=[columns[k] for k in keys] + [{"COUNT": "name", "as": "count"}],
 		group_by=", ".join(group),
 		order_by=", ".join(group),

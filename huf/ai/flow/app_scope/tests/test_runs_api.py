@@ -121,6 +121,19 @@ class TestRunsApi(IntegrationTestCase):
 		self.assertEqual(len(runs_api.list_app_runs("huf", flow_ids=[A_FLOW], member_key=PHONE)), 2)
 		self.assertEqual(runs_api.list_app_runs("huf", flow_ids=[A_FLOW], member_key="nobody"), [])
 
+	def test_test_runs_counted_only_on_request(self):
+		run = {"doctype": "Agent Flow Run", "flow_definition": A_FLOW, "flow_id": A_FLOW, "status": "Success"}
+		frappe.get_doc({**run, "run_mode": "Test"}).insert(ignore_permissions=True)
+		blank = frappe.get_doc(run).insert(ignore_permissions=True)
+		frappe.db.set_value("Agent Flow Run", blank.name, "run_mode", None, update_modified=False)
+		frappe.set_user(USER_A)
+		flows = [A_FLOW, A_FLOW2]
+		for group_by in ("flow,status,reason", "status"):
+			for kwargs, total in (({}, 4), ({"include_test": "0"}, 4), ({"include_test": 1}, 5)):
+				counts = runs_api.count_app_runs("huf", group_by=group_by, flow_ids=flows, **kwargs)
+				self.assertEqual(sum(c["count"] for c in counts), total, (group_by, kwargs))
+		self.assertEqual(len(runs_api.list_app_runs("huf", flow_ids=flows)), 5)
+
 	def test_bad_group_by_refused(self):
 		frappe.set_user(USER_A)
 		with self.assertRaises(frappe.ValidationError):
