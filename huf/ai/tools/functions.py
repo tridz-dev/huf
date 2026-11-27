@@ -68,7 +68,8 @@ def create_document(doctype: str, data: dict, function=None):
 			"permission_denied": True
 		}
 
-	doc = frappe.get_doc({"doctype": doctype, **data})
+	# the checked doctype goes last: a "doctype" key in data must not replace it
+	doc = frappe.get_doc({**data, "doctype": doctype})
 	doc.insert()
 	return {"document_id": doc.name, "message": "Document created", "doctype": doctype}
 
@@ -141,6 +142,7 @@ def update_document(doctype: str, document_id: str, data: dict, tool=None):
                 if param.default_value and not data.get(param.fieldname):
                     data[param.fieldname] = param.default_value
 
+        data = {key: value for key, value in data.items() if key != "doctype"}
         doc.update(data)
         doc.save()
 
@@ -416,6 +418,7 @@ def set_value(doctype: str, document_id: str, fieldname: str | dict, value: str 
 		return json.loads(_guard_err)
 
 	if isinstance(fieldname, dict):
+		fieldname = {key: val for key, val in fieldname.items() if key != "doctype"}
 		return client.set_value(doctype, document_id, fieldname)
 	else:
 		return client.set_value(doctype, document_id, fieldname, value)

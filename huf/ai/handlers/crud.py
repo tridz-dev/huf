@@ -174,7 +174,8 @@ def create_create_function(doctype: str) -> Callable:
         Returns:
             dict: Created document
         """
-        doc = frappe.get_doc({"doctype": doctype, **kwargs})
+        # the pinned doctype goes last: the arguments are model-controlled
+        doc = frappe.get_doc({**kwargs, "doctype": doctype})
         doc.insert()
         return doc
 
@@ -209,7 +210,7 @@ def create_update_function(doctype: str) -> Callable:
         doc = frappe.get_doc(doctype, name)
 
         for key, value in kwargs.items():
-            if hasattr(doc, key):
+            if key != "doctype" and hasattr(doc, key):
                 setattr(doc, key, value)
 
         doc.save()
@@ -331,7 +332,8 @@ def handle_create_document(reference_doctype=None, ignore_permissions=False, **k
             doc_fields = kwargs.pop("doc")
             kwargs.update(doc_fields)
 
-        doc = frappe.get_doc({"doctype": reference_doctype, **kwargs})
+        # the checked doctype goes last: a "doctype" argument must not replace it
+        doc = frappe.get_doc({**kwargs, "doctype": reference_doctype})
         doc.insert(ignore_permissions=ignore_permissions)
 
         # Return a concise dictionary to prevent polluting the LLM context with a huge document payload
@@ -520,6 +522,8 @@ def handle_update_document(document_id=None, data=None, reference_doctype=None, 
     _meta, _guard_err = _check_doctype_allowed(reference_doctype)
     if _guard_err:
         return json.loads(_guard_err)
+
+    data = {key: value for key, value in data.items() if key != "doctype"}
 
     if not frappe.db.exists(reference_doctype, document_id):
         return {"success": False, "error": f"{reference_doctype} {document_id} not found"}
@@ -819,6 +823,9 @@ def handle_set_value(doctype: str = None, filters: dict = None, fieldname: str =
     """
     if not doctype or not filters or not fieldname:
         return {"success": False, "error": "Missing required parameters"}
+
+    if fieldname == "doctype":
+        return {"success": False, "error": "The doctype of a document cannot be changed"}
 
     _meta, _guard_err = _check_doctype_allowed(doctype)
     if _guard_err:
