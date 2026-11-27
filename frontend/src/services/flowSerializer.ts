@@ -72,12 +72,12 @@ const NO_NEXT_TYPES = new Set<string>(['condition', 'router.llm', 'router.decisi
 
 /** Valid values of a handle id / edge route other than 'next'. */
 export const FLOW_EDGE_ROUTES: readonly FlowEdgeRoute[] = [
-    'next', 'error', 'true', 'false', 'option', 'default', 'approve', 'reject', 'timeout', 'body',
+    'next', 'error', 'true', 'false', 'option', 'default', 'approve', 'reject', 'timeout', 'body', 'fallback',
 ];
 
 const ROUTE_LABELS: Partial<Record<FlowEdgeRoute, string>> = {
     error: 'On error', true: 'True', false: 'False', default: 'Default',
-    approve: 'Approved', reject: 'Rejected', timeout: 'Timed out', body: 'Each item',
+    approve: 'Approved', reject: 'Rejected', timeout: 'Timed out', body: 'Each item', fallback: "Can't tell",
 };
 
 /** Route of a canvas edge: `data.route`, else the source handle id, else 'next'. */
@@ -183,6 +183,9 @@ function serializeNode(node: FlowNode, outgoing: FlowEdge[], nextOf: Map<string,
         case 'condition':
             setIf('on_true', first('true'));
             setIf('on_false', first('false'));
+            // fallback_next stays in canvas config only to show the optional "Can't tell" handle; the edge decides.
+            delete config.fallback_next;
+            setIf('fallback_next', first('fallback'));
             break;
         case 'router.llm':
         case 'router.decision': {
@@ -420,6 +423,7 @@ function deserializeEdgesForNode(node: BackendNode, byId: Map<string, BackendNod
         case 'condition':
             push(cfg.on_true, 'true');
             push(cfg.on_false, 'false');
+            push(cfg.fallback_next, 'fallback');
             break;
         case 'router.llm':
         case 'router.decision': {

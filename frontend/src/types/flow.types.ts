@@ -362,6 +362,7 @@ export interface EndOutcome {
  *  next      -> node.next
  *  error     -> node.on_error
  *  true/false-> condition on_true / on_false
+ *  fallback  -> condition fallback_next (taken when the facts cannot be known)
  *  option    -> router options[] (label = edge.label)
  *  default   -> router default when it is not also an option target
  *  approve/reject/timeout -> human.approval approve_next / reject_next / timeout_next
@@ -370,7 +371,7 @@ export interface EndOutcome {
  */
 export type FlowEdgeRoute =
   | 'next' | 'error' | 'true' | 'false' | 'option' | 'default'
-  | 'approve' | 'reject' | 'timeout' | 'body';
+  | 'approve' | 'reject' | 'timeout' | 'body' | 'fallback';
 
 export interface FlowEdgeData {
   route?: FlowEdgeRoute;
