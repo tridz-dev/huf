@@ -42,7 +42,7 @@ export function FlowMembersPanel({ flowId, open, onOpenChange, stepName }: { flo
     setRemoving(null);
     if (!row) return;
     try {
-      await removeFlowMember(flowId, row.member_key);
+      await removeFlowMember(flowId, row.member_ref);
     } catch {
       /* the reload below shows what is still there */
     }
@@ -80,7 +80,7 @@ export function FlowMembersPanel({ flowId, open, onOpenChange, stepName }: { flo
                 </TableHeader>
                 <TableBody>
                   {rows.map((r) => (
-                    <TableRow key={r.member_key} data-testid="flow-member-row">
+                    <TableRow key={r.member_ref} data-testid="flow-member-row">
                       <TableCell className="break-all">{r.member_key}</TableCell>
                       <TableCell>{STATUS_WORD[r.status] ?? r.status}</TableCell>
                       <TableCell>{(r.current_node_id && stepName?.(r.current_node_id)) || ''}</TableCell>

@@ -4,7 +4,10 @@ import { handleFrappeError } from '@/lib/frappe-error';
 export type FlowMemberStatus = 'Active' | 'Waiting' | 'Completed' | 'Exited';
 
 export interface FlowMemberRow {
+  /** Masked by the server. */
   member_key: string;
+  /** Opaque handle for removing this person. */
+  member_ref: string;
   status: FlowMemberStatus;
   current_node_id?: string | null;
   active_flow_run?: string | null;
@@ -31,11 +34,11 @@ export async function listFlowMembers(flow: string): Promise<FlowMemberRow[]> {
 }
 
 /** Editors: forget a person and cancel their waiting run. */
-export async function removeFlowMember(flow: string, memberKey: string): Promise<{ removed: boolean }> {
+export async function removeFlowMember(flow: string, memberRef: string): Promise<{ removed: boolean }> {
   try {
-    const result = await call.post('huf.ai.flow.runs.members_api.remove_flow_member', { flow, member_key: memberKey });
+    const result = await call.post('huf.ai.flow.runs.members_api.remove_flow_member', { flow, member_ref: memberRef });
     return result.message as { removed: boolean };
   } catch (error) {
-    handleFrappeError(error, `Error removing ${memberKey} from flow ${flow}`);
+    handleFrappeError(error, `Error removing a person from flow ${flow}`);
   }
 }

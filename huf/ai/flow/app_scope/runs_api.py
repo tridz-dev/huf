@@ -4,6 +4,8 @@ A host app (Happiol) shows a programme-wide view of its runs without sending its
 scoped to the flows whose ``owner_app`` is ``app`` and that the caller may ``view`` (``flow_access``). They return
 ids, status, the final reason code, timestamps and a masked member key: never step outputs, context or payloads.
 
+The caller's User Permissions and the app's ``huf_flow_app_narrow`` hook apply to both.
+
 Runs are filtered on ``(owner_app, status, modified)``; the index is added in ``agent_flow_run.on_doctype_update``.
 """
 
@@ -16,6 +18,7 @@ from frappe.utils import cint, get_datetime
 
 from huf.ai.flow.app_scope.access import flow_access
 from huf.ai.flow.app_scope.api_guards import guard_app_named
+from huf.ai.flow.runs.access import get_user_permitted_runs
 
 DOCTYPE = "Agent Flow Run"
 NODE_OUTPUTS_KEY = "__node_outputs__"
@@ -96,7 +99,7 @@ def _runs(app, status, flow_ids, member_key, since, *, limit):
 	flows = _viewable_flows(app, flow_ids)
 	if not flows:
 		return []
-	return frappe.get_all(
+	return get_user_permitted_runs(
 		DOCTYPE,
 		filters=_filters(app, flows, status, member_key, since),
 		fields=[
@@ -112,7 +115,7 @@ def _runs(app, status, flow_ids, member_key, since, *, limit):
 def _sql_counts(app, flows, keys, status, since) -> list[dict]:
 	columns = {"flow": "flow_definition as flow", "status": "status"}
 	group = [{"flow": "flow_definition", "status": "status"}[k] for k in keys]
-	return frappe.get_all(
+	return get_user_permitted_runs(
 		DOCTYPE,
 		filters=_filters(app, flows, status, None, since),
 		fields=[columns[k] for k in keys] + [{"COUNT": "name", "as": "count"}],

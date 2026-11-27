@@ -20,7 +20,7 @@ class TestReadFollowups(base.AppReadFixture):
 		waiting = {
 			"type": "approval",
 			"node_id": "end",
-			"approver_type": "users",
+			"approver_type": "user",
 			"approver_users": [approver],
 			"message": f"Refund {NAME} on {base.PHONE}",
 			"headline": f"Refund for {NAME}",

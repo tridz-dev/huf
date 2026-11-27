@@ -35,7 +35,7 @@ class TestFlowMembersApi(IntegrationTestCase):
 	def test_list_returns_members_of_this_flow_only(self):
 		member.upsert_member(self.flow_id, "alice")
 		rows = members_api.list_flow_members(self.flow_id)
-		self.assertEqual([r["member_key"] for r in rows], ["alice"])
+		self.assertEqual([r["member_key"] for r in rows], ["****"])
 		self.assertEqual(rows[0]["status"], "Active")
 
 	def test_remove_forgets_member(self):
