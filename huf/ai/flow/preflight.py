@@ -85,6 +85,9 @@ def _send_checks(defn, flow_id: str | None) -> list[Finding]:
 	sends = [n for n in _nodes(defn) if n.get("type") in SEND_NODE_TYPES]
 	for node in sends:
 		node_id, config = node.get("id"), _config(node)
+		if "retry" in config or "retry" in node:
+			# A blocked send is final (G2); a retry would also park around the send's own deferral.
+			found.append(Finding("SEND_RETRY_FORBIDDEN", node_id))
 		category = config.get("category")
 		if _blank(config.get("gateway")) or _blank(config.get("recipient")) or category not in ("marketing", "service"):
 			# What the guard chain needs to judge the send: without it the send cannot be checked.

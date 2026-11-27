@@ -13,6 +13,7 @@
   "category",
   "column_break_gen1",
   "status",
+  "live_send",
   "solution",
   "version",
   "schema_version",
@@ -71,6 +72,13 @@
    "in_list_view": 1,
    "label": "Status",
    "options": "Draft\nActive\nArchived"
+  },
+  {
+   "default": "0",
+   "description": "Off: sends are previewed, nothing goes out. Turned off again on every republish.",
+   "fieldname": "live_send",
+   "fieldtype": "Check",
+   "label": "Live Send"
   },
   {
    "default": "1",
@@ -167,7 +175,7 @@
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-08-24 00:00:00.000000",
+ "modified": "2026-11-27 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Flow Definition",
