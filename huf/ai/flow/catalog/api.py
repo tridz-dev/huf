@@ -4,6 +4,9 @@
 as ``node._sample``). Examples come, best first, from: the sample saved on the step (``_sample``), the latest successful
 run (else the latest run), the last request a webhook received, and the document type of a data trigger (field names plus one
 recent record the user may read). Nothing is invented: a step with no example says so and the picker offers to get one.
+
+Run examples come only from a run the user may read, with the approval redaction of the run pages. On an app-owned flow,
+people who are not privileged get them (and the record example) with personal data masked (G4).
 """
 
 from __future__ import annotations
@@ -14,12 +17,16 @@ import frappe
 from frappe import _
 
 from huf.ai.api_support import require_permission
+from huf.ai.flow.catalog import doc_fields, gateway_fields, node_registry
 from huf.ai.flow.catalog import fields as cat
-from huf.ai.flow.catalog import node_registry
-from huf.ai.flow.catalog import doc_fields, gateway_fields
+from huf.ai.flow.runs.access import can_access_run, is_delegated_flow
+from huf.ai.flow.runs.shape import data_of_viewer
+from huf.ai.flow.support.pii import mask_for_view
 from huf.ai.flow.support.trigger_sample import redact_sample
 
 NODE_OUTPUTS_KEY = "__node_outputs__"
+#: Newest runs looked through for one the user may read.
+RUN_CANDIDATES = 20
 DOC_EVENT = "trigger.doc-event"
 WEBHOOK = "trigger.webhook"
 
@@ -56,18 +63,33 @@ def _step_tool(node: dict) -> str | None:
 
 
 def _latest_run(flow_id: str) -> dict | None:
+	"""The newest successful run (else the newest run) the user may read, as that user may see its data."""
 	for filters in ({"flow_id": flow_id, "status": "Success"}, {"flow_id": flow_id}):
 		rows = frappe.get_all(
 			"Agent Flow Run",
 			filters=filters,
-			fields=["name", "creation", "trigger_payload", "context_json", "trigger_type"],
+			fields=["name", "creation", "trigger_payload", "context_json", "trigger_type", "status", "waiting"],
 			order_by="creation desc",
-			limit_page_length=1,
-			ignore_permissions=True,
+			limit_page_length=RUN_CANDIDATES,
 		)
-		if rows:
-			return rows[0]
+		for row in rows:
+			if can_access_run(row["name"], "read"):
+				return _run_for_viewer(row, flow_id)
 	return None
+
+
+def _run_for_viewer(run: dict, flow_id: str) -> dict:
+	"""A copy of ``run`` with its data masked and redacted for this user; the stored run is never changed."""
+	data = {"payload": _json(run.get("trigger_payload")), "outputs": _run_outputs(run)}
+	if is_delegated_flow(flow_id):
+		data = mask_for_view(data)  # as a whole, so a name found in one value is also masked in the others
+	waiting = _json(run.get("waiting"))
+	data = data_of_viewer(run.get("status"), waiting if isinstance(waiting, dict) else {}, flow_id, data)
+	return {
+		**run,
+		"trigger_payload": data.get("payload"),
+		"context_json": {NODE_OUTPUTS_KEY: data.get("outputs")},
+	}
 
 
 def _run_payload(run: dict | None) -> dict | None:
@@ -88,7 +110,7 @@ def _meta_fields(doctype: str) -> list:
 	return list(frappe.get_meta(doctype).fields)
 
 
-def _doctype_fields(doctype: str, payload: dict | None) -> tuple[list[dict], dict | None, str]:
+def _doctype_fields(doctype: str, payload: dict | None, flow_id: str) -> tuple[list[dict], dict | None, str]:
 	"""Fields of a data trigger's document type, the record the examples come from and where it came from."""
 	if not frappe.db.exists("DocType", doctype):
 		return [], None, "none"
@@ -101,6 +123,8 @@ def _doctype_fields(doctype: str, payload: dict | None) -> tuple[list[dict], dic
 		]
 		rows = frappe.get_list(doctype, fields=["name", "creation", "modified", "owner", *readable], order_by="modified desc", limit_page_length=1)
 		record, source = (rows[0] if rows else None), "doctype"
+		if record and is_delegated_flow(flow_id):
+			record = mask_for_view(dict(record))
 	record = redact_sample(record) if isinstance(record, dict) else None
 	link_meta = lambda dt: _meta_fields(dt) if frappe.has_permission(dt, "read") else []  # noqa: E731
 	fields = doc_fields.doctype_fields(_meta_fields(doctype), record, child_fields=_meta_fields, link_meta=link_meta)
@@ -127,7 +151,7 @@ def _trigger_step(graph: dict, flow_id: str, run: dict | None) -> dict | None:
 		doctype = (node.get("config") or {}).get("doctype")
 		step["doctype"] = doctype
 		if doctype:
-			fields, record, source = _doctype_fields(doctype, pinned or payload)
+			fields, record, source = _doctype_fields(doctype, pinned or payload, flow_id)
 			step.update(fields=fields, has_sample=bool(record), source="pinned" if pinned else source)
 			step["ran_at"] = str(run["creation"]) if run and source == "last_run" else None
 		return step
