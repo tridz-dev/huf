@@ -44,6 +44,7 @@ NODE_TYPE_LABELS: dict[str, str] = {
 	"doc.update": "Update Document",
 	"flow.call": "Run Another Flow",
 	"member.set": "Remember for this Person",
+	"send.message": "Send Message",
 }
 
 FIELD_LABELS: dict[str, str] = {
@@ -114,6 +115,7 @@ TYPE_TITLES: dict[str, str] = {
 	"doc.update": "Update a record",
 	"flow.call": "Run another flow",
 	"member.set": "Remember for this person",
+	"send.message": "Send a message",
 }
 
 TOOL_TITLES: dict[str, str] = {

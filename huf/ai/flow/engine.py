@@ -1593,6 +1593,7 @@ def _exec_router_llm(flow_run, node: dict, config: dict, settings: dict) -> dict
 _exec_router_decision = adapters.exec_router_decision
 _exec_stop = adapters.exec_stop
 _exec_member_set = adapters.exec_member_set
+_exec_send_message = adapters.exec_send_message
 _exec_doc_get = adapters.exec_doc_get
 _exec_doc_update = adapters.exec_doc_update
 _exec_flow_call = adapters.exec_flow_call
@@ -2200,6 +2201,7 @@ _NODE_EXECUTORS = {
 	"wait": exec_wait,
 	"stop": _exec_stop,
 	"member.set": _exec_member_set,
+	"send.message": _exec_send_message,
 	"doc.get": _exec_doc_get,
 	"doc.update": _exec_doc_update,
 	"flow.call": _exec_flow_call,

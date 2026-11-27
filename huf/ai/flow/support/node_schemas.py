@@ -27,6 +27,7 @@ _NODE_DISPLAY = {
 	"doc.update": ("Update document", "FilePen", "data"),
 	"flow.call": ("Run another flow", "Workflow", "advanced"),
 	"member.set": ("Remember for this person", "UserPen", "data"),
+	"send.message": ("Send message", "Send", "data"),
 	"condition": ("Condition (IF)", "GitFork", "control"),
 	"foreach": ("Loop", "RotateCw", "control"),
 	"validate": ("Validate", "ShieldCheck", "control"),
