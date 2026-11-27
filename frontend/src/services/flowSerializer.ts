@@ -255,7 +255,7 @@ function serializeNode(node: FlowNode, outgoing: FlowEdge[], nextOf: Map<string,
     return out;
 }
 
-function mapFrontendNodeTypeToBackend(node: FlowNode): BackendNodeType {
+export function mapFrontendNodeTypeToBackend(node: FlowNode): BackendNodeType {
     const nodeType = node.data?.nodeType;
     if (nodeType === 'end') return 'output';
 
