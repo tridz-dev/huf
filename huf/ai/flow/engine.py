@@ -400,7 +400,7 @@ def _start_run_lock_heartbeat(cache, key: str) -> None:
 			try:
 				if not cache.expire(key, RUN_LOCK_TTL_SECONDS):
 					return  # the lock is gone; EXPIRE never recreates it
-			except Exception:
+			except Exception:  # noqa: BLE001, S110
 				pass  # try again on the next beat, while the TTL still has room
 
 	threading.Thread(target=beat, name=f"run-lock-heartbeat:{key}", daemon=True).start()

@@ -34,7 +34,9 @@ class TestRunLockTTL(IntegrationTestCase):
 		engine._stop_run_lock_heartbeat(self.key)
 
 	def test_ttl_is_step_time_plus_margin(self):
-		self.assertEqual(engine.RUN_LOCK_TTL_SECONDS, engine.RUN_LOCK_STEP_SECONDS + engine.RUN_LOCK_MARGIN_SECONDS)
+		self.assertEqual(
+			engine.RUN_LOCK_TTL_SECONDS, engine.RUN_LOCK_STEP_SECONDS + engine.RUN_LOCK_MARGIN_SECONDS
+		)
 		self.assertEqual(engine.RUN_LOCK_TTL_SECONDS, 120)
 		self.assertTrue(engine._acquire_run_lock(self.name))
 		self.assertTrue(0 < frappe.cache().ttl(self.key) <= 120)
@@ -91,6 +93,9 @@ class TestWakeSweeperLock(IntegrationTestCase):
 		self.assertFalse(frappe.cache().get(self.key))
 
 	def test_lock_is_released_when_the_sweep_raises(self):
-		with patch.object(park, "_drain_due_waits", side_effect=RuntimeError), self.assertRaises(RuntimeError):
+		with (
+			patch.object(park, "_drain_due_waits", side_effect=RuntimeError),
+			self.assertRaises(RuntimeError),
+		):
 			park.wake_due_waits()
 		self.assertFalse(frappe.cache().get(self.key))

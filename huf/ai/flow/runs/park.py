@@ -203,7 +203,7 @@ def _take_sweeper_lock() -> bool:
 	try:
 		cache = frappe.cache()
 		return bool(cache.set(cache.make_key(WAKE_LOCK_KEY), 1, ex=WAKE_LOCK_TTL_SECONDS, nx=True))
-	except Exception:
+	except Exception:  # noqa: BLE001
 		return True  # the lock only avoids overlap; ``wake_run`` is what prevents a double wake
 
 
@@ -211,7 +211,7 @@ def _drop_sweeper_lock() -> None:
 	try:
 		cache = frappe.cache()
 		cache.delete(cache.make_key(WAKE_LOCK_KEY))
-	except Exception:
+	except Exception:  # noqa: BLE001, S110
 		pass
 
 
