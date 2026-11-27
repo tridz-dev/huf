@@ -137,7 +137,7 @@ def sync_from_frappe_user(doc, method=None):
 				frappe.flags.syncing_huf_roles = True
 				try:
 					huf_user_role.db_set("enabled", 0)
-				huf_user_role.db_set("granted_by_default", 0)
+					huf_user_role.db_set("granted_by_default", 0)
 					_bust_cache(doc.name)
 				finally:
 					frappe.flags.syncing_huf_roles = False
