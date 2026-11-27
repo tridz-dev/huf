@@ -8,7 +8,9 @@ import frappe
 from frappe.tests import IntegrationTestCase
 
 from huf.ai.flow import engine as flow_engine
+from huf.ai.flow.nodes import send
 from huf.ai.flow.runs import park
+from huf.ai.flow.support import step_keys
 from huf.ai.flow.nodes.subflow import MAX_DEPTH, exec_flow_call
 from huf.ai.flow.tests.test_flow_draft_validation import finished_flow
 from huf.ai.graph.executor import GraphContext
@@ -63,6 +65,46 @@ class TestSubflow(IntegrationTestCase):
 
 	def _children(self):
 		return frappe.get_all("Agent Flow Run", filters={"parent_run": self.parent.name}, fields=["name", "status", "parent_node"])
+
+	def _child_of(self, member_key=None, data=None, **config):
+		if member_key:
+			self.parent.db_set("member_key", member_key)
+		config = {"flow_id": self.child_flow.name, **config}
+		with patch("frappe.enqueue"):
+			out = exec_flow_call(self.parent, {**self.node, "config": config}, config, {}, GraphContext(data or {}))
+		self.assertEqual(out["status"], "success", out)
+		return frappe.get_doc("Agent Flow Run", out["output"]["run"])
+
+	def test_child_is_about_the_parents_member(self):
+		child = self._child_of(member_key="cust-1")
+		self.assertEqual(child.member_key, "cust-1")
+		self.assertEqual(flow_engine.load_context(child.context_json).data.get("_huf_split"), None)
+		result = self._send(child, flow_engine.load_context(child.context_json), "$member", "service", resolve=send.recipient_binder.RecipientUnbound())
+		self.assertEqual(self.resolve.call_args.args[1], "cust-1")
+		self.assertEqual(result["output"]["status"], "blocked")
+
+	def test_no_member_parent_keeps_the_session_user(self):
+		self.assertEqual(self._child_of().member_key, "Administrator")
+
+	def test_held_out_parent_holds_out_the_child(self):
+		flag = {"holdout": True, "bucket": 5, "node_id": "sp1"}
+		child = self._child_of(member_key="cust-1", data={"_huf_split": flag}, input={"n": 3, "_huf_split": {"holdout": False}})
+		data = flow_engine.load_context(child.context_json).data
+		self.assertEqual((data["_huf_split"], data["n"]), (flag, 3))
+		result = self._send(child, flow_engine.load_context(child.context_json), "+919876543210", "marketing")
+		self.resolve.assert_not_called()
+		self.assertEqual(result["output"], {"status": "blocked", "reason": "holdout_no_contact"})
+
+	def _send(self, run, ctx, recipient, category, resolve=None):
+		"""One send step of ``run`` up to the guard chain, which neither case here may reach."""
+		node = step_keys.with_key({"id": "s1", "type": "send.message", "next": "n2"}, frappe.generate_hash())
+		config = {"gateway": "gw", "recipient": recipient, "template": "promo", "category": category}
+		with patch.object(flow_engine, "_context_of", return_value=ctx), patch.object(flow_engine, "_persist_context"), \
+			patch.object(send, "channel_of", return_value="whatsapp"), patch.object(send.guard, "evaluate") as evaluate, \
+			patch.object(send.recipient_binder, "resolve", side_effect=resolve) as self.resolve:
+			result = send.exec_send_message(run, node, config, {})
+		evaluate.assert_not_called()
+		return result
 
 	def _wait_for_child(self):
 		with patch("frappe.enqueue") as enq:

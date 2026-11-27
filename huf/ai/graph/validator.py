@@ -232,6 +232,7 @@ def validate_graph(
 		errors.extend(_check_limits_policy(graph))
 		return ValidationResult(ok=not errors, profile=profile, errors=tuple(errors))
 	errors.extend(_check_reachability(graph, nodes_by_id))
+	errors.extend(_check_app_trigger_on_error(nodes))
 	errors.extend(_check_acyclic(graph, nodes_by_id))
 	errors.extend(step_checks.check_tool_ids_literal(nodes))
 	errors.extend(step_checks.check_app_node_validators(nodes, profile))
@@ -269,6 +270,15 @@ def _check_split_weights(nodes: list) -> list[ValidationError]:
 			for problem in config_problems(node.get("config") or {}):
 				errors.append(ValidationError("SPLIT_WEIGHTS", node.get("id"), "config", problem))
 	return errors
+
+
+def _check_app_trigger_on_error(nodes: list) -> list[ValidationError]:
+	"""An App trigger only refuses starts that are not its app's; an error step would let those carry on."""
+	return [
+		ValidationError("TRIGGER_ON_ERROR", node.get("id"), "on_error", "a trigger.app node must not declare on_error")
+		for node in nodes
+		if isinstance(node, dict) and node.get("type") == "trigger.app" and node.get("on_error") is not None
+	]
 
 
 def validate_procedure_graph(graph: dict, **kwargs: Any) -> ValidationResult:

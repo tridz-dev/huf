@@ -40,6 +40,14 @@ class TestAppTriggerPure(unittest.TestCase):
 				result = validate_flow(app_flow(), mode)
 				self.assertTrue(result.ok, (mode, result.errors, result.issues))
 
+	def test_on_error_on_the_trigger_is_refused(self):
+		defn = app_flow()
+		defn["nodes"][0] = {**TRIGGER, "on_error": "end2"}
+		with patch("frappe.get_installed_apps", return_value=[]), patch("frappe.get_hooks", return_value=[]):
+			result = validate_flow(defn, "publish")
+		self.assertFalse(result.ok)
+		self.assertTrue(any("error step" in m for m in result.messages(defn)), result.messages(defn))
+
 	def test_activatable_and_not_unset(self):
 		self.assertEqual(collect_activation_problems(app_flow()), [])
 		self.assertFalse(entry_is_unset(app_flow()))
