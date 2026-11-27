@@ -122,6 +122,7 @@ class TestEmbedHeaders(IntegrationTestCase):
 
 	def test_denied_page_is_403_and_keeps_the_header(self):
 		# The built shell (huf.html) is not in a source checkout, so render the error path directly.
+		set_request(method="GET", path="/huf/embed/flow/missing-flow")
 		self.assertEqual(resolve_path("huf/embed/flow/missing-flow"), "huf")
 		frappe.set_user("Guest")
 		with self.assertRaises(frappe.PermissionError) as raised:
