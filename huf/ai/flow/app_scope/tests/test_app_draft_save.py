@@ -150,13 +150,12 @@ class TestAppDraftSave(IntegrationTestCase):
 		self._refused(_defn({"id": "tell", "type": "send.message", "config": config, "next": "end"}, first="tell"))
 
 	def _gateway(self):
-		doc = frappe.get_doc(
-			{"doctype": "Gateway", "gateway_name": f"AppGW {frappe.generate_hash(length=8)}", "provider": "Telegram"}
-		)
-		frappe.set_user("Administrator")
-		doc.insert(ignore_permissions=True, ignore_mandatory=True)
-		frappe.set_user(USER)
-		return doc.name
+		"""A stored Gateway row; the channel's own setup checks are not under test."""
+		name = f"AppGW {frappe.generate_hash(length=8)}"
+		doc = frappe.get_doc({"doctype": "Gateway", "gateway_name": name, "provider": "Telegram"})
+		doc.name = name
+		doc.db_insert()
+		return name
 
 	def _sending(self, gateway):
 		config = {"gateway": gateway, "recipient": "$member", "message": ""}
