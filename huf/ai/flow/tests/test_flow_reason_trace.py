@@ -97,7 +97,9 @@ class TestEngineStepRecord(unittest.TestCase):
 				return ["tier_not_eligible"]
 			return real(hook, *args, app_name=app_name, **kwargs)
 
-		with mock.patch.object(frappe, "get_hooks", side_effect=get_hooks):
+		# the installed apps cannot be read with no site
+		with mock.patch.object(frappe, "get_hooks", side_effect=get_hooks), \
+			mock.patch.object(frappe, "get_installed_apps", return_value=["huf"]):
 			outcome = engine._with_reason_code(
 				Outcome.from_mapping(
 					{"status": "success", "output": {"status": "blocked", "reason": "tier_not_eligible"}}

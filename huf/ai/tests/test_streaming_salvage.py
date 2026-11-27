@@ -175,6 +175,9 @@ class TestStreamSalvageOnDisconnect(unittest.TestCase):
 			patch.object(agent_integration.frappe.db, "sql", _fake_sql, create=True),
 			patch.object(agent_integration.frappe.db, "get_value", _fake_get_value, create=True),
 			patch.object(agent_integration.frappe.db, "count", lambda *a, **k: 0, create=True),
+			# RunBudget reads Agent Settings before the run is written; loading that doctype's meta would
+			# go through the faked get_value above. None means "use the budget defaults".
+			patch.object(agent_integration.frappe.db, "get_single_value", lambda *a, **k: None, create=True),
 			patch.object(agent_integration.frappe, "log_error", lambda *a, **k: None, create=True),
 			patch.object(agent_integration.frappe, "logger", lambda *a, **k: MagicMock(), create=True),
 			patch.object(agent_integration, "assert_agent_access", lambda *a, **k: None),

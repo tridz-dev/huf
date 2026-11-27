@@ -168,8 +168,10 @@ class TestSenderOptOutStored(unittest.TestCase):
 			mock.patch.object(svc, "_live_sender_entry", return_value={"name": "E1", "state": "Approved"}),
 			mock.patch.object(svc, "_save_entry") as save,
 			mock.patch.object(svc.frappe, "get_doc") as gd,
+			mock.patch.object(svc, "fire_hook") as hook,  # opt-out hook handlers write to the database
 		):
 			svc._record_opt_out(GW, "42")
+		hook.assert_called_once()
 		save.assert_called_once_with("E1", {"state": "Opted out", "previous_state": "Approved"})
 		gd.assert_not_called()
 
@@ -178,8 +180,10 @@ class TestSenderOptOutStored(unittest.TestCase):
 			mock.patch.object(svc, "_live_sender_entry", return_value=None),
 			mock.patch.object(svc, "_save_entry") as save,
 			mock.patch.object(svc.frappe, "get_doc") as gd,
+			mock.patch.object(svc, "fire_hook") as hook,
 		):
 			svc._record_opt_out(GW, "42", "Jane")
+		hook.assert_called_once()
 		save.assert_not_called()
 		doc = gd.call_args.args[0]
 		self.assertEqual(
