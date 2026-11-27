@@ -49,7 +49,7 @@ _TEST_MODES = ("skip", "run")
 #: Built-in types the app-scoped (embed) palette may offer (docs/flow/BUILDER_EMBED.md section 3). Generic write paths
 #: (``code.run``, ``tool.call``, ``doc.create``, ``doc.update``) stay out; a new built-in is excluded until added here.
 EMBED_BUILTIN_TYPES = (
-	"trigger.unset", "trigger.schedule", "trigger.doc-event", "condition", "router.decision", "transform", "foreach",
+	"trigger.unset", "trigger.schedule", "trigger.doc-event", "trigger.app", "condition", "router.decision", "transform", "foreach",
 	"wait", "stop", "output", "human.approval", "member.set", "send.message", "knowledge.search", "split",
 )
 
@@ -190,8 +190,25 @@ def can_wait(type_id: str | None) -> bool:
 	return bool(node_type and node_type.can_wait)
 
 
+APP_TRIGGER_TYPE = "trigger.app"
+
+
+def _exec_trigger_app(flow_run, node: dict, config: dict, settings: dict) -> dict:
+	"""trigger.app: a passthrough for runs its app started (trigger_type "App") and for dry runs; anything else fails."""
+	from huf.ai.flow.engine import _context_of
+	from huf.ai.flow.testrun import gate as test_gate
+
+	if str(getattr(flow_run, "trigger_type", "") or "") != "App" and not test_gate.is_dry_run(flow_run):
+		app = str((config or {}).get("app") or "its app")
+		return {"status": "failed", "error": frappe._("This flow is started by {0} only.").format(app)}
+	return {"status": "success", "output": _context_of(flow_run, settings).as_dict()}
+
+
 def executor_for(type_id: str | None):
-	"""An engine executor ``(flow_run, node, config, settings) -> dict | Outcome`` for a registered type, else None."""
+	"""An engine executor ``(flow_run, node, config, settings) -> dict | Outcome`` for a registered type, else None.
+	``trigger.app`` is a built-in served here so the engine needs no branch for it."""
+	if type_id == APP_TRIGGER_TYPE:
+		return _exec_trigger_app
 	node_type = get_type(type_id)
 	if node_type is None:
 		return None
