@@ -37,7 +37,7 @@ def save_app_draft(doc, definition_json: str) -> None:
 		_refuse(_("This flow is live. Only a draft can be changed."))
 	_check_steps(doc.owner_app, _nodes(new))
 	_check_triggers(_nodes(old), _nodes(new))
-	_check_targets(_nodes(old), _nodes(new))
+	_check_targets(doc.owner_app, _nodes(old), _nodes(new))
 	doc.definition_json = definition_json
 	doc.flags.ignore_permlevel_for_fields = ["definition_json"]
 	doc.save()
@@ -79,11 +79,11 @@ def _check_triggers(old: list[dict], new: list[dict]) -> None:
 		_refuse(_("Triggers cannot be added to this flow."))
 
 
-def _check_targets(old: list[dict], new: list[dict]) -> None:
+def _check_targets(app: str, old: list[dict], new: list[dict]) -> None:
 	if targets.handoff_problems(new):
 		_refuse(_("A handoff step here may only hand over the run's own member, without a message."))
 	if targets.computed_gateways(new):
 		_refuse(_("Choose the channel of each step; it cannot be worked out while the flow runs."))
-	refused = targets.unauthorised_gateways(old, new, frappe.session.user)
+	refused = targets.unauthorised_gateways(old, new, app, frappe.session.user)
 	if refused:
-		_refuse(_("You need write access to Gateway {0} to use it in this flow.").format(", ".join(refused)))
+		_refuse(_("Gateway {0} cannot be used in this flow.").format(", ".join(refused)))

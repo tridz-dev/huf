@@ -3,13 +3,14 @@
 A live ``handoff`` marks a contact ``handed_off`` and may copy their transcript to CRM or helpdesk. So in an
 app-owned flow it may only name the run's own member: ``recipient: "$member"``, no ``conversation``, and an empty
 ``message``. The Gateway of a ``handoff`` or ``send.message`` step is written in the flow, never computed while it
-runs. An app editor may keep a Gateway the flow already uses; naming another one needs write access to it, as for a
-chat trigger (:mod:`huf.ai.flow.gateways.authority`).
+runs. An app editor may keep a Gateway the flow already uses; another one must be listed by the flow's app
+(:mod:`huf.ai.flow.app_scope.gateways`).
 """
 
 import frappe
 
 from huf.ai.channels import recipient_binder
+from huf.ai.flow.app_scope.gateways import app_gateways
 
 GATEWAY_STEP_TYPES = frozenset({"handoff", "send.message"})
 
@@ -58,11 +59,10 @@ def gateway_names(nodes) -> set[str]:
 	}
 
 
-def unauthorised_gateways(old_nodes, new_nodes, user: str) -> list[str]:
-	"""Gateways ``new_nodes`` adds to the flow that ``user`` may not write."""
-	return sorted(
-		name
-		for name in gateway_names(new_nodes) - gateway_names(old_nodes)
-		if not frappe.db.exists("Gateway", name)
-		or not frappe.has_permission("Gateway", "write", doc=name, user=user)
-	)
+def unauthorised_gateways(old_nodes, new_nodes, app: str, user: str) -> list[str]:
+	"""Gateways ``new_nodes`` adds to the flow that ``app`` does not let ``user`` pick (or that do not exist)."""
+	added = gateway_names(new_nodes) - gateway_names(old_nodes)
+	if not added:
+		return []
+	allowed = app_gateways(app, user)
+	return sorted(name for name in added if name not in allowed or not frappe.db.exists("Gateway", name))
