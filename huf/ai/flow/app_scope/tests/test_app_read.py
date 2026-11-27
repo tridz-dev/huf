@@ -187,7 +187,7 @@ class TestAppRead(IntegrationTestCase):
 		self.assertTrue(api.handle_get_flow_run(self.runs[FLOW_1])["success"])
 		self._assert_run_refused(self.runs[FLOW_2])
 
-	def test_user_permission_on_run_link_field_applies_to_detail_and_lists(self):
+	def test_user_permission_on_runs_applies_to_detail_and_lists(self):
 		hidden = (
 			frappe.get_doc(
 				{
@@ -195,13 +195,12 @@ class TestAppRead(IntegrationTestCase):
 					"flow_definition": FLOW_1,
 					"flow_id": FLOW_1,
 					"status": "Waiting User",
-					"requester_user": USER_OTHER,
 				}
 			)
 			.insert(ignore_permissions=True)
 			.name
 		)
-		self._restrict("User", USER)
+		self._restrict("Agent Flow Run", self.runs[FLOW_1])
 		frappe.set_user(USER)
 		self._assert_run_refused(hidden)
 		self.assertEqual([r["name"] for r in api.list_flow_runs(flow_id=FLOW_1)], [self.runs[FLOW_1]])
