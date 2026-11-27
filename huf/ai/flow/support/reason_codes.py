@@ -33,6 +33,8 @@ HUF_CODES = frozenset(
 		"media_host_not_allowed",
 		"no_opt_in",
 		"window_defer_exhausted",
+		# member exited every flow on a STOP keyword (H-W2-14)
+		"opt_out",
 		# condition facts providers
 		"facts_error",
 		"facts_timeout",
