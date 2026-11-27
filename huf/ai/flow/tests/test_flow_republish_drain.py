@@ -98,7 +98,9 @@ class TestRepublishDrain(IntegrationTestCase):
 
 	def test_deleted_definition_fails_unpinned_parked_run_clearly(self):
 		run = self._parked_run(self.v1)
-		frappe.db.set_value("Agent Flow Run", run.name, {"pinned_definition": None, "pinned_fingerprint": None})
+		frappe.db.set_value(
+			"Agent Flow Run", run.name, {"pinned_definition": None, "pinned_fingerprint": None}
+		)
 		run.reload()
 		frappe.db.delete("Flow Definition", {"name": self.flow_id})
 		with self.assertRaises(engine.FlowDefinitionGone):
