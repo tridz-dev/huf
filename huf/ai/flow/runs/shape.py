@@ -193,6 +193,18 @@ def _modified_iso(value):
 	return _utc_iso(value)
 
 
+# Ids the approval UI and decision rights need: approver emails are identifiers, not trace data.
+_WAITING_KEEP = ("type", "node_id", "approver_type", "approver_role", "approver_roles", "approver_users", "timeout_at", "timeout_ms", "timeout_next")
+
+
+def waiting_for_view(waiting):
+	"""A masked copy of a run's ``waiting`` payload for a read API; approver ids stay intact (G4)."""
+	if not isinstance(waiting, dict) or not waiting:
+		return mask_for_view(waiting)
+	masked = mask_for_view({k: v for k, v in waiting.items() if k not in _WAITING_KEEP})
+	return {**masked, **{k: waiting[k] for k in _WAITING_KEEP if k in waiting}}
+
+
 def approval_lapsed(status, waiting) -> bool:
 	"""True for a run parked on a code approval whose ``expires_on`` has passed.
 
