@@ -29,7 +29,7 @@ class TestNodeForms(unittest.TestCase):
 		fields = _fields(self.schemas, "knowledge.search")
 		self.assertEqual(set(fields), set(knowledge.KEYS))
 		self.assertTrue(fields["query"]["required"] and fields["knowledge_source"]["required"])
-		self.assertEqual(fields["query"]["type"], "expression")
+		self.assertEqual(fields["query"]["type"], "value")
 		self.assertEqual((fields["top_k"]["min"], fields["top_k"]["max"]), (1, knowledge.MAX_TOP_K))
 		self.assertEqual(fields["top_k"]["default"], knowledge.DEFAULT_TOP_K)
 		self.assertEqual(self.schemas["knowledge.search"]["category"], "ai")

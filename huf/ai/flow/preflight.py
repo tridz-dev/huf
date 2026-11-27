@@ -109,6 +109,7 @@ def _send_checks(defn, flow_id: str | None) -> list[Finding]:
 		):
 			# Only WhatsApp has a send transport and guard chain; any other (or unknown) gateway cannot send.
 			found.append(Finding("SEND_GATEWAY_UNSUPPORTED", node_id))
+		# "$member" (the run's member, resolved at send time) is a reference, never a literal number.
 		if guard_steps.normalise_recipient(config.get("recipient")):
 			# A phone number written into the definition: the outbox stores references only (G4).
 			found.append(Finding("SEND_RECIPIENT_LITERAL", node_id))
