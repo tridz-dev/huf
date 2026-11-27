@@ -232,6 +232,28 @@ def waiting_of_viewer(status, waiting, flow):
 	return kept
 
 
+def hides_run_data(status, waiting, flow) -> bool:
+	"""True when this user sees an approval's texts redacted: the run data they quote is hidden as well."""
+	return waiting_of_viewer(status, waiting, flow) is not waiting
+
+
+def data_of_viewer(status, waiting, flow, data):
+	"""Run ``data`` (already field-masked) as this user may see it.
+
+	A name under an unknown key or in free text cannot be recognised, so whoever may not read the approval's texts
+	gets the keys only (the steps that ran), with every text and number redacted.
+	"""
+	return _redact_values(data) if hides_run_data(status, waiting, flow) else data
+
+
+def _redact_values(value):
+	if isinstance(value, dict):
+		return {k: _redact_values(v) for k, v in value.items()}
+	if isinstance(value, list):
+		return [_redact_values(v) for v in value]
+	return value if value is None or isinstance(value, bool) or value == "" else REDACTED
+
+
 def approval_lapsed(status, waiting) -> bool:
 	"""True for a run parked on a code approval whose ``expires_on`` has passed.
 
@@ -270,7 +292,8 @@ def shape_list_rows(rows: list, names: dict, can_fail: bool) -> list:
 			people[r.owner] = _full_name(r.owner)
 	for r in rows:
 		ctx = _load_json(r.pop("context_json", None))
-		r["approval_lapsed"] = approval_lapsed(r.status, _load_json(r.pop("waiting", None)))
+		waiting = _load_json(r.pop("waiting", None))
+		r["approval_lapsed"] = approval_lapsed(r.status, waiting)
 		creation = r.pop("creation", None)
 		r["flow_name"] = names.get(r.flow_id) or r.flow_id
 		r["stale"] = _is_stale(r.status, r.modified)
@@ -281,7 +304,7 @@ def shape_list_rows(rows: list, names: dict, can_fail: bool) -> list:
 		r["started_by"] = r.pop("owner", None)
 		r["started_by_name"] = people.get(r["started_by"])
 		r["run_number"] = bisect_right(by_flow[r.flow_id], creation) if creation is not None else None
-		r["input_hint"] = input_hint(mask_for_view(ctx))
+		r["input_hint"] = "" if hides_run_data(r.status, waiting, r.flow_id) else input_hint(mask_for_view(ctx))
 		recorded = stored_outcome(r) if r.status == "Success" else None
 		r["outcome"] = recorded or compute_outcome(r.status, r.current_node_id, ctx, metas.get(r.flow_id, {}))
 		r.pop("outcome_label", None)

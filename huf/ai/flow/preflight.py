@@ -152,6 +152,26 @@ def _facts_checks(defn, flow_id: str | None) -> list[Finding]:
 	return found
 
 
+def _app_target_checks(defn, owner_app: str | None) -> list[Finding]:
+	"""In an app-owned flow, a step may only reach whom the app may reach (see ``app_scope/targets.py``)."""
+	if not owner_app:
+		return []
+	from huf.ai.flow.app_scope import targets
+
+	nodes = _nodes(defn)
+	found = [Finding("APP_HANDOFF_TARGET", node_id) for node_id in targets.handoff_problems(nodes)]
+	found += [Finding("APP_GATEWAY_NOT_FIXED", node_id) for node_id in targets.computed_gateways(nodes)]
+	# A handoff has no other way to find its conversation than the Gateway written in the flow.
+	found += [
+		Finding("APP_HANDOFF_TARGET", n.get("id"))
+		for n in nodes
+		if n.get("type") == "handoff"
+		and _blank(_config(n).get("gateway"))
+		and n.get("id") not in {f.node_id for f in found}
+	]
+	return found
+
+
 def _hook_paths() -> list[str]:
 	return list(frappe.get_hooks(HOOK) or [])
 
@@ -192,8 +212,11 @@ def _app_checks(defn, flow_id: str | None) -> list[Finding]:
 	return found
 
 
-def run_preflight(defn, flow_id: str | None = None) -> list[Finding]:
-	"""Every finding for ``defn``, built-in checks first. Never raises: a check that breaks is a finding."""
+def run_preflight(defn, flow_id: str | None = None, *, owner_app: str | None = None) -> list[Finding]:
+	"""Every finding for ``defn``, built-in checks first. Never raises: a check that breaks is a finding.
+
+	``owner_app`` names the flow's app when ``flow_id`` is not stored yet.
+	"""
 	found: list[Finding] = []
 	for check in (_lint, _send_checks, _facts_checks):
 		try:
@@ -201,6 +224,13 @@ def run_preflight(defn, flow_id: str | None = None) -> list[Finding]:
 		except Exception as exc:  # noqa: BLE001 -- a broken check becomes an error finding
 			_log_failure(check.__name__, exc)
 			found.append(Finding("PREFLIGHT_CHECK_ERROR"))
+	try:
+		from huf.ai.flow.app_scope.ownership import owner_app_of
+
+		found.extend(_app_target_checks(defn, owner_app or owner_app_of(flow_id)))
+	except Exception as exc:  # noqa: BLE001 -- a broken check becomes an error finding
+		_log_failure("_app_target_checks", exc)
+		found.append(Finding("PREFLIGHT_CHECK_ERROR"))
 	found.extend(_app_checks(defn, flow_id))
 	return found
 

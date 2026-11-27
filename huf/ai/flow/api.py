@@ -27,7 +27,7 @@ from huf.ai.flow.runs.access import (
 	require_run_access,
 	run_reader,
 )
-from huf.ai.flow.runs.shape import _STEP_TYPE_TITLES, extras_for_detail, waiting_for_view, waiting_of_viewer
+from huf.ai.flow.runs.shape import _STEP_TYPE_TITLES, data_of_viewer, extras_for_detail, waiting_for_view, waiting_of_viewer
 from huf.ai.flow.support.approval_card import api_card, build_card
 from huf.ai.flow.support.decision_rights import approval_decision_rights
 from huf.ai.flow.support.node_schemas import _node_config_schema, build_node_schemas  # noqa: F401  (re-exported)
@@ -443,7 +443,7 @@ def get_flow_run(flow_run_id: str) -> dict:
 		"trigger_type": doc.trigger_type,
 		"current_node_id": doc.current_node_id,
 		"hop_count": doc.hop_count,
-		"context_json": mask_for_view(ctx),
+		"context_json": data_of_viewer(doc.status, waiting, doc.flow_definition or doc.flow_id, mask_for_view(ctx)),
 		"waiting": waiting_for_view(seen),
 		"node_labels": _node_labels(doc.flow_id),
 		"trigger_event": _trigger_event(doc, ctx),
@@ -1039,13 +1039,15 @@ def handle_get_flow_run(flow_run_id: str, **kwargs) -> dict:
 		except (json.JSONDecodeError, TypeError):
 			pass
 
+		flow = doc.flow_definition or doc.flow_id
+		seen_ctx = data_of_viewer(doc.status, waiting, flow, mask_for_view(ctx))
 		return {
 			"success": True,
 			"status": doc.status,
 			"current_node_id": doc.current_node_id,
 			# Masked before cutting, so a cut value cannot slip past the masker (G4).
-			"context_summary": {k: str(v)[:100] for k, v in mask_for_view(ctx).items()},
-			"waiting": waiting_for_view(waiting_of_viewer(doc.status, waiting, doc.flow_definition or doc.flow_id)),
+			"context_summary": {k: str(v)[:100] for k, v in seen_ctx.items()},
+			"waiting": waiting_for_view(waiting_of_viewer(doc.status, waiting, flow)),
 		}
 	except Exception as e:
 		log_flow_error(frappe.get_traceback(), "Get Flow Run Tool Error")

@@ -135,11 +135,11 @@ def check_can_publish(defn, previous_defn=None, user: str | None = None) -> None
 	frappe.throw(publish_denied_message(sensitive_labels(defn)), frappe.PermissionError)
 
 
-def check_preflight(defn, flow_id: str | None = None) -> None:
+def check_preflight(defn, flow_id: str | None = None, *, owner_app: str | None = None) -> None:
 	"""Raise when any preflight check (built-in or an app's ``huf_flow_preflight``) reports an error."""
 	from huf.ai.flow.preflight import blocking, run_preflight
 
-	errors = blocking(run_preflight(defn, flow_id))
+	errors = blocking(run_preflight(defn, flow_id, owner_app=owner_app))
 	if not errors:
 		return
 	listed = ", ".join(f"{f.code} ({f.node_id})" if f.node_id else f.code for f in errors)
