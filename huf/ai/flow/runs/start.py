@@ -35,7 +35,9 @@ def start_flow_for_member(
 	skipped (or resumed a waiting run), or this ``entry_key`` (default: the member key) already started a run.
 	"""
 	_check_key(member_key)
-	flow = frappe.db.get_value("Flow Definition", flow_id, ["status", "owner", "definition_json"], as_dict=True)
+	flow = frappe.db.get_value(
+		"Flow Definition", flow_id, ["status", "owner", "definition_json"], as_dict=True
+	)
 	if not flow or flow.status != "Active":
 		return None
 	node = _trigger_node(flow.definition_json, trigger_node_id)
@@ -69,7 +71,9 @@ def _check_key(member_key) -> None:
 		or member_key != member_key.strip()
 		or len(member_key) > member.MAX_KEY_CHARS
 	):
-		raise ValueError(f"member_key must be 1 to {member.MAX_KEY_CHARS} characters without surrounding spaces.")
+		raise ValueError(
+			f"member_key must be 1 to {member.MAX_KEY_CHARS} characters without surrounding spaces."
+		)
 
 
 def _trigger_node(definition_json, trigger_node_id: str | None) -> dict:
@@ -90,7 +94,9 @@ def _trigger_node(definition_json, trigger_node_id: str | None) -> dict:
 	return nodes[0]
 
 
-def _create_run(flow_id: str, member_key: str, payload: dict, entry_key: str | None, node: dict) -> str | None:
+def _create_run(
+	flow_id: str, member_key: str, payload: dict, entry_key: str | None, node: dict
+) -> str | None:
 	"""The new run's name, or ``None`` when this entry is a duplicate or the entry policy starts nothing."""
 	from huf.ai.flow import engine
 
@@ -112,9 +118,11 @@ def _create_run(flow_id: str, member_key: str, payload: dict, entry_key: str | N
 		if entry.entry_decision(flow_id, policy, key, payload)["action"] != "start":
 			return None
 		# Other trigger types would derive a member from the session or the payload; the app's key is passed instead.
-		trigger_type = {"trigger.webhook": "Webhook", "trigger.schedule": "Schedule", "trigger.doc-event": "Doc Event"}.get(
-			node.get("type"), "Manual"
-		)
+		trigger_type = {
+			"trigger.webhook": "Webhook",
+			"trigger.schedule": "Schedule",
+			"trigger.doc-event": "Doc Event",
+		}.get(node.get("type"), "Manual")
 		run = engine.create_flow_run(
 			flow_id=flow_id,
 			payload={**payload, ENTRY_MARKER: marker},
@@ -175,7 +183,8 @@ def _member_lock(flow_id: str, key: str):
 
 	def release():
 		frappe.db.multisql(
-			{"mariadb": "select release_lock(%s)", "postgres": "select pg_advisory_unlock(hashtext(%s))"}, (name,)
+			{"mariadb": "select release_lock(%s)", "postgres": "select pg_advisory_unlock(hashtext(%s))"},
+			(name,),
 		)
 
 	if not getattr(frappe.local, "request", None):
