@@ -12,7 +12,7 @@ from frappe.tests import IntegrationTestCase
 from frappe.utils import now_datetime
 
 from huf.ai.handlers import crud
-from huf.ai.tools import functions, frappe_generic
+from huf.ai.tools import frappe_generic, functions
 from huf.ai.tools.code_execution import _make_broker_handler
 from huf.ai.tools.doctype_guard import _check_doctype_allowed
 
