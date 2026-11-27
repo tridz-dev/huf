@@ -1143,7 +1143,7 @@ def _make_node_handler(flow_run, settings):
 		if node.type == "send.message":
 			decided = _decided_send(flow_run, raw, settings)
 			if decided is not None:
-				return Outcome.from_mapping(decided)
+				return _with_reason_code(Outcome.from_mapping(decided))
 
 		def run_once():
 			try:
@@ -1168,9 +1168,20 @@ def _make_node_handler(flow_run, settings):
 				pass
 			if getattr(flow_run, "status", None) in WAITING_STATUSES:
 				return Outcome.paused(PauseRequest(kind="user", status_label=flow_run.status))
-		return outcome
+		return _with_reason_code(outcome)
 
 	return handler
+
+
+def _with_reason_code(outcome: Outcome) -> Outcome:
+	"""Stamp the step record with its registered reason code (H-W2-11): blocked, deferred, skipped steps (G2)."""
+	from huf.ai.flow.support import reason_codes
+
+	outcome.output = reason_codes.stamp(outcome.output)
+	if outcome.output is None and outcome.extra.get("skipped") is True:
+		# a turned-off step keeps its None output (later steps read it); its code goes on the outcome record
+		outcome.extra = reason_codes.stamp(outcome.extra)
+	return outcome
 
 
 def _execute_loop(flow_run, nodes_map: dict, edges_list: list, settings: dict):

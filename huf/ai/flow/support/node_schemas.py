@@ -13,6 +13,7 @@ _NODE_DISPLAY = {
 	"trigger.schedule": ("Schedule Trigger", "Clock", "trigger"),
 	"trigger.doc-event": ("Doc Event Trigger", "FileText", "trigger"),
 	"trigger.unset": ("Unset Trigger", "CircleDashed", "trigger"),
+	"trigger.app": ("App Trigger", "AppWindow", "trigger"),
 	"trigger.gateway": ("Chat Message Trigger", "MessageSquare", "trigger"),
 	"trigger.whatsapp": ("WhatsApp Message Trigger", "MessageCircle", "trigger"),
 	"trigger.telegram": ("Telegram Message Trigger", "Send", "trigger"),
@@ -113,6 +114,9 @@ _EXTRA_NODE_CONFIGS = {
 		False,
 	),
 }
+
+#: Types only an app can start (start_flow_for_member); the palette marks them "app only".
+APP_ONLY_TYPES = frozenset({"trigger.app"})
 
 _SCHEMA_FILE = None
 
@@ -234,6 +238,8 @@ def build_node_schemas(schema: dict | None = None) -> dict:
 		if node_type == "router.decision":
 			config = _with_decision(config)
 		out[node_type] = _descriptor(node_type, node_def.get("description"), config, forbids_next)
+		if node_type in APP_ONLY_TYPES:
+			out[node_type]["app_only"] = True
 	for node_type, (description, config, forbids_next) in _EXTRA_NODE_CONFIGS.items():
 		out.setdefault(node_type, _descriptor(node_type, description, config, forbids_next))
 	return out
