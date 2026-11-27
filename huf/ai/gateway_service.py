@@ -2517,6 +2517,7 @@ def _start_flow_for_event(event, gateway) -> dict:
         payload=payload,
         trigger_type="Gateway",
         ignore_permissions=True,
+        gateway_event=event.name,
     )
     event.db_set({"flow_run": flow_run.name, "status": "Running"})
     frappe.enqueue(

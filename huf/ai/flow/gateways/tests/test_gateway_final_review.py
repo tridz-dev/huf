@@ -85,10 +85,10 @@ class TestNonAdminGatewayChecks(IntegrationTestCase):
 		self.assertFalse(out["found"])
 
 	def test_create_flow_run_rechecks_active_for_a_gateway_message(self):
-		payload = {"gateway": self.gateway, "gateway_event": "GWE-1", "text": "hi", "provider": "WhatsApp"}
+		payload = {"gateway": self.gateway, "text": "hi", "provider": "WhatsApp"}
 		self.assertNotEqual(frappe.db.get_value("Flow Definition", self.flow_id, "status"), "Active")
 		with self.assertRaises(frappe.ValidationError):
-			create_flow_run(flow_id=self.flow_id, payload=payload, trigger_type="Gateway", ignore_permissions=True)
+			create_flow_run(flow_id=self.flow_id, payload=payload, trigger_type="Gateway", ignore_permissions=True, gateway_event="GWE-1")
 		self.assertFalse(frappe.db.exists("Agent Flow Run", {"flow_id": self.flow_id}))
 
 
