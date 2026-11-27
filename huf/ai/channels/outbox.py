@@ -258,17 +258,20 @@ def on_delivery_status(gateway=None, provider_message_id=None, status=None, erro
 	try:
 		if not provider_message_id or not status:
 			return
-		name = frappe.db.get_value(DOCTYPE, {"provider_message_id": provider_message_id}, "name")
-		if name:
-			frappe.db.set_value(
-				DOCTYPE,
-				name,
-				{
-					"delivery_status": str(status)[:40],
-					**({"error_code": str(error_code)[:80]} if error_code else {}),
-				},
-				update_modified=False,
-			)
+		row = frappe.db.get_value(
+			DOCTYPE,
+			{"provider_message_id": provider_message_id},
+			["name", "delivery_status", "error_code"],
+			as_dict=True,
+		)
+		if not row:
+			return
+		values = {"delivery_status": str(status)[:40]}
+		if error_code:
+			values["error_code"] = str(error_code)[:80]
+		# a duplicate webhook writes nothing, so ``modified`` moves only for a change reports must pick up
+		if any(row[key] != value for key, value in values.items()):
+			frappe.db.set_value(DOCTYPE, row.name, values)
 	except Exception as exc:  # noqa: BLE001 - a status hook never raises
 		frappe.logger("huf.outbox").warning("delivery status: %s", type(exc).__name__)
 
