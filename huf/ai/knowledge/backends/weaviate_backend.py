@@ -17,7 +17,7 @@ from typing import Any
 import frappe
 from frappe import _
 
-from . import ChunkResult, KnowledgeBackend
+from . import BackendNotInitializedError, ChunkResult, KnowledgeBackend
 from .llamaindex_base import LLAMAINDEX_AVAILABLE, LlamaIndexBackend
 
 try:
@@ -302,6 +302,24 @@ class WeaviateBackend(LlamaIndexBackend, KnowledgeBackend):
 			# Propagate: swallowing would let add_chunks append duplicates on re-index.
 			raise
 		return count_before
+
+	def get_chunks(self, input_id: str, start: int = 0, limit: int = 20):
+		from .chunk_listing import MAX_LISTED_CHUNKS, page_chunks, to_result
+
+		if not self._initialized or not self.client:
+			raise BackendNotInitializedError
+		collection = self.client.collections.get(self.index_name)
+		result = collection.query.fetch_objects(filters=self._scope_filter(input_id), limit=MAX_LISTED_CHUNKS)
+		chunks = []
+		for obj in result.objects:
+			props = dict(obj.properties or {})
+			meta = {k: v for k, v in props.items() if k in ("chunk_index", "page", "page_end")}
+			chunks.append(
+				to_result(
+					props.get("chunk_id") or str(obj.uuid), props.get("text"), meta, props.get("source_title")
+				)
+			)
+		return page_chunks(chunks, start, limit)
 
 	def clear(self) -> None:
 		if not self._initialized:

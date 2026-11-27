@@ -99,7 +99,14 @@ class LitellmRealtimeEngine(VoiceEngine):
 
 	@rate_limit(limit=10, seconds=60)
 	def start_session(
-		self, agent_doc, config: dict[str, Any], user_ref: Any, *, conversation_id: str | None = None
+		self,
+		agent_doc,
+		config: dict[str, Any],
+		user_ref: Any,
+		*,
+		conversation_id: str | None = None,
+		session_user: str | None = None,
+		voice_nonce: str | None = None,
 	) -> dict[str, Any]:
 		# model comes only from the per-Agent voice_config resolved upstream in
 		# huf.ai.voice.api - never from user_ref or any browser-supplied value.
@@ -125,6 +132,7 @@ class LitellmRealtimeEngine(VoiceEngine):
 			"model": model_name,
 			"api_key_provider": provider_name,
 			"conversation_id": conversation_id,
+			"user": session_user,
 		}
 		frappe.cache().set_value(cache_key, payload, expires_in_sec=SESSION_CACHE_EXPIRY_SEC)
 

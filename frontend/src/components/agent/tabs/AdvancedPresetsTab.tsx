@@ -76,6 +76,9 @@ const THINKING = [
 
 const bool = (v: boolean | undefined) => Boolean(v);
 
+const NO_POLICY_MEMORY_HINT =
+  'No policy selected: facts are saved and recalled automatically for each user and this agent, with no approval step. Other users never see them. Choose a policy to change this.';
+
 export function AdvancedPresetsTab({
   form, allModels, summaryPromptOptions, loadingSummaryPrompts = false, memoryPolicyOptions = [],
   loadingMemoryPolicies = false, cacheStatus, onCreateSummaryPrompt, dangerZone, locked = false,
@@ -274,7 +277,7 @@ export function AdvancedPresetsTab({
             <BoolRow form={form} name="show_tool_execution_details" title="Show tool execution details" description="Show each tool call and its result in the chat." />
           </div>
           {enableMemory && (
-            <Field label="Memory policy" hint="Which memories may be stored and recalled.">
+            <Field label="Memory policy" hint={get('memory_policy') ? 'Which memories may be stored and recalled.' : NO_POLICY_MEMORY_HINT}>
               {(p) => (
                 <Combobox id={p.id} options={memoryPolicyOptions.map((o) => ({ value: o.value, label: o.label }))} value={get('memory_policy') ?? ''}
                   onValueChange={(v) => set('memory_policy', v || undefined)} disabled={loadingMemoryPolicies}

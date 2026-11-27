@@ -76,6 +76,11 @@ class TextExtractor(ABC):
 			"htm": "huf.ai.knowledge.extractors.html.HTMLExtractor",
 			".htm": "huf.ai.knowledge.extractors.html.HTMLExtractor",
 			
+			# CSV
+			"text/csv": "huf.ai.knowledge.extractors.csv_extractor.CSVExtractor",
+			"csv": "huf.ai.knowledge.extractors.csv_extractor.CSVExtractor",
+			".csv": "huf.ai.knowledge.extractors.csv_extractor.CSVExtractor",
+
 			# URL
 			"url": "huf.ai.knowledge.extractors.url.URLExtractor",
 		}

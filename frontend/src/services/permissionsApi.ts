@@ -13,7 +13,7 @@ export interface MeResponse {
   /** Granted by the Huf Role but refused by the server (flows.create / flows.manage without the matching Frappe role). */
   withheld_capabilities?: string[];
   /** What the user's Frappe roles allow per DocType; absent on older servers. */
-  doc_permissions?: Record<string, { create: boolean; delete: boolean }>;
+  doc_permissions?: Record<string, { create: boolean; write?: boolean; delete: boolean }>;
 }
 
 export interface HufUser {

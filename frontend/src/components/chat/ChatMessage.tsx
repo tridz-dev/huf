@@ -13,6 +13,7 @@ import { HubAskUser, splitAskUserBlocks } from '../hub/HubAskUser';
 import { MessageActions } from './MessageActions';
 import { ProposeProcedureAction } from './ProposeProcedureAction';
 import { MessageLoadingState } from './MessageLoadingState';
+import { StoppingIndicator } from './composer/StoppingIndicator';
 import { ChatErrorCard } from './ChatErrorCard';
 import { CopyButton } from './CopyButton';
 import { Image } from '@/components/ai-elements/image';
@@ -109,7 +110,8 @@ export function ChatMessage({
         toast.info("Denying tool calls isn't wired up yet.");
     };
 
-    const showLoading = isAssistant && !message.error && (
+    const isStopping = !!message.stopping && !message.error && message.runStatus !== 'Success';
+    const showLoading = isAssistant && !message.error && !isStopping && (
         ((status === 'submitted' || status === 'streaming') && isEmpty) ||
         message.runStatus === 'Queued' ||
         message.runStatus === 'Started'
@@ -288,6 +290,7 @@ export function ChatMessage({
                                     <ReasoningContent>{message.reasoning}</ReasoningContent>
                                 </Reasoning>
                             )}
+                            {isStopping && <StoppingIndicator />}
                             {/* Show loading state while message is generating */}
                             {showLoading && (
                                 <MessageLoadingState

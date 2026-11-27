@@ -175,8 +175,28 @@ class TestHubTriageWiring(IntegrationTestCase):
 	def test_current_instructions_left_alone(self):
 		with (
 			patch("frappe.db.exists", return_value=True),
-			patch("frappe.db.get_value", return_value="x 0. TRIAGE y CHANNEL SETUP v2 z"),
+			patch("frappe.db.get_value", return_value="x 0. TRIAGE y HUB DELEGATE v1 z"),
 			patch("frappe.db.set_value") as set_value,
 		):
 			self.assertFalse(hub_orchestrator_module.ensure_hub_orchestrator_instructions())
 		set_value.assert_not_called()
+
+	def test_delegate_tool_wired(self):
+		"""delegate_to_agent is attached to the Hub and registered with its handler."""
+		self.assertIn("delegate_to_agent", hub_orchestrator_module.BUILDER_TOOL_NAMES)
+		entry = next(
+			(t for t in registry_module.BUILDER_TOOLS if t.get("tool_name") == "delegate_to_agent"),
+			None,
+		)
+		self.assertIsNotNone(entry, "delegate_to_agent not found in BUILDER_TOOLS")
+		self.assertEqual(entry["function_path"], "huf.ai.tools.hub.delegate.delegate_to_agent")
+
+	def test_triage_instructions_delegate_and_new_marker(self):
+		"""TRIAGE (c) delegates instead of only linking, and carries the refresh marker."""
+		seed_path = Path(frappe.get_app_path("huf")) / "huf" / "agents" / "hub-orchestrator.json"
+		with open(seed_path, encoding="utf-8") as f:
+			instructions = json.load(f).get("instructions", "")
+		self.assertIn(hub_orchestrator_module.INSTRUCTIONS_MARKER, instructions)
+		self.assertIn("delegate_to_agent", instructions)
+		self.assertNotIn("you do NOT run business reports", instructions)
+		self.assertIn("call tools before asking the user anything", instructions)

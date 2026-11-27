@@ -165,7 +165,7 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
       };
     },
     initialParams: {},
-    pageSize: 9,
+    pageSize: 12,
     debounceMs: 300,
     autoLoad: true,
   });

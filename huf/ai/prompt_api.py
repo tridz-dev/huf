@@ -16,6 +16,7 @@ import frappe
 from frappe import _
 from frappe.utils import cint
 
+from huf.ai.prompts.versioning import create_version
 from huf.permissions import has_capability
 
 
@@ -54,55 +55,10 @@ def create_new_version(prompt_name, prompt_body, title=None, description=None):
 	if current.is_system:
 		frappe.throw(_("System prompts cannot be versioned by users."))
 
-	new_version = cint(current.version) + 1
-
-	# Mark current as no longer latest
-	frappe.db.set_value("Agent Prompt", prompt_name, "is_latest", 0, update_modified=False)
-
-	new_prompt = frappe.get_doc({
-		"doctype": "Agent Prompt",
-		"title": title or current.title,
-		"category": current.category,
-		"description": description or current.description,
-		"prompt_body": prompt_body,
-		"visibility": current.visibility,
-		"is_active": current.is_active,
-		"is_system": 0,
-		"tags": current.tags,
-		"version": new_version,
-		"is_latest": 1,
-		"previous_version": prompt_name,
-		"forked_from": current.forked_from,
-		"prompt_group": current.prompt_group or prompt_name,
-	})
-	new_prompt.insert()
-
-	# Update agents that point to the old version and are NOT locked
-	_update_agent_links(prompt_name, new_prompt.name, new_version)
-
-	return {"name": new_prompt.name, "version": new_version}
-
-
-def _update_agent_links(old_prompt_name, new_prompt_name, new_version):
-	"""Point unlocked agents from old prompt to new version."""
-	agents = frappe.get_all(
-		"Agent",
-		filters={
-			"prompt_mode": "Template",
-			"agent_prompt": old_prompt_name,
-			"prompt_version_locked": 0,
-		},
-		pluck="name",
+	new_prompt = create_version(
+		"Agent Prompt", current, prompt_body, title=title, description=description
 	)
-	for agent_name in agents:
-		frappe.db.set_value(
-			"Agent", agent_name,
-			{
-				"agent_prompt": new_prompt_name,
-				"template_version_at_attach": new_version,
-			},
-			update_modified=False,
-		)
+	return {"name": new_prompt.name, "version": cint(new_prompt.version)}
 
 
 @frappe.whitelist()
@@ -312,57 +268,10 @@ def create_new_summary_version(prompt_name, prompt_body, title=None, description
 	if current.is_system:
 		frappe.throw(_("System summary prompts cannot be versioned by users."))
 
-	new_version = cint(current.version) + 1
-
-	# Mark current as no longer latest
-	frappe.db.set_value(
-		"Agent Summary Prompt", prompt_name, "is_latest", 0, update_modified=False
+	new_prompt = create_version(
+		"Agent Summary Prompt", current, prompt_body, title=title, description=description
 	)
-
-	new_prompt = frappe.get_doc({
-		"doctype": "Agent Summary Prompt",
-		"title": title or current.title,
-		"category": current.category,
-		"description": description or current.description,
-		"prompt_body": prompt_body,
-		"visibility": current.visibility,
-		"is_active": current.is_active,
-		"is_system": 0,
-		"tags": current.tags,
-		"version": new_version,
-		"is_latest": 1,
-		"previous_version": prompt_name,
-		"forked_from": current.forked_from,
-		"prompt_group": current.prompt_group or prompt_name,
-	})
-	new_prompt.insert()
-
-	# Update agents that point to the old version and are NOT locked
-	_update_summary_agent_links(prompt_name, new_prompt.name, new_version)
-
-	return {"name": new_prompt.name, "version": new_version}
-
-
-def _update_summary_agent_links(old_prompt_name, new_prompt_name, new_version):
-	"""Point unlocked agents from old summary prompt to new version."""
-	agents = frappe.get_all(
-		"Agent",
-		filters={
-			"summary_prompt_mode": "Template",
-			"summary_prompt_template": old_prompt_name,
-			"summary_prompt_version_locked": 0,
-		},
-		pluck="name",
-	)
-	for agent_name in agents:
-		frappe.db.set_value(
-			"Agent", agent_name,
-			{
-				"summary_prompt_template": new_prompt_name,
-				"summary_template_version_at_attach": new_version,
-			},
-			update_modified=False,
-		)
+	return {"name": new_prompt.name, "version": cint(new_prompt.version)}
 
 
 @frappe.whitelist()

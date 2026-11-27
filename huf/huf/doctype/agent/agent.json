@@ -63,6 +63,7 @@
   "voice_engine",
   "voice_config",
   "voice_greeting",
+  "voice_language",
   "embed_tab",
   "embed_enabled",
   "publishable_key",
@@ -331,6 +332,13 @@
    "fieldtype": "Code",
    "label": "Voice Configuration",
    "options": "JSON"
+  },
+  {
+   "depends_on": "eval:doc.voice_enabled",
+   "description": "Leave empty to auto-detect: the agent understands and replies in the language spoken. Set a language code or name (e.g. ml, Malayalam) to force transcription and replies into it.",
+   "fieldname": "voice_language",
+   "fieldtype": "Data",
+   "label": "Voice Language"
   },
   {
    "depends_on": "eval:doc.voice_enabled",
@@ -673,10 +681,10 @@
   },
   {
    "default": "1",
-   "description": "Applies only to Doc Event runs on the legacy Agent Trigger model: creates/maintains conversation history per initiating user (or trigger owner) when checked, otherwise a single shared history is used. Scheduled runs never read this field. Automations built on the newer Automation model (Schedule, Doc Event, Webhook, App Event) do not read this field either — they set conversation identity per-Automation via Conversation Mode instead.",
+   "description": "For automations with a Dedicated conversation, keeps a separate conversation per initiating user (the user who made the change, or the run-as user for schedules and webhooks) when checked; otherwise one shared conversation is used. Guest runs always start a new conversation. New and No-UI modes are unaffected.",
    "fieldname": "persist_user_history",
    "fieldtype": "Check",
-   "label": "Persist per User (Doc/Schedule)"
+   "label": "Persist per User"
   },
   {
    "fetch_from": "provider.provider_brand",
@@ -1244,7 +1252,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-10-21 12:00:00.000000",
+ "modified": "2026-11-26 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Agent",

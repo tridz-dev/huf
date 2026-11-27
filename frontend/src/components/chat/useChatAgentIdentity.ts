@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { getConversation } from '@/services/chatApi';
 import { getAgent } from '@/services/agentApi';
 import type { AgentStarterPromptRow } from '@/types/agent.types';
+import { publishComposerMode, useComposerMode } from './composer/composerMode';
 
 export const DEFAULT_COLD_START_AGENT = 'Hub Orchestrator';
 
@@ -49,6 +50,7 @@ export function useChatAgentIdentity(chatId: string | null, searchParams: URLSea
   const [maxUploadSizeMb, setMaxUploadSizeMb] = useState<number | null>(null);
   const [runImmediately, setRunImmediately] = useState<boolean>(false);
   const [autonamingOfConversationTitle, setAutonamingOfConversationTitle] = useState<boolean>(true);
+  const composerMode = useComposerMode(agentName);
   const agentNameRef = useRef<string>('');
 
   // Keep ref in sync so async callbacks see the latest value
@@ -74,6 +76,7 @@ export function useChatAgentIdentity(chatId: string | null, searchParams: URLSea
         try {
           const agentData = await getAgent(conversation.agent);
           if (!cancelled) {
+            publishComposerMode(conversation.agent, agentData);
             setAgentDisplayName(agentData.agent_name || conversation.agent);
             setAgentModel(agentData.model || null);
             setAgentColor(agentData.agent_color || null);
@@ -112,6 +115,7 @@ export function useChatAgentIdentity(chatId: string | null, searchParams: URLSea
       try {
         const agentData = await getAgent(agentFromQuery);
         if (!cancelled) {
+          publishComposerMode(agentFromQuery, agentData);
           setAgentDisplayName(agentData.agent_name || agentFromQuery);
           setAgentModel(agentData.model || null);
           setAgentColor(agentData.agent_color || null);
@@ -180,6 +184,7 @@ export function useChatAgentIdentity(chatId: string | null, searchParams: URLSea
       getAgent(currentAgent)
         .then((agentData) => {
           if (cancelled) return;
+          publishComposerMode(currentAgent, agentData);
           setAgentDisplayName(agentData.agent_name || currentAgent);
           setAgentModel(agentData.model || null);
           setAgentColor(agentData.agent_color || null);
@@ -215,5 +220,7 @@ export function useChatAgentIdentity(chatId: string | null, searchParams: URLSea
     maxUploadSizeMb,
     runImmediately,
     autonamingOfConversationTitle,
+    composerMode,
+    agentModality: composerMode === 'text' ? 'Text' : composerMode === 'voice' ? 'Voice' : 'Both',
   };
 }

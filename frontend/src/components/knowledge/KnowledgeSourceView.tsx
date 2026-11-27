@@ -200,6 +200,10 @@ export function KnowledgeSourceView(props: KnowledgeSourceViewProps) {
                 overview.refresh();
                 props.onChanged();
               }}
+              onBulkDeleted={() => {
+                overview.refresh();
+                props.onChanged();
+              }}
               onReprocess={props.onReprocessInput}
               onRemove={props.onDeleteInput}
             />

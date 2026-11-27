@@ -111,6 +111,7 @@ export function mapAgentDocToFormValues(agent: Partial<AgentDoc>): AgentFormValu
     voice_engine: agent.voice_engine || undefined,
     voice_config: agent.voice_config || '{}',
     voice_greeting: agent.voice_greeting || '',
+    voice_language: (agent as { voice_language?: string | null }).voice_language || '',
     image_generation_model: agent.image_generation_model || undefined,
     tts_model: agent.tts_model || undefined,
     tts_voice: agent.tts_voice || '',
@@ -202,6 +203,7 @@ export const DEFAULT_FORM_VALUES: AgentFormValues = {
   voice_engine: undefined,
   voice_config: '{}',
   voice_greeting: '',
+  voice_language: '',
   image_generation_model: undefined,
   tts_model: undefined,
   tts_voice: '',
@@ -296,6 +298,7 @@ export function formValuesToDoc(values: AgentFormValues): Record<string, unknown
   voice_engine: values.voice_engine || undefined,
   voice_config: values.voice_config || '{}',
   voice_greeting: values.voice_greeting || '',
+  voice_language: values.voice_language || '',
   image_generation_model: values.image_generation_model || undefined,
   tts_model: values.tts_model || undefined,
   tts_voice: values.tts_voice || undefined,
@@ -387,7 +390,7 @@ export function toMcpRefs(items: AgentMcpServerRow[] | undefined): MCPServerRef[
 export const SECTION_FIELDS: Record<AgentConfigSection, readonly (keyof AgentFormValues)[]> = {
   general: ['agent_name', 'agent_modality', 'provider', 'model', 'temperature', 'top_p', 'disabled', 'run_immediately', 'description', 'instructions', 'starter_prompts', 'enable_prompt_caching', 'cache_control_type', 'cache_system_message', 'cache_conversation_history', 'prompt_cache_mode', 'prompt_mode', 'agent_prompt', 'prompt_version_locked', 'template_version_at_attach'],
   behavior: ['allow_chat', 'persist_conversation', 'persist_user_history', 'enable_multi_run', 'default_plan', 'allow_ask_user', 'allow_rich_elements', 'allow_document_artifacts'],
-  voice: ['voice_enabled', 'voice_engine', 'voice_config', 'voice_greeting', 'tts_model', 'tts_voice', 'stt_model'],
+  voice: ['voice_enabled', 'voice_engine', 'voice_config', 'voice_greeting', 'voice_language', 'tts_model', 'tts_voice', 'stt_model'],
   embed: ['embed_enabled', 'publishable_key', 'allowed_origins'],
   permissions: [
     'allow_all_users', 'allow_guest', 'allowed_users', 'allowed_roles', 'enable_conversation_data', 'conversation_data_api_permission',

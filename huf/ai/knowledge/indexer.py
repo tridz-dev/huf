@@ -157,6 +157,9 @@ def process_knowledge_input(knowledge_input: str, skip_lock: bool = False) -> di
 				source.status = "Ready"
 				source.last_indexed_at = now_datetime()
 				source.save(ignore_permissions=True)
+				from .hooks import recompute_source_status
+
+				recompute_source_status(source.name)
 
 			frappe.db.commit()
 

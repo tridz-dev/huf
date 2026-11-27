@@ -230,6 +230,7 @@ class AgentStreamRenderer(BaseRenderer):
 					skip_user_message=skip_user_message,
 					files=files,
 					project=project,
+					client_idempotency_key=_get_param("client_idempotency_key"),
 					desktop_executor_id=desktop_executor_id,
 					desktop_lease_secret=desktop_lease_secret,
 				)

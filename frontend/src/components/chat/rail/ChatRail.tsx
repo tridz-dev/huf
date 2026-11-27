@@ -14,6 +14,7 @@ import {
   type ConversationTitleUpdatedDetail,
   useConversationTitleSwitchFallback,
 } from '../useConversationTitleFallback';
+import { DEFAULT_COLD_START_AGENT } from '../useChatAgentIdentity';
 import type { ChatRailScope } from './chatRailScope';
 
 export interface ChatRailProps {
@@ -161,7 +162,7 @@ export function ChatRail({ onToggleRail, className }: ChatRailProps) {
   const scopeProjectId = scope.kind === 'project' ? scope.projectId : undefined;
   const activeAgent = selectedChatId
     ? selectedConversationAgent ?? undefined
-    : searchParams.get('agent') ?? undefined;
+    : searchParams.get('agent') ?? DEFAULT_COLD_START_AGENT;
 
   // Pinned conversations for the current scope - unfiltered globally, or
   // scoped to the active project's pins when the rail is project-scoped.

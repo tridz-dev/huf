@@ -1,5 +1,6 @@
 """Security round 2 (DECISIONS 13): the test-run gate fails CLOSED, and a step's preview never promises a harmless read."""
 
+import asyncio
 import json
 import unittest
 from unittest.mock import MagicMock, PropertyMock, patch
@@ -64,6 +65,25 @@ class TestGateFailsClosed(unittest.TestCase):
 			out = gate.agent_tool_gate("gmail_send_email", {"to": "x@example.invalid"}, {"agent_run_id": "AR-7"})
 		self.assertIsNotNone(out)
 		self.assertTrue(json.loads(out)["simulated"])
+
+	def test_delegation_in_a_test_never_starts_the_other_agent(self):
+		from huf.ai import sdk_tools
+
+		tool = sdk_tools.create_function_tool(
+			"delegate_to_agent", "d", "huf.ai.tools.hub.delegate.delegate_to_agent", {}
+		)
+		with (
+			patch("huf.ai.tools.hub.delegate._check_delegation") as check,
+			patch("huf.ai.tools.hub.delegate._start_child") as start,
+			gate.step_test_scope(),
+		):
+			out = asyncio.run(tool.on_invoke_tool(None, json.dumps({"target_agent_name": "Reports", "prompt": "x"})))
+		self.assertEqual(json.loads(out)["summary"], "Would ask the agent Reports")
+		check.assert_not_called()
+		start.assert_not_called()
+
+		node = {"type": "tool.call", "config": {"tool_id": "delegate_to_agent", "input": {"target_agent_name": "Reports"}}}
+		self.assertTrue(gate.simulate_node(node, lambda value: value)["simulated"])
 
 	def test_an_agents_read_still_runs_when_the_lookup_fails(self):
 		with patch.object(gate.frappe.db, "get_value", side_effect=_boom):

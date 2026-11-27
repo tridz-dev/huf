@@ -9,6 +9,12 @@ import {
   type NewConversationResponse,
   type SendMessageResponse,
 } from './chatApi';
+import { newStreamClientKey, setStreamRunId } from '@/components/chat/composer/activeRun';
+import {
+  GATEWAY_STATUSES,
+  GatewayError,
+  recoverRunAfterGateway,
+} from '@/components/chat/composer/gatewayRecovery';
 
 const frappeUrl = import.meta.env.VITE_FRAPPE_URL || window.location.origin;
 
@@ -20,7 +26,7 @@ export function setStreamingAvailable(value: boolean): void {
 }
 
 export interface StreamChunk {
-  type: 'delta' | 'reasoning' | 'tool_call' | 'complete' | 'error';
+  type: 'delta' | 'reasoning' | 'tool_call' | 'complete' | 'error' | 'run_started';
   content?: string;
   full_response?: string;
   full_reasoning?: string;
@@ -34,6 +40,10 @@ export interface StreamChunk {
   provider?: string;
   error?: string;
   tool_call?: { function?: { name?: string } };
+  /** Set on a synthesized error chunk when the gateway answered 502/503/504. */
+  gateway_status?: number;
+  /** Set on a recovered result when the run was still open after the recovery deadline. */
+  queued?: boolean;
 }
 
 type FrappeWindow = Window & {
@@ -100,6 +110,8 @@ export interface StreamAgentParams {
    * the internal 3s connectivity guard used elsewhere in this module.
    */
   signal?: AbortSignal;
+  /** Sent as `client_idempotency_key`, so the run can be found if the response is lost. */
+  clientKey?: string;
 }
 
 /**
@@ -108,7 +120,7 @@ export interface StreamAgentParams {
 export async function* streamAgentResponse(
   params: StreamAgentParams
 ): AsyncGenerator<StreamChunk, StreamChunk | undefined, unknown> {
-  const { agentName, message, conversationId, skipUserMessage, files, modelOverride, project, signal } = params;
+  const { agentName, message, conversationId, skipUserMessage, files, modelOverride, project, signal, clientKey } = params;
   const url = `${frappeUrl}/huf/stream/${encodeURIComponent(agentName)}`;
 
   const body: Record<string, unknown> = {
@@ -132,6 +144,9 @@ export async function* streamAgentResponse(
   if (project) {
     body.project = project;
   }
+  if (clientKey) {
+    body.client_idempotency_key = clientKey;
+  }
 
   const res = await fetch(url, {
     method: 'POST',
@@ -145,7 +160,11 @@ export async function* streamAgentResponse(
   });
 
   if (!res.ok) {
-    yield { type: 'error', error: `Request failed: ${res.status}` };
+    yield {
+      type: 'error',
+      error: `Request failed: ${res.status}`,
+      gateway_status: GATEWAY_STATUSES.has(res.status) ? res.status : undefined,
+    };
     return;
   }
 
@@ -226,6 +245,10 @@ export async function sendMessage(
     // instead of losing it or surfacing as an error.
     let lastPartialResponse = '';
     let lastPartialReasoning: string | undefined;
+    let runId: string | null = null;
+    const startedAt = Date.now();
+    setStreamRunId(null);
+    const clientKey = newStreamClientKey();
     try {
       for await (const chunk of streamAgentResponse({
         agentName: params.agent,
@@ -236,7 +259,13 @@ export async function sendMessage(
         modelOverride: params.modelOverride,
         project: params.project,
         signal,
+        clientKey,
       })) {
+        if (chunk.type === 'run_started') {
+          runId = chunk.agent_run_id ?? null;
+          setStreamRunId(runId);
+          continue;
+        }
         if (chunk.type === 'delta' && chunk.full_response !== undefined) {
           lastPartialResponse = chunk.full_response;
           onDelta?.(chunk.full_response);
@@ -255,6 +284,7 @@ export async function sendMessage(
           break;
         }
         if (chunk.type === 'error') {
+          if (chunk.gateway_status) throw new GatewayError(chunk.gateway_status);
           throw new Error(chunk.error ?? 'Stream error');
         }
       }
@@ -270,9 +300,27 @@ export async function sendMessage(
           response: lastPartialResponse,
           full_reasoning: lastPartialReasoning,
         };
+      } else if (err instanceof GatewayError || (runId && err instanceof TypeError)) {
+        // Gateway timeout (or the body dropped after the run started): the run may still
+        // be going. Poll it for a bounded time; the message is never re-sent.
+        const recovered = await recoverRunAfterGateway({
+          runId,
+          conversationId: params.conversationId,
+          clientKey,
+          startedAt,
+          signal,
+        }).catch((recoveryError: unknown) => {
+          if (isAbortError(recoveryError) || signal?.aborted) return null;
+          throw recoveryError;
+        });
+        lastComplete = recovered
+          ? { type: 'complete', ...recovered }
+          : { type: 'complete', success: true, full_response: lastPartialResponse, response: lastPartialResponse };
       } else {
         throw err;
       }
+    } finally {
+      setStreamRunId(null);
     }
 
     if (!lastComplete) {
@@ -296,8 +344,8 @@ export async function sendMessage(
       return {
         message: {
           success: runShape.success,
-          queued: false,
-          status: runShape.success ? 'Success' : 'Failed',
+          queued: data.queued ?? false,
+          status: data.queued ? 'Queued' : runShape.success ? 'Success' : 'Failed',
           response: runShape.response,
           error: runShape.error ?? undefined,
           conversation_id: data.conversation_id ?? '',
@@ -313,8 +361,8 @@ export async function sendMessage(
     return {
       message: {
         success: runShape.success,
-        queued: false,
-        status: runShape.success ? 'Success' : 'Failed',
+        queued: data.queued ?? false,
+        status: data.queued ? 'Queued' : runShape.success ? 'Success' : 'Failed',
         conversation_id: data.conversation_id ?? '',
         agent_message_id: data.agent_message_id ?? '',
         run: runShape,

@@ -65,6 +65,7 @@ BUILDER_TOOL_NAMES = (
     "list_agents",
     "find_existing_agents",
     "discover_site_capabilities",
+    "delegate_to_agent",
     "get_agent",
     "list_apps",
     "get_app",
@@ -240,8 +241,8 @@ def create_hub_orchestrator_agent() -> bool:
     return True
 
 
-# Bumped with the CHANNEL SETUP playbook so already-installed sites pick up the new instructions.
-INSTRUCTIONS_MARKER = "CHANNEL SETUP v2"
+# Bumped with each instructions change so already-installed sites pick up the new instructions.
+INSTRUCTIONS_MARKER = "HUB DELEGATE v1"
 
 
 def ensure_hub_orchestrator_instructions() -> bool:

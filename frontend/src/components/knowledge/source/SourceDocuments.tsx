@@ -13,10 +13,13 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Checkbox } from '@/components/ui/checkbox';
+import { useResourceAccess } from '@/hooks/permissions/useResourceAccess';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
 import { reprocessInput, retryIngestion, type ImportOptions } from '@/services/knowledgeApi';
 import { formatTimeAgo } from '@/utils/time';
 import type { KnowledgeInputDoc } from '@/types/knowledge.types';
+import { BulkDeleteInputs } from './BulkDeleteInputs';
 import { DocumentDetailSheet } from '../DocumentDetailSheet';
 import { inputOrigin, inputTitle } from '../inputDisplay';
 import { ConfirmActionDialog } from '../import/ConfirmActionDialog';
@@ -50,6 +53,8 @@ export interface SourceDocumentsProps {
   onFiles: (files: File[]) => void;
   importOptions?: ImportOptions | null;
   onRetried: (ingestion?: string) => void;
+  /** After a bulk delete: refresh the inputs, counts and source stats (once). */
+  onBulkDeleted?: () => void;
   onReprocess: (name: string) => Promise<void> | void;
   onRemove: (name: string) => Promise<void> | void;
 }
@@ -75,6 +80,7 @@ function StatusPill({ status }: { status: string }) {
 }
 
 export function SourceDocuments({
+  knowledgeSource,
   inputs,
   loading,
   counts,
@@ -85,12 +91,15 @@ export function SourceDocuments({
   onFiles,
   importOptions,
   onRetried,
+  onBulkDeleted,
   onReprocess,
   onRemove,
 }: SourceDocumentsProps) {
   const [retrying, setRetrying] = useState(false);
   const [openName, setOpenName] = useState<string | null>(null);
   const [removeTarget, setRemoveTarget] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const selectable = useResourceAccess('knowledge').canDelete && !!onBulkDeleted;
 
   const retryAll = async () => {
     setRetrying(true);
@@ -155,11 +164,32 @@ export function SourceDocuments({
   }
 
   const rows = filter === 'all' ? inputs : inputs.filter((i) => i.status === DOC_FILTER_STATUS[filter]);
+  const selectedNames = rows.filter((i) => selected.has(i.name)).map((i) => i.name);
+  const allOn = rows.length > 0 && selectedNames.length === rows.length;
+  const toggle = (name: string, on: boolean) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(name);
+      else next.delete(name);
+      return next;
+    });
 
   return (
     <>
       <ResourceList label="Documents">
         {slot}
+        {selectable && rows.length > 0 && (
+          <ResourceListSlot>
+            <div className="flex items-center gap-3 border-b border-line px-4 py-2 text-meta text-steel">
+              <Checkbox
+                aria-label="Select all documents"
+                checked={allOn ? true : selectedNames.length > 0 ? 'indeterminate' : false}
+                onCheckedChange={(v) => setSelected(v === true ? new Set(rows.map((i) => i.name)) : new Set())}
+              />
+              <span>{selectedNames.length > 0 ? `${selectedNames.length.toLocaleString()} of ${rows.length.toLocaleString()} selected` : 'Select all'}</span>
+            </div>
+          </ResourceListSlot>
+        )}
         {counts.failed > 0 && (
           <ResourceListSlot>
             <AttentionBanner
@@ -188,6 +218,9 @@ export function SourceDocuments({
                   status={<StatusPill status={i.status} />}
                   time={formatTimeAgo(i.creation)}
                   adding={adding}
+                  selected={selected.has(i.name)}
+                  onSelectedChange={selectable ? (on) => toggle(i.name, on) : undefined}
+                  selectLabel={`Select ${title}`}
                   reason={
                     i.status === 'Error' ? (
                       <>
@@ -216,6 +249,17 @@ export function SourceDocuments({
               );
             })}
       </ResourceList>
+      {selectable && (
+        <BulkDeleteInputs
+          knowledgeSource={knowledgeSource}
+          names={selectedNames}
+          onClear={() => setSelected(new Set())}
+          onDeleted={(deleted) => {
+            setSelected(new Set());
+            if (deleted.length > 0) onBulkDeleted?.();
+          }}
+        />
+      )}
       <DocumentDetailSheet input={inputs.find((i) => i.name === openName) ?? null} onOpenChange={(o) => !o && setOpenName(null)} />
       <ConfirmActionDialog
         open={removeTarget !== null}

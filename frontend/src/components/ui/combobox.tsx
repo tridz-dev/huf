@@ -117,6 +117,7 @@ export function Combobox({
                 <CommandItem
                   key={option.value}
                   value={option.value}
+                  keywords={[option.label, ...(option.subtitle ? [option.subtitle] : [])]}
                   data-testid={testId ? `${testId}-option-${option.value}` : undefined}
                   onSelect={() => {
                    if (option.action) {

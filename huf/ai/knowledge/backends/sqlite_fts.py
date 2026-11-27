@@ -316,6 +316,12 @@ class SQLiteFTSBackend(KnowledgeBackend):
 			return " OR ".join(f'"{term}"' for term in terms if term)
 		return result
 
+	def get_chunks(self, input_id: str, start: int = 0, limit: int = 20):
+		from .chunk_listing import sql_chunks
+
+		with self._get_connection(readonly=True) as conn:
+			return sql_chunks(conn, input_id, start, limit)
+
 	def clear(self) -> None:
 		"""Clear all chunks from the database."""
 		with self._get_connection() as conn:

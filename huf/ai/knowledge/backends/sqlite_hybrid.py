@@ -394,6 +394,12 @@ class SQLiteHybridBackend(KnowledgeBackend):
 
 			return results
 
+	def get_chunks(self, input_id: str, start: int = 0, limit: int = 20):
+		from .chunk_listing import sql_chunks
+
+		with self._get_connection(readonly=True) as conn:
+			return sql_chunks(conn, input_id, start, limit)
+
 	def clear(self) -> None:
 		with self._get_connection() as conn:
 			conn.execute("DELETE FROM chunks_vec")

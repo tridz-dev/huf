@@ -20,6 +20,8 @@ class VoiceEngine(ABC):
 	key: str
 	label: str
 	kind: str  # "composed" or "realtime"
+	# True: the engine saves via a provider webhook and needs a Huf Voice Session nonce.
+	persists_via_webhook: bool = False
 
 	@classmethod
 	def get_config_schema(cls) -> list[dict[str, Any]]:
@@ -80,9 +82,21 @@ class VoiceEngine(ABC):
 
 	@abstractmethod
 	def start_session(
-		self, agent_doc, config: dict[str, Any], user_ref: Any, *, conversation_id: str | None = None
+		self,
+		agent_doc,
+		config: dict[str, Any],
+		user_ref: Any,
+		*,
+		conversation_id: str | None = None,
+		session_user: str | None = None,
+		voice_nonce: str | None = None,
 	) -> dict[str, Any]:
 		"""Mint a new voice session for ``agent_doc`` and return session details.
+
+		``session_user`` is the Frappe user the caller already authenticated
+		(``None`` for anonymous embed calls); ``voice_nonce`` is the raw
+		session nonce for engines with ``persists_via_webhook``. Both are
+		passed in so the engine never reads ``frappe.session.user``.
 
 		``agent_doc`` is an already-resolved Agent document; ``user_ref`` is an
 		opaque reference to the caller (it may be a Frappe user id, a
