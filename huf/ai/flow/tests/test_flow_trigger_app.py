@@ -112,8 +112,8 @@ class TestAppTriggerStart(start_suite.TestFlowStartForMember):
 
 	def test_failed_output_step_fails_the_run(self):
 		name = self._start(trigger_node_id="start")
-		failing = lambda *args: {"status": "failed", "error": "too large"}
-		with patch.dict(engine._NODE_EXECUTORS, {"output": failing}):
+		failed = {"status": "failed", "error": "too large"}
+		with patch.dict(engine._NODE_EXECUTORS, {"output": lambda *args: dict(failed)}):
 			engine.run_flow(name)
 		run = frappe.get_doc("Agent Flow Run", name)
 		self.assertEqual(run.status, "Failed")
