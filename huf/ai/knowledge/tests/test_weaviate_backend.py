@@ -17,6 +17,10 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+# Stubs must not outlive this module: they are taken out of sys.modules once the
+# code under test is imported, and put back only while these tests run.
+_before = set(sys.modules)
+
 try:
 	import frappe
 except ImportError:  # standalone run outside a bench: install a minimal fake
@@ -104,6 +108,23 @@ except ImportError:  # standalone run: install a minimal fake llama_index tree
 from huf.ai.knowledge.backends import llamaindex_base as lb
 from huf.ai.knowledge.backends import weaviate_backend as wb
 from huf.ai.knowledge.backends.weaviate_backend import WeaviateBackend
+
+_stubs = {
+	name: sys.modules.pop(name)
+	for name, module in list(sys.modules.items())
+	if name not in _before and name.split(".")[0] in ("frappe", "llama_index") and not hasattr(module, "__file__")
+}
+_run_patch = patch.dict(sys.modules, _stubs)
+
+
+def setUpModule():
+	if _stubs:
+		_run_patch.start()
+
+
+def tearDownModule():
+	if _stubs:
+		_run_patch.stop()
 
 
 class TestWeaviateBackend(unittest.TestCase):
