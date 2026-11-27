@@ -115,7 +115,7 @@ def _sql_counts(app, flows, keys, status, since) -> list[dict]:
 	return frappe.get_all(
 		DOCTYPE,
 		filters=_filters(app, flows, status, None, since),
-		fields=[columns[k] for k in keys] + ["count(name) as count"],
+		fields=[columns[k] for k in keys] + [{"COUNT": "name", "as": "count"}],
 		group_by=", ".join(group),
 		order_by=", ".join(group),
 		ignore_permissions=True,
