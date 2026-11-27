@@ -13,6 +13,15 @@ Rules, fail closed:
 - An app may only grant access to its own flows: an entry is read from the hooks of the app it names, so app B
   cannot grant roles on app A's flows. Huf and Frappe core roles are never accepted as delegated roles.
 - ``edit`` implies ``view``. ``test`` and ``approve`` do not.
+- An app may narrow its own grant per flow and user (for example to the records a user is restricted to)::
+
+      huf_flow_app_narrow = {"<app>": "<dotted path>"}
+
+  The function receives ``{"flow_id", "user", "action"}`` and only an exact ``True`` allows: anything else, an
+  exception or a bad path refuses, so an app answers ``False`` for a flow it does not know. It only ever removes
+  access, and applies to :func:`flow_access`, the Flow Definition ``has_permission`` hook and its list condition.
+- App roles never read Agent Flow Run or Flow Member State documents (they hold raw payloads): they read runs
+  only through the scoped, masked flow APIs.
 
 Frappe ``has_permission`` hooks can only deny; the grant itself is a Custom DocPerm row synced by
 :mod:`huf.ai.flow.app_scope.docperms`. The hooks below and the query conditions scope those rows to
@@ -25,6 +34,7 @@ from frappe import _
 from huf.ai.flow.app_scope.ownership import FIELD, SERVER_FLAG, owner_app_of
 
 HOOK = "huf_flow_app_access"
+NARROW_HOOK = "huf_flow_app_narrow"
 ACTIONS = ("view", "edit", "test", "approve")
 PRIVILEGED_ROLES = frozenset({"System Manager", "Huf Manager"})
 #: Huf roles that reach Huf-native flows today.
@@ -34,7 +44,7 @@ PROTECTED_ROLES = frozenset(
 	{"Administrator", "System Manager", "Guest", "All", "Desk User", "Huf User", "Huf Viewer", "Huf Manager"}
 )
 READ_PTYPES = frozenset({"read", "select", "report", "print", "email"})
-#: Agent Flow Run and Flow Member State are written only by the server: no app role writes them.
+#: Agent Flow Run and Flow Member State hold raw payloads: no app role reads or writes the documents.
 RUN_DOCTYPES = ("Agent Flow Run", "Flow Member State")
 _FLOW_FIELD = {"Agent Flow Run": "flow_definition", "Flow Member State": "flow"}
 #: Flow Definition fields that only the app's server path (or a Huf Manager) may change on an app flow.
@@ -76,6 +86,29 @@ def apps_for(user: str | None, action: str) -> set[str]:
 	return {app for app, per_action in app_grants().items() if roles & per_action[action]}
 
 
+def narrowers(app: str) -> list[str]:
+	"""The app's own ``huf_flow_app_narrow`` paths for itself (empty: the app does not narrow)."""
+	paths = (frappe.get_hooks(NARROW_HOOK, app_name=app) or {}).get(app) or []
+	return [paths] if isinstance(paths, str) else list(paths)
+
+
+def narrow_allows(app: str, user: str, flow: str, action: str) -> bool:
+	"""Whether every narrowing function of ``app`` answers exactly ``True``. Fails closed."""
+	path = None
+	try:
+		return all(
+			frappe.get_attr(path)({"flow_id": flow, "user": user, "action": action}) is True
+			for path in narrowers(app)
+		)
+	except Exception as exc:  # noqa: BLE001 - any failure refuses; the message may carry data, so only the class
+		frappe.logger("huf").warning(f"{NARROW_HOOK} {path or app}: {type(exc).__name__}; access refused")
+		return False
+
+
+def _app_allows(user: str, app: str, flow: str, action: str) -> bool:
+	return app in apps_for(user, action) and narrow_allows(app, user, flow, action)
+
+
 def _has_native_role(user: str | None) -> bool:
 	return bool(NATIVE_ROLES & set(frappe.get_roles(user or frappe.session.user)))
 
@@ -92,7 +125,7 @@ def flow_access(user: str | None, flow: str | None, action: str) -> bool:
 		return True
 	owner = owner_app_of(flow)
 	if owner:
-		return owner in apps_for(user, action)
+		return _app_allows(user, owner, flow, action)
 	return _native_access(user, action)
 
 
@@ -137,29 +170,26 @@ def has_permission_flow_definition(doc, ptype=None, user=None, debug=False):
 	if not owner:
 		return _has_native_role(user)
 	if ptype in READ_PTYPES:
-		return owner in apps_for(user, "view")
+		return _app_allows(user, owner, _doc_name(doc), "view")
 	if ptype == "write":
-		return owner in apps_for(user, "edit")
+		return _app_allows(user, owner, _doc_name(doc), "edit")
 	return False  # create, delete, share, export, import, submit, cancel, amend: never for an app role
 
 
-def _has_permission_flow_record(doctype, doc, ptype, user):
-	"""Agent Flow Run and Flow Member State: scoped through the flow they belong to."""
+def _has_permission_flow_record(doctype, doc, user):
+	"""Agent Flow Run and Flow Member State: app-owned flows' documents are for privileged users only."""
 	user = user or frappe.session.user
 	if is_privileged(user):
 		return True
-	owner = _stored_owner_app(doctype, doc)
-	if not owner:
-		return _has_native_role(user)
-	return ptype in READ_PTYPES and owner in apps_for(user, "view")
+	return not _stored_owner_app(doctype, doc) and _has_native_role(user)
 
 
 def has_permission_flow_run(doc, ptype=None, user=None, debug=False):
-	return _has_permission_flow_record("Agent Flow Run", doc, ptype, user)
+	return _has_permission_flow_record("Agent Flow Run", doc, user)
 
 
 def has_permission_member_state(doc, ptype=None, user=None, debug=False):
-	return _has_permission_flow_record("Flow Member State", doc, ptype, user)
+	return _has_permission_flow_record("Flow Member State", doc, user)
 
 
 # --- permission_query_conditions ----------------------------------------------------------------------------
@@ -174,16 +204,35 @@ def flow_scope_condition(user: str | None = None, table: str = "tabFlow Definiti
 	if _has_native_role(user):
 		parts.append(f"ifnull(`{table}`.`{FIELD}`, '') = ''")
 	apps = sorted(apps_for(user, "view"))
-	if apps:
-		parts.append(f"`{table}`.`{FIELD}` in ({', '.join(frappe.db.escape(a) for a in apps)})")
+	whole = [app for app in apps if not narrowers(app)]
+	if whole:
+		parts.append(f"`{table}`.`{FIELD}` in ({_in(whole)})")
+	flows = _narrowed_flows(user, [app for app in apps if app not in whole])
+	if flows:
+		parts.append(f"`{table}`.`name` in ({_in(flows)})")
 	return "(" + " or ".join(parts) + ")" if parts else "1=0"
 
 
+def _in(values) -> str:
+	return ", ".join(frappe.db.escape(v) for v in values)
+
+
+def _narrowed_flows(user: str, apps: list[str]) -> list[str]:
+	"""The flows of the narrowing ``apps`` that ``user`` may view, asked one by one."""
+	if not apps:
+		return []
+	rows = frappe.get_all("Flow Definition", filters={FIELD: ("in", apps)}, fields=["name", FIELD])
+	return [r.name for r in rows if narrow_allows(r[FIELD], user, r.name, "view")]
+
+
 def _scoped_by_flow(column: str, user) -> str | None:
-	cond = flow_scope_condition(user)
-	if cond is None or cond == "1=0":
-		return cond
-	sub = f"select `tabFlow Definition`.`name` from `tabFlow Definition` where {cond}"  # noqa: S608 -- escaped
+	"""Documents of Huf-native flows only, for holders of a Huf role."""
+	user = user or frappe.session.user
+	if is_privileged(user):
+		return None
+	if not _has_native_role(user):
+		return "1=0"
+	sub = f"select `name` from `tabFlow Definition` where ifnull(`{FIELD}`, '') = ''"  # noqa: S608 -- constant
 	return f"ifnull({column}, '') in ({sub})"
 
 

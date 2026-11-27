@@ -134,13 +134,25 @@ def approver_role_names() -> list[str]:
 		return []
 
 
-def _holders(names: list[str]) -> set[str]:
-	"""Which of ``names`` hold at least one approver role (one query)."""
-	roles = approver_role_names()
+def _holders(names: list[str], roles: list[str] | None = None) -> set[str]:
+	"""Which of ``names`` hold at least one of ``roles`` (default: the approver roles), in one query."""
+	roles = approver_role_names() if roles is None else roles
 	if not names or not roles:
 		return set()
 	rows = frappe.get_all("Has Role", filters={"parent": ("in", names), "parenttype": "User", "role": ("in", roles)}, pluck="parent", ignore_permissions=True, limit_page_length=0)
 	return set(rows)
+
+
+def _app_approvers() -> set[str] | None:
+	"""For an app-only user, the only people they may look up: holders of their app's approve roles. Else None."""
+	from huf.ai.flow.app_scope.api_guards import app_approve_roles, is_app_only
+
+	if not is_app_only():
+		return None
+	roles = sorted(app_approve_roles("edit"))
+	if not roles:
+		return set()
+	return set(frappe.get_all("Has Role", filters={"parenttype": "User", "role": ("in", roles)}, pluck="parent", ignore_permissions=True, limit_page_length=0)) - {"Guest", "Administrator"}
 
 
 def _user_row(row: dict, holders: set[str] | None = None) -> dict:
@@ -170,11 +182,16 @@ def search_flow_users(query: str = "", limit: int = MAX_USERS) -> list[dict]:
 	if text:
 		like = f"%{text}%"
 		or_filters = [["name", "like", like], ["full_name", "like", like]]
+	allowed = _app_approvers()
+	if allowed is not None:
+		if not allowed:
+			return []
+		filters["name"] = ("in", sorted(allowed))
 	rows = frappe.get_all(
 		"User", filters=filters, or_filters=or_filters, fields=["name", "full_name", "email"],
 		order_by="full_name asc, name asc", limit_page_length=limit, ignore_permissions=True,
 	)
-	holders = _holders([r["name"] for r in rows])
+	holders = _holders([r["name"] for r in rows]) if allowed is None else allowed
 	return [_user_row(r, holders) for r in rows]
 
 
@@ -195,8 +212,11 @@ def check_flow_users(users) -> list[dict]:
 		except ValueError:
 			users = [u for u in users.split(",")]
 	names = [str(u).strip() for u in (users or []) if str(u).strip()][:50]
+	allowed = _app_approvers()
 	out = []
 	for name in names:
-		row = frappe.db.get_value("User", {"name": name, "enabled": 1, "user_type": "System User"}, ["name", "full_name"], as_dict=True)
+		row = None
+		if allowed is None or name in allowed:
+			row = frappe.db.get_value("User", {"name": name, "enabled": 1, "user_type": "System User"}, ["name", "full_name"], as_dict=True)
 		out.append({"name": row.name if row else name, "found": bool(row), "full_name": (row.full_name if row else None) or name})
 	return out

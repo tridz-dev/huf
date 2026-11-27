@@ -19,7 +19,13 @@ from frappe.utils import add_to_date, now_datetime
 
 from huf.ai.api_support import require_permission
 from huf.ai.flow.app_scope.links import flow_link
-from huf.ai.flow.runs.access import can_access_run, require_flow_read, require_run_access
+from huf.ai.flow.runs.access import (
+	can_access_run,
+	can_list_runs,
+	require_flow_read,
+	require_run_access,
+	run_reader,
+)
 from huf.ai.flow.runs.shape import _STEP_TYPE_TITLES, extras_for_detail, waiting_for_view
 from huf.ai.flow.support.approval_card import api_card, build_card
 from huf.ai.flow.support.decision_rights import approval_decision_rights
@@ -544,7 +550,7 @@ def list_flow_runs(flow_id: str | None = None, status: str | None = None, limit:
 	"""
 	from huf.ai.flow.app_scope.api_guards import guard_flow_or_huf
 	guard_flow_or_huf(flow_id, "view")
-	if not frappe.has_permission("Agent Flow Run", "read"):
+	if not can_list_runs():
 		frappe.throw(_("Not permitted"), frappe.PermissionError)
 
 	_expire_overdue_approvals()
@@ -558,7 +564,7 @@ def list_flow_runs(flow_id: str | None = None, status: str | None = None, limit:
 
 	require_flow_read(flow_id)
 	# get_list, not get_all: runs of flows hidden from the caller by User Permissions stay out of the answer.
-	runs = frappe.get_list(
+	runs = run_reader(flow_id)(
 		"Agent Flow Run",
 		filters=filters,
 		fields=_FLOW_RUN_LIST_FIELDS,
@@ -586,7 +592,7 @@ def list_flow_runs_page(
 	"""
 	from huf.ai.flow.app_scope.api_guards import guard_flow_or_huf
 	guard_flow_or_huf(flow_id, "view")
-	if not frappe.has_permission("Agent Flow Run", "read"):
+	if not can_list_runs():
 		frappe.throw(_("Not permitted"), frappe.PermissionError)
 
 	_expire_overdue_approvals()
@@ -618,8 +624,9 @@ def list_flow_runs_page(
 			or_filters.append(["flow_id", "in", matching])
 
 	require_flow_read(flow_id)
-	total = len(frappe.get_list("Agent Flow Run", filters=filters, or_filters=or_filters, pluck="name", limit_page_length=0))
-	rows = frappe.get_list(
+	reader = run_reader(flow_id)
+	total = len(reader("Agent Flow Run", filters=filters, or_filters=or_filters, pluck="name", limit_page_length=0))
+	rows = reader(
 		"Agent Flow Run",
 		filters=filters,
 		or_filters=or_filters,
@@ -640,7 +647,7 @@ def get_flow_step_labels(items: str | list) -> list:
 	"""
 	from huf.ai.flow.app_scope.api_guards import guard_app_meta
 	guard_app_meta()
-	if not frappe.has_permission("Agent Flow Run", "read"):
+	if not can_list_runs():
 		frappe.throw(_("Not permitted"), frappe.PermissionError)
 	if isinstance(items, str):
 		items = json.loads(items or "[]")
@@ -1034,8 +1041,9 @@ def handle_get_flow_run(flow_run_id: str, **kwargs) -> dict:
 			"success": True,
 			"status": doc.status,
 			"current_node_id": doc.current_node_id,
-			"context_summary": {k: str(v)[:100] for k, v in ctx.items()},
-			"waiting": waiting,
+			# Masked before cutting, so a cut value cannot slip past the masker (G4).
+			"context_summary": {k: str(v)[:100] for k, v in mask_for_view(ctx).items()},
+			"waiting": waiting_for_view(waiting),
 		}
 	except Exception as e:
 		log_flow_error(frappe.get_traceback(), "Get Flow Run Tool Error")
@@ -1133,7 +1141,7 @@ def get_pending_approvals(limit: int = 50, flow_id: str | None = None) -> list:
 	from huf.ai.flow.app_scope.api_guards import guard_flow_or_huf
 
 	guard_flow_or_huf(flow_id, "approve")
-	if not frappe.has_permission("Agent Flow Run", "read"):
+	if not can_list_runs():
 		frappe.throw(_("Not permitted"), frappe.PermissionError)
 
 	_expire_overdue_approvals()
@@ -1381,10 +1389,14 @@ def get_approver_roles() -> list[dict]:
 	Returns ``[{name, group}]`` with ``group`` ``"Huf"`` or ``"Other"``.
 	"""
 	# Read is enough: a read-only viewer opening a flow still needs the names to show the saved role.
-	from huf.ai.flow.app_scope.api_guards import guard_app_meta
+	from huf.ai.flow.app_scope.api_guards import app_approve_roles, guard_app_meta, is_app_only
 	guard_app_meta()
 	if not frappe.has_permission("Flow Definition", "read"):
 		frappe.throw(_("Not permitted"), frappe.PermissionError)
+
+	if is_app_only():  # an app user learns only the roles that approve their app's flows
+		return [{"name": name, "group": "Other"} for name in sorted(app_approve_roles("view"))
+			if frappe.db.exists("Role", {"name": name, "disabled": 0})]
 
 	rows = frappe.get_all("Role", filters={"disabled": 0}, fields=["name"], order_by="name asc", limit_page_length=0)
 	available = {row.name for row in rows}
