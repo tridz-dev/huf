@@ -75,46 +75,6 @@ _DECISION_PROPERTY = {
 	},
 }
 
-#: Node types whose module is merged but which ``graph_ir.schema.json`` does not list yet:
-#: ``(description, config schema, forbids_next)``. Keys match each module's config exactly.
-_EXTRA_NODE_CONFIGS = {
-	"knowledge.search": (
-		"Search one knowledge source as the run's user and return the best passages.",
-		{
-			"type": "object",
-			"additionalProperties": False,
-			"required": ["query", "knowledge_source"],
-			"properties": {
-				"query": {**_EXPR, "description": "The text to search for."},
-				"knowledge_source": {"type": "string", "minLength": 1, "description": "Knowledge Source name."},
-				"top_k": {"type": "integer", "minimum": 1, "maximum": 20, "default": 5},
-				"filters": {"type": "object", "description": "Optional metadata filters."},
-			},
-		},
-		False,
-	),
-	"handoff": (
-		"Hand the conversation to a person and wait until they release it.",
-		{
-			"type": "object",
-			"additionalProperties": False,
-			"properties": {
-				"conversation": {"$ref": "#/$defs/Value", "description": "Channel Conversation to hand over."},
-				"gateway": {"$ref": "#/$defs/Value", "description": "Channel of the contact (with recipient)."},
-				"recipient": {"$ref": "#/$defs/Value", "description": "Contact whose open conversation is handed over."},
-				"reason": {"type": "string", "description": "Reason code stored on the run."},
-				"target": {"type": "string", "description": "Queue or person to hand to."},
-				"summary": {**_EXPR, "description": "Short note for the person taking over."},
-				"priority": {"type": "string", "enum": ["low", "normal", "high", "urgent"], "default": "normal"},
-				"message": {"type": "string", "description": "Message sent to the contact on handoff."},
-				"timeout_ms": {"type": "integer", "minimum": 1},
-				"timeout_next": {**_NODE_ID, "description": "Step taken when nobody releases it in time."},
-			},
-		},
-		False,
-	),
-}
-
 #: Types only an app can start (start_flow_for_member); the palette marks them "app only".
 APP_ONLY_TYPES = frozenset({"trigger.app"})
 
@@ -240,6 +200,4 @@ def build_node_schemas(schema: dict | None = None) -> dict:
 		out[node_type] = _descriptor(node_type, node_def.get("description"), config, forbids_next)
 		if node_type in APP_ONLY_TYPES:
 			out[node_type]["app_only"] = True
-	for node_type, (description, config, forbids_next) in _EXTRA_NODE_CONFIGS.items():
-		out.setdefault(node_type, _descriptor(node_type, description, config, forbids_next))
 	return out

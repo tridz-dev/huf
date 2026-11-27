@@ -26,6 +26,8 @@ HUF_CODES = frozenset(
 		"hook_timeout",
 		# AI kill switch (huf.ai.run_budget.AI_DISABLED)
 		"ai_disabled",
+		# router.llm: the run's deadline passed or its AI spend cap is used up
+		"ai_budget_exceeded",
 		"bad_recipient",
 		"freq_cap",
 		"template_params_invalid",
