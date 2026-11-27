@@ -4,7 +4,7 @@ import json
 from unittest.mock import patch
 
 import frappe
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests import IntegrationTestCase
 from frappe.utils import set_request
 from frappe.website.serve import get_response
 from werkzeug.datastructures import Headers
@@ -16,7 +16,7 @@ KEY = page.EMBED_CONFIG_KEY
 NO_ROLE_USER = "embed-no-role@example.com"
 
 
-class TestEmbedHeaders(FrappeTestCase):
+class TestEmbedHeaders(IntegrationTestCase):
 	@classmethod
 	def setUpClass(cls):
 		super().setUpClass()
