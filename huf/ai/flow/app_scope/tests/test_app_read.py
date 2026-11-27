@@ -22,7 +22,7 @@ from huf.ai.flow.tests.test_flow_draft_validation import _end, _graph, _trigger
 
 FLOW_1, FLOW_2 = "test-secread-1", "test-secread-2"
 FLOWS = (FLOW_1, FLOW_2)
-ROLE, ROLE_APPROVE = "SecRead App Editor", "SecRead App Approver"
+ROLE, ROLE_APPROVE, ROLE_OTHER = "SecRead App Editor", "SecRead App Approver", "SecRead Other"
 USER, USER_APPROVER = "secread-a@example.com", "secread-approver@example.com"
 USER_OTHER, USER_BOTH = "secread-other@example.com", "secread-both@example.com"
 PHONE = "919876543210"
@@ -67,12 +67,12 @@ class TestAppRead(IntegrationTestCase):
 	def setUpClass(cls):
 		super().setUpClass()
 		frappe.set_user("Administrator")
-		for role in (ROLE, ROLE_APPROVE):
+		for role in (ROLE, ROLE_APPROVE, ROLE_OTHER):
 			if not frappe.db.exists("Role", role):
 				frappe.get_doc({"doctype": "Role", "role_name": role, "desk_access": 1}).insert()
 		_user(USER, ROLE)
 		_user(USER_APPROVER, ROLE_APPROVE)
-		_user(USER_OTHER, "Blogger")
+		_user(USER_OTHER, ROLE_OTHER)
 		_user(USER_BOTH, ROLE, "Huf User")
 		mock.patch.object(access, "app_grants", side_effect=_grants).start()
 		mock.patch.object(docperms, "app_grants", side_effect=_grants).start()
