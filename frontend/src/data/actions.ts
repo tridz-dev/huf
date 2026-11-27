@@ -154,7 +154,7 @@ export const actionOptions: ActionOption[] = [
   {
     id: 'send-message',
     name: 'Send message',
-    description: 'Send a WhatsApp message to the person this run is about.',
+    description: 'Send a WhatsApp message to the person in this run.',
     icon: 'Send',
     category: 'data',
     keywords: ['whatsapp', 'message', 'send', 'notify', 'template'],
