@@ -17,7 +17,7 @@ from frappe.desk.form.save import savedocs
 from frappe.tests import IntegrationTestCase
 from frappe.utils import add_to_date, now_datetime
 
-from huf.ai.tools.code_execution import stash_pending_execution
+from huf.ai.tools.code_execution import _sha256, stash_pending_execution
 from huf.huf.doctype.agent_execution_approval.agent_execution_approval import (
 	approve_execution,
 	reject_execution,
@@ -68,7 +68,7 @@ class TestExecutionApprovalWrite(IntegrationTestCase):
 		}
 
 	def _park(self, requester):
-		name = self._insert(self._values(requested_by=requester))
+		name = self._insert(self._values(requested_by=requester, code_ref=_sha256("print(1)")))
 		stash_pending_execution(name, code="print(1)", profile_snapshot={"limits": {}}, acting_user=requester)
 		return name
 
@@ -101,7 +101,7 @@ class TestExecutionApprovalWrite(IntegrationTestCase):
 		self._refused(lambda: client.save(frappe.as_json(self._forged())))
 		self._refused(lambda: savedocs(frappe.as_json(self._forged()), "Save"))
 		self._refused(
-			lambda: client.set_value(APPROVAL, self.name, {"flags": {"ignore_permissions": 1, "decision_write": 1}, "status": "Approved"})
+			lambda: client.set_value(APPROVAL, self.name, {"flags": {"ignore_permissions": 1, "recording_decision": 1}, "status": "Approved"})
 		)
 		frappe.set_user(self.requester)
 		out = client.bulk_update(json.dumps([{"doctype": APPROVAL, "docname": self.name, "status": "Approved"}]))
@@ -119,7 +119,7 @@ class TestExecutionApprovalWrite(IntegrationTestCase):
 			with self.subTest(status=status):
 				self._refused(lambda: client.insert(self._values(status=status)))
 		self._refused(lambda: client.insert_many(json.dumps([self._values(status="Approved")], default=str)))
-		self._refused(lambda: savedocs(frappe.as_json({**self._values(status="Approved"), "__islocal": 1}), "Save"))
+		self._refused(lambda: savedocs(frappe.as_json({**self._values(status="Approved"), "__islocal": 1, "name": "new-agent-execution-approval-1"}), "Save"))
 		self.assertEqual(self._approvals(), [self.name])
 
 	def test_rename_cannot_move_an_approval(self):
