@@ -3,6 +3,7 @@
  * Contract: docs/flow/BUILDER_EMBED.md, sections 4.1, 4.2 and 5.
  */
 import { setHostColorMode, type HostColorMode } from '../lib/personalization';
+import { embedBoot, isEmbedPath, postToHost, setHostOrigin } from './bridge';
 
 type TokenKind = 'colour' | 'length' | 'font';
 
@@ -41,7 +42,6 @@ const MAX_MESSAGE_BYTES = 8 * 1024;
 const MAX_THEME_PARAM_LENGTH = 2 * 1024;
 const MAX_FONT_LIST_LENGTH = 200;
 const MAX_LENGTH_PX = 32;
-const EMBED_PATH_PREFIX = '/huf/embed/';
 
 const HEX_COLOUR = /^#(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
 const FUNCTION_COLOUR = /^(?:rgb|hsl)a?\((?=[^)]*\d)(?:[\d.%,/+\s-]|deg|grad|rad|turn)+\)$/i;
@@ -138,29 +138,24 @@ export function parseThemeMessage(data: unknown): HostAppearance | null {
   return { mode, tokens: tokens === undefined ? undefined : sanitizeThemeTokens(tokens) };
 }
 
-function bootAllowedOrigins(): string[] {
-  const boot = (window as unknown as {
-    frappe?: { boot?: { huf_embed?: { allowed_origins?: unknown } } };
-  }).frappe?.boot;
-  const origins = boot?.huf_embed?.allowed_origins;
-  return Array.isArray(origins) ? origins.filter((o): o is string => typeof o === 'string') : [];
-}
-
 /**
  * On an embed route, applies the URL appearance and then follows the host's
  * messages. Does nothing elsewhere. Returns a function that stops listening.
  */
 export function initEmbedTheme(): () => void {
   const noop = () => {};
-  if (!window.location.pathname.startsWith(EMBED_PATH_PREFIX)) return noop;
+  if (!isEmbedPath()) return noop;
   applyHostAppearance(parseAppearanceParams(window.location.search));
   if (window.parent === window) return noop;
 
   const onMessage = (event: MessageEvent) => {
-    if (event.source !== window.parent || !bootAllowedOrigins().includes(event.origin)) return;
+    if (event.source !== window.parent || !embedBoot()?.allowed_origins.includes(event.origin)) return;
     const appearance = parseThemeMessage(event.data);
-    if (appearance) applyHostAppearance(appearance);
+    if (!appearance) return;
+    if ((event.data as { type: string }).type === 'host.init') setHostOrigin(event.origin);
+    applyHostAppearance(appearance);
   };
   window.addEventListener('message', onMessage);
+  postToHost('guest.ready', {});
   return () => window.removeEventListener('message', onMessage);
 }

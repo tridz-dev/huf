@@ -51,7 +51,23 @@ def _load():
 	return mod, frappe, api
 
 
+# Stubs must not outlive this module: they are taken out of sys.modules once the
+# code under test is imported, and put back only while these tests run.
+_prior = sys.modules.get("frappe")
 rows, fr, api = _load()
+if _prior is None:
+	sys.modules.pop("frappe")
+else:
+	sys.modules["frappe"] = _prior
+_run_patch = mock.patch.dict(sys.modules, {"frappe": fr})
+
+
+def setUpModule():
+	_run_patch.start()
+
+
+def tearDownModule():
+	_run_patch.stop()
 
 
 def test_operator_allow_list_accepts_valid():
