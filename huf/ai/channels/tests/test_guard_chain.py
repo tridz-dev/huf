@@ -130,6 +130,7 @@ class TestGuardChain(IntegrationTestCase):
 			patch.object(guard, "_hook_paths", return_value=["app.step"]),
 			patch.object(guard.guard_steps, "window_resolvers", return_value=["app.window"]),
 			patch.object(guard.guard_steps, "window_deferral", side_effect=window),
+			patch.object(guard.guard_steps, "resolve_caps", return_value=[]),
 			patch.object(frappe, "get_attr", side_effect=step),
 		):
 			return guard.evaluate({"to": RECIPIENT}, **kwargs), seen
