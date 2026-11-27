@@ -170,7 +170,10 @@ class TestRunDenylist(IntegrationTestCase):
 				)
 			for label, call in calls.items():
 				with self.subTest(doctype=denied, path=label):
-					call()
+					try:
+						call()
+					except frappe.ValidationError:
+						pass  # the ToDo that was really asked for may reject the smuggled field values
 					self.assertEqual(frappe.db.count(denied), before)
 
 	def test_a_doctype_in_the_arguments_cannot_redirect_an_update(self):
