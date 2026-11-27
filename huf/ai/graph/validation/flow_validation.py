@@ -17,12 +17,18 @@
 Nothing is stored about incompleteness. The list of unfinished things is computed from the definition
 each time, so it can never go stale: ``result.issues`` is that list, as ``(node_id, field, message)``.
 
+Installed apps add their own node policy with the ``huf_flow_validators`` hook (dotted paths). Each is called as
+``fn(graph)`` with a copy of a structurally sound definition and returns a list (empty when it has no objection)
+of sentences or ``{"message", "code"?, "node_id"?, "field"?}`` dicts. What it returns is a structural error, so it
+fails every mode. A hook that cannot be loaded, raises or returns anything else fails validation too.
+
 Pure functions over a parsed definition (the only database access is the tool classifier the shared
 validator already uses), so every rule is unit-testable in isolation.
 """
 
 from __future__ import annotations
 
+import copy
 import dataclasses
 import json
 import re
@@ -35,6 +41,16 @@ from huf.ai.graph.validation.result import ValidationError
 from huf.ai.graph.validator import MODE_DRAFT, MODE_PUBLISH, validate_graph
 
 MODES = (MODE_DRAFT, MODE_PUBLISH)
+VALIDATOR_HOOK = "huf_flow_validators"
+
+
+@dataclasses.dataclass(frozen=True)
+class AppValidationError(ValidationError):
+	"""A refusal from an app's ``huf_flow_validators`` hook; its message is already written for the flow author."""
+
+
+def _describe(defn, err: ValidationError) -> str:
+	return err.message if isinstance(err, AppValidationError) else describe_error(defn, err)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -75,7 +91,7 @@ class FlowValidation:
 
 	def messages(self, defn: dict | None = None) -> list[str]:
 		"""Plain sentences for everything that fails in this mode (structure first)."""
-		out = [describe_error(defn, e) for e in self.errors]
+		out = [_describe(defn, e) for e in self.errors]
 		if self.mode == MODE_PUBLISH:
 			out.extend(i.message for i in self.issues)
 		seen: list[str] = []
@@ -90,7 +106,7 @@ class FlowValidation:
 			"ok": self.ok,
 			"structure_ok": self.structure_ok,
 			"finished": self.finished,
-			"errors": [{"node_id": e.node_id, "field": e.field, "message": describe_error(defn, e)} for e in self.errors],
+			"errors": [{"node_id": e.node_id, "field": e.field, "message": _describe(defn, e)} for e in self.errors],
 			"issues": [{"node_id": i.node_id, "field": i.field, "message": i.message} for i in self.issues],
 		}
 
@@ -211,6 +227,48 @@ def _flow_call_issues(node: dict, flow_id: str | None) -> list[FlowIssue]:
 	return []
 
 
+def _hook_failed(what: str, exc: Exception | None = None) -> AppValidationError:
+	# Only the check's name and the exception class are logged: a message or traceback could carry personal data.
+	try:
+		frappe.log_error(title="Flow validator failed", message=f"{what}: {type(exc).__name__ if exc else 'bad result'}")
+	except Exception:
+		pass  # the refusal below must reach the caller even when logging does not work
+	return AppValidationError("APP_VALIDATOR_FAILED", None, None, _("A check added by an installed app could not run. Ask your administrator to look at the error log."))
+
+
+def _app_error(item, node_ids: set[str]) -> AppValidationError | None:
+	"""One item a hook returned, or ``None`` when it is not in the documented shape."""
+	if isinstance(item, str):
+		item = {"message": item}
+	if not isinstance(item, dict):
+		return None
+	message, code, node_id, field = (item.get(k) for k in ("message", "code", "node_id", "field"))
+	if not isinstance(message, str) or not message.strip() or any(v is not None and not isinstance(v, str) for v in (code, node_id, field)):
+		return None
+	return AppValidationError(code or "APP_VALIDATOR", node_id if node_id in node_ids else None, field, message)
+
+
+def _app_errors(defn: dict) -> tuple[ValidationError, ...]:
+	"""What installed apps refuse in ``defn``. Fail-closed: anything wrong with a hook is itself an error."""
+	try:
+		paths = list(frappe.get_hooks(VALIDATOR_HOOK) or [])
+	except Exception as exc:
+		return (_hook_failed(VALIDATOR_HOOK, exc),)
+	node_ids = {n["id"] for n in defn.get("nodes") or [] if isinstance(n, dict) and isinstance(n.get("id"), str)}
+	errors: list[ValidationError] = []
+	for path in paths:
+		try:
+			result = frappe.get_attr(path)(copy.deepcopy(defn))
+			if not isinstance(result, (list, tuple)):
+				errors.append(_hook_failed(path))
+				continue
+			for item in result:
+				errors.append(_app_error(item, node_ids) or _hook_failed(path))
+		except Exception as exc:
+			errors.append(_hook_failed(path, exc))
+	return tuple(errors)
+
+
 def validate_flow(defn, mode: str = MODE_PUBLISH, *, classify_tool=None, check_people: bool = True, flow_id: str | None = None) -> FlowValidation:
 	"""Check ``defn`` (a parsed flow definition) in ``mode`` (``"draft"`` or ``"publish"``).
 
@@ -223,6 +281,9 @@ def validate_flow(defn, mode: str = MODE_PUBLISH, *, classify_tool=None, check_p
 	draft = validate_graph(defn, "flow", mode=MODE_DRAFT, **kwargs)
 	if not draft.ok:
 		return FlowValidation(mode=mode, errors=draft.errors)
+	refused = _app_errors(defn)
+	if refused:
+		return FlowValidation(mode=mode, errors=refused)
 
 	full = validate_graph(defn, "flow", mode=MODE_PUBLISH, **kwargs)
 	issues: list[FlowIssue] = []
