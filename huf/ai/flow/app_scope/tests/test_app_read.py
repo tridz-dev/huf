@@ -45,7 +45,7 @@ def only_flow_1(request):
 
 
 def broken(request):
-	raise RuntimeError("lookup failed")
+	raise RuntimeError
 
 
 def truthy(request):
