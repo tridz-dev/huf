@@ -66,6 +66,25 @@ class TestReadFollowups(base.AppReadFixture):
 		self.assertTrue(detail["can_decide"])
 		self.assertEqual(detail["approval_card"]["facts"][0], {"label": "Who", "value": NAME})
 
+	def test_run_data_is_hidden_from_a_user_who_cannot_decide(self):
+		run = self.runs[base.FLOW_1]
+		context = {"customer": NAME, "__node_outputs__": {"end": {"summary": f"Refund for {NAME}"}}}
+		frappe.db.set_value("Agent Flow Run", run, "context_json", frappe.as_json(context))
+		self._park_for_approval(run, base.USER_APPROVER)
+		frappe.set_user(base.USER)
+		detail = api.get_flow_run(run)
+		self.assertEqual(list(detail["context_json"]["__node_outputs__"]), ["end"])
+		for part in (
+			detail,
+			api.handle_get_flow_run(run),
+			api.list_flow_runs(flow_id=base.FLOW_1),
+			api.list_flow_runs_page(flow_id=base.FLOW_1),
+		):
+			self.assertNotIn(NAME, frappe.as_json(part))
+		frappe.set_user("Administrator")
+		self._park_for_approval(run, "Administrator")
+		self.assertEqual(api.get_flow_run(run)["context_json"]["customer"], NAME)
+
 	# --- run summaries and pending approvals --------------------------------------------------------------
 
 	def _app_ids(self):

@@ -127,6 +127,34 @@ class TestFlowPreflight(IntegrationTestCase):
 		self.assertNotIn(PHONE, json.dumps(findings))
 
 
+class TestAppTargets(IntegrationTestCase):
+	def _app_codes(self, node_type, config, owner_app="huf"):
+		step = {"id": "s", "type": node_type, "config": config, "next": "end"}
+		defn = _graph([_trigger("s"), step, _end()])
+		found = preflight.run_preflight(defn, owner_app=owner_app)
+		return {f.code for f in found if f.code.startswith("APP_")}
+
+	def test_app_handoff_may_only_target_the_runs_member(self):
+		good = {"gateway": "gw", "recipient": "$member", "message": ""}
+		self.assertEqual(self._app_codes("handoff", good), set())
+		for config in (
+			{**good, "recipient": "+919999999999"},
+			{**good, "conversation": "CONV-0001"},
+			{**good, "message": "Hello"},
+			{"gateway": "gw", "recipient": "$member"},
+			{**good, "gateway": ""},
+		):
+			with self.subTest(config=sorted(config.items())):
+				self.assertEqual(self._app_codes("handoff", config), {"APP_HANDOFF_TARGET"})
+
+	def test_app_gateway_must_be_named_in_the_flow(self):
+		config = {"gateway": {"$from": "trigger.gateway"}, "recipient": "$member"}
+		self.assertEqual(self._app_codes("send.message", config), {"APP_GATEWAY_NOT_FIXED"})
+
+	def test_huf_flows_are_not_narrowed(self):
+		self.assertEqual(self._app_codes("handoff", {"conversation": "CONV-0001"}, owner_app=None), set())
+
+
 class TestPublishBlocking(IntegrationTestCase):
 	def setUp(self):
 		frappe.set_user("Administrator")
