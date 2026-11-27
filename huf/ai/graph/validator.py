@@ -133,7 +133,7 @@ FLOW_ONLY_NODE_TYPES: frozenset[str] = frozenset(
 		"state.delete",
 		"doc.create",
 		"code.run",
-		"wait", "stop", "doc.get", "doc.update", "flow.call", "member.set", "send.message",
+		"wait", "stop", "doc.get", "doc.update", "flow.call", "member.set", "send.message", "split",
 	}
 ) | {"trigger.gateway", "trigger.whatsapp", "trigger.telegram"}  # chat triggers: huf/ai/flow/gateways
 
@@ -222,6 +222,7 @@ def validate_graph(
 	errors: list[ValidationError] = []
 	errors.extend(_check_profile_node_types(nodes, profile))
 	errors.extend(_check_control_flow_targets(graph, nodes_by_id))
+	errors.extend(_check_split_weights(nodes))
 	if draft:
 		# A half-built flow may have loose steps, loops of links, unfinished values and tools whose closure is not
 		# known yet; those are reported as things to finish (see huf.ai.graph.validation.flow_validation), not as a
@@ -254,6 +255,18 @@ def validate_graph(
 			errors.extend(_check_envelope_covers_closure(graph, envelope))
 
 	return ValidationResult(ok=not errors, profile=profile, errors=tuple(errors), envelope=envelope if not errors else None)
+
+
+def _check_split_weights(nodes: list) -> list[ValidationError]:
+	"""Split steps: branch weights add up to 100 and the holdout share is 0-100 (H-W2-07), in draft and publish."""
+	from huf.ai.flow.nodes.split import config_problems
+
+	errors = []
+	for node in nodes:
+		if isinstance(node, dict) and node.get("type") == "split":
+			for problem in config_problems(node.get("config") or {}):
+				errors.append(ValidationError("SPLIT_WEIGHTS", node.get("id"), "config", problem))
+	return errors
 
 
 def validate_procedure_graph(graph: dict, **kwargs: Any) -> ValidationResult:
@@ -318,7 +331,7 @@ def _control_flow_targets(node: dict) -> list[tuple[str, str | None]]:
 		targets.append(("config.on_true", config.get("on_true")))
 		targets.append(("config.on_false", config.get("on_false")))
 		targets.append(("config.fallback_next", config.get("fallback_next")))
-	elif ntype in {"router.llm", "router.decision"}:
+	elif ntype in {"router.llm", "router.decision", "split"}:
 		for i, option in enumerate(config.get("options", []) or []):
 			if isinstance(option, dict):
 				targets.append((f"config.options[{i}].node_id", option.get("node_id")))

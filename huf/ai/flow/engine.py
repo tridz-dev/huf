@@ -143,6 +143,7 @@ NODE_ROUTING = {
 	"condition": RoutingMode.SELF_ROUTED,
 	"router.llm": RoutingMode.SELF_ROUTED,
 	"router.decision": RoutingMode.SELF_ROUTED,
+	"split": RoutingMode.SELF_ROUTED,
 	"wait": RoutingMode.SELF_ROUTED,
 	# "output" is always terminal per spec/graph-ir.md section 2 ("next must be
 	# absent or null") -- true for both the Procedure and Flow profiles.
@@ -1633,6 +1634,7 @@ _exec_router_decision = adapters.exec_router_decision
 _exec_stop = adapters.exec_stop
 _exec_member_set = adapters.exec_member_set
 _exec_send_message = adapters.exec_send_message
+_exec_split = adapters.exec_split
 _exec_doc_get = adapters.exec_doc_get
 _exec_doc_update = adapters.exec_doc_update
 _exec_flow_call = adapters.exec_flow_call
@@ -2226,6 +2228,7 @@ _NODE_EXECUTORS = {
 	"tool.call": _exec_tool_call,
 	"router.llm": _exec_router_llm,
 	"router.decision": _exec_router_decision,
+	"split": _exec_split,
 	"human.approval": _exec_human_approval,
 	"condition": _exec_condition,
 	"transform": _exec_transform,
