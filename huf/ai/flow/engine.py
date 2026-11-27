@@ -203,6 +203,8 @@ class FlowRunContext(dict):
 		self.flow_run = flow_run
 		self.version = version
 		self.context = context if context is not None else GraphContext()
+		if version:
+			self.context.step_ids = _step_ids(version.graph)
 		self.flow_id = getattr(flow_run, "flow_id", None)
 		self.run_id = getattr(flow_run, "name", None)
 		self.mode = (getattr(flow_run, "mode", "") or "normal").lower()
@@ -261,33 +263,47 @@ ENGINE_KEYS = frozenset(
 		GATEWAY_EVENT_KEY,  # set by gateway ingestion through ``create_flow_run``
 		"_schedule_trigger",
 		"_doc_event_trigger",
-		"member",  # reference roots: without a run member / loop frame, these would be read from the payload
-		"foreach",
 	}
 )
 """Context keys only the engine writes (with ``_huf_*`` and ``_WRITES_KEY``)."""
+
+
+def _step_ids(graph: dict | None) -> frozenset:
+	"""Ids of the steps whose output is read by name: every node of ``graph`` that is not a trigger."""
+	return frozenset(
+		node.get("id")
+		for node in (graph or {}).get("nodes") or []
+		if not str(node.get("type") or "").startswith("trigger.")
+	)
 
 
 def strip_reserved_keys(values: dict, graph: dict | None = None, trigger_type: str | None = None) -> dict:
 	"""``values`` from a caller without anything the engine owns, so they are never read as the run's own state
 	(a forged approval decision, a skipped error handler, a borrowed gateway send binding).
 
-	Dropped: :data:`ENGINE_KEYS`, ``_huf_*`` run state, the document write counter, an ``error`` shaped like the
-	error handler's record, the name of every non-trigger step of ``graph`` (node outputs are read by step id, and a
-	step that has not run falls back to the context) and ``_trigger`` unless a Doc Event run is being created.
+	Dropped: :data:`ENGINE_KEYS`, ``_huf_*`` run state, the document write counter, ``_trigger`` unless a Doc Event
+	run is being created, and objects shaped like an engine record: the error handler's ``error``, a decision under a
+	step's name, ``member`` with ``vars``, a ``foreach`` frame.
+
+	Everything else is the caller's data and is kept, even under a step's name or ``member``: ``input.<key>`` reads it,
+	and :meth:`GraphContext.resolve_reference` never answers a step, member or loop reference from it.
 	"""
-	steps = {
-		node.get("id")
-		for node in (graph or {}).get("nodes") or []
-		if not str(node.get("type") or "").startswith("trigger.")
-	}
+	steps = _step_ids(graph)
 
 	def owned(key, value) -> bool:
-		if key in ENGINE_KEYS or key == _WRITES_KEY or key in steps or str(key).startswith("_huf_"):
+		if key in ENGINE_KEYS or key == _WRITES_KEY or str(key).startswith("_huf_"):
 			return True
 		if key == "_trigger":
 			return trigger_type != "Doc Event"
-		return key == "error" and isinstance(value, dict) and "node_id" in value and "message" in value
+		if not isinstance(value, dict):
+			return False
+		if key == "error":
+			return "node_id" in value and "message" in value
+		if key == "member":
+			return "vars" in value
+		if key == "foreach":
+			return "item" in value or "index" in value
+		return key in steps and "decision" in value
 
 	return {key: value for key, value in values.items() if not owned(key, value)}
 
@@ -316,7 +332,11 @@ def _context_of(flow_run, settings) -> GraphContext:
 	run_ctx = _run_context(settings)
 	if run_ctx is not None:
 		return run_ctx.context
-	return load_context(getattr(flow_run, "context_json", None))
+	context = load_context(getattr(flow_run, "context_json", None))
+	pinned = getattr(flow_run, "pinned_definition", None)
+	if pinned:  # e.g. outbox delivery: references resolve by the same rules as during the run
+		context.step_ids = _step_ids(PinnedVersion.from_json(pinned).graph)
+	return context
 
 
 def _persist_context(flow_run, ctx: GraphContext, settings=None) -> None:
@@ -2240,6 +2260,8 @@ def _exec_foreach(flow_run, node: dict, config: dict, settings: dict) -> dict:
 
 	results = []
 	skipped = []
+	outer_vars = ctx.loop_vars
+	ctx.loop_vars = outer_vars | {item_var, index_var}
 	try:
 		for index, item in enumerate(items):
 			ctx.push_foreach(item, index)
@@ -2259,6 +2281,7 @@ def _exec_foreach(flow_run, node: dict, config: dict, settings: dict) -> dict:
 			finally:
 				ctx.pop_foreach()
 	finally:
+		ctx.loop_vars = outer_vars
 		for key, value in saved.items():
 			if value is _MISSING:
 				ctx.data.pop(key, None)

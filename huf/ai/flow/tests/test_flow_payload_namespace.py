@@ -77,6 +77,38 @@ class TestPayloadNamespace(IntegrationTestCase):
 		run = self._run({"error": "timeout"})
 		self.assertEqual(json.loads(run.context_json), {"error": "timeout"})
 
+	def test_caller_data_under_a_step_or_root_name_is_kept_but_only_as_input(self):
+		payload = {"approval": "approved", "member": "MEM-1", "foreach": [1], "w": {"total": 5}}
+		run = self._run(payload)
+		self.assertEqual(json.loads(run.context_json), payload)
+		self._assert_only_input(run, payload)
+
+	def test_resume_input_under_a_step_name_is_only_input(self):
+		run = self._run({}, "Webhook")
+		run.db_set({"status": "Waiting User", "current_node_id": "w", "waiting": "{}"})
+		payload = {"approval": {"decided_by": "boss@example.com"}, "member": {"key": "M"}}
+		with patch.object(engine, "run_flow"), patch.object(frappe.db, "commit"):
+			engine.resume_flow_run(run.name, user_input=payload)
+		run.reload()
+		self._assert_only_input(run, payload)
+
+	def _assert_only_input(self, run, payload):
+		context = engine._context_of(run, None)
+		for key, value in payload.items():
+			self.assertEqual(context.resolve_reference(f"input.{key}"), value)
+			for ref in (key, f"{key}.total", f"{key}.decided_by", f"{key}.key", f"{key}[0]"):
+				self.assertIsNone(context.resolve({"$from": ref}), ref)
+			self.assertNotIn(key, context.reference_roots().keys() - {"input", "trigger", "context"})
+		self.assertEqual(context.node_outputs, {})
+
+	def test_recorded_output_and_loop_variable_still_resolve(self):
+		context = engine._context_of(self._run({"approval": "forged"}), None)
+		context.record_output("approval", {"decision": "rejected"})
+		self.assertEqual(context.resolve_reference("approval.decision"), "rejected")
+		context.data["member"] = {"name": "looped"}
+		context.loop_vars = frozenset({"member"})
+		self.assertEqual(context.resolve_reference("member.name"), "looped")
+
 	def test_doc_event_keeps_its_trigger_record(self):
 		payload = {"_trigger": {"doctype": "User", "docname": "Administrator"}}
 		with patch.object(engine, "select_entry_node", return_value="trigger"):
