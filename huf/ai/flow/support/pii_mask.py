@@ -27,14 +27,41 @@ MAX_DEPTH = 20
 MIN_NAME_PART = 3
 
 PHONE_FIELDS = frozenset(
-	{"phone", "phone_no", "phone_number", "mobile", "mobile_no", "mobile_number", "whatsapp", "whatsapp_no",
-	 "whatsapp_number", "contact_no", "contact_number", "msisdn"}
+	{
+		"phone",
+		"phone_no",
+		"phone_number",
+		"mobile",
+		"mobile_no",
+		"mobile_number",
+		"whatsapp",
+		"whatsapp_no",
+		"whatsapp_number",
+		"contact_no",
+		"contact_number",
+		"msisdn",
+	}
 )
 EMAIL_FIELDS = frozenset({"email", "email_id", "email_address", "mail"})
 NAME_FIELDS = frozenset(
-	{"name", "full_name", "first_name", "middle_name", "last_name", "customer_name", "member_name", "contact_name",
-	 "sender_name", "recipient_name", "profile_name", "push_name", "display_name", "lead_name", "employee_name",
-	 "user_name"}
+	{
+		"name",
+		"full_name",
+		"first_name",
+		"middle_name",
+		"last_name",
+		"customer_name",
+		"member_name",
+		"contact_name",
+		"sender_name",
+		"recipient_name",
+		"profile_name",
+		"push_name",
+		"display_name",
+		"lead_name",
+		"employee_name",
+		"user_name",
+	}
 )
 
 _EMAIL = re.compile(r"[\w.+'%\-]+@[\w\-]+(?:\.[\w\-]+)+")
@@ -63,7 +90,7 @@ def mask_pii(value, extra_fields=()):
 		names: set[str] = set()
 		_collect_names(value, names, 0)
 		return _Masker(extra, names).mask(value, None, 0)
-	except Exception:
+	except Exception:  # noqa: BLE001 - fail closed
 		return None
 
 
@@ -95,7 +122,7 @@ def _embedded_json(text: str):
 		parsed = json.loads(text)
 	except ValueError:
 		return None
-	return parsed if isinstance(parsed, (dict, list)) else None
+	return parsed if isinstance(parsed, dict | list) else None
 
 
 def _collect_names(value, names: set, depth: int, is_name: bool = False) -> None:
@@ -104,7 +131,7 @@ def _collect_names(value, names: set, depth: int, is_name: bool = False) -> None
 	if isinstance(value, dict):
 		for key, item in value.items():
 			_collect_names(item, names, depth + 1, is_name or _kind(_field(key)) == NAME_MASK)
-	elif isinstance(value, (list, tuple)):
+	elif isinstance(value, list | tuple):
 		for item in value:
 			_collect_names(item, names, depth + 1, is_name)
 	elif isinstance(value, str):
@@ -121,7 +148,9 @@ class _Masker:
 		self.extra = extra
 		ordered = sorted(names, key=len, reverse=True)
 		self.names = (
-			re.compile(r"(?<!\w)(?:" + "|".join(map(re.escape, ordered)) + r")(?!\w)", re.I) if ordered else None
+			re.compile(r"(?<!\w)(?:" + "|".join(map(re.escape, ordered)) + r")(?!\w)", re.I)
+			if ordered
+			else None
 		)
 
 	def mask(self, value, field: str | None, depth: int):
@@ -136,21 +165,21 @@ class _Masker:
 			return self._sensitive(value, kind)
 		if isinstance(value, dict):
 			return self._mapping(value, depth)
-		if isinstance(value, (list, tuple)):
+		if isinstance(value, list | tuple):
 			return self._items(value, field, depth)
 		if isinstance(value, str):
 			return self._string(value, field, depth)
 		if isinstance(value, int):
 			is_number = (field in ID_KEYS) or 10 <= len(str(abs(value))) <= 15
 			return mask_phone(value) if is_number else value
-		if isinstance(value, (float, Decimal, datetime.date, datetime.time, datetime.timedelta)):
+		if isinstance(value, float | Decimal | datetime.date | datetime.time | datetime.timedelta):
 			return value
 		raise _Drop
 
 	def _sensitive(self, value, kind: str):
 		if value == "":
 			return value
-		if kind == PHONE_MASK and isinstance(value, (str, int)):
+		if kind == PHONE_MASK and isinstance(value, str | int):
 			return mask_phone(value) or PHONE_MASK
 		return kind
 
@@ -162,8 +191,8 @@ class _Masker:
 			try:
 				masked = self.mask(item, _field(key), depth + 1)
 				new_key = self._text(key) if isinstance(key, str) else self.mask(key, None, depth + 1)
-			except Exception:
-				continue  # fail closed: leave the field out
+			except Exception:  # noqa: BLE001, S112 - fail closed
+				continue
 			base, n = new_key, 2
 			while new_key in out:
 				new_key, n = f"{base}#{n}", n + 1
@@ -175,7 +204,7 @@ class _Masker:
 		for item in value:
 			try:
 				out.append(self.mask(item, field, depth + 1))
-			except Exception:
+			except Exception:  # noqa: BLE001, S112 - fail closed
 				continue
 		return out
 

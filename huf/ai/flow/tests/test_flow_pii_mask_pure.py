@@ -30,7 +30,9 @@ def _record(i: int) -> tuple[dict, list[str]]:
 	first, last = FIRST[i % 5], LAST[(i // 5) % 5]
 	full = f"{first} {last}"
 	local = f"98{i:08d}"
-	phone = [f"+91 {local[:5]} {local[5:]}", f"91{local}", f"({local[:3]}) {local[3:6]}-{local[6:]}", local][i % 4]
+	phone = [f"+91 {local[:5]} {local[5:]}", f"91{local}", f"({local[:3]}) {local[3:6]}-{local[6:]}", local][
+		i % 4
+	]
 	email = f"{first.lower()}.{i}@example.test"
 	record = {
 		"customer_name": full,
@@ -74,7 +76,10 @@ class TestFlowPiiMaskPure(UnitTestCase):
 		self.assertEqual(mask_pii(value), value)
 
 	def test_extra_fields_are_hidden(self):
-		self.assertEqual(mask_pii({"loyaltyCard": "AB-12", "x": "y"}, ["loyalty_card"]), {"loyaltyCard": "[redacted]", "x": "y"})
+		self.assertEqual(
+			mask_pii({"loyaltyCard": "AB-12", "x": "y"}, ["loyalty_card"]),
+			{"loyaltyCard": "[redacted]", "x": "y"},
+		)
 
 	def test_webhook_secret_in_a_graph_is_dropped(self):
 		graph = {"nodes": [{"type": "trigger.webhook", "config": {"secret": "s3cret-value"}}]}
