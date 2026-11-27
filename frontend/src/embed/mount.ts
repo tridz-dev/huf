@@ -40,7 +40,10 @@ const GUEST_MESSAGES: Record<string, [MountEvent, Record<string, Check>]> = {
   'guest.dirty': ['dirty', { flow_id: text, dirty: flag }],
   'guest.saved': ['saved', { flow_id: text, version: count, unfinished: count }],
   'guest.publish_state': ['publish-state', { flow_id: text, status }],
-  'guest.navigate': ['navigate', { target: oneOf('flow_list', 'connections', 'providers', 'gateways', 'procedure') }],
+  'guest.navigate': ['navigate', {
+    target: oneOf('flow_list', 'connections', 'providers', 'gateways', 'procedure', 'run', 'approvals'),
+    run_id: optional(text),
+  }],
   'guest.error': ['error', {
     code: oneOf('session_expired', 'not_permitted', 'not_found', 'unknown_app', 'load_failed', 'save_failed', 'publish_refused'),
     flow_id: optional(text),
@@ -67,6 +70,8 @@ export function parseGuestMessage(data: unknown): { event: MountEvent; detail: R
     if (!check(value)) return null;
     if (value !== undefined) detail[key] = value;
   }
+  // A run id comes only with the `run` target, and that target always has one.
+  if (event === 'navigate' && (detail.target === 'run') !== (typeof detail.run_id === 'string' && detail.run_id !== '')) return null;
   return { event, detail };
 }
 

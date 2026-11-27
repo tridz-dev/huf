@@ -140,8 +140,10 @@ Guest to host:
 | `guest.dirty` | `{ flow_id: string, dirty: boolean }` | Unsaved state changes. |
 | `guest.saved` | `{ flow_id: string, version: number, unfinished: number }` | Save succeeded. `unfinished` is a count only. |
 | `guest.publish_state` | `{ flow_id: string, status: 'Draft'\|'Active' }` | Publish or unpublish succeeded. |
-| `guest.navigate` | `{ target: 'flow_list'\|'connections'\|'providers'\|'gateways'\|'procedure' }` | The user chose a link that leaves the editor. The host decides what to do. |
+| `guest.navigate` | `{ target: 'flow_list'\|'connections'\|'providers'\|'gateways'\|'procedure'\|'approvals' }` or `{ target: 'run', run_id: string }` | The user chose a link that leaves the editor (a router link, or a plain `<a href>` to `/huf/...` or `/app/...`). The host decides what to do. `run_id` comes only with `run`, and `run` always has it. |
 | `guest.error` | `{ code: ErrorCode, flow_id?: string }` | A state from section 6, or a failed save or publish. |
+
+Leaving links (H-W7-10): `/huf/executions/<run>` and `/app/agent-flow-run/<run>` send `run`; `/huf/approvals` and `/huf/executions?tab=approvals` send `approvals`; `/app/flow-definition/...` and `/huf/flows/<other>` send `flow_list`. Any other same-site link outside `/huf/embed/` is stopped and sends nothing. Links to this flow's runs (`/huf/flows/<this flow>?run=`) stay in the frame.
 
 ```ts
 type ErrorCode =
@@ -151,7 +153,7 @@ type ErrorCode =
 
 ### 4.3 No PII (G4)
 
-Payloads contain only the fields above: ids, numbers, booleans, fixed enums and (host to guest) appearance values. Never: flow or step names, step settings, definition JSON, samples, trigger payloads, run data, member keys, user names, server error text or tracebacks. Run ids are not sent. The guest builds each payload field by field; it must not spread an API response or an `Error` into a message. Neither side logs message payloads to the console or to the server. Flow ids are chosen by the host and must not contain personal data.
+Payloads contain only the fields above: ids, numbers, booleans, fixed enums and (host to guest) appearance values. Never: flow or step names, step settings, definition JSON, samples, trigger payloads, run data, member keys, user names, server error text or tracebacks. Run ids are sent only as `run_id` of `navigate` with target `run` (ids only, H-W7-10); no other run data is sent. The guest builds each payload field by field; it must not spread an API response or an `Error` into a message. Neither side logs message payloads to the console or to the server. Flow ids are chosen by the host and must not contain personal data.
 
 ## 5. Theme tokens (H-W7-03)
 
@@ -200,6 +202,8 @@ The host sends names from this closed set; Huf maps each to its own CSS variable
 | Save failed | The editor keeps the changes and shows the error | `save_failed` |
 | Publish refused | The existing readable refusal, inside the frame | `publish_refused` |
 
+App-owned flows (H-W7-10, DECISIONS_RUN D-HAPPIOL-EMBED): when the boot carries `huf_embed.policy`, the frame opens without a Huf role and its own capabilities follow the policy (`can_edit` gives editing; otherwise the editor is view only). The toolbar shows the save state, Save (`can_edit`), "Test (no messages sent)" (`can_test`, test mode only: the run dialog has no real run and the server forces a dry run), Runs (this flow's runs, trace through `?run=`), Waiting for approval (`can_approve`: this flow's waiting runs, approve, or reject with a reason) and People (this flow's members, masked by the server). Publish, Unpublish and Flow settings have no button, menu item, palette entry or shortcut; the host makes a journey live. The palette lists no other flows.
+
 A server-side 403 (section 2.2) renders no app, so it sends no message. The mount package therefore starts a 20 second timer: without `guest.ready` it replaces the frame with its own "The flow editor could not be loaded" state with Retry, and fires an `error` event with code `load_failed`. A frame blocked by `frame-ancestors` ends in the same state.
 
 Unsaved changes: the guest keeps the browser's `beforeunload` protection if present; the host must also confirm before removing the element while the last `guest.dirty` was `true`.
@@ -214,6 +218,7 @@ Unsaved changes: the guest keeps the browser's `beforeunload` protection if pres
 - Attributes: `flow` (required), `app` (required), `src-origin` (default: current origin), `mode`, `theme` (JSON), `run`.
 - Changing `flow`, `app`, `src-origin` or `run` reloads the frame. Changing `mode` or `theme` sends `host.theme`.
 - DOM events, with the validated payload as `detail`: `ready`, `loaded`, `dirty`, `saved`, `publish-state`, `navigate`, `error`.
+- `navigate` validation: `target` is one of the section 4.2 values; `run_id` is a string, present exactly when `target` is `run`. Anything else is dropped.
 - The element fills its parent; the host gives it a height. No auto-resize.
 - The bundle has a stable file name and no dependency on React, so hosts can include it directly. It needs its own build entry.
 
