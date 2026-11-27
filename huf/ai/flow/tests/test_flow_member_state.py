@@ -9,6 +9,8 @@ from huf.ai.flow import engine as flow_engine
 from huf.ai.flow.runs import member
 from huf.ai.flow.tests.test_flow_draft_validation import finished_flow
 from huf.ai.graph.executor import GraphContext
+from huf.huf.doctype.flow_member_state.flow_member_state import on_doctype_update
+from huf.patches.v1 import dedupe_flow_member_state
 
 
 class TestFlowMemberState(IntegrationTestCase):
@@ -71,6 +73,43 @@ class TestFlowMemberState(IntegrationTestCase):
 		self.assertEqual(member.get_member(self.flow_id, "k1")["run_count"], 2)
 		with self.assertRaises(frappe.DuplicateEntryError):
 			frappe.get_doc({"doctype": "Flow Member State", "flow": self.flow_id, "member_key": "k1"}).insert(ignore_permissions=True)
+
+	def test_indexes_present(self):
+		for index in ("unique_flow_member_key", "flow_status_index", "member_key_index"):
+			self.assertTrue(frappe.db.has_index("tabFlow Member State", index), index)
+
+	def test_dedupe_patch_merges_duplicates_then_unique_index_holds(self):
+		frappe.db.commit()
+		frappe.db.sql_ddl("alter table `tabFlow Member State` drop index `unique_flow_member_key`")
+		try:
+			canonical = member.member_name(self.flow_id, "k1")
+			self._seed_row(canonical, "k1", "2026-01-01 00:00:00", 2, {"a": 1, "b": 1}, "n1")
+			self._seed_row(f"dup-{self.flow_id}"[:140], "k1", "2026-02-01 00:00:00", 3, {"b": 2}, "n2")
+			self._seed_row(f"solo-{self.flow_id}"[:140], "k2", "2026-01-01 00:00:00", 1, {}, "n1")
+			dedupe_flow_member_state.execute()
+			dedupe_flow_member_state.execute()  # safe to run again
+			self.assertEqual(frappe.db.count("Flow Member State", {"flow": self.flow_id, "member_key": "k1"}), 1)
+			self.assertEqual(frappe.db.count("Flow Member State", {"flow": self.flow_id}), 2)
+			row = member.get_member(self.flow_id, "k1")  # the survivor carries the canonical name
+			self.assertEqual(row["run_count"], 5)
+			self.assertEqual(str(row["last_event_at"]), "2026-02-01 00:00:00")
+			self.assertEqual(str(row["entered_at"]), "2026-01-01 00:00:00")
+			self.assertEqual(row["vars"], {"a": 1, "b": 2})
+			self.assertEqual([h["node"] for h in row["history"]], ["n1", "n2"])
+		finally:
+			frappe.db.commit()
+			on_doctype_update()
+		self.assertTrue(frappe.db.has_index("tabFlow Member State", "unique_flow_member_key"))
+		with self.assertRaises(Exception) as caught:
+			self._seed_row(f"again-{self.flow_id}"[:140], "k1", "2026-03-01 00:00:00", 1, {}, "n1")
+		self.assertTrue(frappe.db.is_unique_key_violation(caught.exception), caught.exception)
+
+	def _seed_row(self, name, key, at, run_count, variables, node):
+		frappe.db.sql(
+			"insert into `tabFlow Member State` (name, creation, modified, flow, member_key, status, entered_at,"
+			" last_event_at, run_count, vars_json, history_json) values (%s, %s, %s, %s, %s, 'Active', %s, %s, %s, %s, %s)",
+			(name, at, at, self.flow_id, key, at, at, run_count, json.dumps(variables), json.dumps([{"node": node, "at": at}])),
+		)
 
 	def test_waiting_status_remembers_the_step_and_other_statuses_forget_it(self):
 		member.upsert_member(self.flow_id, "k1", None)
