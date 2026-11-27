@@ -231,6 +231,8 @@ def describe_error(graph: dict | None, err) -> str:
 		return f"{who} uses a step type that flows do not support. Delete it."
 	if code == "BAD_EXPRESSION":
 		return f"{who} has an expression that cannot be read. Check the value you typed."
+	if code == "TRIGGER_ON_ERROR":
+		return f"{who} cannot have an error step. Remove the error connection from this trigger."
 	if code == "NOT_AN_OBJECT":
 		return "The flow definition is not valid. Reload the page and try again."
 	return f"{who} has a setting that is not valid. Open the step and check its fields."

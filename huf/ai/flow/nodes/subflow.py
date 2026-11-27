@@ -3,7 +3,8 @@
 Config: ``flow_id`` (the flow to start), ``input`` (the child's trigger payload; ``$from`` / ``$template`` values are
 resolved), ``mode`` (``fire_and_forget`` by default, or ``wait``).
 
-The child is an ordinary Flow Run linked to this run by ``parent_run`` / ``parent_node``. In ``wait`` mode the parent
+The child is an ordinary Flow Run linked to this run by ``parent_run`` / ``parent_node``. It is about the same
+member as this run (when this run has one) and keeps this run's holdout flag (``_huf_split``). In ``wait`` mode the parent
 parks (``park.park_run``, reason ``child``) *before* the child is enqueued, and the engine's terminal functions
 (``_complete_flow_run`` / ``_fail_flow_run`` / ``park.cancel_run``) call :func:`on_child_finished`, which wakes the
 parent with ``{status, error, output}``. A child that did not succeed makes this step fail, so ``on_error`` applies.
@@ -18,9 +19,11 @@ from types import SimpleNamespace
 
 import frappe
 
+from huf.ai.flow.nodes.split import SPLIT_KEY
 from huf.ai.flow.runs import park
 from huf.ai.flow.runs.park import ParkRequest
 from huf.ai.flow.support.pii import log_flow_error
+from huf.ai.transaction import commit_if_background
 
 MAX_DEPTH = 5
 KEYS = frozenset({"flow_id", "input", "mode"})
@@ -88,8 +91,21 @@ def exec_flow_call(flow_run, node: dict, config: dict, settings: dict, context) 
 	if gate.is_test_run(flow_run):  # a test never starts another run
 		return {"status": "success", "output": {"flow_id": flow_id, "run": None, "note": "Test run: the other flow was not started."}}
 
-	child = engine.create_flow_run(flow_id=flow_id, payload=payload, trigger_type="Manual", ignore_permissions=True)
-	child.db_set({"parent_run": flow_run.name, "parent_node": node.get("id")})
+	child = engine.create_flow_run(
+		flow_id=flow_id,
+		payload=payload,
+		trigger_type="Manual",
+		ignore_permissions=True,
+		member_key=getattr(flow_run, "member_key", None),
+	)
+	values = {"parent_run": flow_run.name, "parent_node": node.get("id")}
+	# a held-out member stays held out in the child: written after create_flow_run stripped reserved keys from the
+	# input, and the child's own splits never overwrite it (first split wins)
+	split = context.data.get(SPLIT_KEY)
+	if isinstance(split, dict):
+		values["context_json"] = json.dumps({**json.loads(child.context_json or "{}"), SPLIT_KEY: split})
+	child.db_set(values)
+	commit_if_background()  # the worker must read the flag: commit before the child is enqueued
 
 	if mode == "fire_and_forget":
 		frappe.enqueue("huf.ai.flow.engine.run_flow", queue="default", flow_run_name=child.name)
