@@ -224,7 +224,9 @@ class TestAppRead(IntegrationTestCase):
 			guard_run(self.runs[FLOW_2], "view")
 		with self.assertRaises(frappe.PermissionError):
 			api.get_flow_run(self.runs[FLOW_2])
-		self.assertEqual({r["flow_id"] for r in runs_api.list_app_runs("huf", flow_ids=list(FLOWS))}, {FLOW_1})
+		self.assertEqual(
+			{r["flow_id"] for r in runs_api.list_app_runs("huf", flow_ids=list(FLOWS))}, {FLOW_1}
+		)
 
 	def test_narrowing_hook_fails_closed(self):
 		for fn in ("broken", "truthy", "no_such_function"):
@@ -238,6 +240,8 @@ class TestAppRead(IntegrationTestCase):
 		frappe.set_user(USER)
 		names = {r["name"] for r in form_options_api.search_flow_users("secread", limit=50)}
 		self.assertEqual(names, {USER_APPROVER})
-		found = {r["name"]: r["found"] for r in form_options_api.check_flow_users([USER_APPROVER, USER_OTHER])}
+		found = {
+			r["name"]: r["found"] for r in form_options_api.check_flow_users([USER_APPROVER, USER_OTHER])
+		}
 		self.assertEqual(found, {USER_APPROVER: True, USER_OTHER: False})
 		self.assertEqual([r["name"] for r in api.get_approver_roles()], [ROLE_APPROVE])

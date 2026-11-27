@@ -87,14 +87,18 @@ def _get_user_permitted_runs(doctype: str, filters=None, or_filters=None, **kwar
 		doctype, filters=filters, or_filters=or_filters, fields=["name", *links], limit_page_length=0
 	)
 	allowed = [
-		row.name for row in rows if has_user_permission(frappe.get_doc({"doctype": doctype, **row}), ptype="read")
+		row.name
+		for row in rows
+		if has_user_permission(frappe.get_doc({"doctype": doctype, **row}), ptype="read")
 	]
 	if not allowed:
 		return []
 	return frappe.get_all(doctype, filters={"name": ("in", allowed)}, **kwargs)
 
 
-def require_run_access(flow_run_id: str, ptype: str = "read", flow_ptype: str | None = None, message: str | None = None) -> str | None:
+def require_run_access(
+	flow_run_id: str, ptype: str = "read", flow_ptype: str | None = None, message: str | None = None
+) -> str | None:
 	"""Raise unless :func:`can_access_run`. A run that does not exist is a plain "not found". Returns the run's flow id."""
 	if not flow_run_id or not frappe.db.exists("Agent Flow Run", flow_run_id):
 		frappe.throw(_("Run not found"), frappe.DoesNotExistError)
@@ -105,5 +109,9 @@ def require_run_access(flow_run_id: str, ptype: str = "read", flow_ptype: str | 
 
 def require_flow_read(flow_id: str | None) -> None:
 	"""Raise unless the caller may read that flow (an unknown or empty id is left to the caller's own not-found handling)."""
-	if flow_id and frappe.db.exists("Flow Definition", flow_id) and not frappe.has_permission("Flow Definition", "read", doc=flow_id):
+	if (
+		flow_id
+		and frappe.db.exists("Flow Definition", flow_id)
+		and not frappe.has_permission("Flow Definition", "read", doc=flow_id)
+	):
 		frappe.throw(_("Not permitted"), frappe.PermissionError)
