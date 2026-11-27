@@ -169,8 +169,14 @@ def _targets(node: dict) -> list[str]:
 	elif ntype in ("router.llm", "router.decision", "split"):
 		out += [o.get("node_id") for o in config.get("options") or [] if isinstance(o, dict)]
 		out.append(config.get("default"))
+		decision = config.get("decision") if ntype == "router.decision" else None
+		if isinstance(decision, dict):
+			out += [c.get("node_id") for c in decision.get("candidates") or [] if isinstance(c, dict)]
+			out.append(decision.get("uncertain_next"))
 	elif ntype == "human.approval":
 		out += [config.get("approve_next"), config.get("reject_next"), config.get("timeout_next")]
+	elif ntype == "handoff":
+		out.append(config.get("timeout_next"))
 	elif ntype == "foreach":
 		out += list(config.get("body") or [])
 	return [t for t in out if isinstance(t, str) and t]
