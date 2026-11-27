@@ -12,7 +12,6 @@ def approval_decision_rights(status: str | None, waiting: dict, flow: str | None
 	if status != "Waiting Approval":
 		return False, None
 	from huf.ai.flow import engine
-
 	from huf.ai.flow.app_scope.access import flow_access, is_privileged
 	from huf.ai.flow.app_scope.api_guards import is_app_flow, is_app_only
 
