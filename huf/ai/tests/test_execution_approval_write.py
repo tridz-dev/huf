@@ -215,7 +215,8 @@ class TestExecutionApprovalWrite(IntegrationTestCase):
 				before = self._approver_rows()
 				moved = {**frappe.get_doc("Agent User", child).as_dict(), "parenttype": "Agent", "parentfield": "allowed_users", "parent": agent.name}
 				self._refused(lambda: client.save(frappe.as_json(moved)))
-				self._refused(lambda: client.delete("Agent User", child))
+				# client.delete cannot load a respelled parent, so go to the delete it would reach
+				self._refused(lambda: frappe.delete_doc("Agent User", child))
 				self._refused(lambda: discard("Agent User", child))
 				frappe.db.savepoint("steal")
 				doc = frappe.get_doc("Agent", agent.name)
