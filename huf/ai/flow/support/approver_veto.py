@@ -37,7 +37,7 @@ def _timeout_seconds() -> float:
 	import frappe
 
 	value = frappe.conf.get(TIMEOUT_KEY)
-	if isinstance(value, bool) or not isinstance(value, (int, float)) or not value > 0:
+	if isinstance(value, bool) or not isinstance(value, int | float) or not value > 0:
 		return DEFAULT_TIMEOUT_S
 	return min(max(value, 1), 30)
 
@@ -78,12 +78,13 @@ def _vetoed(flow_run, user: str, decision: str) -> bool:
 				if answer is not True:
 					_warn(path, "invalid result")
 				return True
-		return False
 	except Exception as exc:  # noqa: BLE001 - any failure refuses; the message may carry data, so only the class
 		if isinstance(messages, list):
 			del messages[message_count:]  # a frappe.throw in the hook must not surface to the decider
 		_warn(path or HOOK, type(exc).__name__)
 		return True
+	else:
+		return False
 
 
 def _warn(path: str, what: str) -> None:
