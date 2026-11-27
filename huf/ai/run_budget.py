@@ -22,6 +22,12 @@ class AIDisabled(RunBudgetExceeded):
     pass
 
 
+def _site_switch_off() -> bool:
+    """Site config ``huf_ai_disabled``; with no site bound there is no config, so nothing is off."""
+    conf = getattr(frappe.local, "conf", None)
+    return bool(conf and cint(conf.get("huf_ai_disabled")))
+
+
 def ai_policy(agent: str | None = None) -> dict:
     """The kill switch and spend cap that apply to ``agent``: ``{"enabled": bool, "spend_cap_usd": float}``.
 
@@ -34,7 +40,7 @@ def ai_policy(agent: str | None = None) -> dict:
     ``spend_cap_usd`` (its programme's cap; 0 or missing = none). Any provider can switch off; the
     lowest cap wins. A provider that fails counts as off (a kill switch must not fail open).
     """
-    if cint(frappe.conf.get("huf_ai_disabled")):
+    if _site_switch_off():
         return {"enabled": False, "spend_cap_usd": 0.0}
     enabled, caps = True, []
     for path in frappe.get_hooks(FEATURE_MAP_HOOK) or []:
@@ -86,7 +92,7 @@ class RunBudget:
 
         The site switch is read live, so it also stops runs that started before it was turned off.
         """
-        if self.ai_disabled or cint(frappe.conf.get("huf_ai_disabled")):
+        if self.ai_disabled or _site_switch_off():
             frappe.throw(AI_DISABLED, AIDisabled)
         if self.is_deadline_exceeded():
             frappe.throw("Run budget deadline exceeded",
