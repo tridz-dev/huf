@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react';
 import { actionOptions } from '@/data/actions';
 import { embedApp, isBackendTypeAllowed, setScopeTypes } from '@/components/flow/palette/embedScope';
 import type { ActionOption } from '@/types/modal.types';
-import { listNodeTypes, type AppNodeType, type NodeTypeRow, type SchemaProp } from '@/services/flow/steps/nodeTypesApi';
+import { listNodeTypes, type AppNodeType, type SchemaProp } from '@/services/flow/steps/nodeTypesApi';
 
 let cached: AppNodeType[] | null = null;
 let inFlight: Promise<AppNodeType[]> | null = null;
@@ -21,7 +21,7 @@ export function loadAppNodeTypes(): Promise<AppNodeType[]> {
   if (cached) return Promise.resolve(cached);
   const app = embedApp();
   inFlight ??= listNodeTypes(app ?? undefined)
-    .catch(() => [] as NodeTypeRow[]) // Embedded: an unknown app or a failed load leaves the scope empty.
+    // A failure is not cached: the scope stays empty (embedded) and the next call asks again.
     .then((rows) => {
       if (app !== null) setScopeTypes(rows.map((r) => r.type));
       const types = rows.filter((r) => !r.builtin);
@@ -38,7 +38,7 @@ export function useAppNodeTypes(): { types: AppNodeType[]; loaded: boolean } {
   useEffect(() => {
     const on = () => tick((n) => n + 1);
     listeners.add(on);
-    void loadAppNodeTypes();
+    loadAppNodeTypes().catch(() => undefined);
     return () => { listeners.delete(on); };
   }, []);
   return { types: cached ?? [], loaded: cached !== null };

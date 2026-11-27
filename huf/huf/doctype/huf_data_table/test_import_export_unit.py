@@ -7,10 +7,14 @@ import os
 import sys
 import types
 from pathlib import Path
+from unittest import mock
 
 import pytest
 
-if getattr(sys.modules.get("frappe"), "__file__", None) is None:
+# Stubs must not outlive this module: they are taken out of sys.modules once the
+# code under test is imported, and put back only while these tests run.
+_prior = sys.modules.get("frappe")
+if getattr(_prior, "__file__", None) is None:
 	stub = types.ModuleType("frappe")
 	stub._ = lambda s, *a: s
 	stub.whitelist = lambda *a, **k: (lambda f: f)
@@ -36,6 +40,21 @@ _load_mod("csv_out")
 sec = _load_mod("import_security")
 ie = _load_mod("import_export")
 _load_mod("import_replace")
+
+_stubs = {}
+if sys.modules.get("frappe") is not _prior:
+	_stubs["frappe"] = sys.modules.pop("frappe")
+	if _prior is not None:
+		sys.modules["frappe"] = _prior
+_run_patch = mock.patch.dict(sys.modules, _stubs)
+
+
+def setUpModule():
+	_run_patch.start()
+
+
+def tearDownModule():
+	_run_patch.stop()
 
 FIELDS = [
 	{"fieldname": "title", "label": "Title", "fieldtype": "Data", "reqd": 1, "options": None},
