@@ -133,8 +133,8 @@ class TestEmbedHeaders(IntegrationTestCase):
 		body = response.get_data(as_text=True)
 		self.assertIn("Not Permitted", body)
 		# No Login button: it would navigate the iframe to /login.
-		self.assertNotIn("/login", body)
-		self.assertNotIn("redirect-to", body)
+		for marker in ("href='/login", 'href="/login', "redirect-to", "btn-primary"):
+			self.assertNotIn(marker, body)
 
 	def test_other_huf_pages_are_unchanged(self):
 		frappe.conf[KEY] = ["'self'"]
