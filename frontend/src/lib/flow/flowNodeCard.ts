@@ -70,6 +70,11 @@ function hostOf(url: unknown): string | undefined {
   }
 }
 
+/** An app id as a title ("loyal_arrow" reads "Loyal Arrow"), the way Frappe titles a new app. */
+function appTitle(id: string): string {
+  return id.split(/[_-]+/).filter(Boolean).map((w) => w[0].toUpperCase() + w.slice(1)).join(' ');
+}
+
 const DOC_EVENT_WORD: Record<string, string> = {
   after_insert: 'created',
   on_update: 'changed',
@@ -95,7 +100,7 @@ export function triggerSubtitle(cfg: TriggerConfig | undefined, gateways?: reado
     }
     case 'app': {
       const app = typed((cfg as { app?: unknown }).app);
-      return app ? `Started by ${app}` : 'Started by an app';
+      return app ? `Started by ${appTitle(app)}` : 'Started by an app';
     }
     default:
       return 'Choose what starts this flow';
