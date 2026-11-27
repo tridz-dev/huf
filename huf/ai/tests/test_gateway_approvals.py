@@ -252,7 +252,9 @@ class TestNotify(Base):
 		self.assertEqual(self.w.sessions[0]["payload"]["name"], "FR-1")
 
 	def test_flow_run_notify_all_policy_roles(self):
-		self.role_users["Auditor"] = ["carol@x.com"]
+		self.w.role_users["Auditor"] = ["carol@x.com"]
+		self.w.enabled.add("carol@x.com")
+		self.w.links[("gw1", "carol@x.com")] = "UCAROL"
 		fr = SimpleNamespace(name="FR-2", waiting=json.dumps({"approver_type": "role",
 			"approver_role": "Approver", "approver_roles": ["Approver", "Auditor"], "approver_users": []}))
 		ap.notify_flow_run_approvers(fr)
