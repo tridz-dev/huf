@@ -23,11 +23,11 @@ def app_gateways(app: str, user: str) -> set[str]:
 		allowed = None
 		for path in [paths] if isinstance(paths, str) else paths:
 			names = frappe.get_attr(path)(app=app, user=user)
-			if not isinstance(names, (list, tuple)) or not all(isinstance(n, str) for n in names):
+			if not isinstance(names, list | tuple) or not all(isinstance(n, str) for n in names):
 				frappe.logger("huf").warning(f"{HOOK} {path}: not a list of names; none offered")
 				return set()
 			allowed = set(names) if allowed is None else allowed & set(names)
-		return allowed or set()
+		return allowed or set()  # noqa: TRY300
 	except Exception as exc:  # noqa: BLE001 - any failure offers nothing; the message may carry data, so only the class
 		frappe.logger("huf").warning(f"{HOOK} {path or app}: {type(exc).__name__}; none offered")
 		return set()
