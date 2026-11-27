@@ -18,6 +18,8 @@ from __future__ import annotations
 
 import frappe
 from frappe import _
+from frappe.core.doctype.user_permission.user_permission import get_user_permissions
+from frappe.permissions import has_user_permission
 
 from huf.ai.flow.app_scope.access import apps_for, flow_access, is_privileged
 from huf.ai.flow.app_scope.ownership import owner_app_of
@@ -30,7 +32,14 @@ def can_access_run(flow_run_id: str, ptype: str = "read", flow_ptype: str | None
 	app_flow = delegated_flow_of_run(flow_run_id)
 	if app_flow:
 		# App roles hold no run DocPerm: reading goes through the flow grant, and they never write a run.
-		return ptype == "read" and flow_ptype in (None, "read") and flow_access(None, app_flow, "view")
+		# User Permissions still apply, on the flow and on every link field of the run.
+		return bool(
+			ptype == "read"
+			and flow_ptype in (None, "read")
+			and flow_access(None, app_flow, "view")
+			and frappe.has_permission("Flow Definition", "read", doc=app_flow)
+			and has_user_permission(frappe.get_doc("Agent Flow Run", flow_run_id), ptype="read")
+		)
 	if not frappe.has_permission("Agent Flow Run", ptype, doc=flow_run_id):
 		return False
 	flow_id = frappe.db.get_value("Agent Flow Run", flow_run_id, "flow_id")
@@ -58,11 +67,31 @@ def can_list_runs() -> bool:
 def run_reader(flow_id: str | None):
 	"""The query function for a run list already guarded on ``flow_id``.
 
-	``get_all`` only for one app-owned flow the guard has checked; otherwise ``get_list`` (DocPerm and scope).
+	``get_all`` (narrowed by User Permissions) only for one app-owned flow the guard has checked; otherwise
+	``get_list`` (DocPerm and scope).
 	"""
 	if is_delegated_flow(flow_id) and flow_access(None, flow_id, "view"):
-		return frappe.get_all
+		return _get_user_permitted_runs
 	return frappe.get_list
+
+
+def _get_user_permitted_runs(doctype: str, filters=None, or_filters=None, **kwargs) -> list:
+	"""``get_all`` on runs, leaving out those the caller's User Permissions hide (``get_all`` ignores them).
+
+	Narrowed before ordering and paging, so pages and totals stay correct.
+	"""
+	if not get_user_permissions(frappe.session.user):
+		return frappe.get_all(doctype, filters=filters, or_filters=or_filters, **kwargs)
+	links = [field.fieldname for field in frappe.get_meta(doctype).get_link_fields()]
+	rows = frappe.get_all(
+		doctype, filters=filters, or_filters=or_filters, fields=["name", *links], limit_page_length=0
+	)
+	allowed = [
+		row.name for row in rows if has_user_permission(frappe.get_doc({"doctype": doctype, **row}), ptype="read")
+	]
+	if not allowed:
+		return []
+	return frappe.get_all(doctype, filters={"name": ("in", allowed)}, **kwargs)
 
 
 def require_run_access(flow_run_id: str, ptype: str = "read", flow_ptype: str | None = None, message: str | None = None) -> str | None:

@@ -12,7 +12,7 @@ import frappe
 import frappe.client
 from frappe.tests import IntegrationTestCase
 
-from huf.ai.flow import api
+from huf.ai.flow import api, run_identity_api
 from huf.ai.flow.app_scope import access, docperms, runs_api
 from huf.ai.flow.app_scope.access import flow_access
 from huf.ai.flow.app_scope.api_guards import guard_run
@@ -151,6 +151,62 @@ class TestAppRead(IntegrationTestCase):
 		text = frappe.as_json(result)
 		self.assertNotIn(PHONE, text)
 		self.assertNotIn(EMAIL, text)
+
+	# --- User Permissions ---------------------------------------------------------------------------------
+
+	def _restrict(self, allow, value):
+		doc = frappe.get_doc(
+			{
+				"doctype": "User Permission",
+				"user": USER,
+				"allow": allow,
+				"for_value": value,
+				"apply_to_all_doctypes": 1,
+			}
+		).insert(ignore_permissions=True)
+		self.addCleanup(frappe.clear_cache, user=USER)
+		self.addCleanup(doc.delete, ignore_permissions=True)
+		self.addCleanup(frappe.set_user, "Administrator")
+		frappe.clear_cache(user=USER)
+
+	def _assert_run_refused(self, run):
+		with self.assertRaises(frappe.PermissionError):
+			api.get_flow_run(run)
+		with self.assertRaises(frappe.PermissionError):
+			run_identity_api.get_flow_run_identity(run)
+		result = api.handle_get_flow_run(run)
+		self.assertNotIn("success", result)
+		self.assertIn("error", result)
+		self.assertEqual(api.get_flow_step_labels([{"flow_run": run, "flow_node_id": "end"}]), [None])
+
+	def test_user_permission_on_flow_hides_other_flows_runs(self):
+		self._restrict("Flow Definition", FLOW_1)
+		frappe.set_user(USER)
+		self.assertTrue(api.get_flow_run(self.runs[FLOW_1]))
+		self.assertTrue(run_identity_api.get_flow_run_identity(self.runs[FLOW_1]))
+		self.assertTrue(api.handle_get_flow_run(self.runs[FLOW_1])["success"])
+		self._assert_run_refused(self.runs[FLOW_2])
+
+	def test_user_permission_on_run_link_field_applies_to_detail_and_lists(self):
+		hidden = (
+			frappe.get_doc(
+				{
+					"doctype": "Agent Flow Run",
+					"flow_definition": FLOW_1,
+					"flow_id": FLOW_1,
+					"status": "Waiting User",
+					"requester_user": USER_OTHER,
+				}
+			)
+			.insert(ignore_permissions=True)
+			.name
+		)
+		self._restrict("User", USER)
+		frappe.set_user(USER)
+		self._assert_run_refused(hidden)
+		self.assertEqual([r["name"] for r in api.list_flow_runs(flow_id=FLOW_1)], [self.runs[FLOW_1]])
+		page = api.list_flow_runs_page(flow_id=FLOW_1)
+		self.assertEqual((page["total"], [r["name"] for r in page["items"]]), (1, [self.runs[FLOW_1]]))
 
 	# --- narrowing hook -----------------------------------------------------------------------------------
 
