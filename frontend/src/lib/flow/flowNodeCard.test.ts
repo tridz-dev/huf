@@ -56,6 +56,11 @@ describe('actionSubtitle', () => {
 });
 
 describe('triggerSubtitle', () => {
+  it('shows the app title, never the raw app id', () => {
+    expect(triggerSubtitle({ type: 'app', app: 'loyal_arrow' } as never)).toBe('Started by Loyal Arrow');
+    expect(triggerSubtitle({ type: 'app' } as never)).toBe('Started by an app');
+  });
+
   it('reads like a sentence', () => {
     expect(triggerSubtitle({ type: 'schedule', cron: '0 9 * * 1-5' })).toBe('Every Monday to Friday at 09:00');
     expect(triggerSubtitle({ type: 'schedule', cron: '0 9 * * *' })).toBe('Every day at 09:00');
