@@ -11,6 +11,7 @@ import frappe
 from frappe.tests import IntegrationTestCase
 
 from huf.ai.flow import engine as flow_engine
+from huf.ai.flow.catalog import api as catalog_api
 from huf.ai.flow.catalog import node_registry
 from huf.ai.flow.runs import park
 from huf.ai.graph.validator import get_flow_node_types, validate_graph
@@ -215,3 +216,51 @@ class TestAppNodes(IntegrationTestCase):
 			out = self._exec(self._node(text="x"))
 		self.assertEqual(out["status"], "success")
 		self.assertEqual(CALLS, [])
+
+
+class TestScopedPalette(IntegrationTestCase):
+	"""``list_node_types(app=...)``: the embed palette scope (BUILDER_EMBED.md section 3)."""
+
+	def setUp(self):
+		frappe.set_user("Administrator")
+		# A fake ledger-kind node of the scoped app, and one node of a second app.
+		self.by_app = {"huf": [_entry("huf.grant_points")], "frappe": [_entry("frappe.other")]}
+		real = frappe.get_hooks
+
+		def fake(hook=None, *a, **k):
+			if hook == "huf_flow_nodes":
+				return list(self.by_app.get(k.get("app_name"), []))
+			return real(hook, *a, **k)
+
+		p = patch("frappe.get_hooks", side_effect=fake)
+		p.start()
+		self.addCleanup(p.stop)
+		self.addCleanup(frappe.set_user, "Administrator")
+
+	def _types(self, **kw):
+		return {t["type"] for t in catalog_api.list_node_types(**kw)}
+
+	def test_scope_is_app_types_and_allowed_builtins(self):
+		rows = catalog_api.list_node_types(app="huf")
+		self.assertEqual({t["type"] for t in rows if not t["builtin"]}, {"huf.grant_points"})
+		builtins = {t["type"] for t in rows if t["builtin"]}
+		self.assertEqual(builtins, set(node_registry.embed_builtin_types()))
+		self.assertTrue({"condition", "human.approval", "output", "trigger.schedule"} <= builtins)
+
+	def test_write_paths_are_never_offered(self):
+		types = self._types(app="huf")
+		self.assertFalse({"code.run", "tool.call", "doc.create", "doc.update", "ledger_write", "frappe.other"} & types)
+
+	def test_ledger_kind_only_when_the_scoped_app_registers_it(self):
+		self.assertNotIn("huf.grant_points", self._types(app="frappe"))
+		self.by_app["huf"] = []
+		self.assertNotIn("huf.grant_points", self._types(app="huf"))
+
+	def test_unknown_app_raises_and_no_app_is_unchanged(self):
+		for app in ("no_such_app", ""):
+			self.assertRaises(frappe.ValidationError, catalog_api.list_node_types, app=app)
+		self.assertEqual(self._types(), {"huf.grant_points", "frappe.other"})
+
+	def test_scoped_list_needs_flow_read(self):
+		frappe.set_user("Guest")
+		self.assertRaises(frappe.PermissionError, catalog_api.list_node_types, app="huf")

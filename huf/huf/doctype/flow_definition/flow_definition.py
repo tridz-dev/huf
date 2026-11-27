@@ -245,7 +245,7 @@ class FlowDefinition(Document):
 		flags = frappe.flags
 		if getattr(flags, "in_install", False) or getattr(flags, "in_migrate", False) or getattr(flags, "in_patch", False):
 			return
-		from huf.ai.flow.publish_guard import check_can_publish
+		from huf.ai.flow.publish_guard import check_can_publish, check_preflight
 
 		previous = None
 		before = self.get_doc_before_save() if not self.is_new() else None
@@ -255,6 +255,7 @@ class FlowDefinition(Document):
 			except (json.JSONDecodeError, TypeError):
 				previous = None
 		check_can_publish(defn, previous)
+		check_preflight(defn, self.name)  # after the permission checks: app checks run only for a permitted publish
 
 	def _validate_activation(self, defn: dict):
 		"""Active flows must be runnable: Draft/Archived saves stay permissive. Reports

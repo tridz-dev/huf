@@ -85,13 +85,13 @@ class TestFlowMemberEntry(IntegrationTestCase):
 	def test_once_per_member_skips_second(self):
 		self.assertEqual(self._decide("once_per_member"), {"action": "start"})
 		self._run(status="Success")
-		self.assertEqual(self._decide("once_per_member")["action"], "skip")
+		self.assertEqual(self._decide("once_per_member")["code"], "already_entered")
 
 	def test_one_active_blocks_parallel(self):
 		self._run(status="Success")
 		self.assertEqual(self._decide("one_active_per_member"), {"action": "start"})
 		self._run(status="Running")
-		self.assertEqual(self._decide("one_active_per_member")["action"], "skip")
+		self.assertEqual(self._decide("one_active_per_member")["code"], "run_in_progress")
 
 	def test_start_flow_run_applies_policy(self):
 		defn = {"nodes": [{"id": "t1", "type": "trigger.webhook", "config": {"entry_policy": "one_active_per_member"}}]}

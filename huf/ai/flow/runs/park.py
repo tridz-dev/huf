@@ -14,11 +14,12 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 import frappe
-from frappe.utils import now_datetime
+from frappe.utils import get_datetime, now_datetime
 
 from huf.ai.graph.executor import Outcome, PauseRequest
 from huf.ai.transaction import commit_if_background
@@ -26,6 +27,11 @@ from huf.ai.transaction import commit_if_background
 WAIT_STATUS = "Waiting Timer"
 MAX_WAIT_DAYS_DEFAULT = 365
 MAX_PAYLOAD_BYTES = 64 * 1024
+WAKE_PAGE_SIZE_DEFAULT = 500  # site config: huf_flow_wake_page_size
+WAKE_CHUNK_SIZE = 100
+WAKE_BUDGET_SECONDS = 40  # the sweeper ticks every minute
+WAKE_LOCK_KEY = "huf:flow:wake_sweeper"
+WAKE_LOCK_TTL_SECONDS = 55  # above the budget, below the tick: a killed sweeper never costs the next minute
 
 
 @dataclass
@@ -113,8 +119,13 @@ def verify_token(flow_run, token: str) -> bool:
 	return bool(expected and token) and hmac.compare_digest(expected, str(token))
 
 
-def wake_run(flow_run_name: str, reason: str, payload=None, *, enqueue: bool = True) -> bool:
-	"""Move a ``Waiting Timer`` run back to Running and continue it. True only for the single winner."""
+def wake_run(
+	flow_run_name: str, reason: str, payload=None, *, enqueue: bool = True, due_by: datetime | None = None
+) -> bool:
+	"""Move a ``Waiting Timer`` run back to Running and continue it. True only for the single winner.
+
+	With ``due_by`` (timer wakes) the run must also still be due then: a run re-parked for later is left alone.
+	"""
 	from huf.ai.flow.engine import _acquire_run_lock, _release_run_lock, _transition_run, run_flow
 
 	if payload is not None and len(json.dumps(payload, default=str).encode()) > MAX_PAYLOAD_BYTES:
@@ -124,6 +135,8 @@ def wake_run(flow_run_name: str, reason: str, payload=None, *, enqueue: bool = T
 	try:
 		flow_run = frappe.get_doc("Agent Flow Run", flow_run_name)
 		if flow_run.status != WAIT_STATUS:
+			return False
+		if due_by and not (flow_run.resume_at and get_datetime(flow_run.resume_at) <= due_by):
 			return False
 		waiting = _waiting(flow_run)
 		waiting["woke"] = {"reason": reason, "payload": payload, "at": datetime.now(timezone.utc).isoformat()}
@@ -169,22 +182,89 @@ def cancel_run(flow_run_name: str, by: str) -> bool:
 	return True
 
 
-def wake_due_waits(now: datetime | None = None, limit: int = 500) -> list[str]:
-	"""Scheduler entry (every minute): wake every ``Waiting Timer`` run whose ``resume_at`` has passed.
+def wake_due_waits(now: datetime | None = None, limit: int | None = None) -> list[str]:
+	"""Scheduler entry (every minute): drain the ``Waiting Timer`` runs whose ``resume_at`` has passed.
 
-	Each continuation is enqueued on the short queue, never run here, so a big tick cannot hold the scheduler.
+	Due runs are read in pages of ``limit`` (site config, default 500) until none are left or the time budget is
+	spent. The oldest chunk is woken here; every further chunk of 100 is enqueued as a ``wake_chunk`` job. Nothing is
+	claimed until ``wake_run`` moves the run, so a lost job or an overlapping tick cannot strand or double-wake one.
+	Returns the runs woken here plus those handed to a chunk job. Only one sweeper per site runs at a time; a tick
+	that finds the sweeper lock held does nothing.
 	"""
-	names = frappe.get_all(
+	if not _take_sweeper_lock():
+		return []
+	try:
+		return _drain_due_waits(now, limit)
+	finally:
+		_drop_sweeper_lock()
+
+
+def _take_sweeper_lock() -> bool:
+	try:
+		cache = frappe.cache()
+		return bool(cache.set(cache.make_key(WAKE_LOCK_KEY), 1, ex=WAKE_LOCK_TTL_SECONDS, nx=True))
+	except Exception:  # noqa: BLE001
+		return True  # the lock only avoids overlap; ``wake_run`` is what prevents a double wake
+
+
+def _drop_sweeper_lock() -> None:
+	try:
+		cache = frappe.cache()
+		cache.delete(cache.make_key(WAKE_LOCK_KEY))
+	except Exception:  # noqa: BLE001, S110
+		pass
+
+
+def _drain_due_waits(now: datetime | None, limit: int | None) -> list[str]:
+	now = now or datetime.now(timezone.utc).replace(tzinfo=None)
+	page_size = int(limit or frappe.conf.get("huf_flow_wake_page_size") or WAKE_PAGE_SIZE_DEFAULT)
+	deadline = time.monotonic() + WAKE_BUDGET_SECONDS
+	taken: list[str] = []
+	last = None
+	inline = True
+	while True:
+		rows = _due_page(now, last, page_size)
+		names = [row.name for row in rows]
+		for start in range(0, len(names), WAKE_CHUNK_SIZE):
+			chunk = names[start : start + WAKE_CHUNK_SIZE]
+			if inline:
+				taken += wake_chunk(chunk, now)
+				inline = False
+			else:
+				frappe.enqueue("huf.ai.flow.runs.park.wake_chunk", queue="short", names=chunk, due_by=now)
+				taken += chunk
+		if len(rows) < page_size or time.monotonic() >= deadline:
+			return taken
+		last = rows[-1]
+
+
+def _due_page(now: datetime, after, page_size: int) -> list:
+	"""One page of due runs, oldest first, strictly after the row ``after`` (keyset on ``resume_at, name``)."""
+	filters = {"status": WAIT_STATUS, "resume_at": ["<=", now]}
+	or_filters = None
+	if after:
+		filters = [
+			["status", "=", WAIT_STATUS],
+			["resume_at", "<=", now],
+			["resume_at", ">=", after.resume_at],
+		]
+		or_filters = [["resume_at", ">", after.resume_at], ["name", ">", after.name]]
+	return frappe.get_all(
 		"Agent Flow Run",
-		filters={"status": "Waiting Timer", "resume_at": ["<=", now or datetime.now(timezone.utc).replace(tzinfo=None)]},
-		order_by="resume_at asc",
-		limit_page_length=limit,
-		pluck="name",
+		filters=filters,
+		or_filters=or_filters,
+		fields=["name", "resume_at"],
+		order_by="resume_at asc, name asc",
+		limit_page_length=page_size,
 	)
+
+
+def wake_chunk(names: list[str], due_by: datetime) -> list[str]:
+	"""Wake each still-due run and enqueue its continuation. Returns the runs this call won."""
 	woken: list[str] = []
 	for name in names:
 		try:
-			if wake_run(name, "elapsed"):
+			if wake_run(name, "elapsed", due_by=due_by):
 				woken.append(name)
 		except Exception:
 			frappe.log_error(frappe.get_traceback(), f"Flow wait wake: {name}")
