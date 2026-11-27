@@ -16,10 +16,16 @@ RECIPIENT = "+15550001234"
 
 
 def allow(request):
-	return {"allowed": True}
+	return {"allow": True}
 
 
 class TestGuardChain(IntegrationTestCase):
+	def setUp(self):
+		# app-hook behaviour only; the built-in steps are covered by test_guard_steps
+		patcher = patch.object(guard, "BUILTIN_STEPS", [])
+		patcher.start()
+		self.addCleanup(patcher.stop)
+
 	def run_chain(self, *steps, request=None, **kwargs):
 		"""Evaluate with ``steps`` registered as app hooks."""
 		registry = {f"app.step{i}": step for i, step in enumerate(steps)}
@@ -42,7 +48,7 @@ class TestGuardChain(IntegrationTestCase):
 			def run(request):
 				seen.append((label, request["vars"][:]))
 				request["vars"].append(label)
-				return {"allowed": True}
+				return {"allow": True}
 
 			return run
 
@@ -56,17 +62,17 @@ class TestGuardChain(IntegrationTestCase):
 	def test_first_block_short_circuits(self):
 		later = []
 		result = self.run_chain(
-			lambda r: {"allowed": False, "reason": "freq_cap"}, lambda r: later.append(1) or allow(r)
+			lambda r: {"allow": False, "reason": "freq_cap"}, lambda r: later.append(1) or allow(r)
 		)
 		self.assertBlocked(result, "freq_cap")
 		self.assertEqual(later, [])
 
 	def test_unregistered_reason_is_stored_as_unknown(self):
-		result = self.run_chain(lambda r: {"allowed": False, "reason": f"no consent for {r['to']}"})
+		result = self.run_chain(lambda r: {"allow": False, "reason": f"no consent for {r['to']}"})
 		self.assertBlocked(result, "unknown")
 
 	def test_anything_but_an_explicit_verdict_blocks(self):
-		bad = (None, True, False, "", {}, {"allowed": 1}, {"allowed": "True"}, {"allowed": True, "x": 1})
+		bad = (None, True, False, "", {}, {"allow": 1}, {"allow": "True"}, {"allow": True, "x": 1})
 		for verdict in bad:
 			with self.subTest(verdict=verdict):
 				self.assertBlocked(self.run_chain(lambda r, v=verdict: v), "hook_error")
@@ -107,7 +113,7 @@ class TestGuardChain(IntegrationTestCase):
 			except RuntimeError as error:
 				errors.append(error)
 			done.set()
-			return {"allowed": True}
+			return {"allow": True}
 
 		result = self.run_chain(slow, lambda r: later.append(1) or allow(r), timeout=0.05)
 		release.set()
@@ -123,7 +129,7 @@ class TestGuardChain(IntegrationTestCase):
 		def slow_query(request):
 			frappe.db.sql("select sleep(0.3)")
 			finished.append(1)
-			return {"allowed": True}
+			return {"allow": True}
 
 		started = time.monotonic()
 		self.assertBlocked(self.run_chain(slow_query, timeout=0.05), "hook_timeout")
@@ -133,7 +139,7 @@ class TestGuardChain(IntegrationTestCase):
 	def test_step_sees_the_site_and_the_callers_transaction(self):
 		def read(request):
 			rows = frappe.db.sql("select @huf_guard_probe")
-			return {"allowed": frappe.local.site == request["site"] and rows[0][0] == 7}
+			return {"allow": frappe.local.site == request["site"] and rows[0][0] == 7}
 
 		frappe.db.sql("set @huf_guard_probe = 7")
 		self.assertTrue(self.run_chain(read, request={"site": frappe.local.site}).allowed)
