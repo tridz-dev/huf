@@ -30,6 +30,8 @@ MAX_PAYLOAD_BYTES = 64 * 1024
 WAKE_PAGE_SIZE_DEFAULT = 500  # site config: huf_flow_wake_page_size
 WAKE_CHUNK_SIZE = 100
 WAKE_BUDGET_SECONDS = 40  # the sweeper ticks every minute
+WAKE_LOCK_KEY = "huf:flow:wake_sweeper"
+WAKE_LOCK_TTL_SECONDS = 55  # above the budget, below the tick: a killed sweeper never costs the next minute
 
 
 @dataclass
@@ -186,8 +188,34 @@ def wake_due_waits(now: datetime | None = None, limit: int | None = None) -> lis
 	Due runs are read in pages of ``limit`` (site config, default 500) until none are left or the time budget is
 	spent. The oldest chunk is woken here; every further chunk of 100 is enqueued as a ``wake_chunk`` job. Nothing is
 	claimed until ``wake_run`` moves the run, so a lost job or an overlapping tick cannot strand or double-wake one.
-	Returns the runs woken here plus those handed to a chunk job.
+	Returns the runs woken here plus those handed to a chunk job. Only one sweeper per site runs at a time; a tick
+	that finds the sweeper lock held does nothing.
 	"""
+	if not _take_sweeper_lock():
+		return []
+	try:
+		return _drain_due_waits(now, limit)
+	finally:
+		_drop_sweeper_lock()
+
+
+def _take_sweeper_lock() -> bool:
+	try:
+		cache = frappe.cache()
+		return bool(cache.set(cache.make_key(WAKE_LOCK_KEY), 1, ex=WAKE_LOCK_TTL_SECONDS, nx=True))
+	except Exception:
+		return True  # the lock only avoids overlap; ``wake_run`` is what prevents a double wake
+
+
+def _drop_sweeper_lock() -> None:
+	try:
+		cache = frappe.cache()
+		cache.delete(cache.make_key(WAKE_LOCK_KEY))
+	except Exception:
+		pass
+
+
+def _drain_due_waits(now: datetime | None, limit: int | None) -> list[str]:
 	now = now or datetime.now(timezone.utc).replace(tzinfo=None)
 	page_size = int(limit or frappe.conf.get("huf_flow_wake_page_size") or WAKE_PAGE_SIZE_DEFAULT)
 	deadline = time.monotonic() + WAKE_BUDGET_SECONDS
