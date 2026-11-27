@@ -132,3 +132,70 @@ class TestRunDenylist(IntegrationTestCase):
 				meta, error = _check_doctype_allowed(doctype)
 				self.assertIsNone(meta)
 				self.assertTrue(error)
+
+	def _smuggled_run(self):
+		return {
+			"doctype": "Agent Flow Run",
+			"flow_definition": frappe.db.get_value("Agent Flow Run", self.run_name, "flow_definition"),
+			"flow_id": "x",
+			"status": "Success",
+			"trigger_type": "Manual",
+			"started_at": str(now_datetime()),
+			"description": "denylist smuggle",
+		}
+
+	def test_a_doctype_in_the_arguments_cannot_redirect_a_create(self):
+		script = {
+			"doctype": "Server Script",
+			"__newname": "_test-denylist-script",
+			"script_type": "API",
+			"api_method": "_test_denylist",
+			"script": "pass",
+			"description": "denylist smuggle",
+		}
+		create_fn = crud.create_create_function("ToDo")
+		for values in (self._smuggled_run(), script):
+			denied = values["doctype"]
+			before = frappe.db.count(denied)
+			calls = {
+				"functions": lambda: functions.create_document("ToDo", dict(values)),
+				"functions_many": lambda: functions.create_documents("ToDo", [dict(values)]),
+				"generated": lambda: create_fn(**values),
+			}
+			for ignore in (False, True):
+				pinned = {"reference_doctype": "ToDo", "ignore_permissions": ignore}
+				calls[f"flat_{ignore}"] = lambda pinned=pinned: crud.handle_create_document(**pinned, **values)
+				calls[f"wrapped_{ignore}"] = lambda pinned=pinned: crud.handle_create_document(
+					**pinned, doc=dict(values)
+				)
+			for label, call in calls.items():
+				with self.subTest(doctype=denied, path=label):
+					call()
+					self.assertEqual(frappe.db.count(denied), before)
+
+	def test_a_doctype_in_the_arguments_cannot_redirect_an_update(self):
+		todo = frappe.get_doc({"doctype": "ToDo", "description": "before"}).insert().name
+		data = {"doctype": "Agent Flow Run", "description": "after"}
+		update_fn = crud.create_update_function("ToDo")
+		calls = {
+			"functions": lambda: functions.update_document("ToDo", todo, dict(data)),
+			"generated": lambda: update_fn(name=todo, **data),
+			"set_value_name": lambda: functions.set_value("ToDo", todo, "doctype", "Agent Flow Run"),
+			"set_value_dict": lambda: functions.set_value("ToDo", todo, dict(data)),
+			"handle_set_value": lambda: crud.handle_set_value(
+				doctype="ToDo", filters=todo, fieldname="doctype", value="Agent Flow Run"
+			),
+		}
+		for ignore in (False, True):
+			calls[f"handler_{ignore}"] = lambda ignore=ignore: crud.handle_update_document(
+				reference_doctype="ToDo", document_id=todo, data=dict(data), ignore_permissions=ignore
+			)
+		for label, call in calls.items():
+			with self.subTest(path=label):
+				frappe.db.set_value("ToDo", todo, "description", "before")
+				try:
+					result = call()
+				except frappe.ValidationError as e:
+					result = str(e)
+				self.assertEqual(self._status(), "Queued", result)
+				self.assertEqual(frappe.db.count("Agent Flow Run", {"name": todo}), 0)
