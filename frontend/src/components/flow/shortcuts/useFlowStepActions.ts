@@ -6,6 +6,9 @@ import { duplicateSteps } from '@/lib/flow-history/flowDuplicate';
 import { buildClipboard, pasteSteps, readClipboard, writeClipboard } from '@/lib/flow-history/flowClipboard';
 import { insertSpot, insertStep } from '@/lib/flow-history/insertStep';
 import { defaultActionConfig } from '@/lib/flow-history/actionDefaults';
+import { isStepAllowed } from '../palette/scopeFilter';
+
+const OUT_OF_SCOPE = 'This step cannot be edited here';
 
 const stepsText = (n: number) => (n === 1 ? 'Step' : `${n} steps`);
 
@@ -26,7 +29,12 @@ export function useFlowStepActions() {
   const duplicate = useCallback((ids: string[]): boolean => {
     const flow = getFlow();
     if (!flow || ids.length === 0) return false;
-    const result = duplicateSteps({ nodes: flow.nodes, edges: flow.edges }, ids, Date.now());
+    const inScope = ids.filter((id) => flow.nodes.every((n) => n.id !== id || isStepAllowed(n)));
+    if (inScope.length === 0) {
+      toast.info(OUT_OF_SCOPE);
+      return false;
+    }
+    const result = duplicateSteps({ nodes: flow.nodes, edges: flow.edges }, inScope, Date.now());
     if (!result) return false;
     if (result.addedIds.length === 0) {
       toast.info('A flow has only one trigger', { description: 'The trigger cannot be duplicated.' });
@@ -59,9 +67,15 @@ export function useFlowStepActions() {
   const paste = useCallback((): boolean => {
     const flow = getFlow();
     if (!flow) return false;
-    const payload = readClipboard();
-    if (!payload) {
+    const copied = readClipboard();
+    if (!copied) {
       toast.info('Nothing to paste yet', { description: 'Select a step and copy it first.' });
+      return false;
+    }
+    // The clipboard is shared with the full editor: steps this editor does not offer are left out.
+    const payload = { ...copied, nodes: copied.nodes.filter(isStepAllowed) };
+    if (payload.nodes.length === 0) {
+      toast.info('Nothing was pasted', { description: 'The copied steps cannot be added here.' });
       return false;
     }
     const key = `${flow.id}:${payload.copiedAt}`;
