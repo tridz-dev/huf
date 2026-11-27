@@ -12,6 +12,58 @@ class RunBudgetExceeded(frappe.ValidationError):
     pass
 
 
+AI_DISABLED = "ai_disabled"
+FEATURE_MAP_HOOK = "huf_ai_feature_map"
+
+
+class AIDisabled(RunBudgetExceeded):
+    """Raised when the AI kill switch is off for the site or for the agent's feature.
+    The message is the reason code ``ai_disabled``."""
+    pass
+
+
+def ai_policy(agent: str = None) -> dict:
+    """The kill switch and spend cap that apply to ``agent``: ``{"enabled": bool, "spend_cap_usd": float}``.
+
+    Site switch: site config ``huf_ai_disabled``. Apps declare providers in ``hooks.py``::
+
+        huf_ai_feature_map = ["my_app.ai.feature_policy"]
+
+    A provider is called with ``agent=<Agent name or None>`` and returns None when the agent is not
+    one of its features, else a dict with optional ``enabled`` (False switches the feature off) and
+    ``spend_cap_usd`` (its programme's cap; 0 or missing = none). Any provider can switch off; the
+    lowest cap wins. A provider that fails counts as off (a kill switch must not fail open).
+    """
+    if cint(frappe.conf.get("huf_ai_disabled")):
+        return {"enabled": False, "spend_cap_usd": 0.0}
+    enabled, caps = True, []
+    for path in frappe.get_hooks(FEATURE_MAP_HOOK) or []:
+        try:
+            policy = frappe.get_attr(path)(agent=agent)
+            if not policy:
+                continue
+            if not policy.get("enabled", True):
+                enabled = False
+            caps.append(flt(policy.get("spend_cap_usd")))
+        except Exception:
+            frappe.logger("huf").warning(f"{FEATURE_MAP_HOOK}: provider {path} failed", exc_info=True)
+            enabled = False
+    return {"enabled": enabled, "spend_cap_usd": min((c for c in caps if c > 0), default=0.0)}
+
+
+def assert_ai_enabled(agent: str = None) -> dict:
+    """Return the policy for ``agent``, or raise :class:`AIDisabled` when AI is switched off."""
+    policy = ai_policy(agent)
+    if not policy["enabled"]:
+        frappe.throw(AI_DISABLED, AIDisabled)
+    return policy
+
+
+def _lowest_cap(*caps: float) -> float:
+    """The tightest of the caps that are set; 0 (unlimited) when none is."""
+    return min((c for c in caps if c > 0), default=0)
+
+
 class RunBudget:
     """Shared budget for a run and all child runs."""
 
@@ -62,6 +114,7 @@ class RunBudget:
         Agent Run, not from fields named ``depth``/``ancestry`` (Agent Run
         has neither today).
         """
+        policy = assert_ai_enabled(getattr(agent_doc, "name", None))
         if deadline_secs is None:
             deadline_secs = cint(frappe.db.get_single_value("Agent Settings",
                                             "deadline_seconds")) or 900
@@ -73,6 +126,7 @@ class RunBudget:
         # "unlimited" into a hard cap (reviewer item 12).
         spend_cap = frappe.db.get_single_value("Agent Settings", "spend_cap_usd")
         spend_cap = flt(spend_cap) if spend_cap is not None else 0
+        spend_cap = _lowest_cap(spend_cap, policy["spend_cap_usd"])
 
         ancestry = []
         current_depth = 0
@@ -114,6 +168,7 @@ class RunBudget:
         # Fetch settings for spend cap
         spend_cap = frappe.db.get_single_value("Agent Settings", "spend_cap_usd")
         spend_cap = flt(spend_cap) if spend_cap is not None else 0
+        spend_cap = _lowest_cap(spend_cap, ai_policy(run_doc.get("agent"))["spend_cap_usd"])
 
         budget = RunBudget(
             deadline_at=deadline_at,
