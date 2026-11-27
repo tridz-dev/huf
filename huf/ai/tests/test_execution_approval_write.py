@@ -173,9 +173,9 @@ class TestExecutionApprovalWrite(IntegrationTestCase):
 
 	def test_agent_rows_are_still_written_directly_and_through_the_agent(self):
 		agent = self._agent(allowed_users=[{"user": self.manager}])
-		row = client.insert(
+		row = frappe.get_doc(
 			{"doctype": "Agent User", "parenttype": "Agent", "parentfield": "allowed_users", "parent": agent.name, "user": self.requester}
-		)
+		).insert()
 		doc = frappe.get_doc("Agent User", row.name)
 		doc.user = self.manager
 		doc.save()

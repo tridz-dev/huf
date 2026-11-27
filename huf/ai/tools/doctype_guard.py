@@ -31,6 +31,8 @@ _DENYLISTED_DOCTYPES = {
 	"agent flow run",
 	"flow member state",
 	"agent execution approval",
+	# child rows naming who may use an agent or decide an approval
+	"agent user",
 	"channel outbox",
 	"gateway event",
 }
