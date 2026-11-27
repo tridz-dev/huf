@@ -20,6 +20,10 @@ MAX_KEY_CHARS = 140
 MAX_VARS_BYTES = 64 * 1024
 MAX_HISTORY = 100
 DEFAULT_RETENTION_DAYS = 365
+# ``active_flow_run`` of a member whose entry was granted but whose run is not recorded yet. It expires, so a run
+# that failed to be created does not keep the member out.
+ENTRY_CLAIM = "entry-claimed"
+ENTRY_CLAIM_SECONDS = 60
 
 
 class FlowMemberError(ValueError):
@@ -72,17 +76,72 @@ def get_member(flow: str, key: str) -> dict | None:
 	return row
 
 
-def upsert_member(flow: str, key: str, run: str | None = None) -> str:
-	"""Create the member on first sight, then count this run. Returns the row name."""
+def create_member(flow: str, key: str) -> bool:
+	"""Insert-or-skip: True when this call created the member, False when it already existed (also when another
+	transaction created it at the same moment; the insert waits for that transaction to finish)."""
+	try:
+		frappe.get_doc(
+			{"doctype": DOCTYPE, "flow": flow, "member_key": key, "status": "Active", "entered_at": now_datetime()}
+		).insert(ignore_permissions=True)
+	except frappe.DuplicateEntryError:
+		frappe.clear_last_message()
+		return False
+	return True
+
+
+def lock_member(flow: str, key: str) -> str:
+	"""Create the member if missing and hold its row lock until the transaction ends. Returns the row name.
+
+	One upsert statement, not insert-then-``for update``: a failed insert keeps a shared lock, and many callers
+	upgrading it at once deadlock.
+	"""
 	name = member_name(flow, key)
 	now = now_datetime()
-	if not frappe.db.exists(DOCTYPE, name):
-		try:
-			frappe.get_doc(
-				{"doctype": DOCTYPE, "flow": flow, "member_key": key, "status": "Active", "entered_at": now}
-			).insert(ignore_permissions=True)
-		except frappe.DuplicateEntryError:
-			pass  # another run created it at the same moment
+	user = frappe.session.user
+	insert = (
+		f"insert into `tab{DOCTYPE}` (name, creation, modified, owner, modified_by, flow, member_key, status, entered_at)"
+		" values (%s, %s, %s, %s, %s, %s, %s, 'Active', %s)"
+	)
+	frappe.db.multisql(
+		{
+			"mariadb": f"{insert} on duplicate key update name = name",
+			"postgres": f"{insert} on conflict (name) do update set name = excluded.name",
+		},
+		(name, now, now, user, user, flow, key, now),
+	)
+	return name
+
+
+def claim_active_entry(flow: str, key: str) -> bool:
+	"""Atomically grant the member's one active run. False when a run is in progress or being created.
+
+	The row lock serialises concurrent triggers; the stored claim outlives a commit made before the run is
+	inserted. The member row and its run are read with locking reads, which see what others just committed.
+	"""
+	name = lock_member(flow, key)
+	row = frappe.db.get_value(DOCTYPE, name, ["active_flow_run", "last_event_at"], as_dict=True, for_update=True)
+	now = now_datetime()
+	if row.active_flow_run == ENTRY_CLAIM:
+		if row.last_event_at and row.last_event_at > add_to_date(now, seconds=-ENTRY_CLAIM_SECONDS):
+			return False
+	elif row.active_flow_run:
+		from huf.ai.flow.engine import TERMINAL_STATUSES
+
+		status = frappe.db.get_value("Agent Flow Run", row.active_flow_run, "status", for_update=True)
+		if status and status not in TERMINAL_STATUSES:
+			return False
+	if has_active_run(flow, key):
+		return False
+	frappe.db.set_value(
+		DOCTYPE, name, {"active_flow_run": ENTRY_CLAIM, "last_event_at": now}, update_modified=False
+	)
+	return True
+
+
+def upsert_member(flow: str, key: str, run: str | None = None) -> str:
+	"""Create the member on first sight, then count this run. Returns the row name."""
+	name = lock_member(flow, key)
+	now = now_datetime()
 	frappe.db.sql(
 		f"update `tab{DOCTYPE}` set run_count = run_count + 1, last_event_at = %s, status = 'Active',"
 		" completed_at = null, active_flow_run = %s where name = %s",
