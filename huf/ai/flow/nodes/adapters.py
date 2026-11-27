@@ -25,6 +25,13 @@ def exec_router_decision(flow_run, node: dict, config: dict, settings: dict) -> 
 	return exec_switch(flow_run, node, config, settings, _ctx(flow_run, settings))
 
 
+def exec_split(flow_run, node: dict, config: dict, settings: dict) -> dict:
+	"""Execute split node: weighted branches plus holdout, see ``nodes/split.py``."""
+	from huf.ai.flow.nodes.split import exec_split as run_split
+
+	return run_split(flow_run, node, config, settings)
+
+
 def exec_stop(flow_run, node: dict, config: dict, settings: dict) -> dict:
 	"""Execute stop node: fail the run with its message, see ``nodes/stop.py``."""
 	from huf.ai.flow.nodes.stop import exec_stop as run_stop

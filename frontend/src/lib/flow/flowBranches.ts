@@ -21,6 +21,8 @@ const CONDITION: BranchHandle[] = [
   { route: 'true', handleId: 'true', label: 'Yes' },
   { route: 'false', handleId: 'false', label: 'No' },
 ];
+/** Path taken when the facts cannot be known (backend `fallback_next`); shown only on a condition that has one. */
+const CONDITION_FALLBACK: BranchHandle = { route: 'fallback', handleId: 'fallback', label: "Can't tell", optional: true };
 const HUMAN: BranchHandle[] = [
   { route: 'approve', handleId: 'approve', label: 'Approved' },
   { route: 'reject', handleId: 'reject', label: 'Rejected' },
@@ -41,7 +43,7 @@ const WAIT_WITH_TIMEOUT: BranchHandle[] = [
 export function branchHandlesFor(actionType: string | undefined, config?: Record<string, unknown>): BranchHandle[] {
   switch (actionType) {
     case 'condition':
-      return CONDITION;
+      return config && config.fallback_next ? [...CONDITION, CONDITION_FALLBACK] : CONDITION;
     case 'human.approval':
       return config && config.timeout_ms ? [...HUMAN, HUMAN_TIMEOUT] : HUMAN;
     case 'foreach':
@@ -76,6 +78,7 @@ export function branchTone(route: FlowEdgeRoute): BranchTone {
     case 'error':
       return 'bad';
     case 'timeout':
+    case 'fallback':
       return 'warn';
     case 'body':
     case 'next':

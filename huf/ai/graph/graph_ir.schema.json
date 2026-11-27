@@ -1341,6 +1341,9 @@
         },
         {
           "$ref": "#/$defs/SendMessageNode"
+        },
+        {
+          "$ref": "#/$defs/SplitNode"
         }
       ]
     },
@@ -2018,6 +2021,72 @@
                 },
                 "language": {
                   "type": "string"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "SplitNode": {
+      "description": "Weighted branches plus a holdout share, bucketed per member.",
+      "allOf": [
+        {
+          "$ref": "#/$defs/NodeCommon"
+        },
+        {
+          "not": {
+            "required": [
+              "next"
+            ]
+          },
+          "properties": {
+            "type": {
+              "const": "split"
+            },
+            "config": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "options"
+              ],
+              "properties": {
+                "options": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "label",
+                      "node_id",
+                      "weight"
+                    ],
+                    "properties": {
+                      "label": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "node_id": {
+                        "$ref": "#/$defs/NodeId"
+                      },
+                      "weight": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 100
+                      }
+                    }
+                  }
+                },
+                "holdout": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 100,
+                  "description": "Percent of members held out from marketing sends"
+                },
+                "salt": {
+                  "type": "string",
+                  "description": "Bucket salt; defaults to the flow version"
                 }
               }
             }

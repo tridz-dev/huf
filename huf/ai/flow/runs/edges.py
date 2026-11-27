@@ -28,7 +28,7 @@ def edges_from_nodes(nodes: list) -> list[dict]:
 				edges.append({"from": node_id, "to": config["on_false"], "type": "always", "meta": {"label": "false"}})
 			if config.get("fallback_next"):
 				edges.append({"from": node_id, "to": config["fallback_next"], "type": "always", "meta": {"label": "fallback"}})
-		elif node_type in ("router.llm", "router.decision"):
+		elif node_type in ("router.llm", "router.decision", "split"):
 			for option in config.get("options") or []:
 				to = (option or {}).get("node_id")
 				if to:

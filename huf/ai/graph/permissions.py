@@ -161,7 +161,7 @@ def iter_reachable_nodes(graph: dict) -> Iterator[dict]:
 			worklist.append(config.get("on_true"))
 			worklist.append(config.get("on_false"))
 			worklist.append(config.get("fallback_next"))
-		elif ntype in {"router.llm", "router.decision"}:
+		elif ntype in {"router.llm", "router.decision", "split"}:
 			for option in config.get("options", []) or []:
 				worklist.append(option.get("node_id"))
 			worklist.append(config.get("default"))
