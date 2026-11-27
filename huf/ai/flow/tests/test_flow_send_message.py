@@ -185,6 +185,7 @@ class TestSendOutboxWiring(IntegrationTestCase):
 		first = step_keys.step_key("RUN-1", "s1", 1)
 		decided = {"status": "success", "output": {"status": "blocked", "reason": "opted_out"}}
 		step_keys.record(ctx.data, "s1", first, decided)
+		step_keys.advance(ctx.data, "s1")
 		second = step_keys.with_key(NODE, step_keys.key_for("RUN-1", "s1", ctx.data))
 		with (
 			patch.object(engine, "_context_of", return_value=ctx),
