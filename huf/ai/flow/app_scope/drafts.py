@@ -4,9 +4,14 @@
 way an app editor changes it: it lifts the permlevel check for that single field, and only after the submitted
 graph passed a server-side allow-list. Every other check of a normal save still applies.
 
-Allowed steps: the embed built-ins and the step types the flow's own app registers. So ``doc.create``,
-``doc.update``, ``tool.call``, ``code.run`` and webhook or chat triggers are refused. A trigger may be chosen or
-changed among the allowed types, but a save may not add triggers.
+Allowed steps: the embed built-ins, ``handoff``, and the step types the flow's own app registers. So
+``doc.create``, ``doc.update``, ``tool.call``, ``code.run`` and webhook or chat triggers are refused. A trigger may
+be chosen or changed among the allowed types, but a save may not add triggers.
+``handoff`` is allowed so an app's journeys with a human path stay editable. This save does not require its message
+to be empty: at run time a run that is not live hands nothing over, and a live message is sent only when the
+pre-send guard chain allows it (see ``nodes/handoff.py``).
+Note: this save checks trigger types and their count, not a trigger's settings. The ``doctype`` and ``event`` of a
+``trigger.doc-event`` are checked when the flow is made Active, together with the right to publish it.
 An Active flow's definition cannot change here at all.
 """
 
@@ -16,6 +21,9 @@ import frappe
 from frappe import _
 
 from huf.ai.flow.catalog.node_registry import embed_builtin_types, registered_types
+
+#: Built-ins an app editor may save beyond the embed palette's list.
+DRAFT_ONLY_BUILTIN_TYPES = ("handoff",)
 
 
 def save_app_draft(doc, definition_json: str) -> None:
@@ -55,7 +63,7 @@ def _nodes(definition) -> list[dict]:
 
 
 def _check_steps(app: str, nodes: list[dict]) -> None:
-	allowed = set(embed_builtin_types())
+	allowed = {*embed_builtin_types(), *DRAFT_ONLY_BUILTIN_TYPES}
 	allowed |= {type_id for type_id, node_type in registered_types().items() if node_type.app == app}
 	for node in nodes:
 		if node["type"] not in allowed:
