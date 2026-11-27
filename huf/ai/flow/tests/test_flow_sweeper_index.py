@@ -23,8 +23,10 @@ def sweeper_sql() -> str:
 	captured = []
 	real_get_all = frappe.get_all
 
-	def capture(*args, **kwargs):
-		captured.append(real_get_all(*args, **kwargs, run=False))
+	def capture(doctype, *args, **kwargs):
+		if doctype != "Agent Flow Run":  # meta loading goes through get_all too
+			return real_get_all(doctype, *args, **kwargs)
+		captured.append(real_get_all(doctype, *args, **kwargs, run=False))
 		return []
 
 	with patch.object(park.frappe, "get_all", side_effect=capture):
