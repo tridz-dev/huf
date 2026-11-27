@@ -44,7 +44,9 @@ class Scale:
 	locks: int
 
 
-SMOKE = Scale(runs=4, due=2, members=10, events=2, expired_state=1, workers=2, entry_rounds=1, query_samples=1, locks=2)
+SMOKE = Scale(
+	runs=4, due=2, members=10, events=2, expired_state=1, workers=2, entry_rounds=1, query_samples=1, locks=2
+)
 GATE = Scale(
 	runs=1_000_000,
 	due=100_000,
@@ -180,7 +182,8 @@ def measure_entry(scale: Scale) -> dict:
 		thread.join()
 	frappe.db.rollback()  # a fresh snapshot that sees the threads' commits
 	if errors:
-		raise AssertionError(f"member entry workers failed: {errors[:3]}")
+		message = f"member entry workers failed: {errors[:3]}"
+		raise AssertionError(message)
 	rows = frappe.db.count("Flow Member State", {"flow": ENTRY_FLOW})
 	expected_rows = scale.entry_rounds * (scale.workers + 1)
 	extra_winners = sum(abs(winners[r] - 1) for r in range(scale.entry_rounds))
@@ -202,7 +205,7 @@ def measure_replay(scale: Scale) -> dict:
 			)
 			new += not result.get("duplicate")
 		elapsed = time.perf_counter() - started
-	rows_added = sum(a - b for a, b in zip(counts(), before))
+	rows_added = sum(a - b for a, b in zip(counts(), before, strict=True))
 	return {
 		"replay_duplicate_effects": new + rows_added + enqueue.call_count,
 		"replay_ms_per_event": elapsed * 1000 / scale.events,
@@ -217,7 +220,8 @@ def measure_locks(scale: Scale) -> dict:
 	try:
 		for name in names:
 			if not engine._acquire_run_lock(name):
-				raise AssertionError(f"run lock already held: {name}")
+				message = f"run lock already held: {name}"
+				raise AssertionError(message)
 			key = engine._run_lock_key(name)
 			engine._stop_run_lock_heartbeat(key)
 			stuck += not 0 < cache.ttl(key) <= engine.RUN_LOCK_TTL_SECONDS
