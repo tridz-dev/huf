@@ -178,6 +178,8 @@ def exec_handoff(flow_run, node: dict, config: dict, settings: dict):
 		summary=summary,
 		priority=str(config.get("priority") or "normal"),
 		message=message,
+		# the adapter above can be slow. A cancel after this check can still let the message out (no lock over a send)
+		may_send=lambda: not run_cancelled(flow_run.name),
 	)
 	extra = {
 		"conversation": conversation,

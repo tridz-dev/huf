@@ -98,7 +98,7 @@ def park_run(flow_run, node: dict, req: ParkRequest) -> Outcome:
 		{
 			"status": WAIT_STATUS,
 			"resume_at": resume_at,
-			"member_key": req.member_key,
+			**({"member_key": req.member_key} if req.member_key else {}),  # a park never erases the run's member
 			"waiting": json.dumps(waiting, default=str),
 		},
 		not_from_statuses=TERMINAL_STATUSES,
@@ -224,7 +224,7 @@ def cancel_run(flow_run_name: str, by: str, *, running: bool = False) -> bool:
 		pass
 	engine._sync_gateway_event(flow_run, "Cancelled", error=message)
 	engine._publish_flow_event(flow_run, "flow_cancelled", {"error": message})
-	subflow.cancel_waited_child(flow_run, by)
+	subflow.cancel_waited_child(flow_run, by, running=running)
 	subflow.on_child_finished(flow_run, "Cancelled", message)
 	return True
 
