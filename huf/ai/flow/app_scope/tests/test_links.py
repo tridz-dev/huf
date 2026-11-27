@@ -30,10 +30,10 @@ def raising_route(kind, flow_id, run_id=None):
 def _hooks(path):
 	real = frappe.get_hooks
 
-	def fake(hook=None, default=None, app_name=None):
+	def fake(hook=None, *args, **kwargs):
 		if hook == links.HOOK:
 			return {"huf": path} if path else {}
-		return real(hook, default, app_name)
+		return real(hook, *args, **kwargs)
 
 	return mock.patch.object(links.frappe, "get_hooks", side_effect=fake)
 
