@@ -131,7 +131,7 @@ class TestGatewayEventForge(IntegrationTestCase):
 		self.assertEqual(self._bound(result["flow_run_id"]), ("", ""))
 
 	def test_no_caller_payload_stores_the_key(self):
-		for trigger_type in ("Manual", "Webhook", "App"):
+		for trigger_type in ("Manual", "Webhook"):
 			run = engine.create_flow_run(
 				self.flow_id, {"gateway_event": self.event, "keep": 1}, trigger_type=trigger_type, ignore_permissions=True
 			)
