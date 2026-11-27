@@ -154,6 +154,7 @@ NODE_ROUTING = {
 	"router.decision": RoutingMode.SELF_ROUTED,
 	"split": RoutingMode.SELF_ROUTED,
 	"wait": RoutingMode.SELF_ROUTED,
+	"handoff": RoutingMode.SELF_ROUTED,
 	# "output" is always terminal per spec/graph-ir.md section 2 ("next must be
 	# absent or null") -- true for both the Procedure and Flow profiles.
 	"output": RoutingMode.TERMINAL,
@@ -193,6 +194,14 @@ class FlowRunContext(dict):
 		self.run_id = getattr(flow_run, "name", None)
 		self.mode = (getattr(flow_run, "mode", "") or "normal").lower()
 		self.conversation = getattr(flow_run, "conversation", None)
+		self.agent = getattr(flow_run, "agent", None) or None  # whose AI policy applies (huf_ai_feature_map)
+
+	@property
+	def budget(self):
+		"""The run budget set in this worker (deadline, spend cap), or None."""
+		from huf.ai.run_budget import peek_current_budget
+
+		return peek_current_budget()
 
 	@property
 	def definition(self) -> dict:
@@ -493,6 +502,7 @@ TRIGGER_NODE_TYPES = {
 	"Schedule": "trigger.schedule",
 	"Doc Event": "trigger.doc-event",
 	"Gateway": ("trigger.gateway", "trigger.whatsapp", "trigger.telegram"),
+	"App": "trigger.app",
 }
 
 
@@ -673,7 +683,10 @@ def run_flow(flow_run_name: str):
 		commit_if_background()
 
 		try:
-			_execute_loop(flow_run, nodes_map, edges_list, run_ctx)
+			from huf.ai.channels import guard
+
+			with guard.batch():  # one run's sends share template reads and consent allows (H-W2-19)
+				_execute_loop(flow_run, nodes_map, edges_list, run_ctx)
 		except Exception as e:
 			_fail_flow_run(flow_run, describe_exception(e))
 			log_flow_error(f"Flow engine error: {frappe.get_traceback()}", "Flow Engine")
@@ -1617,6 +1630,9 @@ def _exec_router_llm(flow_run, node: dict, config: dict, settings: dict) -> dict
 	if not options:
 		return {"status": "failed", "error": "Add at least one path for the AI to choose from, then run again."}
 
+	blocked = _router_llm_ai_block(_run_context(settings))
+	if blocked:
+		return blocked
 	ctx = _context_of(flow_run, settings)
 	chosen, reason = None, ""
 	provider, model = None, config.get("model") or None
@@ -1650,7 +1666,41 @@ def _exec_router_llm(flow_run, node: dict, config: dict, settings: dict) -> dict
 	}
 
 
+def _router_llm_ai_block(run_ctx) -> dict | None:
+	"""A failed result when the AI switch is off, the run's deadline passed or its spend cap is used up, else None.
+
+	Checked before any provider is asked, so a switched-off site never reaches a model (H-W5-05).
+	"""
+	from huf.ai.run_budget import AI_DISABLED, AIDisabled, RunBudgetExceeded, assert_ai_enabled
+
+	try:
+		assert_ai_enabled(getattr(run_ctx, "agent", None))
+		budget = getattr(run_ctx, "budget", None)
+		if budget is not None:
+			budget.check_deadline()
+			if budget.spend_cap_usd and budget.spend_so_far_usd >= budget.spend_cap_usd:
+				raise RunBudgetExceeded("spend cap reached")
+			budget.check_spend(0.0)
+	except AIDisabled:
+		return {
+			"status": "failed",
+			"reason_code": AI_DISABLED,
+			"error": "AI features are switched off on this site, so this step did not run.",
+		}
+	except RunBudgetExceeded:
+		return {"status": "failed", "error": "This run has used up its AI budget, so this step did not run."}
+	except Exception:  # noqa: BLE001 - a kill switch must not fail open
+		return {
+			"status": "failed",
+			"reason_code": AI_DISABLED,
+			"error": "AI features could not be checked, so this step did not run.",
+		}
+	return None
+
+
 _exec_router_decision = adapters.exec_router_decision
+_exec_knowledge_search = adapters.exec_knowledge_search
+_exec_handoff = adapters.exec_handoff
 _exec_stop = adapters.exec_stop
 _exec_member_set = adapters.exec_member_set
 _exec_send_message = adapters.exec_send_message
@@ -2267,6 +2317,8 @@ _NODE_EXECUTORS = {
 	"doc.get": _exec_doc_get,
 	"doc.update": _exec_doc_update,
 	"flow.call": _exec_flow_call,
+	"knowledge.search": _exec_knowledge_search,
+	"handoff": _exec_handoff,
 }
 
 _NODE_TYPES = tuple(_NODE_EXECUTORS)

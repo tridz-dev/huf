@@ -56,3 +56,25 @@ class TestTraceViewMasking(TestFlowUx4RunApi):
 		rows = flow_api.list_flow_runs(flow_id=self.flow_id)
 		self.assertTrue(rows)
 		self.assertNotIn(PHONE, rows[0]["input_hint"])
+
+
+class TestWaitingViewMasking(TestFlowUx4RunApi):
+	def test_detail_masks_waiting_but_keeps_approver_ids(self):
+		waiting = {
+			"type": "approval",
+			"node_id": "h",
+			"message": f"Call {PHONE}",
+			"context": {"email": EMAIL, "amount": 5},
+			"approver_type": "user",
+			"approver_users": [EMAIL],
+		}
+		name = self._run(status="Waiting Approval", ctx={"amount": 5}, current="h")
+		frappe.db.set_value("Agent Flow Run", name, "waiting", json.dumps(waiting))
+		detail = flow_api.get_flow_run(name)
+		shown = detail["waiting"]
+		self.assertNotIn(PHONE, json.dumps(shown))
+		self.assertNotIn(EMAIL, json.dumps({k: v for k, v in shown.items() if k != "approver_users"}))
+		self.assertEqual(shown["approver_users"], [EMAIL])
+		self.assertEqual(shown["approver_type"], "user")
+		self.assertEqual(shown["node_id"], "h")
+		self.assertEqual(json.loads(frappe.db.get_value("Agent Flow Run", name, "waiting")), waiting)

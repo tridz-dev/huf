@@ -53,11 +53,38 @@ def live_send_on(flow_id) -> bool:
 		return False
 
 
+def pin_is_current(flow_run) -> bool:
+	"""Whether the run executes the flow's CURRENT definition (its pinned fingerprint matches it).
+
+	``live_send`` is switched on for one version, after that version was looked at (G3). A run parked on an older
+	version keeps executing that older graph after a republish (H-W2-18 drain), so a newer version's ``live_send``
+	must not make it send for real. Fails CLOSED: no pin, no flow, or a read error means not current.
+	"""
+	pinned = getattr(flow_run, "pinned_fingerprint", None)
+	flow_id = getattr(flow_run, "flow_id", None)
+	if not pinned or not flow_id:
+		return False
+	try:
+		from huf.ai.graph.executor import PinnedVersion
+
+		raw = frappe.db.get_value("Flow Definition", flow_id, "definition_json")
+		if not raw:
+			return False
+		defn = json.loads(raw) if isinstance(raw, str) else raw
+		return PinnedVersion.pin(defn).fingerprint == pinned
+	except Exception as exc:
+		_log_doubt("pinned version", exc)
+		return False
+
+
 def is_live(flow_run) -> bool:
-	"""G3, the one place it is decided: ``live = live_send AND NOT dry_run``. Anything else is preview only."""
+	"""G3, the one place it is decided: ``live = live_send AND NOT dry_run``. Anything else is preview only.
+
+	``live_send`` belongs to the current version, so a run pinned to an older version is never live.
+	"""
 	if is_dry_run(flow_run):
 		return False
-	return live_send_on(getattr(flow_run, "flow_id", None))
+	return live_send_on(getattr(flow_run, "flow_id", None)) and pin_is_current(flow_run)
 
 
 # --------------------------------------------------------------------------- testing one step on its own (UX-16)

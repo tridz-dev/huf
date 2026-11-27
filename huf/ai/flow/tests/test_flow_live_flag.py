@@ -43,6 +43,7 @@ class TestIsLive(IntegrationTestCase):
 				with (
 					patch.object(gate, "is_dry_run", return_value=dry),
 					patch.object(gate, "live_send_on", return_value=live_send),
+					patch.object(gate, "pin_is_current", return_value=True),
 				):
 					self.assertIs(gate.is_live(run_doc()), expected)
 					self.assertIs(send.is_live(run_doc()), expected)
@@ -81,7 +82,10 @@ class TestSendHonoursLive(IntegrationTestCase):
 			self.addCleanup(patcher.stop)
 
 	def run_node(self, live_send, run_mode=""):
-		with patch.object(gate, "live_send_on", return_value=live_send):
+		with (
+			patch.object(gate, "live_send_on", return_value=live_send),
+			patch.object(gate, "pin_is_current", return_value=True),
+		):
 			node = step_keys.with_key(NODE, frappe.generate_hash())  # the engine always attaches a step key
 			return send.exec_send_message(run_doc(run_mode), node, dict(CONFIG), {})
 

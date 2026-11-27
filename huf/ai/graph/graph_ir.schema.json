@@ -1384,6 +1384,12 @@
         },
         {
           "$ref": "#/$defs/SplitNode"
+        },
+        {
+          "$ref": "#/$defs/KnowledgeSearchNode"
+        },
+        {
+          "$ref": "#/$defs/HandoffNode"
         }
       ]
     },
@@ -1505,10 +1511,6 @@
             "config": {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "options",
-                "default"
-              ],
               "properties": {
                 "options": {
                   "type": "array",
@@ -1536,8 +1538,75 @@
                 },
                 "default": {
                   "$ref": "#/$defs/NodeId"
+                },
+                "decision": {
+                  "type": "object",
+                  "description": "Let the Decision runtime choose the next step. Leave empty to choose by rules.",
+                  "additionalProperties": false,
+                  "required": [
+                    "candidates",
+                    "uncertain_next"
+                  ],
+                  "properties": {
+                    "candidates": {
+                      "type": "array",
+                      "minItems": 2,
+                      "description": "The steps the decision may choose from.",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "node_id"
+                        ],
+                        "properties": {
+                          "node_id": {
+                            "$ref": "#/$defs/NodeId"
+                          },
+                          "label": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    "instructions": {
+                      "type": "string",
+                      "description": "What the decision should pick."
+                    },
+                    "minimum_confidence": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "uncertain_next": {
+                      "$ref": "#/$defs/NodeId",
+                      "description": "Step taken on any doubt or failure."
+                    },
+                    "backend": {
+                      "type": "string",
+                      "description": "Registered Decision backend id."
+                    },
+                    "policy_id": {
+                      "type": "string"
+                    },
+                    "state": {
+                      "type": "object"
+                    }
+                  }
                 }
-              }
+              },
+              "anyOf": [
+                {
+                  "required": [
+                    "options",
+                    "default"
+                  ]
+                },
+                {
+                  "required": [
+                    "decision"
+                  ]
+                }
+              ]
             }
           }
         }
@@ -2127,6 +2196,117 @@
                 "salt": {
                   "type": "string",
                   "description": "Bucket salt; defaults to the flow version"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "KnowledgeSearchNode": {
+      "description": "Search one knowledge source as the run's user and return the best passages.",
+      "allOf": [
+        {
+          "$ref": "#/$defs/NodeCommon"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "knowledge.search"
+            },
+            "config": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "query",
+                "knowledge_source"
+              ],
+              "properties": {
+                "query": {
+                  "$ref": "#/$defs/Expression",
+                  "description": "The text to search for."
+                },
+                "knowledge_source": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Knowledge Source name."
+                },
+                "top_k": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 20,
+                  "default": 5
+                },
+                "filters": {
+                  "type": "object",
+                  "description": "Optional metadata filters."
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "HandoffNode": {
+      "description": "Hand the conversation to a person and wait until they release it.",
+      "allOf": [
+        {
+          "$ref": "#/$defs/NodeCommon"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "handoff"
+            },
+            "config": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "conversation": {
+                  "$ref": "#/$defs/Value",
+                  "description": "Channel Conversation to hand over."
+                },
+                "gateway": {
+                  "$ref": "#/$defs/Value",
+                  "description": "Channel of the contact (with recipient)."
+                },
+                "recipient": {
+                  "$ref": "#/$defs/Value",
+                  "description": "Contact whose open conversation is handed over."
+                },
+                "reason": {
+                  "type": "string",
+                  "description": "Reason code stored on the run."
+                },
+                "target": {
+                  "type": "string",
+                  "description": "Queue or person to hand to."
+                },
+                "summary": {
+                  "$ref": "#/$defs/Expression",
+                  "description": "Short note for the person taking over."
+                },
+                "priority": {
+                  "type": "string",
+                  "enum": [
+                    "low",
+                    "normal",
+                    "high",
+                    "urgent"
+                  ],
+                  "default": "normal"
+                },
+                "message": {
+                  "type": "string",
+                  "description": "Message sent to the contact on handoff."
+                },
+                "timeout_ms": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "timeout_next": {
+                  "$ref": "#/$defs/NodeId",
+                  "description": "Step taken when nobody releases it in time."
                 }
               }
             }
