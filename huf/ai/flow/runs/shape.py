@@ -33,6 +33,7 @@ _STEP_TYPE_TITLES = {
 }
 
 from huf.ai.flow.runs.outcome import stored_outcome
+from huf.ai.flow.support.pii import mask_for_view
 
 _DECISION_OUTCOMES = {
 	"approved": ("Approved", "good"),
@@ -241,7 +242,7 @@ def shape_list_rows(rows: list, names: dict, can_fail: bool) -> list:
 		r["started_by"] = r.pop("owner", None)
 		r["started_by_name"] = people.get(r["started_by"])
 		r["run_number"] = bisect_right(by_flow[r.flow_id], creation) if creation is not None else None
-		r["input_hint"] = input_hint(ctx)
+		r["input_hint"] = input_hint(mask_for_view(ctx))
 		recorded = stored_outcome(r) if r.status == "Success" else None
 		r["outcome"] = recorded or compute_outcome(r.status, r.current_node_id, ctx, metas.get(r.flow_id, {}))
 		r.pop("outcome_label", None)
