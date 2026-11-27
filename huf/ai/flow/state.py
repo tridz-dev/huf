@@ -26,11 +26,14 @@ from typing import Any
 import frappe
 from frappe.utils import add_to_date, now_datetime
 
+from huf.ai.transaction import commit_if_background
+
 DOCTYPE = "Flow State"
 MAX_KEY_CHARS = 140
 MAX_VALUE_BYTES = 16 * 1024
 DEFAULT_TTL_SECONDS = 24 * 3600
 DEFAULT_MAX_TTL_DAYS = 365
+PURGE_BATCH_SIZE = 1000
 
 
 class FlowStateError(ValueError):
@@ -138,15 +141,22 @@ def delete_state(flow_id: str, key: Any) -> bool:
 
 
 def purge_expired() -> int:
-	"""Scheduler entry point (daily): delete every expired row. Returns the number removed."""
-	# keep-forever rows have a NULL expires_at; Frappe's dict "<=" filter also matches NULL, so the
+	"""Scheduler entry point (daily): delete every expired row, ``PURGE_BATCH_SIZE`` per transaction.
+
+	Returns the number removed.
+	"""
+	# keep-forever rows have a NULL expires_at; Frappe's "<=" filter also matches NULL, so the
 	# "is set" condition is explicit and must stay.
-	expired = frappe.get_all(
-		DOCTYPE,
-		filters=[[DOCTYPE, "expires_at", "is", "set"], [DOCTYPE, "expires_at", "<=", now_datetime()]],
-		pluck="name",
-		limit=10000,
-	)
-	for name in expired:
-		frappe.db.delete(DOCTYPE, {"name": name})
-	return len(expired)
+	expired = [[DOCTYPE, "expires_at", "is", "set"], [DOCTYPE, "expires_at", "<=", now_datetime()]]
+	removed = 0
+	while True:
+		names = frappe.get_all(
+			DOCTYPE, filters=expired, pluck="name", order_by="expires_at asc", limit=PURGE_BATCH_SIZE
+		)
+		if names:
+			# the expiry conditions are repeated: a row saved again since the read is left alone
+			frappe.db.delete(DOCTYPE, [[DOCTYPE, "name", "in", names], *expired])
+			commit_if_background()
+			removed += len(names)
+		if len(names) < PURGE_BATCH_SIZE:
+			return removed
