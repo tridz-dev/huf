@@ -15,6 +15,7 @@
   "status",
   "live_send",
   "solution",
+  "owner_app",
   "version",
   "schema_version",
   "definition_section",
@@ -171,11 +172,22 @@
    "fieldtype": "Link",
    "label": "Solution",
    "options": "Solution"
+  },
+  {
+   "fieldname": "owner_app",
+   "fieldtype": "Data",
+   "label": "Owner App",
+   "read_only": 1,
+   "search_index": 1,
+   "set_only_once": 1,
+   "no_copy": 1,
+   "permlevel": 1,
+   "description": "The app that created this flow through its server. Set once by the server; empty for Huf flows."
   }
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-27 12:00:00.000000",
+ "modified": "2026-11-27 18:00:00.000000",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Flow Definition",
