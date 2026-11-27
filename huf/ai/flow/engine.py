@@ -44,6 +44,7 @@ What changed in T-22, and why (defect ids are from the track plan):
 
 import json
 import re
+import threading
 
 import frappe
 from frappe import _
@@ -111,8 +112,22 @@ from huf.ai.transaction import commit_if_background
 
 DEFAULT_MAX_HOPS = 100
 
-RUN_LOCK_TTL_SECONDS = 600
-"""How long a run lock survives if its holder dies mid-execution."""
+RUN_LOCK_STEP_SECONDS = 90
+"""The step duration the run lock TTL is sized for. Not a limit: longer steps are covered by the heartbeat."""
+
+RUN_LOCK_MARGIN_SECONDS = 30
+
+RUN_LOCK_TTL_SECONDS = RUN_LOCK_STEP_SECONDS + RUN_LOCK_MARGIN_SECONDS
+"""How long a run lock survives if its holder dies mid-execution: step time + margin.
+
+The lock is held for a whole walk of the graph, and a step (agent, tool, code) has no hard upper bound, so the
+TTL alone must never decide whether a worker is alive: the holder refreshes it from a heartbeat thread every
+:data:`RUN_LOCK_HEARTBEAT_SECONDS`. A killed worker takes the thread with it and the lock expires within the TTL.
+"""
+
+RUN_LOCK_HEARTBEAT_SECONDS = RUN_LOCK_TTL_SECONDS / 4
+
+_run_lock_heartbeats: dict[str, threading.Event] = {}
 
 WAITING_STATUSES = ("Waiting User", "Waiting Approval", "Waiting Code", "Waiting Timer")
 
@@ -361,16 +376,44 @@ def _acquire_run_lock(flow_run_name: str) -> bool:
 	concurrent callers gets ``True``. Before T-22 ``run_flow`` took no lock at
 	all and two concurrent calls could both advance the same cursor (F-4).
 	"""
+	key = _run_lock_key(flow_run_name)
 	try:
-		return bool(frappe.cache().set(_run_lock_key(flow_run_name), 1, ex=RUN_LOCK_TTL_SECONDS, nx=True))
+		cache = frappe.cache()
+		if not cache.set(key, 1, ex=RUN_LOCK_TTL_SECONDS, nx=True):
+			return False
 	except Exception:
 		# A cache that cannot serve the lock must not silently serialize
 		# nothing *and* block execution; the executor's status guard is the
 		# second line of defence.
 		return True
+	_start_run_lock_heartbeat(cache, key)
+	return True
+
+
+def _start_run_lock_heartbeat(cache, key: str) -> None:
+	"""Keep a held run lock alive. ``cache`` is passed in: the thread has no frappe request context."""
+	_stop_run_lock_heartbeat(key)  # a previous holder that never released
+	stop = _run_lock_heartbeats[key] = threading.Event()
+
+	def beat():
+		while not stop.wait(RUN_LOCK_HEARTBEAT_SECONDS):
+			try:
+				if not cache.expire(key, RUN_LOCK_TTL_SECONDS):
+					return  # the lock is gone; EXPIRE never recreates it
+			except Exception:  # noqa: BLE001, S110
+				pass  # try again on the next beat, while the TTL still has room
+
+	threading.Thread(target=beat, name=f"run-lock-heartbeat:{key}", daemon=True).start()
+
+
+def _stop_run_lock_heartbeat(key: str) -> None:
+	stop = _run_lock_heartbeats.pop(key, None)
+	if stop:
+		stop.set()
 
 
 def _release_run_lock(flow_run_name: str) -> None:
+	_stop_run_lock_heartbeat(_run_lock_key(flow_run_name))
 	try:
 		# ``delete`` (raw key), not ``delete_value``: the lock is taken with a raw
 		# ``SET NX``, while ``delete_value`` removes the site-prefixed key, so the lock
