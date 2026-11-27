@@ -23,6 +23,9 @@ Rules, fail closed:
 - App roles never read Agent Flow Run or Flow Member State documents (they hold raw payloads): they read runs
   only through the scoped, masked flow APIs.
 
+An app's users need no Huf role. The app lists its own roles in ``huf_app_roles = ["<role>", ...]`` so that Huf
+gives their holders no default Huf role (``huf_user_role.ensure_default_huf_roles``).
+
 Frappe ``has_permission`` hooks can only deny; the grant itself is a Custom DocPerm row synced by
 :mod:`huf.ai.flow.app_scope.docperms`. The hooks below and the query conditions scope those rows to
 ``owner_app``.
@@ -142,6 +145,37 @@ def _native_access(user: str, action: str) -> bool:
 def require_flow_access(flow: str | None, action: str, user: str | None = None) -> None:
 	if not flow_access(user, flow, action):
 		frappe.throw(_("Not permitted"), frappe.PermissionError)
+
+
+def approval_recipients(flow_run, users: list) -> list:
+	"""``users`` who may be told about ``flow_run``'s approval. Huf-native flows: unchanged.
+
+	App-owned flows: only users with ``approve`` access to the flow. It only removes users, and fails closed:
+	a check that raises drops that user, an unreadable owner drops everyone.
+	"""
+	flow = getattr(flow_run, "flow_definition", None) or getattr(flow_run, "flow_id", None)
+	try:
+		if not (getattr(flow_run, "owner_app", None) or owner_app_of(flow)):
+			return users
+	except Exception as exc:  # noqa: BLE001
+		_log_recipient_failure(flow_run, exc)
+		return []
+
+	def allowed(user):
+		try:
+			return flow_access(user, flow, "approve") is True
+		except Exception as exc:  # noqa: BLE001
+			_log_recipient_failure(flow_run, exc)
+			return False
+
+	return [user for user in users if allowed(user)]
+
+
+def _log_recipient_failure(flow_run, exc: Exception) -> None:
+	# Ids and the exception class only: the message may carry data.
+	frappe.logger("huf").warning(
+		f"approval recipient check for run {getattr(flow_run, 'name', None)}: {type(exc).__name__}; dropped"
+	)
 
 
 # --- has_permission hooks (deny only) -----------------------------------------------------------------------

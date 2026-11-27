@@ -79,10 +79,12 @@ def notify_flow_run_approvers(flow_run) -> int:
 			users += [u for u in waiting["approver_users"] if isinstance(u, str)]
 		else:  # no declared approver: System Manager only (engine.check_approver)
 			users += _role_users("System Manager")
+		from huf.ai.flow.app_scope.access import approval_recipients
 		from huf.ai.flow.support.approval_card import build_card, flow_name_of, slack_details
 
 		card = build_card(flow_name_of(flow_run) if getattr(flow_run, "flow_id", None) else None, waiting)
 		title, details = card["headline"], slack_details(card)
+		users = approval_recipients(flow_run, list(dict.fromkeys(users)))
 		return _notify(KIND_FLOW, flow_run.name, users, title, details, DEFAULT_TTL)
 	except Exception:
 		_log("Slack flow approval notify failed")

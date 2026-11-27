@@ -4,6 +4,7 @@
 """Every Frappe System User gets Huf Manager + Huf Gateway User by default, without ever escalating."""
 
 import unittest
+from unittest.mock import patch
 
 import frappe
 
@@ -14,9 +15,12 @@ from huf.huf.doctype.huf_user_role.huf_user_role import (
 from huf.permissions import get_user_huf_role, has_capability
 
 DESK_ROLE = "Huf Test Desk Role"
+APP_ROLE = "Huf Test App Role"
+HOOK_READER = "huf.huf.doctype.huf_user_role.huf_user_role.app_declared_roles"
+ANY_HUF_ROLE = {"Huf Manager", "Huf User", "Huf Viewer", "Huf Gateway User"}
 
 
-class TestDefaultHufRoles(unittest.TestCase):
+class _DefaultRolesCase(unittest.TestCase):
 	def setUp(self):
 		if not frappe.db.exists("Role", DESK_ROLE):
 			frappe.get_doc({"doctype": "Role", "role_name": DESK_ROLE, "desk_access": 1}).insert(ignore_permissions=True)
@@ -46,6 +50,8 @@ class TestDefaultHufRoles(unittest.TestCase):
 	def _roles(self, user):
 		return set(frappe.get_all("Has Role", {"parent": user, "parenttype": "User"}, pluck="role"))
 
+
+class TestDefaultHufRoles(_DefaultRolesCase):
 	def test_new_system_user_gets_manager_and_gateway_roles(self):
 		user = self._user(DESK_ROLE)
 		self.assertEqual(user.user_type, "System User")
@@ -119,3 +125,73 @@ class TestDefaultHufRoles(unittest.TestCase):
 		self.assertEqual(get_user_huf_role("Administrator"), "Huf Admin")
 		if not had:
 			frappe.db.delete("Has Role", {"parent": "Administrator", "role": "Huf Gateway User"})
+
+
+class TestAppUsersGetNoDefaultHufRole(_DefaultRolesCase):
+	"""A user holding an installed app's own role (hook ``huf_app_roles``) gets no default Huf role."""
+
+	def setUp(self):
+		super().setUp()
+		if not frappe.db.exists("Role", APP_ROLE):
+			frappe.get_doc({"doctype": "Role", "role_name": APP_ROLE, "desk_access": 1}).insert(ignore_permissions=True)
+		real = frappe.get_hooks
+
+		def hooks(hook=None, *args, **kwargs):
+			if hook == "huf_app_roles":
+				return [APP_ROLE, "All", "Huf Manager"]
+			return real(hook, *args, **kwargs)
+
+		patcher = patch.object(frappe, "get_hooks", hooks)
+		patcher.start()
+		self.addCleanup(patcher.stop)
+
+	def _assert_no_huf(self, user):
+		self.assertFalse(self._roles(user) & ANY_HUF_ROLE)
+		self.assertFalse(frappe.db.exists("Huf User Role", {"user": user}))
+		self.assertIsNone(get_user_huf_role(user))
+		self.assertFalse(has_capability(user, "flows.use"))
+
+	def test_insert_update_and_backfill_grant_nothing(self):
+		user = self._user(APP_ROLE)
+		self.assertEqual(user.user_type, "System User")
+		self._assert_no_huf(user.name)
+		user.save(ignore_permissions=True)
+		grant_default_roles_to_system_users()
+		self.assertFalse(ensure_default_huf_roles(user.name))
+		self._assert_no_huf(user.name)
+
+	def test_default_is_taken_back_when_the_app_role_comes_later(self):
+		user = self._user(DESK_ROLE)
+		self.assertIn("Huf Manager", self._roles(user.name))
+		user.add_roles(APP_ROLE)
+		self._assert_no_huf(user.name)
+		self.assertFalse({r.role for r in user.roles} & ANY_HUF_ROLE)
+		user.save(ignore_permissions=True)
+		self._assert_no_huf(user.name)
+		self.assertIn(APP_ROLE, self._roles(user.name))
+
+	def test_backfill_takes_back_a_default_only(self):
+		user = self._user(DESK_ROLE)
+		frappe.get_doc({"doctype": "Has Role", "parent": user.name, "parenttype": "User", "parentfield": "roles",
+			"role": APP_ROLE}).db_insert()
+		frappe.clear_cache(user=user.name)
+		grant_default_roles_to_system_users()
+		self._assert_no_huf(user.name)
+
+	def test_a_saved_role_record_is_assigned_and_kept(self):
+		user = self._user(DESK_ROLE)
+		frappe.get_doc("Huf User Role", {"user": user.name}).save(ignore_permissions=True)
+		frappe.get_doc("User", user.name).add_roles(APP_ROLE)
+		self.assertTrue({"Huf Manager", "Huf Gateway User"} <= self._roles(user.name))
+
+	def test_role_assigned_with_the_app_role_is_kept(self):
+		user = self._user(APP_ROLE, "Huf Viewer")
+		self.assertEqual(get_user_huf_role(user.name), "Huf Viewer")
+		self.assertIn("Huf Gateway User", self._roles(user.name))
+		self.assertNotIn("Huf Manager", self._roles(user.name))
+
+	def test_hook_error_grants_nothing(self):
+		with patch(HOOK_READER, side_effect=RuntimeError("boom")):
+			user = self._user(DESK_ROLE)
+			grant_default_roles_to_system_users()
+		self._assert_no_huf(user.name)

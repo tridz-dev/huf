@@ -58,6 +58,8 @@ class TestHostLinks(IntegrationTestCase):
 		run = frappe._dict(name=f"RUN-{flow}", flow_id=flow)
 		waiting = {"approver_type": "user", "approver_users": [APPROVER], "flow_name": flow}
 		with (
+			# who is told is test_approval_recipients' subject; this module tests the link
+			mock.patch.object(notif, "approval_recipients", side_effect=lambda run, users: users),
 			mock.patch.object(notif, "enqueue_create_notification") as bell,
 			mock.patch.object(notif, "is_email_notifications_enabled", return_value=True),
 			mock.patch.object(notif.frappe, "sendmail") as mail,
