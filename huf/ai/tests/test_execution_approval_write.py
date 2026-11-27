@@ -5,7 +5,7 @@
 or change one. Every forging case goes through the real generic document APIs.
 
 Run with:
-    bench --site <site> run-tests --app huf --module huf.huf.doctype.agent_execution_approval.test_agent_execution_approval_write
+    bench --site <site> run-tests --app huf --module huf.ai.tests.test_execution_approval_write
 """
 
 import json
