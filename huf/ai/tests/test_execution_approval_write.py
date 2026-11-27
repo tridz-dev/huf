@@ -14,7 +14,7 @@ from unittest.mock import patch
 import frappe
 from frappe import client
 from frappe.api import v1
-from frappe.desk.form.save import savedocs
+from frappe.desk.form.save import discard, savedocs
 from frappe.tests import IntegrationTestCase
 from frappe.utils import add_to_date, now_datetime
 
@@ -29,6 +29,8 @@ from huf.testing.factories import make_agent, make_user
 APPROVAL = "Agent Execution Approval"
 CALL = "Agent Tool Call"
 ENQUEUE = "huf.ai.tools.code_execution.enqueue_execution"
+# spellings the database collation treats as the same DocType name
+RESPELLED = ("agent execution approval", "Agent Execution Approval ", "Agént Execution Approval")
 
 
 class TestExecutionApprovalWrite(IntegrationTestCase):
@@ -188,6 +190,48 @@ class TestExecutionApprovalWrite(IntegrationTestCase):
 		parent.allowed_users[0].user = self.requester
 		parent.save()
 		self.assertEqual(frappe.get_all("Agent User", {"parent": agent.name}, pluck="user"), [self.requester])
+
+	def test_respelled_parenttype_cannot_add_an_approver(self):
+		self.addCleanup(setattr, frappe.local, "form_dict", frappe.local.form_dict)
+		for parenttype in RESPELLED:
+			row = self._child(user=self.manager, parenttype=parenttype)
+
+			def rest():
+				frappe.local.form_dict = frappe._dict(data=frappe.as_json(row))
+				v1.create_doc("Agent User")
+
+			with self.subTest(parenttype=parenttype, api="create_doc"):
+				self._refused(rest)
+			with self.subTest(parenttype=parenttype, api="savedocs"):
+				new = {**row, "__islocal": 1, "name": "new-agent-user-1"}
+				self._refused(lambda: savedocs(frappe.as_json(new), "Save"))
+		self.assertEqual(self._approver_rows(), [])
+
+	def test_rows_stored_under_a_respelled_parenttype_are_protected(self):
+		agent = self._agent(allowed_users=[{"user": self.requester}])
+		for parenttype in RESPELLED:
+			with self.subTest(parenttype=parenttype):
+				child = self._row(parenttype=parenttype)
+				before = self._approver_rows()
+				moved = {**frappe.get_doc("Agent User", child).as_dict(), "parenttype": "Agent", "parentfield": "allowed_users", "parent": agent.name}
+				self._refused(lambda: client.save(frappe.as_json(moved)))
+				self._refused(lambda: client.delete("Agent User", child))
+				self._refused(lambda: discard("Agent User", child))
+				frappe.db.savepoint("steal")
+				doc = frappe.get_doc("Agent", agent.name)
+				doc.allowed_users[0].name = child
+				with self.assertRaises(frappe.PermissionError):
+					doc.save()
+				frappe.db.rollback(save_point="steal")
+				self.assertEqual(self._approver_rows(), before)
+
+	def test_discard_cannot_cancel_an_approval_or_an_approver_row(self):
+		child = self._row()
+		before = (self._snapshot(), self._approver_rows())
+		self._refused(lambda: discard(APPROVAL, self.name))
+		self._refused(lambda: discard("Agent User", child))
+		self.assertEqual((self._snapshot(), self._approver_rows()), before)
+		self.assertEqual(frappe.db.get_value("Agent User", child, "docstatus"), 0)
 
 	def test_generic_agent_tools_cannot_write_approver_rows(self):
 		child = self._row()
