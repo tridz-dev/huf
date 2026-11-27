@@ -250,17 +250,22 @@ def dump_context(ctx: GraphContext) -> str:
 	return json.dumps(payload, default=str)
 
 
+GATEWAY_EVENT_KEY = "gateway_event"
+"""Payload key naming the Gateway Event a run answers; it selects the run's trusted send binding."""
+
+
 def strip_reserved_keys(values: dict) -> dict:
-	"""``values`` from a caller without the keys only the engine writes: node outputs, ``_huf_*`` run state
-	(``_huf_entry`` is set by ``runs.start``, before the run exists) and the document write counter. Anything
-	else would be restored as the run's own state, for example a forged approval decision.
+	"""``values`` from a caller without the keys only the server writes: node outputs, ``_huf_*`` run state
+	(``_huf_entry`` is set by ``runs.start``, before the run exists), the document write counter and
+	``gateway_event`` (set by gateway ingestion through ``create_flow_run``). Anything else would be restored
+	as the run's own state, for example a forged approval decision or a borrowed gateway send binding.
 	"""
 	from huf.ai.flow.runs.start import ENTRY_MARKER
 
 	return {
 		key: value
 		for key, value in values.items()
-		if key not in (NODE_OUTPUTS_KEY, _WRITES_KEY)
+		if key not in (NODE_OUTPUTS_KEY, _WRITES_KEY, GATEWAY_EVENT_KEY)
 		and not (str(key).startswith("_huf_") and key != ENTRY_MARKER)
 	}
 
@@ -584,6 +589,7 @@ def create_flow_run(
 	ignore_permissions: bool = False,
 	mode: str = "real",
 	member_key: str | None = None,
+	gateway_event: str | None = None,
 ) -> "frappe.Document":
 	"""
 	Create a new FlowRun document from a FlowDefinition. This is the public
@@ -605,12 +611,16 @@ def create_flow_run(
 	        outside the flow (see :mod:`huf.ai.flow.testrun`); every later continuation reads it from the run.
 	    member_key: the member a real run is about, when the caller knows it (``runs.start``); otherwise it is
 	        told from the trigger.
+	    gateway_event: the inbound Gateway Event this run answers. Only gateway ingestion passes it; the same
+	        key in ``payload`` is dropped.
 
 	Returns:
 	    Flow Run document
 	"""
 	if isinstance(payload, dict):
 		payload = strip_reserved_keys(payload)
+	if gateway_event:
+		payload = {**(payload or {}), GATEWAY_EVENT_KEY: gateway_event}
 	defn_doc = frappe.get_doc("Flow Definition", flow_id)
 	defn = json.loads(defn_doc.definition_json) if isinstance(defn_doc.definition_json, str) else defn_doc.definition_json
 
@@ -1519,7 +1529,8 @@ def _bound_gateway(flow_run, run_id: str = ""):
 	"""Trusted gateway for the WhatsApp tool: the gateway that started this flow.
 
 	Model/tool arguments never select it, and no node config does (the schema has no gateway
-	field); empty means the tool fails closed (gateway_context_required).
+	field); empty means the tool fails closed (gateway_context_required). The event must name this run
+	as its own (``Gateway Event.flow_run``, written by ingestion): the run row alone is not trusted.
 	"""
 	from huf.ai.tools.whatsapp import trusted_gateway
 
@@ -1530,7 +1541,9 @@ def _bound_gateway(flow_run, run_id: str = ""):
 		payload = json.loads(payload) if isinstance(payload, str) else (payload or {})
 		event = payload.get("gateway_event") if isinstance(payload, dict) else None
 		if event:
-			row = frappe.db.get_value("Gateway Event", event, ["gateway", "sender_id"], as_dict=True) or {}
+			row = frappe.db.get_value("Gateway Event", event, ["gateway", "sender_id", "flow_run"], as_dict=True) or {}
+			if row.get("flow_run") != flow_run.name:
+				row = {}
 			gateway = row.get("gateway") or ""
 			contact = row.get("sender_id") or ""
 	except Exception:
