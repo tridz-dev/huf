@@ -25,6 +25,7 @@ import { DataTableBuilderWrapper } from './pages/DataTableBuilderWrapper';
 import { DataTableViewWrapper } from './pages/DataTableViewWrapper';
 import { Toaster } from './components/ui/sonner';
 import { CommandPalette } from './components/CommandPalette';
+import { isEmbedPath } from './embed/bridge';
 
 const HomePage = lazy(() => import('./pages/HomePage'));
 const AppsPage = lazy(() => import('./pages/AppsPage'));
@@ -42,6 +43,7 @@ const SSHConnectionsPage = lazy(() => import('./pages/SSHConnectionsPage'));
 const SSHConnectionFormPageWrapper = lazy(() => import('./pages/SSHConnectionFormPageWrapper'));
 const NetworkAccessPoliciesPage = lazy(() => import('./pages/NetworkAccessPoliciesPage'));
 const NetworkAccessPolicyFormPage = lazy(() => import('./pages/NetworkAccessPolicyFormPage'));
+const EmbedFlowPage = lazy(() => import('./embed/EmbedFlowPage'));
 const FlowListPage = lazy(() => import('./pages/FlowListPage'));
 const FlowCanvasPageWrapper = lazy(() => import('./pages/FlowCanvasPageWrapper'));
 const DataPage = lazy(() => import('./pages/DataPage'));
@@ -142,6 +144,8 @@ function ChatOnlyRedirectGuard() {
 
 function AppShell() {
   const location = useLocation();
+  // Embed mode has no app chrome (docs/flow/BUILDER_EMBED.md, section 2.4).
+  const embedded = isEmbedPath();
 
   useEffect(() => {
     clearChunkReloadFlag();
@@ -155,7 +159,7 @@ function AppShell() {
     <SocketProvider>
       <UserProvider>
         <PermissionsProvider>
-          <ChatOnlyRedirectGuard />
+          {!embedded && <ChatOnlyRedirectGuard />}
           <Suspense fallback={<AuthenticatingPage />}>
             <AnimatePresence mode="wait" initial={false}>
               <motion.div
@@ -167,6 +171,17 @@ function AppShell() {
                 className="h-full"
               >
                 <Routes location={location}>
+          {['/embed/flow/:flowId', '/embed/*'].map((path) => (
+            <Route
+              key={path}
+              path={path}
+              element={
+                <Suspense fallback={<PageLoader />}>
+                  <EmbedFlowPage />
+                </Suspense>
+              }
+            />
+          ))}
           <Route
             path="/"
             element={
@@ -1004,7 +1019,7 @@ function AppShell() {
             </AnimatePresence>
           </Suspense>
           <Toaster />
-          <CommandPalette />
+          {!embedded && <CommandPalette />}
         </PermissionsProvider>
       </UserProvider>
     </SocketProvider>

@@ -27,10 +27,14 @@ import sys
 import time
 import unittest
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 # Mirrors huf/ai/tests/conftest.py + test_test_provider.py's defensive stub,
 # so this file is runnable standalone without a bench.
+# Stubs must not outlive this module: they are taken out of sys.modules once the
+# code under test is imported, and put back only while these tests run.
+_before = set(sys.modules)
+
 try:
     import frappe  # noqa: F401
 except ImportError:
@@ -74,6 +78,23 @@ from huf.testing import tool_testing  # noqa: E402
 from huf.testing import factories  # noqa: E402
 from huf.ai.tools.registry import PermissionAwareToolRegistry  # noqa: E402
 from huf.ai.sdk_tools import get_function_from_name, create_function_tool  # noqa: E402
+
+_stubs = {
+    name: sys.modules.pop(name)
+    for name, module in list(sys.modules.items())
+    if name not in _before and name.split(".")[0] in ("frappe", "agents") and not hasattr(module, "__file__")
+}
+_run_patch = patch.dict(sys.modules, _stubs)
+
+
+def setUpModule():
+    if _stubs:
+        _run_patch.start()
+
+
+def tearDownModule():
+    if _stubs:
+        _run_patch.stop()
 
 
 def _spec_to_namespace(spec: dict) -> SimpleNamespace:
