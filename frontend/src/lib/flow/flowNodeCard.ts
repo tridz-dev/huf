@@ -167,6 +167,8 @@ export function actionSubtitle(cfg: ActionConfig | undefined): string {
       return 'AI picks the next path';
     case 'router-decision':
       return 'Picks the next path by a rule';
+    case 'split':
+      return typeof cfg.holdout === 'number' && cfg.holdout > 0 ? `Weighted paths · ${cfg.holdout}% held out` : 'Weighted paths';
     case 'condition':
       return 'Go one of two ways';
     case 'foreach':

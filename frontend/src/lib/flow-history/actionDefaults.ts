@@ -11,6 +11,7 @@ export function defaultActionConfig(actionId: string, defaultCodeProfile?: strin
     condition: { type: 'condition', expression: '' },
     router: { type: 'router', prompt: '' },
     switch: { type: 'router-decision' },
+    split: { type: 'split', holdout: 0 },
     loop: { type: 'foreach', items: { $from: '' }, max_iterations: 100, on_item_error: 'fail', collect: { $from: '' } },
     'human.approval': { type: 'human.approval', message: '' },
     wait: { type: 'wait', mode: 'duration', duration: { unit: 'hours' } },
