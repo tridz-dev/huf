@@ -24,11 +24,9 @@ SYSTEM_RECORD_UNLOCKED_FIELDS: tuple = ("updated_by", "updated_at")
 
 def get_permission_query_conditions(user=None):
 	"""Hide system Flow Definitions from non-System-Managers. Registered in hooks.py."""
-	from huf.ai.flow.app_scope.access import flow_scope_condition
-
 	conds = [
 		system_records.make_permission_query_conditions("Flow Definition")(user),
-		flow_scope_condition(user),
+		app_access.flow_scope_condition(user),
 	]
 	conds = [c for c in conds if c]
 	return " and ".join(f"({c})" for c in conds) if conds else None
@@ -135,10 +133,7 @@ class FlowDefinition(Document):
 
 		procedure_name = result.get("name")
 		if not result.get("convertible", True) or not procedure_name:
-			note = (
-				result.get("reason")
-				or "Not convertible: contains an agent.run/router.llm/human.approval node."
-			)
+			note = result.get("reason") or "Not convertible: contains an agent.run/router.llm/human.approval node."
 			frappe.db.set_value(
 				"Flow Definition",
 				self.name,
@@ -176,11 +171,7 @@ class FlowDefinition(Document):
 			frappe.throw(_("Definition JSON is required"))
 
 		try:
-			defn = (
-				json.loads(self.definition_json)
-				if isinstance(self.definition_json, str)
-				else self.definition_json
-			)
+			defn = json.loads(self.definition_json) if isinstance(self.definition_json, str) else self.definition_json
 		except (json.JSONDecodeError, TypeError) as e:
 			frappe.throw(_("Invalid JSON in definition: {0}").format(str(e)))
 
@@ -217,13 +208,9 @@ class FlowDefinition(Document):
 			gateway = str((config or {}).get("gateway") or "").strip() if isinstance(config, dict) else ""
 			if not gateway or str(node.get("type")) != "tool.call":
 				continue
-			if not frappe.db.exists("Gateway", gateway) or not frappe.has_permission(
-				"Gateway", "write", doc=gateway
-			):
+			if not frappe.db.exists("Gateway", gateway) or not frappe.has_permission("Gateway", "write", doc=gateway):
 				frappe.throw(
-					_("Node {0}: you need write access to Gateway {1} to bind it.").format(
-						node.get("id"), gateway
-					),
+					_("Node {0}: you need write access to Gateway {1} to bind it.").format(node.get("id"), gateway),
 					frappe.PermissionError,
 				)
 		authority.check_gateway_authority(defn, owner=self.owner if self.status == "Active" else None)
@@ -248,15 +235,11 @@ class FlowDefinition(Document):
 				continue
 			config = node.get("config") or {}
 			doctype, event = config.get("doctype"), config.get("event")
-			if (
-				event not in ("on_submit", "on_cancel")
-				or not doctype
-				or not frappe.db.exists("DocType", doctype)
-			):
+			if event not in ("on_submit", "on_cancel") or not doctype or not frappe.db.exists("DocType", doctype):
 				continue
 			if not frappe.get_meta(doctype).is_submittable:
 				problems.append(
-					_('trigger {0}: {1} cannot be submitted or cancelled, so "{2}" never fires').format(
+					_("trigger {0}: {1} cannot be submitted or cancelled, so \"{2}\" never fires").format(
 						repr(node.get("id")), doctype, event
 					)
 				)
@@ -266,11 +249,7 @@ class FlowDefinition(Document):
 		"""Adding or changing an Execute code step needs ``flows.execute_code``, in a draft too, so nobody
 		without it writes the code an admin later publishes."""
 		flags = frappe.flags
-		if (
-			getattr(flags, "in_install", False)
-			or getattr(flags, "in_migrate", False)
-			or getattr(flags, "in_patch", False)
-		):
+		if getattr(flags, "in_install", False) or getattr(flags, "in_migrate", False) or getattr(flags, "in_patch", False):
 			return
 		from huf.ai.flow.code_node import check_edit, code_nodes
 
@@ -280,11 +259,7 @@ class FlowDefinition(Document):
 		previous = None
 		if before is not None:
 			try:
-				previous = (
-					json.loads(before.definition_json)
-					if isinstance(before.definition_json, str)
-					else before.definition_json
-				)
+				previous = json.loads(before.definition_json) if isinstance(before.definition_json, str) else before.definition_json
 			except (json.JSONDecodeError, TypeError):
 				previous = None
 		check_edit(defn, previous)
@@ -296,11 +271,7 @@ class FlowDefinition(Document):
 		if self.status != "Active":
 			return
 		flags = frappe.flags
-		if (
-			getattr(flags, "in_install", False)
-			or getattr(flags, "in_migrate", False)
-			or getattr(flags, "in_patch", False)
-		):
+		if getattr(flags, "in_install", False) or getattr(flags, "in_migrate", False) or getattr(flags, "in_patch", False):
 			return
 		from huf.ai.flow.publish_guard import check_can_publish, check_preflight
 
@@ -308,28 +279,18 @@ class FlowDefinition(Document):
 		before = self.get_doc_before_save() if not self.is_new() else None
 		if before is not None and before.status == "Active":
 			try:
-				previous = (
-					json.loads(before.definition_json)
-					if isinstance(before.definition_json, str)
-					else before.definition_json
-				)
+				previous = json.loads(before.definition_json) if isinstance(before.definition_json, str) else before.definition_json
 			except (json.JSONDecodeError, TypeError):
 				previous = None
 		check_can_publish(defn, previous)
-		check_preflight(
-			defn, self.name
-		)  # after the permission checks: app checks run only for a permitted publish
+		check_preflight(defn, self.name)  # after the permission checks: app checks run only for a permitted publish
 
 	def _validate_activation(self, defn: dict):
 		"""Active flows must be runnable: Draft/Archived saves stay permissive. Reports
 		every problem in a single message rather than failing on the first."""
 		if self.status != "Active":
 			return
-		problems = (
-			collect_activation_problems(defn)
-			+ self._doc_event_problems(defn)
-			+ self._gateway_trigger_problems(defn)
-		)
+		problems = collect_activation_problems(defn) + self._doc_event_problems(defn) + self._gateway_trigger_problems(defn)
 		if problems:
 			frappe.throw(
 				_("Flow cannot be Active: {0}").format("; ".join(problems)),
