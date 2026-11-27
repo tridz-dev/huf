@@ -209,6 +209,8 @@ class GraphContext:
 		self.foreach_frames: list[dict] = []
 		self.member: dict | None = None  # the run's member (key, status, vars, ...); None when the run has none
 		self.dirty = False
+		self.step_ids: frozenset = frozenset()  # the graph's non-trigger steps: their names mean their output
+		self.loop_vars: frozenset = frozenset()  # names a running loop has bound in ``data``
 
 	# -- construction -----------------------------------------------------
 
@@ -286,6 +288,10 @@ class GraphContext:
 		elif head in roots:
 			value = roots[head]
 			rest = segments[1:]
+		elif (head in self.step_ids or head in ("member", "foreach")) and head not in self.loop_vars:
+			# A step that has not run, or no member / loop: never answered from the caller's data
+			# (still readable as ``input.<key>``).
+			return None
 		else:
 			# An unqualified path falls back to the flat context namespace,
 			# which is what a Flow-profile graph's own keys live in.
