@@ -17,6 +17,7 @@ import copy
 import sys
 import types
 import unittest
+from unittest.mock import patch
 
 
 def _install_standalone_frappe_stub():
@@ -35,6 +36,10 @@ def _install_standalone_frappe_stub():
 	sys.modules["frappe"] = fake
 
 
+# Stubs must not outlive this module: they are taken out of sys.modules once the
+# code under test is imported, and put back only while these tests run.
+_before = set(sys.modules)
+
 _install_standalone_frappe_stub()
 
 from huf.ai.procedure import versioning as procedure_versioning
@@ -48,6 +53,23 @@ from huf.ai.procedure.versioning import (
 	extract_contract_fields,
 	find_flow_only_nodes,
 )
+
+_stubs = {
+	name: sys.modules.pop(name)
+	for name, module in list(sys.modules.items())
+	if name not in _before and name.split(".")[0] in ("frappe",) and not hasattr(module, "__file__")
+}
+_run_patch = patch.dict(sys.modules, _stubs)
+
+
+def setUpModule():
+	if _stubs:
+		_run_patch.start()
+
+
+def tearDownModule():
+	if _stubs:
+		_run_patch.stop()
 
 
 def _minimal_procedure_graph():
