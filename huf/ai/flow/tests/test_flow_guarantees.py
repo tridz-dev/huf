@@ -70,6 +70,7 @@ def send_harness(steps, live=True, hooks=None, ctx=None):
 		patch.object(guard_steps, "window_resolvers", return_value=[]),
 		patch.object(guard_steps, "resolve_caps", return_value=[]),
 		patch.object(gate, "live_send_on", return_value=live),
+		patch.object(gate, "pin_is_current", return_value=True),
 		patch.object(send, "_enqueue", transport),
 		patch.object(send, "channel_of", return_value="whatsapp"),
 		patch.object(engine, "_context_of", return_value=context),
@@ -271,7 +272,10 @@ class TestG3LiveMatrix(IntegrationTestCase):
 		):
 			mode = gate.STORED_TEST if dry else ""
 			with self.subTest(dry=dry, live_send=live_send):
-				with patch.object(gate, "live_send_on", return_value=live_send):
+				with (
+					patch.object(gate, "live_send_on", return_value=live_send),
+					patch.object(gate, "pin_is_current", return_value=True),
+				):
 					self.assertIs(gate.is_live(run_doc(mode)), expected)
 				with send_harness([("allow", allow)], live=live_send) as h:
 					result = send_once(run_mode=mode)
