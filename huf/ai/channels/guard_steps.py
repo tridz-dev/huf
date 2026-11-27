@@ -133,7 +133,13 @@ def check_consent(request: dict) -> dict:
 	Inside :func:`batch` an allow is reused for the same recipient; a block drops that recipient's allows.
 	"""
 	channel, recipient = request.get("channel"), request.get("recipient")
-	key = ("consent", channel, request.get("gateway"), request.get("category") != "service", _digits(recipient))
+	key = (
+		"consent",
+		channel,
+		request.get("gateway"),
+		request.get("category") != "service",
+		_digits(recipient),
+	)
 	verdict = _cached(key, lambda: _read_consent(request), keep=lambda v: v.get("allow") is True)
 	if verdict.get("allow") is not True:
 		invalidate_consent(recipient)
@@ -182,7 +188,9 @@ def check_template(request: dict) -> dict:
 		return _block("template_not_approved")
 	account = row.get("whatsapp_account")
 	# only "nothing contradicts APPROVED" is reused; a blocking state is read again every send
-	if _cached(("state", account, docname), lambda: _state_blocks(account, docname), keep=lambda v: v is False):
+	if _cached(
+		("state", account, docname), lambda: _state_blocks(account, docname), keep=lambda v: v is False
+	):
 		return _block("template_not_approved")
 
 	if str(row.get("category") or "").upper() == "MARKETING":
