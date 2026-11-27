@@ -9,6 +9,7 @@
   "overview_tab",
   "flow_definition",
   "flow_id",
+  "owner_app",
   "flow_version",
   "pinned_fingerprint",
   "pinned_definition",
@@ -300,11 +301,21 @@
    "label": "Replied via tool",
    "no_copy": 1,
    "read_only": 1
+  },
+  {
+   "fieldname": "owner_app",
+   "fieldtype": "Data",
+   "label": "Owner App",
+   "read_only": 1,
+   "search_index": 1,
+   "set_only_once": 1,
+   "no_copy": 1,
+   "description": "Copied from the flow when the run is created."
   }
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-10-28 09:00:00.000000",
+ "modified": "2026-11-27 18:00:00.000000",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Agent Flow Run",

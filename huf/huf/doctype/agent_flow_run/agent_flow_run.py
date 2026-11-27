@@ -3,7 +3,10 @@ from frappe.model.document import Document
 
 
 class AgentFlowRun(Document):
-	pass
+	def before_insert(self):
+		from huf.ai.flow.app_scope.ownership import owner_app_of
+
+		self.owner_app = owner_app_of(self.flow_definition)
 
 
 def on_doctype_update():
