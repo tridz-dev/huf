@@ -61,11 +61,12 @@ class TestFlowMemberConcurrency(IntegrationTestCase):
 				frappe.db.commit()
 				started.append(run.name if run else None)
 			except Exception as exc:  # noqa: BLE001 - reported by the assertion below
-				errors.append(repr(exc))
+				errors.append(repr(exc) + frappe.get_traceback()[-1800:])
 			finally:
 				frappe.destroy()
 
-		with patch("frappe.enqueue"):
+		# only a gateway trigger's schema takes entry_policy; a gateway is not needed to race the entry path
+		with patch("frappe.enqueue"), patch("huf.ai.graph.validation.flow_validation.check_runnable"):
 			threads = [threading.Thread(target=fire) for _ in range(WORKERS)]
 			for thread in threads:
 				thread.start()
