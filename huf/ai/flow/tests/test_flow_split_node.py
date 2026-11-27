@@ -8,6 +8,7 @@ import frappe
 from frappe.tests import IntegrationTestCase
 
 from huf.ai.flow import engine
+from huf.ai.flow.tests.test_flow_draft_validation import _graph
 from huf.ai.flow.catalog import node_registry
 from huf.ai.flow.nodes import send, split
 from huf.ai.flow.support import reason_codes, step_keys
@@ -90,11 +91,8 @@ class TestSplitNode(IntegrationTestCase):
 		self.assertEqual(self.run_split(member_key=None)["status"], "failed")
 
 	def test_weights_not_summing_to_100_fail_draft_validation(self):
-		graph = {
-			"schema_version": "1.0.0",
-			"profile": "flow",
-			"entry": "sp1",
-			"nodes": [
+		graph = _graph(
+			[
 				{
 					"id": "sp1",
 					"type": "split",
@@ -105,14 +103,16 @@ class TestSplitNode(IntegrationTestCase):
 						]
 					},
 				},
-				{"id": "a", "type": "output"},
-				{"id": "b", "type": "output"},
+				{"id": "a", "type": "output", "config": {}},
+				{"id": "b", "type": "output", "config": {}},
 			],
-		}
+			entry="sp1",
+		)
 		result = validate_flow_graph(graph, mode=MODE_DRAFT)
 		self.assertIn("SPLIT_WEIGHTS", [e.code for e in result.errors])
 		graph["nodes"][0]["config"]["options"][0]["weight"] = 70
 		result = validate_flow_graph(graph, mode=MODE_DRAFT)
+		self.assertEqual([e for e in result.errors if e.code == "SCHEMA"], [])
 		self.assertNotIn("SPLIT_WEIGHTS", [e.code for e in result.errors])
 
 	def test_registered_and_embeddable(self):
