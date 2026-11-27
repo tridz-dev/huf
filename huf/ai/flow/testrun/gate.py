@@ -3,7 +3,8 @@
 Three entry points, one rule: ``reads`` run, ``changes`` and ``sends`` are skipped and answer with a simulated
 output (see :mod:`~huf.ai.flow.testrun.simulate`).
 
-* :func:`simulate_node` is called by the engine before it runs a node (``tool.call``, ``doc.create``, ``code.run``).
+* :func:`simulate_node` is called by the engine before it runs a node (``tool.call``, ``doc.create``, ``doc.update``,
+  ``handoff``, ``code.run``).
 * :func:`agent_tool_gate` / :func:`mcp_tool_gate` are called by the tools an agent step uses, so an agent in a test
   run can look things up but cannot send or change anything.
 * :func:`approval_extras` / :func:`notify_test_owner` shape a test run's approval pause.
@@ -19,7 +20,14 @@ import frappe
 
 from huf.ai.flow.testrun import STORED_TEST
 from huf.ai.flow.testrun.effects import CHANGES, READS, tool_effect
-from huf.ai.flow.testrun.simulate import simulated_code, simulated_document, simulated_output, simulated_state
+from huf.ai.flow.testrun.simulate import (
+	simulated_code,
+	simulated_document,
+	simulated_handoff,
+	simulated_output,
+	simulated_state,
+	simulated_update,
+)
 
 TEST_NOTE = "Test: you can approve this yourself"
 # Code steps run for real only in the throw-away scratch profile (it has no network and no site access).
@@ -54,7 +62,10 @@ def live_send_on(flow_id) -> bool:
 
 
 def pin_is_current(flow_run) -> bool:
-	"""Whether the run executes the flow's CURRENT definition (its pinned fingerprint matches it).
+	"""Whether the run executes the flow's CURRENT PUBLISHED definition (status Active, pinned fingerprint matches).
+
+	A flow that was unpublished, archived or superseded (any status but Active) is not live, so its parked runs
+	only preview.
 
 	``live_send`` is switched on for one version, after that version was looked at (G3). A run parked on an older
 	version keeps executing that older graph after a republish (H-W2-18 drain), so a newer version's ``live_send``
@@ -67,9 +78,10 @@ def pin_is_current(flow_run) -> bool:
 	try:
 		from huf.ai.graph.executor import PinnedVersion
 
-		raw = frappe.db.get_value("Flow Definition", flow_id, "definition_json")
-		if not raw:
+		row = frappe.db.get_value("Flow Definition", flow_id, ["definition_json", "status"], as_dict=True)
+		if not row or row.get("status") != "Active" or not row.get("definition_json"):
 			return False
+		raw = row.get("definition_json")
 		defn = json.loads(raw) if isinstance(raw, str) else raw
 		return PinnedVersion.pin(defn).fingerprint == pinned
 	except Exception as exc:
@@ -166,6 +178,12 @@ def simulate_node(node: dict, resolve: Callable[[Any], Any]) -> dict | None:
 		return _success(simulated_output(tool_id, effect, args))
 	if ntype == "doc.create":
 		return _success(simulated_document(config.get("doctype")))
+	if ntype == "doc.update":
+		return _success(simulated_update(config.get("doctype")))
+	if ntype == "handoff":
+		result = _success(simulated_handoff())
+		result["next_node_id"] = node.get("next")
+		return result
 	if ntype in ("state.set", "state.delete") and step_test_active():
 		return _success(simulated_state(ntype, config.get("key")))
 	if ntype == "wait":

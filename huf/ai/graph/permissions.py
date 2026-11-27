@@ -169,6 +169,8 @@ def iter_reachable_nodes(graph: dict) -> Iterator[dict]:
 			worklist.append(config.get("approve_next"))
 			worklist.append(config.get("reject_next"))
 			worklist.append(config.get("timeout_next"))
+		elif ntype == "handoff":
+			worklist.append(config.get("timeout_next"))
 		elif ntype == "foreach":
 			worklist.extend(config.get("body", []) or [])
 		elif ntype == "parallel":

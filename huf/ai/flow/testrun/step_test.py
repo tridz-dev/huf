@@ -125,7 +125,7 @@ def describe_step(node: dict) -> dict:
 			# Say "changes" (simulated) in the preview rather than promise a harmless read.
 			effect = CHANGES
 		simulated = effect != READS
-	elif ntype in ("doc.create", "state.set", "state.delete"):
+	elif ntype in ("doc.create", "doc.update", "handoff", "state.set", "state.delete"):
 		effect, simulated = CHANGES, True
 	elif ntype == "code.run":
 		effect, simulated = CHANGES, True
