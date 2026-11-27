@@ -17,6 +17,8 @@ from huf.ai.flow.runs.access import require_run_access
 @frappe.whitelist(methods=["GET"])
 def get_flow_run_identity(flow_run_id: str) -> dict:
 	"""``{run_number, started_by, started_by_name}`` for one Flow Run the caller may read."""
+	from huf.ai.flow.app_scope.api_guards import guard_run
+	guard_run(flow_run_id, "view")
 	require_run_access(flow_run_id, "read")
 	run = frappe.db.get_value("Agent Flow Run", flow_run_id, ["flow_id", "creation", "owner"], as_dict=True)
 	if not run:

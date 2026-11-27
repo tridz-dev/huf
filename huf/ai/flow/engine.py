@@ -833,6 +833,8 @@ def approve_flow_run(flow_run_name: str, decision: str, comment: str | None = No
 	    decision: "approved" or "rejected"
 	    comment: Optional comment
 	"""
+	from huf.ai.flow.app_scope.api_guards import guard_run
+	guard_run(flow_run_name, "approve")
 	if decision not in APPROVAL_DECISIONS:
 		frappe.throw(_("Choose Approve or Reject."))
 

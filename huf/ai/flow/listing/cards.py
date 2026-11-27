@@ -164,6 +164,8 @@ def list_flow_cards(
 	or Archived; ``category`` is a category name (or ``Uncategorized`` for flows without one). Only flows the caller may
 	read are returned.
 	"""
+	from huf.ai.flow.app_scope.api_guards import guard_huf_only
+	guard_huf_only()
 	require_permission(frappe.has_permission("Flow Definition", "read"), "Not permitted")
 
 	limit = max(1, min(int(limit or MAX_PAGE), MAX_PAGE))
@@ -259,4 +261,6 @@ def category_names() -> list[str]:
 @frappe.whitelist()
 def list_flow_categories() -> list[str]:
 	"""Categories that flows use, sorted. Feeds the list filter and the settings picker."""
+	from huf.ai.flow.app_scope.api_guards import guard_huf_only
+	guard_huf_only()
 	return category_names()

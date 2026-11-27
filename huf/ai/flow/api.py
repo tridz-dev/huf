@@ -164,6 +164,8 @@ def _flow_names(flow_ids) -> dict:
 @frappe.whitelist()
 def get_site_timezone() -> str:
 	"""IANA name of the site time zone (System Settings), for rendering naive Frappe datetimes."""
+	from huf.ai.flow.app_scope.api_guards import guard_app_meta
+	guard_app_meta()
 	from frappe.utils import get_system_timezone
 
 	require_permission(frappe.session.user != "Guest", "Login required")
@@ -178,6 +180,8 @@ def get_site_timezone() -> str:
 @frappe.whitelist()
 def get_flow_definition(flow_id: str) -> dict:
 	"""A flow: definition_json, version, status. Whoever cannot write the flow gets its webhook secret hidden (``secret: null``, ``secret_hidden: true``)."""
+	from huf.ai.flow.app_scope.api_guards import guard_flow
+	guard_flow(flow_id, "view")
 	if not frappe.has_permission("Flow Definition", "read"):
 		frappe.throw(_("Not permitted"), frappe.PermissionError)
 
@@ -202,6 +206,8 @@ def save_flow_definition(flow_id: str, definition_json: str | dict) -> dict:
 
 	Returns: dict with the version number and how many things are left to finish.
 	"""
+	from huf.ai.flow.app_scope.api_guards import guard_flow
+	guard_flow(flow_id, "edit")
 	if not frappe.has_permission("Flow Definition", "write"):
 		frappe.throw(_("Not permitted"), frappe.PermissionError)
 
@@ -242,6 +248,8 @@ def get_trigger_doctypes() -> list[dict]:
 	doctypes, Huf's own bookkeeping and the system's plumbing (permissions, tokens, logs) are left out. Read from the
 	permission tables, so flow editors who are not System Managers get a list too.
 	"""
+	from huf.ai.flow.app_scope.api_guards import guard_app_meta
+	guard_app_meta()
 	require_permission(frappe.has_permission("Flow Definition", "read"), "Not permitted")
 
 	from frappe.permissions import get_doctypes_with_read
@@ -265,6 +273,8 @@ def get_trigger_doctypes() -> list[dict]:
 @frappe.whitelist()
 def get_trigger_doctype_info(doctype: str) -> dict:
 	"""What a Data trigger needs to know about a document type: whether it can be submitted (and so cancelled)."""
+	from huf.ai.flow.app_scope.api_guards import guard_app_meta
+	guard_app_meta()
 	if not doctype or not frappe.db.exists("DocType", doctype):
 		frappe.throw(_("Document type {0} was not found").format(doctype), frappe.DoesNotExistError)
 	if not frappe.has_permission(doctype, "read"):
@@ -292,6 +302,8 @@ def _set_flow_status(flow_id: str, status: str) -> dict:
 @frappe.whitelist(methods=["POST"])
 def publish_flow(flow_id: str) -> dict:
 	"""Publish a flow (status Active): its triggers start firing. Refused with a readable message if the flow is not runnable."""
+	from huf.ai.flow.app_scope.api_guards import guard_huf_flow
+	guard_huf_flow(flow_id)
 	return _set_flow_status(flow_id, "Active")
 
 
@@ -301,6 +313,8 @@ def unpublish_flow(flow_id: str) -> dict:
 
 	Runs already in progress finish; nothing is deleted. Publish again to restore the triggers.
 	"""
+	from huf.ai.flow.app_scope.api_guards import guard_huf_flow
+	guard_huf_flow(flow_id)
 	return _set_flow_status(flow_id, "Draft")
 
 
@@ -326,9 +340,15 @@ def run_flow(
 	Returns:
 	    dict with flow_run_id, status, current_node_id
 	"""
-	if not frappe.has_permission("Agent Flow Run", "create"):
-		frappe.throw(_("Not permitted"), frappe.PermissionError)
-	require_flow_read(flow_id)  # starting a flow needs read on THAT flow
+	from huf.ai.flow.app_scope.api_guards import force_dry_run, guard_flow, is_app_flow
+
+	guard_flow(flow_id, "test")
+	# An app-owned flow is tested from its app: the app's test role is the grant, and the run is always a dry run.
+	app_test = is_app_flow(flow_id)
+	if not app_test:
+		if not frappe.has_permission("Agent Flow Run", "create"):
+			frappe.throw(_("Not permitted"), frappe.PermissionError)
+		require_flow_read(flow_id)  # starting a flow needs read on THAT flow
 
 	# Parse payload
 	if isinstance(payload, str):
@@ -338,7 +358,7 @@ def run_flow(
 			payload = {}
 	payload = payload or {}
 	try:
-		mode = normalize_mode(mode)
+		mode = normalize_mode(force_dry_run(flow_id, mode))
 	except ValueError as exc:
 		frappe.throw(_(str(exc)))
 
@@ -350,6 +370,7 @@ def run_flow(
 		payload=payload,
 		trigger_type="Manual",
 		mode=mode,
+		ignore_permissions=app_test,
 	)
 
 	# Run synchronously for now; can be enqueued for background execution later
@@ -375,6 +396,8 @@ def get_flow_run(flow_run_id: str) -> dict:
 	Returns:
 	    dict with status, current_node_id, context_json, waiting state
 	"""
+	from huf.ai.flow.app_scope.api_guards import guard_run
+	guard_run(flow_run_id, "view")
 	require_run_access(flow_run_id, "read")
 
 	_expire_overdue_approvals(flow_run_id)
@@ -429,6 +452,8 @@ def mark_flow_run_failed(flow_run_id: str) -> dict:
 	Only a run that has not changed for ``STALE_RUN_MINUTES`` can be failed this way; a run that is
 	really progressing, or already finished, is left alone with a clear message.
 	"""
+	from huf.ai.flow.app_scope.api_guards import guard_run
+	guard_run(flow_run_id, "edit")
 	if not _can_mark_failed():
 		frappe.throw(_("Only a System Manager can mark a run as failed."), frappe.PermissionError)
 	if not frappe.db.exists("Agent Flow Run", flow_run_id):
@@ -509,6 +534,8 @@ def list_flow_runs(flow_id: str | None = None, status: str | None = None, limit:
 	Returns:
 	    list of flow run summaries (times are UTC ISO strings)
 	"""
+	from huf.ai.flow.app_scope.api_guards import guard_flow_or_huf
+	guard_flow_or_huf(flow_id, "view")
 	if not frappe.has_permission("Agent Flow Run", "read"):
 		frappe.throw(_("Not permitted"), frappe.PermissionError)
 
@@ -549,6 +576,8 @@ def list_flow_runs_page(
 	before comparing with the stored naive ``started_at``. ``search`` matches flow name or run id.
 	Returns ``{"items": [...], "total": n}``.
 	"""
+	from huf.ai.flow.app_scope.api_guards import guard_flow_or_huf
+	guard_flow_or_huf(flow_id, "view")
 	if not frappe.has_permission("Agent Flow Run", "read"):
 		frappe.throw(_("Not permitted"), frappe.PermissionError)
 
@@ -601,6 +630,8 @@ def get_flow_step_labels(items: str | list) -> list:
 	``items`` is a list of ``{"flow_run": ..., "flow_node_id": ...}``; the result is aligned with it
 	(``None`` where the run or flow is unknown).
 	"""
+	from huf.ai.flow.app_scope.api_guards import guard_app_meta
+	guard_app_meta()
 	if not frappe.has_permission("Agent Flow Run", "read"):
 		frappe.throw(_("Not permitted"), frappe.PermissionError)
 	if isinstance(items, str):
@@ -644,6 +675,8 @@ def resume_flow_run(flow_run_id: str, input: str | dict | None = None) -> dict:
 	Returns:
 	    dict with status and current_node_id
 	"""
+	from huf.ai.flow.app_scope.api_guards import guard_run
+	guard_run(flow_run_id, "approve")
 	require_run_access(flow_run_id, "write")
 
 	# Parse input
@@ -699,12 +732,16 @@ def _decide_flow_run(flow_run_id: str, decision: str, comment: str | None) -> di
 @frappe.whitelist(methods=["POST"])
 def approve_flow_run(flow_run_id: str, comment: str | None = None) -> dict:
 	"""Approve a flow run waiting for approval (caller must be a permitted approver)."""
+	from huf.ai.flow.app_scope.api_guards import guard_run
+	guard_run(flow_run_id, "approve")
 	return _decide_flow_run(flow_run_id, "approved", comment)
 
 
 @frappe.whitelist(methods=["POST"])
 def reject_flow_run(flow_run_id: str, comment: str | None = None) -> dict:
 	"""Reject a flow run waiting for approval (caller must be a permitted approver)."""
+	from huf.ai.flow.app_scope.api_guards import guard_run
+	guard_run(flow_run_id, "approve")
 	return _decide_flow_run(flow_run_id, "rejected", comment)
 
 
@@ -859,6 +896,8 @@ def flow_webhook(flow_id: str | None = None) -> dict:
 	inactive flow and a wrong or missing secret all get the same 403. At most 60 calls a minute per
 	caller address, then 429.
 	"""
+	from huf.ai.flow.app_scope.api_guards import guard_public
+	guard_public()
 	return _run_flow_webhook(_extract_flow_id(flow_id), _presented_secret())
 
 
@@ -872,6 +911,8 @@ def flow_webhook_clean(flow_id: str | None = None) -> dict:
 	the flow must be named (argument, ``?flow_id=`` or the ``X-Huf-Flow-Id`` header). A flow is never
 	looked up by its secret.
 	"""
+	from huf.ai.flow.app_scope.api_guards import guard_public
+	guard_public()
 	return _run_flow_webhook(_extract_flow_id(flow_id), _presented_secret())
 
 
@@ -881,7 +922,7 @@ def flow_webhook_clean(flow_id: str | None = None) -> dict:
 
 
 @frappe.whitelist()
-def get_node_schemas() -> dict:
+def get_node_schemas(app: str | None = None) -> dict:
 	"""
 	Return field definitions for every flow node type, generated from the graph IR schema
 	(``huf/ai/graph/graph_ir.schema.json``, the source of truth; see docs/flow/FIELD_CONTRACT.md).
@@ -892,6 +933,8 @@ def get_node_schemas() -> dict:
 	    field descriptors: name, label, type, required, options/min/max/default) and json_schema
 	    (the raw config JSON schema).
 	"""
+	from huf.ai.flow.app_scope.api_guards import guard_app_named
+	guard_app_named(app)
 	require_permission(frappe.has_permission("Flow Definition", "read"), "Not permitted")
 	return build_node_schemas()
 
@@ -915,6 +958,8 @@ def handle_run_flow(flow_id: str, payload: str | dict | None = None, **kwargs) -
 	Returns:
 	    dict with flow_run_id, status, message
 	"""
+	from huf.ai.flow.app_scope.api_guards import guard_huf_flow
+	guard_huf_flow(flow_id, "test")
 	if not frappe.has_permission("Agent Flow Run", "create"):
 		return {"error": "Insufficient permissions to start flows"}
 
@@ -957,6 +1002,8 @@ def handle_get_flow_run(flow_run_id: str, **kwargs) -> dict:
 	Returns:
 	    dict with status, context summary, waiting state
 	"""
+	from huf.ai.flow.app_scope.api_guards import guard_run
+	guard_run(flow_run_id, "view")
 	if not can_access_run(flow_run_id, "read"):
 		return {"error": "Insufficient permissions to view flow runs"}
 
@@ -999,6 +1046,8 @@ def handle_resume_flow_run(flow_run_id: str, input: dict | None = None, **kwargs
 	Returns:
 	    dict with updated status
 	"""
+	from huf.ai.flow.app_scope.api_guards import guard_run
+	guard_run(flow_run_id, "approve")
 	if not can_access_run(flow_run_id, "write"):
 		return {"error": "Insufficient permissions to resume flow runs"}
 
@@ -1031,6 +1080,8 @@ def handle_approve_flow_run(flow_run_id: str, decision: str = "approved", commen
 	Returns:
 	    dict with updated status
 	"""
+	from huf.ai.flow.app_scope.api_guards import guard_run
+	guard_run(flow_run_id, "approve")
 	if not can_access_run(flow_run_id, "read"):
 		return {"error": "Insufficient permissions to approve flow runs"}
 
@@ -1063,7 +1114,7 @@ def handle_approve_flow_run(flow_run_id: str, decision: str = "approved", commen
 # expired session (Frappe answers Guest with "not whitelisted"), not from the permission check below.
 # ---------------------------------------------------------------------------
 @frappe.whitelist()
-def get_pending_approvals(limit: int = 50) -> list:
+def get_pending_approvals(limit: int = 50, flow_id: str | None = None) -> list:
 	"""
 	Get list of flow runs waiting for approval that the current user can approve (used by the Approval Inbox).
 	Args:
@@ -1071,12 +1122,16 @@ def get_pending_approvals(limit: int = 50) -> list:
 	Returns:
 	    list of pending approval items with flow details
 	"""
+	from huf.ai.flow.app_scope.api_guards import guard_flow_or_huf
+
+	guard_flow_or_huf(flow_id, "approve")
 	if not frappe.has_permission("Agent Flow Run", "read"):
 		frappe.throw(_("Not permitted"), frappe.PermissionError)
 
 	_expire_overdue_approvals()
 
 	from huf.ai.flow import engine
+	from huf.ai.flow.app_scope.access import flow_access
 
 	user = frappe.session.user
 	user_roles = set(frappe.get_roles(user))
@@ -1084,7 +1139,7 @@ def get_pending_approvals(limit: int = 50) -> list:
 	# Get all flow runs waiting for approval
 	pending_runs = frappe.get_all(
 		"Agent Flow Run",
-		filters={"status": "Waiting Approval"},
+		filters={"status": "Waiting Approval", **({"flow_id": flow_id} if flow_id else {})},
 		fields=[
 			"name",
 			"flow_id",
@@ -1118,6 +1173,9 @@ def get_pending_approvals(limit: int = 50) -> list:
 
 		# Same fail-closed rule as deciding: only runs the current user may decide are listed.
 		if engine.check_approver(waiting, user, user_roles) is not None:
+			continue
+		# An app-owned flow's approvals are listed only to those the app lets approve it.
+		if not flow_access(user, run.flow_id, "approve") and frappe.db.get_value("Flow Definition", run.flow_id, "owner_app"):
 			continue
 
 		approver_type = waiting.get("approver_type")
@@ -1185,6 +1243,8 @@ def analyze_flow_conversion(flow_id: str) -> dict:
 	    {"convertible": True, "reads": [...], "writes": [...],
 	     "atomic_operations": N, "estimated_round_trip_reduction_pct": N}
 	"""
+	from huf.ai.flow.app_scope.api_guards import guard_huf_flow
+	guard_huf_flow(flow_id)
 	if not frappe.has_permission("Flow Definition", "read"):
 		frappe.throw(_("Not permitted"), frappe.PermissionError)
 
@@ -1220,6 +1280,8 @@ def convert_flow_to_procedure(flow_id: str, procedure_id: str | None = None) -> 
 	    dict with the created Agent Procedure's name/procedure_id/version, plus the
 	    same reads/writes/estimated-reduction summary as analyze_flow_conversion.
 	"""
+	from huf.ai.flow.app_scope.api_guards import guard_huf_flow
+	guard_huf_flow(flow_id)
 	if not frappe.has_permission("Flow Definition", "read"):
 		frappe.throw(_("Not permitted"), frappe.PermissionError)
 	if not frappe.has_permission("Agent Procedure", "create"):
@@ -1311,6 +1373,8 @@ def get_approver_roles() -> list[dict]:
 	Returns ``[{name, group}]`` with ``group`` ``"Huf"`` or ``"Other"``.
 	"""
 	# Read is enough: a read-only viewer opening a flow still needs the names to show the saved role.
+	from huf.ai.flow.app_scope.api_guards import guard_app_meta
+	guard_app_meta()
 	if not frappe.has_permission("Flow Definition", "read"):
 		frappe.throw(_("Not permitted"), frappe.PermissionError)
 

@@ -14,6 +14,8 @@ from huf.ai.flow.runs.access import require_flow_read
 @frappe.whitelist()
 def get_flow_state_limits() -> dict:
 	"""``max_ttl_seconds`` for saved data on this site; 0 means no ceiling (keeping data until removed is allowed)."""
+	from huf.ai.flow.app_scope.api_guards import guard_app_meta
+	guard_app_meta()
 	require_permission(frappe.has_permission("Flow Definition", "read"), "Not permitted")
 	return {"max_ttl_seconds": state.max_ttl_seconds()}
 
@@ -21,6 +23,8 @@ def get_flow_state_limits() -> dict:
 @frappe.whitelist()
 def list_flow_members(flow: str, limit: int = 200) -> list[dict]:
 	"""The people of a flow, most recent first. Needs read on the flow."""
+	from huf.ai.flow.app_scope.api_guards import guard_flow
+	guard_flow(flow, "view")
 	require_flow_read(flow)
 	return frappe.get_all(
 		member.DOCTYPE,
@@ -34,6 +38,8 @@ def list_flow_members(flow: str, limit: int = 200) -> list[dict]:
 @frappe.whitelist(methods=["POST"])
 def remove_flow_member(flow: str, member_key: str) -> dict:
 	"""Forget a person: cancels their waiting run and deletes what the flow saved for them. Needs write on the flow."""
+	from huf.ai.flow.app_scope.api_guards import guard_flow
+	guard_flow(flow, "edit")
 	require_flow_read(flow)
 	if not frappe.db.exists("Flow Definition", flow) or not frappe.has_permission("Flow Definition", "write", doc=flow):
 		frappe.throw(_("Only people who can edit this flow can remove people from it."), frappe.PermissionError)

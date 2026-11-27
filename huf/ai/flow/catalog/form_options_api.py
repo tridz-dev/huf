@@ -79,6 +79,8 @@ def settable_fields(meta_fields) -> list[dict]:
 @frappe.whitelist()
 def get_create_document_types() -> list[dict]:
 	"""Record types the "Create document" step can make for the signed-in person."""
+	from huf.ai.flow.app_scope.api_guards import guard_app_meta
+	guard_app_meta()
 	_need_flow_read()
 	return create_document_types(frappe.conf, lambda dt: frappe.db.exists("DocType", dt) and frappe.has_permission(dt, "create"))
 
@@ -86,6 +88,8 @@ def get_create_document_types() -> list[dict]:
 @frappe.whitelist()
 def get_create_document_fields(doctype: str) -> list[dict]:
 	"""The fields of ``doctype`` a "Create document" step may fill in (required first)."""
+	from huf.ai.flow.app_scope.api_guards import guard_app_meta
+	guard_app_meta()
 	_need_flow_read()
 	if doctype not in allowed_doctypes(frappe.conf) or not frappe.db.exists("DocType", doctype):
 		frappe.throw(_("Your administrator has not allowed flows to create {0} records.").format(doctype), frappe.PermissionError)
@@ -156,6 +160,8 @@ def search_flow_users(query: str = "", limit: int = MAX_USERS) -> list[dict]:
 	For people who can edit flows only (viewers get a 403), at most 60 lookups a minute each, and nothing but a name and
 	an address comes back. ``has_approver_role`` is true for someone who holds one of the approver roles.
 	"""
+	from huf.ai.flow.app_scope.api_guards import guard_app_meta
+	guard_app_meta()
 	_need_flow_edit_and_rate()
 	limit = max(1, min(int(limit or MAX_USERS), 50))
 	text = " ".join(str(query or "").split())[:80]
@@ -178,6 +184,8 @@ def check_flow_users(users) -> list[dict]:
 
 	Same rules as :func:`search_flow_users`: editors only, rate limited. Only enabled people count as found.
 	"""
+	from huf.ai.flow.app_scope.api_guards import guard_app_meta
+	guard_app_meta()
 	_need_flow_edit_and_rate()
 	if isinstance(users, str):
 		import json

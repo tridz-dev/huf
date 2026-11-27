@@ -22,6 +22,8 @@ def resume_waiting_run(flow_run: str | None = None, token: str | None = None, pa
 	works once: the first call wakes the run, any later call is refused. ``payload`` (at most 64 KB) is handed to
 	the run, with secrets masked. At most 20 calls a minute per caller address and run.
 	"""
+	from huf.ai.flow.app_scope.api_guards import guard_public
+	guard_public()
 	from huf.ai.flow.runs import park
 	from huf.ai.secrets import redact
 

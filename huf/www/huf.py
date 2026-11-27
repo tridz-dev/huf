@@ -138,23 +138,40 @@ class EmbedNotPermitted(Exception):
 
 
 def _check_embed_access(segments: list[str]) -> None:
-	"""Raise EmbedNotPermitted unless the user could open this flow in the full editor."""
-	from huf.permissions import has_capability
+	"""Raise EmbedNotPermitted unless the user may view this flow (``flow_access``, D-HAPPIOL-EMBED decision 2).
 
-	allowed = (
-		frappe.session.user != "Guest"
-		and len(segments) >= 2
-		and segments[0].lower() == "flow"
-		and has_capability(frappe.session.user, "flows.use")
-		and frappe.has_permission("Flow Definition", "read")
-	)
+	App-owned flows: the app's delegated view role. Huf-native flows: today's Huf roles.
+	"""
+	from huf.ai.flow.app_scope.access import flow_access
+
+	allowed = frappe.session.user != "Guest" and len(segments) >= 2 and segments[0].lower() == "flow"
 	if allowed:
 		flow_id = "/".join(segments[1:])
-		# A missing flow is left to the editor's "not found" state; it exposes nothing.
 		if frappe.db.exists("Flow Definition", flow_id):
-			allowed = frappe.has_permission("Flow Definition", "read", doc=flow_id)
+			allowed = flow_access(frappe.session.user, flow_id, "view")
+		else:
+			# A missing flow is left to the editor's "not found" state; it exposes nothing. Only Huf users get it.
+			from huf.ai.flow.app_scope.api_guards import is_app_only
+
+			allowed = not is_app_only()
 	if not allowed:
 		raise EmbedNotPermitted()
+
+
+class HufNotPermitted(EmbedNotPermitted):
+	"""The full Huf app (outside ``/huf/embed/``) for a signed-in user with no Huf capability: 403, no boot."""
+
+	def __init__(self):
+		super().__init__()
+		self.message = _("You do not have access to this page.")
+
+
+def _check_huf_access() -> None:
+	"""Guests keep today's behaviour (the app shows its login screen). App-only users get a 403 and no boot."""
+	from huf.ai.flow.app_scope.api_guards import is_app_only
+
+	if frappe.session.user != "Guest" and is_app_only():
+		raise HufNotPermitted()
 
 
 def _embed_boot(segments: list[str]) -> dict:
@@ -166,11 +183,19 @@ def _embed_boot(segments: list[str]) -> dict:
 	)
 	_check_embed_access(segments)
 	origins = [_site_origin() if entry == "'self'" else entry for entry in ancestors]
-	return {"huf_embed": {"allowed_origins": list(dict.fromkeys(o for o in origins if o))}}
+	embed = {"allowed_origins": list(dict.fromkeys(o for o in origins if o))}
+	from huf.ai.flow.app_scope.api_guards import embed_policy
+
+	policy = embed_policy("/".join(segments[1:]))
+	if policy is not None:
+		embed["policy"] = policy
+	return {"huf_embed": embed}
 
 
 def get_context(context):
 	segments = _embed_path_segments()
+	if segments is None:
+		_check_huf_access()
 	extra_boot = None if segments is None else _embed_boot(segments)
 	context.update(build_boot_context(extra_boot))
 	return context
