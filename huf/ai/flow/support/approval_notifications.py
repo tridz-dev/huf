@@ -14,6 +14,7 @@ from frappe.desk.doctype.notification_log.notification_log import enqueue_create
 from frappe.desk.doctype.notification_settings.notification_settings import is_email_notifications_enabled
 
 from huf.ai.flow.support.approval_card import build_card, facts_html, flow_name_of
+from huf.ai.flow.support.approvers import approver_roles_of
 from huf.ai.transaction import commit_if_background
 
 
@@ -36,19 +37,16 @@ def _send_approval_notifications(flow_run, node: dict, config: dict, waiting_dat
 	approvers = []
 
 	# Same rule as check_approver: no declared approver means System Manager only.
-	if approver_type == "role" and waiting_data.get("approver_role"):
-		approver_role = waiting_data.get("approver_role")
-	elif approver_type == "user" and waiting_data.get("approver_users"):
-		approver_role = None
-	else:
-		approver_type, approver_role = "role", "System Manager"
+	role_names = approver_roles_of(waiting_data)
+	if not (approver_type == "role" and role_names) and not (approver_type == "user" and waiting_data.get("approver_users")):
+		approver_type, role_names = "role", ["System Manager"]
 
 	if approver_type == "role":
-		if approver_role:
+		if role_names:
 			# Optimized role lookup: Get all users with this role directly from Has Role table
 			approver_names = frappe.get_all(
 				"Has Role",
-				filters={"role": approver_role, "parenttype": "User"},
+				filters={"role": ["in", role_names], "parenttype": "User"},
 				pluck="parent"
 			)
 			if approver_names:
