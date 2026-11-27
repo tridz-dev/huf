@@ -51,9 +51,7 @@ class TestFlowSweeperIndex(IntegrationTestCase):
 	def test_sweeper_query_uses_the_composite_index(self):
 		# mostly finished runs with a past resume_at: only status + resume_at together is selective
 		past = NOW - timedelta(days=1)
-		rows = [
-			(f"_test-sweep-{i}", "Waiting Timer" if i % 50 == 0 else "Success", past) for i in range(500)
-		]
+		rows = [(f"_test-sweep-{i}", "Waiting Timer" if i % 50 == 0 else "Success", past) for i in range(500)]
 		frappe.db.bulk_insert("Agent Flow Run", ["name", "status", "resume_at"], rows)
 		plan = frappe.db.sql(f"EXPLAIN {sweeper_sql()}", as_dict=True)
 		self.assertEqual([row.key for row in plan], [INDEX], plan)
