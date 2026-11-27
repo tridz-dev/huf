@@ -44,6 +44,7 @@ What changed in T-22, and why (defect ids are from the track plan):
 
 import json
 import re
+import threading
 
 import frappe
 from frappe import _
@@ -60,7 +61,7 @@ from huf.ai.flow.runs.outcome import record_outcome
 from huf.ai.flow.support.approval_card import waiting_fields
 from huf.ai.flow.runs.edges import edges_from_nodes
 from huf.ai.flow.support.approval_notifications import _clear_flow_notifications, _send_approval_notifications
-from huf.ai.flow.support.approvers import approval_expired, check_approver
+from huf.ai.flow.support.approvers import approval_expired, check_approver, evaluate_approval_policy
 from huf.ai.flow.integrations import friendly_tool_error
 from huf.ai.gateways.slack import flow_hooks
 from huf.ai.flow.support.router_text import (
@@ -111,8 +112,22 @@ from huf.ai.transaction import commit_if_background
 
 DEFAULT_MAX_HOPS = 100
 
-RUN_LOCK_TTL_SECONDS = 600
-"""How long a run lock survives if its holder dies mid-execution."""
+RUN_LOCK_STEP_SECONDS = 90
+"""The step duration the run lock TTL is sized for. Not a limit: longer steps are covered by the heartbeat."""
+
+RUN_LOCK_MARGIN_SECONDS = 30
+
+RUN_LOCK_TTL_SECONDS = RUN_LOCK_STEP_SECONDS + RUN_LOCK_MARGIN_SECONDS
+"""How long a run lock survives if its holder dies mid-execution: step time + margin.
+
+The lock is held for a whole walk of the graph, and a step (agent, tool, code) has no hard upper bound, so the
+TTL alone must never decide whether a worker is alive: the holder refreshes it from a heartbeat thread every
+:data:`RUN_LOCK_HEARTBEAT_SECONDS`. A killed worker takes the thread with it and the lock expires within the TTL.
+"""
+
+RUN_LOCK_HEARTBEAT_SECONDS = RUN_LOCK_TTL_SECONDS / 4
+
+_run_lock_heartbeats: dict[str, threading.Event] = {}
 
 WAITING_STATUSES = ("Waiting User", "Waiting Approval", "Waiting Code", "Waiting Timer")
 
@@ -361,16 +376,44 @@ def _acquire_run_lock(flow_run_name: str) -> bool:
 	concurrent callers gets ``True``. Before T-22 ``run_flow`` took no lock at
 	all and two concurrent calls could both advance the same cursor (F-4).
 	"""
+	key = _run_lock_key(flow_run_name)
 	try:
-		return bool(frappe.cache().set(_run_lock_key(flow_run_name), 1, ex=RUN_LOCK_TTL_SECONDS, nx=True))
+		cache = frappe.cache()
+		if not cache.set(key, 1, ex=RUN_LOCK_TTL_SECONDS, nx=True):
+			return False
 	except Exception:
 		# A cache that cannot serve the lock must not silently serialize
 		# nothing *and* block execution; the executor's status guard is the
 		# second line of defence.
 		return True
+	_start_run_lock_heartbeat(cache, key)
+	return True
+
+
+def _start_run_lock_heartbeat(cache, key: str) -> None:
+	"""Keep a held run lock alive. ``cache`` is passed in: the thread has no frappe request context."""
+	_stop_run_lock_heartbeat(key)  # a previous holder that never released
+	stop = _run_lock_heartbeats[key] = threading.Event()
+
+	def beat():
+		while not stop.wait(RUN_LOCK_HEARTBEAT_SECONDS):
+			try:
+				if not cache.expire(key, RUN_LOCK_TTL_SECONDS):
+					return  # the lock is gone; EXPIRE never recreates it
+			except Exception:  # noqa: BLE001, S110
+				pass  # try again on the next beat, while the TTL still has room
+
+	threading.Thread(target=beat, name=f"run-lock-heartbeat:{key}", daemon=True).start()
+
+
+def _stop_run_lock_heartbeat(key: str) -> None:
+	stop = _run_lock_heartbeats.pop(key, None)
+	if stop:
+		stop.set()
 
 
 def _release_run_lock(flow_run_name: str) -> None:
+	_stop_run_lock_heartbeat(_run_lock_key(flow_run_name))
 	try:
 		# ``delete`` (raw key), not ``delete_value``: the lock is taken with a raw
 		# ``SET NX``, while ``delete_value`` removes the site-prefixed key, so the lock
@@ -954,6 +997,8 @@ def _build_router(
 	one), so the run can still end ``Failed`` after an ``always`` edge ran cleanup nodes.
 	"""
 	def default_resolver(node: NodeSpec, outcome: Outcome, context: GraphContext):
+		if node.type == "human.approval" and outcome.status == "success" and outcome.extra.get("approval_outcome"):
+			return labelled_resolver(node.id, outcome.extra["approval_outcome"])  # a policy skipped the wait
 		chosen = _resolve_default(node, outcome, context)
 		if outcome.status == "failed" and unhandled_failures is not None:
 			# No edge chosen -> the executor falls back to the node's ``on_error``.
@@ -1553,7 +1598,10 @@ def _exec_human_approval(flow_run, node: dict, config: dict, settings: dict) -> 
 
 	Config: ``message``, ``approve_next``, ``reject_next``, ``timeout_next``, ``timeout_ms``,
 	``approver_type`` (``role`` / ``user``), ``approver_role``, ``approver_users``. Without a
-	declared approver only a System Manager can decide (:func:`check_approver`). Returns a pause
+	declared approver only a System Manager can decide (:func:`check_approver`). An app's
+	``huf_flow_approval_policy`` hook may name the approver roles or say that no approval is needed;
+	then the step records an automatic approval and takes ``approve_next``
+	(:func:`evaluate_approval_policy`, fail closed). Returns a pause
 	as a *value*; the executor never has to reload the document and compare status strings to
 	notice (structural knot 2). The decision record is the node's output once decided.
 	"""
@@ -1561,6 +1609,25 @@ def _exec_human_approval(flow_run, node: dict, config: dict, settings: dict) -> 
 		return {"status": "waiting_approval"}
 
 	ctx = _context_of(flow_run, settings)
+
+	policy = evaluate_approval_policy(
+		flow_run.flow_id,
+		node,
+		{"flow_run": flow_run.name, "test_run": test_gate.is_test_run(flow_run), "data": ctx.reference_roots()},
+	)
+	# Without an approved route there is nowhere to go on automatically, so the step waits as usual.
+	if not policy.required and config.get("approve_next"):
+		return {
+			"status": "success",
+			"approval_outcome": "approved",
+			"output": {
+				"decision": "approved",
+				"comment": None,
+				"decided_by": None,
+				"decided_at": _utc_now_iso(),
+				"reason": policy.reason,
+			},
+		}
 
 	timeout_ms = config.get("timeout_ms")
 	timeout_at = None
@@ -1580,7 +1647,15 @@ def _exec_human_approval(flow_run, node: dict, config: dict, settings: dict) -> 
 		"timeout_next": config.get("timeout_next"),
 		"timeout_ms": timeout_ms,
 		"timeout_at": timeout_at,
+		"policy_reason": policy.reason,
 	}
+	if policy.approver_roles:
+		waiting_data.update(
+			approver_type="role",
+			approver_role=policy.approver_roles[0],
+			approver_roles=list(policy.approver_roles),
+			approver_users=[],
+		)
 
 	# Persist earlier nodes' outputs so downstream {"$from": ...} still resolves after the pause.
 	_persist_context(flow_run, ctx, settings)

@@ -22,6 +22,7 @@ import { StatusPill, flowStatusKind } from '@/components/common/StatusPill';
 import { cn } from '@/lib/utils';
 import { toast } from '@/lib/toast';
 import { RUN_BUTTON_LABEL } from '@/lib/flow-run/flowRunPayload';
+import { isActionAllowed } from './scopeFilter';
 import { paletteFilter } from './paletteFilter';
 
 interface CommandPaletteProps {
@@ -63,7 +64,7 @@ export function FlowCommandPalette({ open, onOpenChange, getSelectedIds, onOpenH
   const afterNode = spot ? nodes.find((n) => n.id === spot.sourceId) : undefined;
   const codeAvailable = Boolean(codeStatus?.available) && canExecuteCode;
   const { types: appTypes } = useAppNodeTypes();
-  const addable = [...actionOptions, ...appActionOptions(appTypes)].filter((a) => a.id !== CODE_RUN_ACTION || codeAvailable);
+  const addable = [...actionOptions, ...appActionOptions(appTypes)].filter((a) => isActionAllowed(a.id) && (a.id !== CODE_RUN_ACTION || codeAvailable));
   const ordered = addable;
   const isLive = activeFlow?.status === 'active';
   const clip = open ? readClipboard() : null;

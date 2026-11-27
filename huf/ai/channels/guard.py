@@ -5,19 +5,23 @@
 
 :func:`evaluate` runs Huf's built-in steps and then every handler an app registers in ``hooks.py``::
 
-	huf_pre_send_hooks = ["my_app.sending.check_consent"]
+        huf_pre_send_hooks = ["my_app.sending.check_consent"]
 
 A step is called as ``step(request)`` with its own copy of the plain request dict and answers with exactly::
 
-	{"allowed": True}
-	{"allowed": False, "reason": "<code>"}   # a code registered in ``reason_codes``
+        {"allow": True}
+        {"allow": False, "reason": "<code>"}  # a code registered in ``reason_codes``
 
 The first block ends the chain. Anything else (``None``, a bare bool, another shape), an exception, a bad
 dotted path or a failing hook lookup blocks with ``hook_error``; a step that runs longer than the timeout
-(2 s, site config ``huf_pre_send_timeout_seconds``) blocks with ``hook_timeout``. A block is final. This is
+(2 s, site config ``huf_pre_send_hook_timeout_s``) blocks with ``hook_timeout``. A block is final. This is
 stricter than ``huf_gateway_pre_send``, where ``None`` allows.
 
-Steps must only observe and decide. Neither the result nor the log line holds request data or exception text.
+Huf's own steps (:mod:`huf.ai.channels.guard_steps`) run first. Steps must only observe and decide.
+
+The frequency cap runs last, only when every step allowed. For a live send (``request["live"] is True``)
+with a cap it counts the send and COMMITS the current transaction, so call :func:`evaluate` only where
+committing the work so far is safe. A preview never counts. Neither the result nor the log line holds request data or exception text.
 
 A step runs in its own thread so the wait can be bounded. A thread cannot be killed: one that timed out is
 abandoned and refused any further ``frappe.db`` call, and a query it already has in flight is waited for,
@@ -30,46 +34,73 @@ import contextvars
 import copy
 import threading
 from collections.abc import Callable
-from typing import Any, NamedTuple
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Any
 
 import frappe
 from frappe.utils.local import _contextvar
 
+from huf.ai.channels import guard_steps
 from huf.ai.flow.support import reason_codes
 
 HOOK = "huf_pre_send_hooks"
-TIMEOUT_CONF = "huf_pre_send_timeout_seconds"
+TIMEOUT_CONF = "huf_pre_send_hook_timeout_s"
 DEFAULT_TIMEOUT_SECONDS = 2.0
 HOOK_ERROR = "hook_error"
 HOOK_TIMEOUT = "hook_timeout"
 
 Step = Callable[[dict], Any]
 # Huf's own steps as (name, step), run in this order before any app hook.
-BUILTIN_STEPS: list[tuple[str, Step]] = []
+BUILTIN_STEPS: list[tuple[str, Step]] = list(guard_steps.STEPS)
 
 
-class GuardResult(NamedTuple):
+@dataclass(frozen=True)
+class GuardResult:
 	allowed: bool
 	reason: str | None = None
 	step: str | None = None
+	defer_until: datetime | None = None  # aware UTC; only the send window step sets it
 
 
-def evaluate(request: dict, *, timeout: float | None = None) -> GuardResult:
-	"""Run the chain for one send. Never raises: whatever goes wrong is a block."""
+def evaluate(request: dict, *, header: dict | None = None, timeout: float | None = None) -> GuardResult:
+	"""Run the chain for one send. Never raises: whatever goes wrong is a block.
+
+	``header`` is the send's media or location header, seen by built-in steps only.
+	"""
 	step_name = None
 	try:
 		seconds = _timeout(timeout)
 		# Both lists are read before any step runs, so a broken hook lookup blocks without side effects.
 		steps = [*BUILTIN_STEPS, *((path, None) for path in _hook_paths())]
-		for step_name, step in steps:
+		builtins = len(BUILTIN_STEPS)
+		for index, (step_name, step) in enumerate(steps):
 			step = step or frappe.get_attr(step_name)
-			reason = _run_step(step_name, step, copy.deepcopy(request), seconds)
+			args = {**request, "header": header} if index < builtins else request
+			reason = _run_step(step_name, step, copy.deepcopy(args), seconds)
 			if reason:
 				return GuardResult(False, reason, step_name)
-		return GuardResult(True)
+		step_name = guard_steps.CAP_STEP
+		reason = _cap_step(copy.deepcopy(request), seconds)
+		return GuardResult(False, reason, step_name) if reason else GuardResult(True)
 	except Exception as error:  # noqa: BLE001 - fail closed, never raise out
 		_warn(step_name, type(error).__name__)
 		return GuardResult(False, HOOK_ERROR, step_name if isinstance(step_name, str) else None)
+
+
+def _cap_step(request: dict, seconds: float) -> str | None:
+	"""Resolver hooks run under the step timeout; the counting runs on the caller's thread.
+
+	A step thread can be abandoned, which would leave a half-made claim and its row lock in the transaction.
+	"""
+	name, caps = guard_steps.CAP_STEP, []
+
+	def resolve(args: dict) -> dict:
+		caps.extend(guard_steps.resolve_caps(args))
+		return {"allow": True}
+
+	reason = _run_step(name, resolve, request, seconds)
+	return reason or _reason(name, guard_steps.apply_caps(request, caps))
 
 
 def _hook_paths() -> list[str]:
@@ -123,8 +154,8 @@ def _run_step(name: str, step: Step, request: dict, seconds: float) -> str | Non
 
 def _reason(name: str, verdict: Any) -> str | None:
 	if isinstance(verdict, dict):
-		allowed = verdict.get("allowed")
-		if allowed is True and set(verdict) == {"allowed"}:
+		allowed = verdict.get("allow")
+		if allowed is True and set(verdict) == {"allow"}:
 			return None
 		if allowed is False:
 			return reason_codes.normalize(verdict.get("reason"))

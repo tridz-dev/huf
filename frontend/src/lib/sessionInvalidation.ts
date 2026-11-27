@@ -1,4 +1,37 @@
 import type { AxiosError, AxiosInstance, InternalAxiosRequestConfig } from 'axios';
+import { isEmbedPath, postToHost } from '@/embed/bridge';
+
+let embedSessionExpired = false;
+const embedListeners = new Set<() => void>();
+
+/**
+ * Send a signed-out user to the login page. The embedded editor must never leave
+ * its frame: it records the signed-out state and tells the host instead.
+ * Returns true when the page navigated.
+ */
+export function leaveForLogin(loginUrl: string): boolean {
+  if (!isEmbedPath()) {
+    window.location.href = loginUrl;
+    return true;
+  }
+  if (!embedSessionExpired) {
+    embedSessionExpired = true;
+    postToHost('guest.error', { code: 'session_expired' });
+    embedListeners.forEach((listener) => listener());
+  }
+  return false;
+}
+
+export function isEmbedSessionExpired(): boolean {
+  return embedSessionExpired;
+}
+
+export function subscribeEmbedSession(listener: () => void): () => void {
+  embedListeners.add(listener);
+  return () => {
+    embedListeners.delete(listener);
+  };
+}
 
 /**
  * Frappe's is_whitelisted() throws this exact text whenever
