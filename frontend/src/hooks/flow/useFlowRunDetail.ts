@@ -3,11 +3,13 @@ import { flowService } from '../../services/flowService';
 import type { FlowRunDetail } from '../../services/flowApi';
 import { onRunChanged } from '../../lib/flow-run/runChanged';
 import { runCanStillChange } from '../../lib/flow-run/runCanStillChange';
+import { useFlowRunRoom } from './useFlowRunRoom';
 
 /** One flow run's details, refreshed every 2 s while the run can still change. */
 export function useFlowRunDetail(runId: string | null) {
     const [run, setRun] = useState<FlowRunDetail | null>(null);
     const [loading, setLoading] = useState(false);
+    useFlowRunRoom(runId);
 
     useEffect(() => {
         async function fetchRun() {
