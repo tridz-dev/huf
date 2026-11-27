@@ -40,7 +40,16 @@ from huf.ai.usage_extraction import extract_round_usage, normalise_usage_payload
 from huf.ai.model_metadata import resolve_model_context_window
 from huf.permissions import has_capability
 from huf.ai.tools.serializer import serialize_tools
-from huf.ai.run_budget import RunBudget, RunBudgetExceeded, get_current_budget, set_current_budget
+from huf.ai.run_budget import (
+    AI_DISABLED,
+    AIDisabled,
+    RunBudget,
+    RunBudgetExceeded,
+    estimate_run_cost,
+    get_current_budget,
+    peek_current_budget,
+    set_current_budget,
+)
 
 class _LazyLogger:
 	"""Defer frappe.logger() until first use so test discovery can import this module."""
@@ -3512,6 +3521,7 @@ def _client_safe_error(e: Exception) -> str:
         return _bounded_public_message(getattr(e, "public_message", None)) or _GENERIC_STREAM_ERROR
     if type(e) in (
         frappe.ValidationError, frappe.PermissionError, frappe.DoesNotExistError, RunBudgetExceeded,
+        AIDisabled,
     ):
         msg = str(e)
         if msg:
@@ -3560,8 +3570,17 @@ async def run_agent_stream(*args, **kwargs):
     raised before that point."""
     state = {"message_saved": False}
     agen = _run_agent_stream_impl(*args, _huf_stream_state=state, **kwargs)
+    previous_budget = peek_current_budget()
     try:
-        async for chunk in agen:
+        while True:
+            # SSE consumers pull each chunk in a new task, which starts from the caller's context:
+            # the run's budget has to be set again before every step.
+            if state.get("budget"):
+                set_current_budget(state["budget"])
+            try:
+                chunk = await agen.__anext__()
+            except StopAsyncIteration:
+                break
             if isinstance(chunk, dict) and chunk.get("type") == "error":
                 chunk = {**chunk, "message_saved": state["message_saved"]}
             yield chunk
@@ -3570,7 +3589,10 @@ async def run_agent_stream(*args, **kwargs):
         yield {"type": "error", "error": _client_safe_error(e), "message_saved": state["message_saved"]}
     finally:
         # Propagate aclose()/cancellation so the impl's salvage `finally` still runs.
-        await agen.aclose()
+        try:
+            await agen.aclose()
+        finally:
+            set_current_budget(previous_budget)
 
 
 async def _run_agent_stream_impl(
@@ -3677,6 +3699,25 @@ async def _run_agent_stream_impl(
             }
             return
 
+        # Kill switch and spend cap, checked before anything is written.
+        try:
+            budget = RunBudget.from_agent(agent_doc)
+            if budget.spend_cap_usd:
+                # Guests may not choose the model, so they must not choose the price either.
+                is_guest = frappe.session.user == "Guest"
+                _provider, cost_model, _name = _resolve_effective_model(
+                    agent_doc,
+                    model=None if is_guest else model,
+                    provider=None if is_guest else provider,
+                )
+                budget.check_spend(estimate_run_cost(agent_doc, model=cost_model, provider=_provider))
+        except RunBudgetExceeded as e:
+            yield {"type": "error", "error": _client_safe_error(e)}
+            return
+        set_current_budget(budget)
+        if _huf_stream_state is not None:
+            _huf_stream_state["budget"] = budget
+
         conv_manager = ConversationManager(
             agent_name=agent_name,
             channel=channel_id,
@@ -3780,7 +3821,11 @@ async def _run_agent_stream_impl(
             "prompt": prompt,
             "prompt_template": resolved_prompt_template,
             "model": resolved_model,
-            "provider": resolved_provider
+            "provider": resolved_provider,
+            "budget_deadline_at": budget.deadline_at,
+            "budget_depth": budget.current_depth,
+            "budget_ancestry": frappe.as_json(budget.ancestry),
+            "budget_spend_usd": budget.spend_so_far_usd,
         }
         if client_idempotency_key:
             run_doc_data["idempotency_key"] = client_idempotency_key
@@ -4058,14 +4103,21 @@ async def _run_agent_stream_impl(
                 try:
                     budget = get_current_budget()
                     budget.check_deadline()
-                except RunBudgetExceeded:
+                except RunBudgetExceeded as budget_error:
                     try:
                         await poll.aclose()
                     except Exception:
                         pass
+                    switched_off = isinstance(budget_error, AIDisabled)
+                    if switched_off:
+                        # Otherwise the disconnect cleanup would record a partial reply as Success.
+                        _guarded_finish_started_run(
+                            run_doc.name, "Failed", error_message=AI_DISABLED, end_time=now_datetime()
+                        )
+                        safe_commit()
                     yield {
                         "type": "error",
-                        "error": "Run budget deadline exceeded",
+                        "error": AI_DISABLED if switched_off else "Run budget deadline exceeded",
                         "success": False,
                         "agent_run_id": run_doc.name,
                         "conversation_id": conversation.name

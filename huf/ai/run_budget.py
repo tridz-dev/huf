@@ -84,7 +84,7 @@ class RunBudget:
     def check_deadline(self):
         """Raise if AI was switched off for this run, or if the deadline is exceeded.
 
-        The site switch is read live: the streaming path never builds a budget and checks the default one.
+        The site switch is read live, so it also stops runs that started before it was turned off.
         """
         if self.ai_disabled or cint(frappe.conf.get("huf_ai_disabled")):
             frappe.throw(AI_DISABLED, AIDisabled)
@@ -216,6 +216,12 @@ def get_current_budget() -> RunBudget:
             spend_cap_usd=0
         )
     return budget
+
+
+def peek_current_budget() -> RunBudget | None:
+    """The budget set in this context, or None (no default), so a caller can restore it."""
+    var = getattr(get_current_budget, '_context_var', None)
+    return var.get() if var else None
 
 
 def set_current_budget(budget: RunBudget):

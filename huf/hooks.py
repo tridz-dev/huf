@@ -407,6 +407,10 @@ scheduler_events = {
     ]
 }
 
+# >>> H-W5-05 AI memory retention (site config huf_ai_memory_retention_days; unset keeps everything)
+scheduler_events["daily"].append("huf.ai.memory.purge.purge_expired_memory")
+# <<< H-W5-05
+
 # Testing
 # -------
 
