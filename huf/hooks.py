@@ -151,6 +151,7 @@ after_migrate = [
     "huf.ai.skills.hooks.sync_app_skills",
     "huf.install.seed_voice_engines",
     "huf.ai.channels.run_as.ensure_all_audit_fields",
+    "huf.ai.flow.app_scope.docperms.sync_app_flow_docperms",
 ]
 
 # Uninstallation
@@ -201,6 +202,8 @@ permission_query_conditions = {
     "Agent Run Prompt Snapshot": "huf.ai.agent.integration.get_prompt_snapshot_permission_conditions",
     "Huf API Key": "huf.huf.doctype.huf_api_key.huf_api_key.get_api_key_permission_conditions",
     "Flow Definition": "huf.huf.doctype.flow_definition.flow_definition.get_permission_query_conditions",
+    "Agent Flow Run": "huf.ai.flow.app_scope.access.get_run_permission_query_conditions",
+    "Flow Member State": "huf.ai.flow.app_scope.access.get_member_state_permission_query_conditions",
     "Agent Procedure": "huf.huf.doctype.agent_procedure.agent_procedure.get_permission_query_conditions",
     "Agent Procedure Binding": "huf.huf.doctype.agent_procedure_binding.agent_procedure_binding.get_permission_query_conditions",
     "Agent Procedure Run": "huf.huf.doctype.agent_procedure_run.agent_procedure_run.get_permission_query_conditions",
@@ -220,6 +223,9 @@ permission_query_conditions = {
 }
 
 has_permission = {
+	"Flow Definition": "huf.ai.flow.app_scope.access.has_permission_flow_definition",
+	"Agent Flow Run": "huf.ai.flow.app_scope.access.has_permission_flow_run",
+	"Flow Member State": "huf.ai.flow.app_scope.access.has_permission_member_state",
 	"Agent Run": "huf.ai.hooks.has_permission_agent_run",
 	"Agent Message": "huf.ai.hooks.has_permission_agent_message",
 	"Agent Conversation": "huf.ai.hooks.has_permission_agent_conversation",
