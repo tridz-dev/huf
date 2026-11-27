@@ -128,6 +128,7 @@ FLOW_ONLY_NODE_TYPES: frozenset[str] = frozenset(
 		"trigger.schedule",
 		"trigger.doc-event",
 		"trigger.unset",
+		"trigger.app",
 		"state.get",
 		"state.set",
 		"state.delete",
