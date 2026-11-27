@@ -9,6 +9,9 @@ The steps in ``STEPS`` only read. Anything they raise is turned into a ``hook_er
 The frequency cap (H-W2-08) is not in ``STEPS``: the chain runs it last, after every app hook, as
 :func:`resolve_caps` (reads app hooks) and then :func:`apply_caps` (counts; a live send commits).
 
+The send window (H-W2-06) is not in ``STEPS`` either: its answer can be "later", so the chain runs it as
+:func:`window_deferral`, after these steps and before any app hook.
+
 Order: recipient, consent, template. ``header`` is not part of the app hook request: the chain adds it for
 built-in steps only, from ``guard.evaluate(..., header=)``; None means "use the template's default media".
 """
@@ -17,13 +20,20 @@ from __future__ import annotations
 
 import copy
 import re
+from datetime import datetime, time, timedelta, timezone
 from typing import Any
 from urllib.parse import urlsplit
 
 import frappe
 
-from huf.ai.flow.policy import frequency_cap
+from huf.ai.flow.policy import frequency_cap, send_window
 
+WINDOW_STEP = "send_window"
+WINDOW_HOOK = "huf_send_window_resolver"
+WINDOW_KEYS = frozenset({"zone", "windows", "exempt_categories"})
+WINDOW_ENTRY_KEYS = frozenset({"start", "end", "weekdays"})
+WINDOW_RETRY = timedelta(hours=1)  # closed with no known next opening
+_CLOCK = re.compile(r"([01][0-9]|2[0-3]):([0-5][0-9])")
 CAP_STEP = "frequency_cap"
 CAP_HOOK = "huf_frequency_cap_resolver"
 CAP_KEYS = frozenset({"limit", "window_seconds", "bucket"})
@@ -208,6 +218,59 @@ def media_host_allowed(link: Any) -> bool:
 	raw = frappe.conf.get(MEDIA_HOSTS_CONF) or []
 	hosts = raw.split(",") if isinstance(raw, str) else raw
 	return host in {str(h).strip().lower() for h in hosts}
+
+
+def window_resolvers() -> list[str]:
+	paths = frappe.get_hooks(WINDOW_HOOK) or []
+	return [paths] if isinstance(paths, str) else list(paths)
+
+
+def window_deferral(request: dict, resolvers: list[str]) -> datetime | None:
+	"""None when the send may leave now, else the aware UTC moment to try again.
+
+	The first resolver answer that is not None decides; none is "always open". Raises on any invalid answer.
+	"""
+	for path in resolvers:
+		answer = frappe.get_attr(path)(copy.deepcopy(request))
+		if answer is not None:
+			break
+	else:
+		return None
+	zone, windows, exempt = _parse_window_answer(answer)
+	now = datetime.now(timezone.utc)
+	# evaluated even for an exempt category, so a bad zone or window never passes unnoticed
+	decision = send_window.check_send_window(now, zone, windows)
+	if decision.allowed or request.get("category") in exempt:
+		return None
+	return decision.next_open or now + WINDOW_RETRY
+
+
+def _parse_window_answer(answer: Any) -> tuple[str, list[send_window.Window], list[str]]:
+	if not isinstance(answer, dict) or not set(answer) <= WINDOW_KEYS:
+		raise ValueError("invalid send window")  # noqa: TRY003
+	zone, windows = answer.get("zone"), answer.get("windows")
+	exempt = answer.get("exempt_categories", [])
+	if not isinstance(zone, str) or not isinstance(windows, list) or not isinstance(exempt, list):
+		raise ValueError("invalid send window")  # noqa: TRY003, TRY004
+	if not all(isinstance(category, str) for category in exempt):
+		raise ValueError("invalid send window")  # noqa: TRY003
+	return zone, [_parse_window(entry) for entry in windows], exempt
+
+
+def _parse_window(entry: Any) -> send_window.Window:
+	if not isinstance(entry, dict) or not set(entry) <= WINDOW_ENTRY_KEYS:
+		raise ValueError("invalid send window")  # noqa: TRY003
+	weekdays = entry.get("weekdays", list(send_window.ALL_WEEKDAYS))
+	if not isinstance(weekdays, list) or not all(type(day) is int for day in weekdays):
+		raise ValueError("invalid send window")  # noqa: TRY003
+	return send_window.Window(_clock(entry.get("start")), _clock(entry.get("end")), frozenset(weekdays))
+
+
+def _clock(value: Any) -> time:
+	match = _CLOCK.fullmatch(value) if isinstance(value, str) else None
+	if not match:
+		raise ValueError("invalid send window")  # noqa: TRY003
+	return time(int(match[1]), int(match[2]))
 
 
 def resolve_caps(request: dict) -> list[tuple[int, str, int]]:
