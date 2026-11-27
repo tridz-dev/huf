@@ -268,13 +268,8 @@ class WebhookHarness:
 			headers[WEBHOOK_SECRET_HEADER] = secret
 		path = "/api/method/huf.ai.gateway_webhook.handle_gateway_webhook"
 		query_string = f"gateway_name={gateway}"
-		path = "/api/method/huf.ai.gateway_webhook.handle_gateway_webhook"
-		query_string = f"gateway_name={gateway}"
 		request = SimpleNamespace(
 			args={"gateway_name": gateway},
-			url=f"https://huf.test{path}?{query_string}",
-			path=path,
-			query_string=query_string.encode(),
 			url=f"https://huf.test{path}?{query_string}",
 			path=path,
 			query_string=query_string.encode(),
