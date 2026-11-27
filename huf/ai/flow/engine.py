@@ -140,6 +140,16 @@ RUN_LOCK_HEARTBEAT_SECONDS = RUN_LOCK_TTL_SECONDS / 4
 
 _run_lock_heartbeats: dict[str, threading.Event] = {}
 
+_run_lock_tokens: dict[str, str] = {}
+"""The owner token this process wrote into each run lock it holds (key -> token)."""
+
+# Compare-and-delete / compare-and-expire: act on the key only while it still holds our token, so a
+# holder whose lock expired (and was taken by another worker) can neither extend nor release it.
+_RELEASE_IF_OWNER = "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) end return 0"
+_EXPIRE_IF_OWNER = (
+	"if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('expire', KEYS[1], ARGV[2]) end return 0"
+)
+
 WAITING_STATUSES = ("Waiting User", "Waiting Approval", "Waiting Code", "Waiting Timer")
 
 ADVANCEABLE_STATUSES = ("Running", "Queued")
@@ -396,22 +406,27 @@ def _acquire_run_lock(flow_run_name: str) -> bool:
 	``SET key value EX ttl NX``, which is atomic, so exactly one of two
 	concurrent callers gets ``True``. Before T-22 ``run_flow`` took no lock at
 	all and two concurrent calls could both advance the same cursor (F-4).
+
+	The value is a per-acquisition owner token; refresh and release only act while the key still
+	holds it (:data:`_EXPIRE_IF_OWNER`, :data:`_RELEASE_IF_OWNER`).
 	"""
 	key = _run_lock_key(flow_run_name)
+	token = frappe.generate_hash(length=32)
 	try:
 		cache = frappe.cache()
-		if not cache.set(key, 1, ex=RUN_LOCK_TTL_SECONDS, nx=True):
+		if not cache.set(key, token, ex=RUN_LOCK_TTL_SECONDS, nx=True):
 			return False
 	except Exception:
 		# A cache that cannot serve the lock must not silently serialize
 		# nothing *and* block execution; the executor's status guard is the
 		# second line of defence.
 		return True
-	_start_run_lock_heartbeat(cache, key)
+	_run_lock_tokens[key] = token
+	_start_run_lock_heartbeat(cache, key, token)
 	return True
 
 
-def _start_run_lock_heartbeat(cache, key: str) -> None:
+def _start_run_lock_heartbeat(cache, key: str, token: str) -> None:
 	"""Keep a held run lock alive. ``cache`` is passed in: the thread has no frappe request context."""
 	_stop_run_lock_heartbeat(key)  # a previous holder that never released
 	stop = _run_lock_heartbeats[key] = threading.Event()
@@ -419,8 +434,8 @@ def _start_run_lock_heartbeat(cache, key: str) -> None:
 	def beat():
 		while not stop.wait(RUN_LOCK_HEARTBEAT_SECONDS):
 			try:
-				if not cache.expire(key, RUN_LOCK_TTL_SECONDS):
-					return  # the lock is gone; EXPIRE never recreates it
+				if not cache.eval(_EXPIRE_IF_OWNER, 1, key, token, int(RUN_LOCK_TTL_SECONDS)):
+					return  # the lock is gone or another worker owns it now; never extend theirs
 			except Exception:  # noqa: BLE001, S110
 				pass  # try again on the next beat, while the TTL still has room
 
@@ -434,12 +449,16 @@ def _stop_run_lock_heartbeat(key: str) -> None:
 
 
 def _release_run_lock(flow_run_name: str) -> None:
-	_stop_run_lock_heartbeat(_run_lock_key(flow_run_name))
+	key = _run_lock_key(flow_run_name)
+	_stop_run_lock_heartbeat(key)
+	token = _run_lock_tokens.pop(key, None)
+	if token is None:
+		return  # not ours (never taken here, or the cache was down at acquire)
 	try:
-		# ``delete`` (raw key), not ``delete_value``: the lock is taken with a raw
-		# ``SET NX``, while ``delete_value`` removes the site-prefixed key, so the lock
-		# would otherwise survive until its TTL and silently block approve/resume.
-		frappe.cache().delete(_run_lock_key(flow_run_name))
+		# Raw key, not ``delete_value``: the lock is taken with a raw ``SET NX``, while
+		# ``delete_value`` removes the site-prefixed key. Compare-and-delete, so a holder
+		# whose lock expired cannot remove the lock a new holder has since taken.
+		frappe.cache().eval(_RELEASE_IF_OWNER, 1, key, token)
 	except Exception:
 		pass
 
