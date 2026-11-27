@@ -86,7 +86,7 @@ class TestSendStepKey(IntegrationTestCase):
 		self.assertEqual(self.transport.call_args.args[-1]["step_key"], key)
 
 	def test_explicit_retry_new_key(self):
-		node, key = self.keyed(retry=1)
+		node, _key = self.keyed(retry=1)
 		send.exec_send_message(run_doc(), node, CONFIG, {})
 		retry_node = step_keys.with_key(NODE, step_keys.step_key("RUN-1", "s1", 2))
 		send.exec_send_message(run_doc(), retry_node, CONFIG, {})
