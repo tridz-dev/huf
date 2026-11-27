@@ -333,9 +333,10 @@ def _context_of(flow_run, settings) -> GraphContext:
 	if run_ctx is not None:
 		return run_ctx.context
 	context = load_context(getattr(flow_run, "context_json", None))
-	pinned = getattr(flow_run, "pinned_definition", None)
-	if pinned:  # e.g. outbox delivery: references resolve by the same rules as during the run
-		context.step_ids = _step_ids(PinnedVersion.from_json(pinned).graph)
+	# e.g. outbox delivery: references resolve by the same rules as during the run
+	version = PinnedVersion.from_json(getattr(flow_run, "pinned_definition", None))
+	if version:
+		context.step_ids = _step_ids(version.graph)
 	return context
 
 
