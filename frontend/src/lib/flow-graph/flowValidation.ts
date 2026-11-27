@@ -201,11 +201,17 @@ export function validateNode(node: NodeLike, edges: EdgeLike[]): FlowIssue[] {
       const rules = out.filter((e) => edgeRoute(e as FlowEdge) === 'option');
       if (rules.length === 0) add('options', 'Add at least one rule.');
       else {
-        if (rules.some((e) => isBlank(asObj((e as { data?: unknown }).data).expression))) add('options', 'Write the check for this rule.');
+        const aiDecides = c.decision !== null && typeof c.decision === 'object';
+        if (aiDecides) {
+          if (rules.length < 2) add('options', 'Add at least two paths for the AI to choose from.');
+          if (isBlank(asObj(c.decision).instructions)) add('decision', 'Describe how the AI should choose a path.');
+        } else if (rules.some((e) => isBlank(asObj((e as { data?: unknown }).data).expression))) add('options', 'Write the check for this rule.');
         const names = rules.map((e) => (typeof e.label === 'string' ? e.label.trim().toLowerCase() : '')).filter((n) => n !== '');
         if (new Set(names).size !== names.length) add('options', 'Give each rule a different name.');
       }
-      if (!out.some((e) => edgeRoute(e as FlowEdge) === 'default')) add('default', 'Choose where to go when no rule matches.');
+      if (!out.some((e) => edgeRoute(e as FlowEdge) === 'default')) {
+        add('default', c.decision && typeof c.decision === 'object' ? 'Choose where to go when the AI is unsure.' : 'Choose where to go when no rule matches.');
+      }
       break;
     }
     case 'split': {

@@ -101,6 +101,8 @@ export function getDefaultLabel(backendType: string): string {
         'send.message': 'Send message',
         'code.run': 'Execute code',
         'split': 'Split audience',
+        'knowledge.search': 'Search knowledge',
+        'handoff': 'Hand to a person',
         'output': 'End',
     };
     return labels[backendType] || backendType;
@@ -121,6 +123,8 @@ export function getDefaultIcon(backendType: string): string {
         'tool.call': 'Play',
         'router.llm': 'GitBranch',
         'router.decision': 'Split',
+        'knowledge.search': 'BookOpen',
+        'handoff': 'UserRound',
         'wait': 'Hourglass',
         'human.approval': 'UserCheck',
         'condition': 'GitBranch',

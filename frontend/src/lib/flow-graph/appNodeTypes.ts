@@ -7,6 +7,7 @@ import { actionOptions } from '@/data/actions';
 import { embedApp, isBackendTypeAllowed, setScopeTypes } from '@/components/flow/palette/embedScope';
 import type { ActionOption } from '@/types/modal.types';
 import { listNodeTypes, type AppNodeType, type SchemaProp } from '@/services/flow/steps/nodeTypesApi';
+import { BUILTIN_SCHEMA_STEPS, builtinSchemaStep } from './builtinSchemaSteps';
 
 let cached: AppNodeType[] | null = null;
 let inFlight: Promise<AppNodeType[]> | null = null;
@@ -46,7 +47,13 @@ export function useAppNodeTypes(): { types: AppNodeType[]; loaded: boolean } {
 
 export const appNodeTypesLoaded = (): boolean => cached !== null;
 export const getAppNodeType = (type: unknown): AppNodeType | undefined =>
-  typeof type === 'string' ? cached?.find((t) => t.type === type) : undefined;
+  (typeof type === 'string' ? cached?.find((t) => t.type === type) : undefined) ?? builtinSchemaStep(type);
+
+/** The app steps, then the built-in steps drawn by the schema form (an app cannot shadow a built-in). */
+export function schemaStepTypes(types: AppNodeType[]): AppNodeType[] {
+  const builtins = BUILTIN_SCHEMA_STEPS.filter((t) => isBackendTypeAllowed(t.type));
+  return [...types.filter((t) => !builtinSchemaStep(t.type)), ...builtins];
+}
 
 const BUILTIN_STEP_PREFIXES = new Set(['agent', 'tool', 'router', 'doc', 'flow', 'state', 'code', 'member', 'trigger']);
 
@@ -67,7 +74,7 @@ const BUILTIN_CATEGORIES = new Set<ActionOption['category']>(['agent', 'control'
 
 /** Palette entries for app step types: they sit in their own category when it matches one, else under Apps. */
 export function appActionOptions(types: AppNodeType[]): ActionOption[] {
-  return types.map((t) => ({
+  return schemaStepTypes(types).map((t) => ({
     id: t.type,
     name: t.label,
     description: t.description,

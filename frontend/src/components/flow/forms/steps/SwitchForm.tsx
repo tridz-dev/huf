@@ -2,6 +2,8 @@ import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react';
 import { Button } from '../../../ui/button';
 import { Input } from '../../../ui/input';
 import { Label } from '../../../ui/label';
+import { Checkbox } from '../../../ui/checkbox';
+import { Textarea } from '../../../ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../ui/select';
 import { FieldHint } from '../../FieldHint';
 import { ConditionBuilder } from '../../condition/ConditionBuilder';
@@ -28,11 +30,19 @@ function freeOptionIndex(edges: FlowEdge[], source: string, target: string): num
  * The Choose by rules step (router.decision): rules checked from the top, the first one whose check holds
  * takes its path, otherwise the "Otherwise go to" path. Rules and paths are the step's option and default edges.
  */
-export function SwitchForm({ nodeId, Err, title }: ActionFormProps) {
+export function SwitchForm({ nodeId, cfg, patch, Err, title }: ActionFormProps) {
   const { activeFlow, updateEdges } = useFlowContext();
   const { canManage } = useFlowPermissions();
   const edges = activeFlow?.edges ?? [];
   const nodes = activeFlow?.nodes ?? [];
+
+  const decision = cfg.decision !== null && typeof cfg.decision === 'object' ? (cfg.decision as Record<string, unknown>) : null;
+  const setDecision = (change: Record<string, unknown>) => {
+    const next: Record<string, unknown> = { ...decision, ...change };
+    for (const k of Object.keys(change)) if (change[k] === undefined) delete next[k];
+    patch({ decision: next });
+  };
+  const confidence = typeof decision?.minimum_confidence === 'number' ? decision.minimum_confidence : undefined;
 
   const rules = edges.filter((e) => e.source === nodeId && edgeRoute(e) === 'option');
   const otherwise = edges.find((e) => e.source === nodeId && edgeRoute(e) === 'default')?.target ?? '';
@@ -80,7 +90,36 @@ export function SwitchForm({ nodeId, Err, title }: ActionFormProps) {
   };
 
   return (
-    <Section title={title} hint="Checks each rule from the top. The first one that matches takes its path.">
+    <Section title={title} hint={decision ? 'The AI picks one of the paths below. When it is unsure, the flow takes the unsure path.' : 'Checks each rule from the top. The first one that matches takes its path.'}>
+      <div className="space-y-2 rounded-md border border-border p-2" data-testid="flow-switch-decision">
+        <div className="flex items-center gap-2">
+          <Checkbox id="flow-switch-ai" data-testid="flow-switch-ai" disabled={!canManage} checked={decision !== null}
+            onCheckedChange={(on) => patch({ decision: on === true ? { ...(decision ?? {}) } : undefined })} />
+          <Label htmlFor="flow-switch-ai" size="sm">Let AI choose the path</Label>
+        </div>
+        {decision ? (
+          <>
+            <div>
+              <Label htmlFor="flow-switch-instructions" size="sm">How to choose</Label>
+              <Textarea id="flow-switch-instructions" data-testid="flow-switch-instructions" disabled={!canManage} rows={3}
+                placeholder="For example: pick the team that should answer this message."
+                value={typeof decision.instructions === 'string' ? decision.instructions : ''}
+                onChange={(e) => setDecision({ instructions: e.target.value === '' ? undefined : e.target.value })} />
+              <Err field="decision" />
+            </div>
+            <div>
+              <Label htmlFor="flow-switch-confidence" size="sm">Lowest confidence to accept (0 to 1)</Label>
+              <Input id="flow-switch-confidence" data-testid="flow-switch-confidence" type="number" min={0} max={1} step={0.05} disabled={!canManage}
+                value={confidence === undefined ? '' : String(confidence)}
+                onChange={(e) => {
+                  const v = e.target.value.trim() === '' ? undefined : Math.min(1, Math.max(0, Number(e.target.value)));
+                  setDecision({ minimum_confidence: v });
+                }} />
+              <FieldHint>Below this, the flow takes the unsure path. Leave empty to accept any answer.</FieldHint>
+            </div>
+          </>
+        ) : null}
+      </div>
       <div className="space-y-2" data-testid="flow-switch-rules">
         <Label size="sm">Rules</Label>
         {rules.length === 0 ? (
@@ -160,10 +199,10 @@ export function SwitchForm({ nodeId, Err, title }: ActionFormProps) {
         <Err field="options" />
       </div>
       <div className="space-y-1">
-        <Label htmlFor="flow-switch-otherwise" size="sm">Otherwise go to</Label>
+        <Label htmlFor="flow-switch-otherwise" size="sm">{decision ? 'When unsure, go to' : 'Otherwise go to'}</Label>
         <Select value={otherwise || undefined} onValueChange={setOtherwise} disabled={!canManage}>
           <SelectTrigger id="flow-switch-otherwise" data-testid="flow-switch-otherwise">
-            <SelectValue placeholder="Choose where to go when no rule matches." />
+            <SelectValue placeholder={decision ? 'Choose where to go when the AI is unsure.' : 'Choose where to go when no rule matches.'} />
           </SelectTrigger>
           <SelectContent>
             {candidates.map((n) => (
