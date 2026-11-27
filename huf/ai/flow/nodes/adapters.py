@@ -19,10 +19,25 @@ def _ctx(flow_run, settings):
 
 
 def exec_router_decision(flow_run, node: dict, config: dict, settings: dict) -> dict:
-	"""Execute router.decision node: the first matching option wins, else ``default`` (see ``nodes/switch.py``)."""
-	from huf.ai.flow.nodes.switch import exec_switch
+	"""``router.decision``: Decision mode when ``decision`` is configured, else the rule mode, see ``nodes/router_decision.py``."""
+	from huf.ai.flow.nodes.router_decision import exec_router_decision as run_router_decision
 
-	return exec_switch(flow_run, node, config, settings, _ctx(flow_run, settings))
+	return run_router_decision(flow_run, node, config, settings, _ctx(flow_run, settings))
+
+
+def exec_knowledge_search(flow_run, node: dict, config: dict, settings: dict) -> dict:
+	"""``knowledge.search``: search one Knowledge Source as the run's user, see ``nodes/knowledge.py``."""
+	from huf.ai.flow.engine import _run_context
+	from huf.ai.flow.nodes.knowledge import exec_knowledge_search as run_knowledge_search
+
+	return run_knowledge_search(node, config, _ctx(flow_run, settings), _run_context(settings))
+
+
+def exec_handoff(flow_run, node: dict, config: dict, settings: dict):
+	"""``handoff``: hand the conversation to a person and park until released, see ``nodes/handoff.py``."""
+	from huf.ai.flow.nodes.handoff import exec_handoff as run_handoff
+
+	return run_handoff(flow_run, node, config, settings)
 
 
 def exec_split(flow_run, node: dict, config: dict, settings: dict) -> dict:

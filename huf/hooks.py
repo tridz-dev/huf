@@ -509,3 +509,10 @@ huf_decision_backends.update({
     "classifier": "huf.ai.decision.backends.classifier.ClassifierBackend",
     "similarity": "huf.ai.decision.backends.similarity.SimilarityBackend",
 })
+
+# Pre-send guard chain (huf.ai.channels.guard): app steps after Huf's built-in ones. While a conversation is
+# handed to a person (``handoff`` flow node), no automated send reaches that contact on that gateway.
+huf_pre_send_hooks = ["huf.ai.flow.nodes.handoff.handed_off_guard"]
+
+# Flow trace reason codes Huf adds through its own hook (huf.ai.flow.support.reason_codes).
+huf_flow_reason_codes = ["handed_off"]
