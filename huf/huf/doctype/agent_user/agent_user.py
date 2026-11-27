@@ -35,7 +35,10 @@ class AgentUser(Document):
 		super().db_update()
 
 	def _stored_parent(self) -> tuple:
-		return (self.name and frappe.db.get_value(self.doctype, self.name, ["parenttype", "parent"])) or (None, None)
+		return (self.name and frappe.db.get_value(self.doctype, self.name, ["parenttype", "parent"])) or (
+			None,
+			None,
+		)
 
 	def _require_server_write(self):
 		from huf.ai.flow.runs.write_guard import require_server_write

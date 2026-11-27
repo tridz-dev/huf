@@ -105,28 +105,48 @@ class TestExecutionApprovalWrite(IntegrationTestCase):
 		self._refused(lambda: client.save(frappe.as_json(self._forged())))
 		self._refused(lambda: savedocs(frappe.as_json(self._forged()), "Save"))
 		self._refused(
-			lambda: client.set_value(APPROVAL, self.name, {"flags": {"ignore_permissions": 1, "recording_decision": 1}, "status": "Approved"})
+			lambda: client.set_value(
+				APPROVAL,
+				self.name,
+				{"flags": {"ignore_permissions": 1, "recording_decision": 1}, "status": "Approved"},
+			)
 		)
 		frappe.set_user(self.requester)
-		out = client.bulk_update(json.dumps([{"doctype": APPROVAL, "docname": self.name, "status": "Approved"}]))
+		out = client.bulk_update(
+			json.dumps([{"doctype": APPROVAL, "docname": self.name, "status": "Approved"}])
+		)
 		frappe.set_user("Administrator")
 		self.assertEqual(len(out["failed_docs"]), 1)
 		self.assertEqual(self._snapshot(), before)
 
 	def test_generic_apis_cannot_add_an_approver(self):
-		row = {"doctype": "Agent User", "parenttype": APPROVAL, "parentfield": "approver_users", "parent": self.name, "user": self.manager}
+		row = {
+			"doctype": "Agent User",
+			"parenttype": APPROVAL,
+			"parentfield": "approver_users",
+			"parent": self.name,
+			"user": self.manager,
+		}
 		self._refused(lambda: client.insert(dict(row)))
 		self.assertEqual(frappe.get_doc(APPROVAL, self.name).approver_users, [])
 
 	def _child(self, **extra):
-		return {"doctype": "Agent User", "parenttype": APPROVAL, "parentfield": "approver_users", "parent": self.name, **extra}
+		return {
+			"doctype": "Agent User",
+			"parenttype": APPROVAL,
+			"parentfield": "approver_users",
+			"parent": self.name,
+			**extra,
+		}
 
 	def _row(self, **values):
 		return frappe.get_doc(self._child(user=self.manager, **values)).insert(ignore_permissions=True).name
 
 	def _approver_rows(self):
 		fields = ["name", "parent", "parenttype", "parentfield", "user"]
-		return frappe.get_all("Agent User", {"parenttype": APPROVAL, "parent": self.name}, fields, order_by="name")
+		return frappe.get_all(
+			"Agent User", {"parenttype": APPROVAL, "parent": self.name}, fields, order_by="name"
+		)
 
 	def _agent(self, **fields):
 		agent = make_agent(**fields)
@@ -144,12 +164,15 @@ class TestExecutionApprovalWrite(IntegrationTestCase):
 
 		self.addCleanup(setattr, frappe.local, "form_dict", frappe.local.form_dict)
 		self._refused(rest)
-		self._refused(lambda: savedocs(frappe.as_json({**row, "__islocal": 1, "name": "new-agent-user-1"}), "Save"))
+		self._refused(
+			lambda: savedocs(frappe.as_json({**row, "__islocal": 1, "name": "new-agent-user-1"}), "Save")
+		)
 		self.assertEqual(self._approver_rows(), [])
 
 	def test_direct_child_writes_cannot_change_or_remove_an_approver(self):
 		child = self._row()
 		before = self._approver_rows()
+
 		def changed(**extra):
 			return frappe.as_json({**frappe.get_doc("Agent User", child).as_dict(), **extra})
 
@@ -163,11 +186,20 @@ class TestExecutionApprovalWrite(IntegrationTestCase):
 		agent = self._agent(allowed_users=[{"user": self.manager}])
 		agent_row = agent.allowed_users[0].name
 		before = self._approver_rows()
+
 		def moved(name, **extra):
 			return frappe.as_json({**frappe.get_doc("Agent User", name).as_dict(), **extra})
 
-		self._refused(lambda: client.save(moved(child, parenttype="Agent", parentfield="allowed_users", parent=agent.name)))
-		self._refused(lambda: client.save(moved(agent_row, parenttype=APPROVAL, parentfield="approver_users", parent=self.name)))
+		self._refused(
+			lambda: client.save(
+				moved(child, parenttype="Agent", parentfield="allowed_users", parent=agent.name)
+			)
+		)
+		self._refused(
+			lambda: client.save(
+				moved(agent_row, parenttype=APPROVAL, parentfield="approver_users", parent=self.name)
+			)
+		)
 		# saving another parent that names the approval's row would take it over without any child hook
 		frappe.db.savepoint("steal")
 		doc = frappe.get_doc("Agent", agent.name)
@@ -180,7 +212,13 @@ class TestExecutionApprovalWrite(IntegrationTestCase):
 	def test_agent_rows_are_still_written_directly_and_through_the_agent(self):
 		agent = self._agent(allowed_users=[{"user": self.manager}])
 		row = frappe.get_doc(
-			{"doctype": "Agent User", "parenttype": "Agent", "parentfield": "allowed_users", "parent": agent.name, "user": self.requester}
+			{
+				"doctype": "Agent User",
+				"parenttype": "Agent",
+				"parentfield": "allowed_users",
+				"parent": agent.name,
+				"user": self.requester,
+			}
 		).insert()
 		doc = frappe.get_doc("Agent User", row.name)
 		doc.user = self.manager
@@ -213,7 +251,12 @@ class TestExecutionApprovalWrite(IntegrationTestCase):
 			with self.subTest(parenttype=parenttype):
 				child = self._row(parenttype=parenttype)
 				before = self._approver_rows()
-				moved = {**frappe.get_doc("Agent User", child).as_dict(), "parenttype": "Agent", "parentfield": "allowed_users", "parent": agent.name}
+				moved = {
+					**frappe.get_doc("Agent User", child).as_dict(),
+					"parenttype": "Agent",
+					"parentfield": "allowed_users",
+					"parent": agent.name,
+				}
 				self._refused(lambda: client.save(frappe.as_json(moved)))
 				# client.delete cannot load a respelled parent, so go to the delete it would reach
 				self._refused(lambda: frappe.delete_doc("Agent User", child))
@@ -252,11 +295,24 @@ class TestExecutionApprovalWrite(IntegrationTestCase):
 			with self.subTest(status=status):
 				self._refused(lambda: client.insert(self._values(status=status)))
 		self._refused(lambda: client.insert_many(json.dumps([self._values(status="Approved")], default=str)))
-		self._refused(lambda: savedocs(frappe.as_json({**self._values(status="Approved"), "__islocal": 1, "name": "new-agent-execution-approval-1"}), "Save"))
+		self._refused(
+			lambda: savedocs(
+				frappe.as_json(
+					{
+						**self._values(status="Approved"),
+						"__islocal": 1,
+						"name": "new-agent-execution-approval-1",
+					}
+				),
+				"Save",
+			)
+		)
 		self.assertEqual(self._approvals(), [self.name])
 
 	def test_rename_cannot_move_an_approval(self):
-		self._refused(lambda: client.rename_doc(APPROVAL, self.name, f"forged-{frappe.generate_hash(length=6)}"))
+		self._refused(
+			lambda: client.rename_doc(APPROVAL, self.name, f"forged-{frappe.generate_hash(length=6)}")
+		)
 		self.assertTrue(frappe.db.exists(APPROVAL, self.name))
 
 	def test_self_approval_is_still_refused(self):
