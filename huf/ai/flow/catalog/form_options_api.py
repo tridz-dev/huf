@@ -185,7 +185,7 @@ def _app_approvers() -> set[str] | None:
 	"""For an app-only user, the only people they may look up. Else None.
 
 	Per app of which the caller may edit at least one flow: holders of its approve roles, narrowed by the app.
-	Refused when no flow is left to edit.
+	An empty set when no flow is left to edit.
 	"""
 	from huf.ai.flow.app_scope.access import app_grants, apps_for
 	from huf.ai.flow.app_scope.api_guards import is_app_only
@@ -194,7 +194,7 @@ def _app_approvers() -> set[str] | None:
 		return None
 	apps = [app for app in sorted(apps_for(None, "edit")) if _edits_a_flow_of(app)]
 	if not apps:
-		frappe.throw(_("Only people who can edit flows can look up approvers."), frappe.PermissionError)
+		return set()  # nothing editable: offer nobody rather than an error on form load
 	grants = app_grants()
 	allowed: set[str] = set()
 	for app in apps:
