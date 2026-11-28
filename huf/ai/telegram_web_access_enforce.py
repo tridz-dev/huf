@@ -11,10 +11,10 @@ module); the marker key and path rules come from the pure ``telegram_web_access_
 
 import json
 import time
-from typing import Any
 
 import frappe
 
+from huf.ai.telegram_session.stored import _session_row_data, _stored_sid  # noqa: F401
 from huf.ai.telegram_web_access_paths import (
 	MARKER_KEY,
 	PRIVILEGED_ROLES,
@@ -241,22 +241,6 @@ def _is_privileged(user: str) -> bool:
 			return True  # cannot tell: treat as privileged (fail closed)
 
 	return _cached(_roles_cache, user, load)
-
-
-def _stored_sid(sid: str) -> str:
-	"""``sid`` as keyed in ``tabSessions`` and the session cache (newer Frappe stores a hash of it)."""
-	from frappe import sessions
-
-	hasher = getattr(sessions, "hash_sid", None)
-	return hasher(sid) if hasher else sid
-
-
-def _session_row_data(raw: str | None) -> Any:
-	"""Parse ``tabSessions.sessiondata``: JSON on newer Frappe, a Python repr on older."""
-	try:
-		return json.loads(raw or "{}")
-	except ValueError:
-		return frappe.safe_eval(raw)
 
 
 def _revoke_current_session() -> None:

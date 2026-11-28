@@ -35,7 +35,7 @@ from huf.ai.tools.invocation import (
 from huf.ai.tools.registry import PermissionAwareToolRegistry
 from huf.ai.tools.support.run_context import _frappe_run_context_dict, _pin_code_execution_identity
 from huf.ai.memory.subject import MEMORY_TOOL_TYPES, pin_memory_run_context
-from huf.ai.tools.guest_guard import guest_scope_error
+from huf.ai.tools.support.guest_guard import guest_scope_error
 from huf.ai.tools.types import _GUEST_DOCTYPE_PINNED_TYPES, _GUEST_REPORT_PINNED_TYPES
 from huf.ai.tools.perplexity import handle_perplexity_search
 

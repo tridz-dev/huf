@@ -13,7 +13,7 @@ from frappe.tests import IntegrationTestCase
 from frappe.utils import add_to_date, now_datetime
 from urllib3.exceptions import MaxRetryError, NewConnectionError, ProtocolError
 
-from huf.ai.channels import guard, outbox, token_binder
+from huf.ai.channels.outbound import guard, outbox, token_binder
 from huf.ai.flow import api as flow_api
 from huf.ai.flow.runs import member, park
 from huf.ai.flow.testrun import gate

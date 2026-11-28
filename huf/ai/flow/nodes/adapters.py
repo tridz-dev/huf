@@ -19,8 +19,8 @@ def _ctx(flow_run, settings):
 
 
 def exec_router_decision(flow_run, node: dict, config: dict, settings: dict) -> dict:
-	"""``router.decision``: Decision mode when ``decision`` is configured, else the rule mode, see ``nodes/router_decision.py``."""
-	from huf.ai.flow.nodes.router_decision import exec_router_decision as run_router_decision
+	"""``router.decision``: Decision mode when ``decision`` is configured, else the rule mode, see ``nodes/routing/router_decision.py``."""
+	from huf.ai.flow.nodes.routing.router_decision import exec_router_decision as run_router_decision
 
 	return run_router_decision(flow_run, node, config, settings, _ctx(flow_run, settings))
 

@@ -12,7 +12,8 @@ from unittest.mock import patch
 import frappe
 from frappe.tests import IntegrationTestCase
 
-from huf.ai.channels import channel_consent, guard, guard_steps
+from huf.ai.channels import channel_consent
+from huf.ai.channels.outbound import guard, guard_steps
 from huf.ai.whatsapp import account_events, outbound_policy
 
 MAX_QUERIES_PER_SEND = 3

@@ -6,7 +6,7 @@ the run's member, resolved by ``huf_send_recipient_providers`` at send time and 
 (exactly one), ``variables`` (token names, bound at send time by ``huf_send_token_providers``), ``category``
 (``marketing`` | ``service``), optional ``header`` (media or location header) and ``language``.
 
-Order (CONTRACTS.md section 7): bind tokens, then :func:`huf.ai.channels.guard.evaluate`, then the outbox.
+Order (CONTRACTS.md section 7): bind tokens, then :func:`huf.ai.channels.outbound.guard.evaluate`, then the outbox.
 No path reaches the outbox without an allowing guard result. Every decided outcome is recorded under the
 step key (H-W2-13), so a re-delivered job or a re-run replays it instead of sending again (G2). Output ``status`` is one of:
 
@@ -26,7 +26,7 @@ from __future__ import annotations
 
 import frappe
 
-from huf.ai.channels import guard, guard_steps, recipient_binder, token_binder
+from huf.ai.channels.outbound import guard, guard_steps, recipient_binder, token_binder
 from huf.ai.flow.nodes import split as split_node
 from huf.ai.flow.runs import member as flow_member
 from huf.ai.flow.runs import park
@@ -84,7 +84,7 @@ def is_live(flow_run) -> bool:
 
 
 def exec_send_message(flow_run, node: dict, config: dict, settings: dict):
-	from huf.ai.channels.outbox import RUN_CANCELLED
+	from huf.ai.channels.outbound.outbox import RUN_CANCELLED
 	from huf.ai.flow.engine import _context_of, _persist_context, _transition_run, run_cancelled
 
 	problem = config_problem(config)
@@ -228,7 +228,7 @@ def _final(flow_run, ctx, settings, node: dict, key: str, output: dict) -> dict:
 
 def _enqueue(request: dict) -> str | None:
 	"""Queue the allowed send on the outbox (H-W2-15). None when queued, else a reason code (a final block)."""
-	from huf.ai.channels import outbox
+	from huf.ai.channels.outbound import outbox
 
 	if request.get("channel") != "whatsapp":
 		return "channel_unsupported"

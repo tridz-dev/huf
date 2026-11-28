@@ -21,7 +21,8 @@ from unittest.mock import MagicMock, patch
 import frappe
 from frappe.tests import IntegrationTestCase
 
-from huf.ai.channels import channel_consent, guard, guard_steps
+from huf.ai.channels import channel_consent
+from huf.ai.channels.outbound import guard, guard_steps
 from huf.ai.flow import engine
 from huf.ai.flow.nodes import send
 from huf.ai.flow.runs import bulk_entry, park

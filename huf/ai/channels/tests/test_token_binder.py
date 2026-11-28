@@ -8,8 +8,8 @@ from unittest.mock import patch
 import frappe
 from frappe.tests import IntegrationTestCase
 
-from huf.ai.channels import guard, token_binder
-from huf.ai.channels.token_binder import TokenUnbound, bind, bind_batch
+from huf.ai.channels.outbound import guard, token_binder
+from huf.ai.channels.outbound.token_binder import TokenUnbound, bind, bind_batch
 from huf.ai.flow.support import reason_codes
 
 SENTINEL = "zz-bound-value-sentinel-7f3a"

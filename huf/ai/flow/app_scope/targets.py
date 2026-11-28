@@ -9,7 +9,7 @@ runs. An app editor may keep a Gateway the flow already uses; another one must b
 
 import frappe
 
-from huf.ai.channels import recipient_binder
+from huf.ai.channels.outbound import recipient_binder
 from huf.ai.flow.app_scope.gateways import app_gateways
 
 GATEWAY_STEP_TYPES = frozenset({"handoff", "send.message"})

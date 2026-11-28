@@ -14,7 +14,7 @@ import frappe
 
 from huf.ai.flow import api as flow_api
 from huf.ai.flow import engine as flow_engine
-from huf.ai.flow.support import approver_veto
+from huf.ai.flow.support.approvals import approver_veto
 from huf.ai.flow.tests.test_flow_wp11_security import WEBHOOK, WP11Base, _graph, _out
 
 SEEN = []

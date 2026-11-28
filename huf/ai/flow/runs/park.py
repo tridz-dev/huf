@@ -200,7 +200,7 @@ def cancel_run(flow_run_name: str, by: str, *, running: bool = False) -> bool:
 
 	Sends of a cancelled or finished run that still wait in the outbox are withdrawn.
 	"""
-	from huf.ai.channels import outbox
+	from huf.ai.channels.outbound import outbox
 	from huf.ai.flow import engine
 	from huf.ai.flow.nodes import subflow
 	from huf.ai.flow.support.approval_notifications import _clear_flow_notifications

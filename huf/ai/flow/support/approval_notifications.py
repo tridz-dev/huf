@@ -16,7 +16,7 @@ from frappe.desk.doctype.notification_settings.notification_settings import is_e
 from huf.ai.flow.app_scope.access import approval_recipients
 from huf.ai.flow.app_scope.links import flow_link
 from huf.ai.flow.support.approval_card import build_card, facts_html, flow_name_of
-from huf.ai.flow.support.approvers import approver_roles_of
+from huf.ai.flow.support.approvals.approvers import approver_roles_of
 from huf.ai.transaction import commit_if_background
 
 

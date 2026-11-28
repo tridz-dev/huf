@@ -121,7 +121,7 @@ def record_opt_out(channel: str, recipient: Any, scope: str = "all", source: str
 	if key is None:
 		return False
 	_insert(channel, key, "opt_out", "all" if scope == "all" else "marketing", source, detail)
-	from huf.ai.channels import guard
+	from huf.ai.channels.outbound import guard
 
 	guard.invalidate_consent(recipient)
 	return True

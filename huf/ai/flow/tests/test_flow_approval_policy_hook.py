@@ -13,7 +13,7 @@ from unittest.mock import patch
 import frappe
 
 from huf.ai.flow import engine as flow_engine
-from huf.ai.flow.support.approvers import POLICY_HOOK, check_approver, evaluate_approval_policy
+from huf.ai.flow.support.approvals.approvers import POLICY_HOOK, check_approver, evaluate_approval_policy
 from huf.ai.flow.tests.test_flow_wp11_security import WEBHOOK, WP11Base, _graph, _out
 
 THRESHOLD = 100

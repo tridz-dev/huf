@@ -47,7 +47,7 @@ _NODE_DISPLAY = {
 _NODE_ID = {"$ref": "#/$defs/NodeId"}
 _EXPR = {"$ref": "#/$defs/Expression"}
 
-#: ``router.decision`` Decision mode (``nodes/router_decision.py``). When ``decision`` is set the rule
+#: ``router.decision`` Decision mode (``nodes/routing/router_decision.py``). When ``decision`` is set the rule
 #: settings (``options``, ``default``) are not used, so neither is required in the form.
 _DECISION_PROPERTY = {
 	"type": "object",

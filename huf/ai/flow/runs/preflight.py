@@ -24,7 +24,7 @@ import re
 
 import frappe
 
-from huf.ai.channels import guard_steps
+from huf.ai.channels.outbound import guard_steps
 from huf.ai.flow.support import facts
 from huf.ai.graph.expressions import ExpressionError, parse_expression
 
