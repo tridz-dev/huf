@@ -11,7 +11,7 @@ import frappe
 from frappe.tests import IntegrationTestCase
 
 from huf.ai.flow import engine as flow_engine
-from huf.ai.flow import preflight
+from huf.ai.flow.runs import preflight
 from huf.ai.flow.runs.edges import edges_from_nodes
 from huf.ai.flow.support import facts, reason_codes
 from huf.ai.flow.tests.test_flow_draft_validation import _graph, _trigger

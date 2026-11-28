@@ -12,7 +12,8 @@ from frappe.tests import IntegrationTestCase
 
 from huf.ai.channels.outbound import guard, guard_steps, outbox, recipient_binder, token_binder
 from huf.ai.channels.outbound.recipient_binder import RECIPIENT_UNBOUND, RecipientUnbound
-from huf.ai.flow import engine, preflight
+from huf.ai.flow import engine
+from huf.ai.flow.runs import preflight
 from huf.ai.flow.nodes import send
 from huf.ai.flow.support import reason_codes, step_keys
 from huf.ai.gateway_adapters import whatsapp_bridge as bridge

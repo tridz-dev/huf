@@ -8,7 +8,8 @@ import frappe
 from frappe.tests import IntegrationTestCase
 
 from huf.ai.channels.outbound import guard, guard_steps, token_binder
-from huf.ai.flow import engine, preflight
+from huf.ai.flow import engine
+from huf.ai.flow.runs import preflight
 from huf.ai.flow.nodes import send
 from huf.ai.flow.runs import park
 from huf.ai.flow.support import step_keys

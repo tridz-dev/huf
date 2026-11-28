@@ -7,7 +7,8 @@ from unittest.mock import MagicMock, patch
 from frappe.tests import IntegrationTestCase
 
 from huf.ai.channels.outbound import guard, guard_steps
-from huf.ai.flow import engine, preflight
+from huf.ai.flow import engine
+from huf.ai.flow.runs import preflight
 from huf.ai.flow.nodes import retry, send
 from huf.ai.flow.runs import park
 from huf.ai.flow.testrun import gate
