@@ -52,6 +52,14 @@ def truthy(request):
 	return "yes"
 
 
+def keep_nobody_but_other(request):
+	return [USER_OTHER]
+
+
+def not_a_list(request):
+	return True
+
+
 def _user(email, *roles):
 	if not frappe.db.exists("User", email):
 		frappe.get_doc(
@@ -249,3 +257,29 @@ class TestAppRead(AppReadFixture):
 		}
 		self.assertEqual(found, {USER_APPROVER: True, USER_OTHER: False})
 		self.assertEqual([r["name"] for r in api.get_approver_roles()], [ROLE_APPROVE])
+
+	def _narrow_approvers(self, fn):
+		real = frappe.get_hooks
+
+		def hooks(hook=None, *args, **kwargs):
+			if hook == form_options_api.APPROVER_NARROW_HOOK:
+				return {"huf": [f"{__name__}.{fn}"]}
+			return real(hook, *args, **kwargs)
+
+		return mock.patch.object(frappe, "get_hooks", side_effect=hooks)
+
+	def test_approver_narrow_hook_only_removes_and_fails_closed(self):
+		frappe.set_user(USER)
+		# USER_OTHER holds no approve role: the hook cannot add them.
+		for fn in ("keep_nobody_but_other", "broken", "not_a_list", "no_such_function"):
+			with self._narrow_approvers(fn):
+				self.assertEqual(form_options_api.search_flow_users("secread", limit=50), [], fn)
+				self.assertFalse(form_options_api.check_flow_users([USER_APPROVER])[0]["found"], fn)
+
+	def test_approver_lookup_needs_an_editable_flow_after_narrowing(self):
+		self._narrow("broken")
+		frappe.set_user(USER)
+		with self.assertRaises(frappe.PermissionError):
+			form_options_api.search_flow_users("secread")
+		with self.assertRaises(frappe.PermissionError):
+			form_options_api.check_flow_users([USER_APPROVER])
