@@ -1,3 +1,4 @@
+import { usePermissions } from '../contexts/PermissionsContext';
 import { Link, useLocation } from 'react-router-dom';
 import { Fragment, ReactNode } from 'react';
 import { ArrowLeft } from 'lucide-react';
@@ -13,7 +14,6 @@ import { BreadcrumbItem as BreadcrumbItemType } from './UnifiedLayout';
 import { useViewport } from '@/lib/ui/responsive';
 import { ApprovalsBell } from '../components/ApprovalsBell';
 import { ExecutionApprovalsBell } from '../components/ExecutionApprovalsBell';
-import { usePermissions } from '../contexts/PermissionsContext';
 import { SOLUTIONS_WORD } from '../components/solutions/labels';
 import { cn } from '../lib/utils';
 
@@ -97,7 +97,6 @@ export function AncestryCrumb({
 
 export function UnifiedHeader({ actions, breadcrumbs, showCurrentCrumb, leftContent, stackOnPhone }: UnifiedHeaderProps) {
   const location = useLocation();
-  const { hasCapability } = usePermissions();
   const { isCompact } = useViewport();
 
   const getPageTitle = () => {
@@ -162,13 +161,23 @@ export function UnifiedHeader({ actions, breadcrumbs, showCurrentCrumb, leftCont
       </div> */}
 
       <div className={cn('flex shrink-0 items-center gap-2', stackOnPhone && 'max-md:basis-full max-md:justify-end')}>
-        {/* Approvals are only asked for by people who use flows: for anyone else the server would refuse every poll. */}
-        {hasCapability('flows.use') && <ApprovalsBell />}
-        {/* Code-run approvals: in the flow editor they move into the header's "..." menu at 1200px and narrower (no room beside Run and Publish).
-            Mounted in one place only: a bell hidden by CSS would still poll the server next to the one in the menu. */}
-        {(hasCapability('execution.approve') || hasCapability('ssh.approve')) && !(stackOnPhone && isCompact) && <ExecutionApprovalsBell />}
+        <HeaderApprovals hideCodeApprovals={stackOnPhone && isCompact} />
         {actions}
       </div>
     </div>
+  );
+}
+
+/** The approval bells. Shown by the topbar, or by PageFrame's head bar when that replaces the topbar. */
+export function HeaderApprovals({ hideCodeApprovals }: { hideCodeApprovals?: boolean }) {
+  const { hasCapability } = usePermissions();
+  return (
+    <>
+      {/* Approvals are only asked for by people who use flows: for anyone else the server would refuse every poll. */}
+      {hasCapability('flows.use') && <ApprovalsBell />}
+      {/* Code-run approvals: in the flow editor they move into the header's "..." menu at 1200px and narrower (no room beside Run and Publish).
+          Mounted in one place only: a bell hidden by CSS would still poll the server next to the one in the menu. */}
+      {(hasCapability('execution.approve') || hasCapability('ssh.approve')) && !hideCodeApprovals && <ExecutionApprovalsBell />}
+    </>
   );
 }

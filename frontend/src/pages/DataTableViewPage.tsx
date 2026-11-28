@@ -1,3 +1,6 @@
+import { PermissionsContext } from '@/contexts/PermissionsContext';
+import { useContext } from 'react';
+import { useResourceAccess } from '@/hooks/permissions/useResourceAccess';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -34,6 +37,14 @@ export function DataTableViewPage() {
 	const [schema, setSchema] = useState<DataTableSchema | null>(null);
 	const [rowCount, setRowCount] = useState<number | undefined>(undefined);
 	const [deleteOpen, setDeleteOpen] = useState(false);
+	const access = useResourceAccess('dataTable');
+	// Editing fields is a table-manage action, gated like the Delete table action below.
+	const canManageTable = access.canDelete;
+	const permissions = useContext(PermissionsContext);
+	// Mirrors import_export._require_import: any one of these lets a person import rows.
+	const canImportRows =
+		!permissions ||
+		['data.tables.manage', 'data.records.create', 'data.records.edit_all', 'data.records.edit_own'].some((c) => permissions.hasCapability(c));
 	const [deleting, setDeleting] = useState(false);
 	const [dataKey, setDataKey] = useState(0);
 	const dataRef = useRef<DataTabHandle>(null);
@@ -92,11 +103,11 @@ export function DataTableViewPage() {
 		...(tab === 'data'
 			? [
 					{ label: 'Export', icon: Download, onSelect: () => dataRef.current?.exportAll() },
-					...(empty ? [] : [{ label: 'Import', icon: Upload, onSelect: () => update({ import: '1' }) }]),
+					...(empty || !canImportRows ? [] : [{ label: 'Import', icon: Upload, onSelect: () => update({ import: '1' }) }]),
 				]
 			: []),
-		{ label: 'Edit fields', icon: Pencil, onSelect: () => setTab('fields') },
-		{ label: 'Delete table', icon: Trash2, destructive: true, separated: true, onSelect: () => setDeleteOpen(true) },
+		...(canManageTable ? [{ label: 'Edit fields', icon: Pencil, onSelect: () => navigate(`/data/${tableId}/edit`) }] : []),
+		...(access.canDelete ? [{ label: 'Delete table', icon: Trash2, destructive: true, separated: true, onSelect: () => setDeleteOpen(true) }] : []),
 	];
 
 	const actions = (
@@ -135,7 +146,7 @@ export function DataTableViewPage() {
 			}
 		>
 			{tab === 'data' && <DataTab key={dataKey} ref={dataRef} schema={schema} tableId={tableId} onImport={() => update({ import: '1' })} onCount={setRowCount} />}
-			{tab === 'fields' && <FieldsTab schema={schema} tableId={tableId} onChanged={() => void loadSchema()} />}
+			{tab === 'fields' && <FieldsTab schema={schema} tableId={tableId} canManage={canManageTable} onChanged={() => void loadSchema()} />}
 			{tab === 'agents' && <AgentsTab schema={schema} tableId={tableId} />}
 			{tab === 'activity' && <ActivityTab tableId={tableId} />}
 

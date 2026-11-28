@@ -4,6 +4,7 @@
 """Site test: ``enforce()`` on a resumed Telegram session (throwaway user, gateway, binding)."""
 
 from types import SimpleNamespace
+from unittest import mock
 
 import frappe
 from frappe.auth import CookieManager
@@ -128,8 +129,16 @@ class TestGuardSite(IntegrationTestCase):
 		self.assertFalse(path_matches("/private/files/x.txt", parse_prefixes("/app/note")))
 
 	def test_revoked_binding_removes_sessions(self):
-		E.revoke_binding_sessions(self.binding.name, USER)
-		self.assertFalse(frappe.db.sql("select sid from tabSessions where sid=%s", self.sid))
+		stored = E._stored_sid(self.sid)
+		self.assertTrue(frappe.db.sql("select sid from tabSessions where sid=%s", stored))
+		self.assertEqual(E.revoke_binding_sessions(self.binding.name, USER), 1)
+		self.assertFalse(frappe.db.sql("select sid from tabSessions where sid=%s", stored))
+
+	def test_revoke_current_session_removes_the_stored_row(self):
+		stored = E._stored_sid(self.sid)
+		with mock.patch.object(frappe.local, "session", frappe._dict(sid=self.sid)):
+			E._revoke_current_session()
+		self.assertFalse(frappe.db.sql("select sid from tabSessions where sid=%s", stored))
 
 	def test_exchange_missing_or_malformed_arguments_are_uniform_403(self):
 		frappe.local.request = _request("/", "POST")

@@ -4,6 +4,9 @@
 as ``node._sample``). Examples come, best first, from: the sample saved on the step (``_sample``), the latest successful
 run (else the latest run), the last request a webhook received, and the document type of a data trigger (field names plus one
 recent record the user may read). Nothing is invented: a step with no example says so and the picker offers to get one.
+
+Run examples come only from a run the user may read, with the approval redaction of the run pages. On an app-owned flow,
+people who are not privileged get them (and the record example) with personal data masked (G4).
 """
 
 from __future__ import annotations
@@ -13,11 +16,17 @@ import json
 import frappe
 from frappe import _
 
+from huf.ai.api_support import require_permission
+from huf.ai.flow.catalog import doc_fields, gateway_fields, node_registry
 from huf.ai.flow.catalog import fields as cat
-from huf.ai.flow.catalog import doc_fields, gateway_fields
+from huf.ai.flow.runs.access import can_access_run, is_delegated_flow
+from huf.ai.flow.runs.shape import data_of_viewer
+from huf.ai.flow.support.pii import mask_for_view
 from huf.ai.flow.support.trigger_sample import redact_sample
 
 NODE_OUTPUTS_KEY = "__node_outputs__"
+#: Newest runs looked through for one the user may read.
+RUN_CANDIDATES = 20
 DOC_EVENT = "trigger.doc-event"
 WEBHOOK = "trigger.webhook"
 
@@ -54,18 +63,33 @@ def _step_tool(node: dict) -> str | None:
 
 
 def _latest_run(flow_id: str) -> dict | None:
+	"""The newest successful run (else the newest run) the user may read, as that user may see its data."""
 	for filters in ({"flow_id": flow_id, "status": "Success"}, {"flow_id": flow_id}):
 		rows = frappe.get_all(
-			"Flow Run",
+			"Agent Flow Run",
 			filters=filters,
-			fields=["name", "creation", "trigger_payload", "context_json", "trigger_type"],
+			fields=["name", "creation", "trigger_payload", "context_json", "trigger_type", "status", "waiting"],
 			order_by="creation desc",
-			limit_page_length=1,
-			ignore_permissions=True,
+			limit_page_length=RUN_CANDIDATES,
 		)
-		if rows:
-			return rows[0]
+		for row in rows:
+			if can_access_run(row["name"], "read"):
+				return _run_for_viewer(row, flow_id)
 	return None
+
+
+def _run_for_viewer(run: dict, flow_id: str) -> dict:
+	"""A copy of ``run`` with its data masked and redacted for this user; the stored run is never changed."""
+	data = {"payload": _json(run.get("trigger_payload")), "outputs": _run_outputs(run)}
+	if is_delegated_flow(flow_id):
+		data = mask_for_view(data)  # as a whole, so a name found in one value is also masked in the others
+	waiting = _json(run.get("waiting"))
+	data = data_of_viewer(run.get("status"), waiting if isinstance(waiting, dict) else {}, flow_id, data)
+	return {
+		**run,
+		"trigger_payload": data.get("payload"),
+		"context_json": {NODE_OUTPUTS_KEY: data.get("outputs")},
+	}
 
 
 def _run_payload(run: dict | None) -> dict | None:
@@ -86,7 +110,7 @@ def _meta_fields(doctype: str) -> list:
 	return list(frappe.get_meta(doctype).fields)
 
 
-def _doctype_fields(doctype: str, payload: dict | None) -> tuple[list[dict], dict | None, str]:
+def _doctype_fields(doctype: str, payload: dict | None, flow_id: str) -> tuple[list[dict], dict | None, str]:
 	"""Fields of a data trigger's document type, the record the examples come from and where it came from."""
 	if not frappe.db.exists("DocType", doctype):
 		return [], None, "none"
@@ -99,6 +123,8 @@ def _doctype_fields(doctype: str, payload: dict | None) -> tuple[list[dict], dic
 		]
 		rows = frappe.get_list(doctype, fields=["name", "creation", "modified", "owner", *readable], order_by="modified desc", limit_page_length=1)
 		record, source = (rows[0] if rows else None), "doctype"
+		if record and is_delegated_flow(flow_id):
+			record = mask_for_view(dict(record))
 	record = redact_sample(record) if isinstance(record, dict) else None
 	link_meta = lambda dt: _meta_fields(dt) if frappe.has_permission(dt, "read") else []  # noqa: E731
 	fields = doc_fields.doctype_fields(_meta_fields(doctype), record, child_fields=_meta_fields, link_meta=link_meta)
@@ -125,7 +151,7 @@ def _trigger_step(graph: dict, flow_id: str, run: dict | None) -> dict | None:
 		doctype = (node.get("config") or {}).get("doctype")
 		step["doctype"] = doctype
 		if doctype:
-			fields, record, source = _doctype_fields(doctype, pinned or payload)
+			fields, record, source = _doctype_fields(doctype, pinned or payload, flow_id)
 			step.update(fields=fields, has_sample=bool(record), source="pinned" if pinned else source)
 			step["ran_at"] = str(run["creation"]) if run and source == "last_run" else None
 		return step
@@ -134,7 +160,7 @@ def _trigger_step(graph: dict, flow_id: str, run: dict | None) -> dict | None:
 		gateway = (node.get("config") or {}).get("gateway")
 		provider = frappe.db.get_value("Gateway", gateway, "provider") if gateway else None
 		step.update(fields=gateway_fields.trigger_fields(node, provider), source="doctype", has_sample=True)
-		step["last_request_available"] = bool(frappe.db.exists("Flow Run", {"flow_id": flow_id, "trigger_type": "Gateway"}))
+		step["last_request_available"] = bool(frappe.db.exists("Agent Flow Run", {"flow_id": flow_id, "trigger_type": "Gateway"}))
 		return step
 	if pinned:
 		step.update(fields=cat.infer_fields(pinned, "input", root_label="What the trigger sent"), source="pinned", has_sample=True)
@@ -144,7 +170,7 @@ def _trigger_step(graph: dict, flow_id: str, run: dict | None) -> dict | None:
 			source="last_run", has_sample=True, ran_at=str(run["creation"]),
 		)
 	if node.get("type") == WEBHOOK:
-		step["last_request_available"] = bool(frappe.db.exists("Flow Run", {"flow_id": flow_id, "trigger_type": "Webhook"}))
+		step["last_request_available"] = bool(frappe.db.exists("Agent Flow Run", {"flow_id": flow_id, "trigger_type": "Webhook"}))
 	return step
 
 
@@ -190,6 +216,8 @@ def build_catalog(graph: dict, node_id: str, flow_id: str, run: dict | None) -> 
 @frappe.whitelist()
 def get_data_catalog(flow_id: str, node_id: str) -> dict:
 	"""Steps before ``node_id`` and the data each offers, for the "Use data" picker. Editors of the flow only."""
+	from huf.ai.flow.app_scope.api_guards import guard_flow
+	guard_flow(flow_id, "view")
 	if not flow_id or not frappe.db.exists("Flow Definition", flow_id):
 		frappe.throw(_("Flow not found"), frappe.DoesNotExistError)
 	if not frappe.has_permission("Flow Definition", "write", doc=flow_id):
@@ -198,3 +226,27 @@ def get_data_catalog(flow_id: str, node_id: str) -> dict:
 	if not isinstance(graph, dict):
 		return {"flow_id": flow_id, "node_id": node_id, "trigger": None, "steps": [], "loop": None}
 	return build_catalog(graph, node_id, flow_id, _latest_run(flow_id))
+
+
+@frappe.whitelist()
+def list_node_types(app: str | None = None) -> list[dict]:
+	"""Step types for the editor palette. Without ``app``: those installed apps add through ``huf_flow_nodes`` (built-ins
+	are not listed). With ``app`` (embed mode): that app's types, then ``{"type", "builtin": True}`` for each allow-listed
+	built-in. This only narrows what the palette offers; publish checks decide what a flow may contain."""
+	from huf.ai.flow.app_scope.api_guards import guard_app_named
+	guard_app_named(app)
+	require_permission(frappe.has_permission("Flow Definition", "read"), "Not permitted")
+	scoped = app is not None
+	if scoped and app not in frappe.get_installed_apps():
+		frappe.throw(_("This app is not installed on this site"), frappe.ValidationError)
+	rows = [
+		{
+			"type": t.type, "label": t.label, "category": t.category, "icon": t.icon, "description": t.description,
+			"config_schema": t.config_schema, "routing": t.routing, "outputs": list(t.outputs), "app": t.app, "builtin": False,
+		}
+		for t in node_registry.registered_types().values()
+		if not scoped or t.app == app
+	]
+	if scoped:
+		rows += [{"type": t, "builtin": True} for t in node_registry.embed_builtin_types()]
+	return rows

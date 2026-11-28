@@ -125,6 +125,18 @@ describe('buildRunStory', () => {
     expect(last.sentence).toBe('Waiting for someone with the System Manager role');
   });
 
+  it('names every policy role a waiting step waits for', () => {
+    const r = run({
+      status: 'Waiting Approval', current_node_id: 'h', completed_at: null,
+      waiting: { type: 'approval', approver_type: 'role', approver_role: 'Sales Manager', approver_roles: ['Sales Manager', 'Auditor'] },
+      context_json: { a: 1, __node_outputs__: { t: { a: 1 } } },
+      node_labels: { t: 'Webhook', h: 'Wait for approval' },
+      step_meta: { t: { type: 'trigger.webhook' }, h: { type: 'human.approval' } },
+    });
+    const last = buildRunStory(r, { titleOf: titleOf(r) }).steps.at(-1)!;
+    expect(last.sentence).toBe('Waiting for someone with one of these roles: Sales Manager, Auditor');
+  });
+
   it('gives a failed run exactly one reason, in plain words', () => {
     const r = run({
       status: 'Failed', current_node_id: 'f', last_error: "Node 'f' of type 'tool.call' failed and declares no on_error successor: Fetch page failed: Requests to private/internal addresses are not allowed",
@@ -237,5 +249,20 @@ describe('ux30 lapsed approval', () => {
     expect(_rsp({ status: 'Waiting Code', lapsed: true }).kind).toBe('expired');
     expect(_rsp({ status: 'Waiting Code' }).kind).toBe('waiting_review');
     expect(_rh({ status: 'Waiting Code', approval_lapsed: true } as never).headline).toBe('The approval expired');
+  });
+});
+
+describe('Waiting Timer and Cancelled run status', () => {
+  it('maps Waiting Timer to a waiting pill and Cancelled to a cancelled pill', () => {
+    expect(_rsp({ status: 'Waiting Timer' }).kind).toBe('waiting_timer');
+    expect(_rsp({ status: 'Cancelled' }).kind).toBe('cancelled');
+  });
+  it('words the Cancelled headline by the person who cancelled', () => {
+    expect(_rh({ status: 'Cancelled', last_error: 'Cancelled by ana@example.com.' } as never).headline).toBe('Cancelled by ana@example.com');
+    expect(_rh({ status: 'Cancelled', last_error: 'Cancelled by ana@example.com before it started.' } as never).headline).toBe('Cancelled by ana@example.com');
+  });
+  it('keeps the Cancelled text non-empty and a Waiting Timer run still changing', () => {
+    expect(_rh({ status: 'Waiting Timer' } as never).headline).toBe('Waiting for a timer');
+    expect(stoppedByPerson('Cancelled by ana@example.com.')?.why).toBe('It stopped where it was and will not continue.');
   });
 });

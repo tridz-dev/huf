@@ -36,6 +36,7 @@ from frappe import _
 from frappe.utils import add_to_date, get_datetime, now_datetime
 
 from huf.ai.flow.support.code_node_result import DEFAULT_TIMEOUT_S, error_text, output_from_call  # noqa: F401
+from huf.ai.flow.support.pii import log_flow_error
 
 NODE_TYPE = "code.run"
 EXECUTE_CAPABILITY = "flows.execute_code"
@@ -103,6 +104,8 @@ def get_code_flow_status() -> dict:
 	Open to every signed-in user (it reveals no secret: two booleans and the profile names), because
 	the editor of a Huf Manager must hide the card and Agent Settings itself is not readable for them.
 	"""
+	from huf.ai.flow.app_scope.api_guards import guard_huf_only
+	guard_huf_only()
 	if frappe.session.user == "Guest":
 		frappe.throw(_("Login required"), frappe.AuthenticationError)
 	user = frappe.session.user
@@ -373,7 +376,7 @@ def continue_flow(flow_run_name: str) -> None:
 	try:
 		engine.resume_code_node(flow_run_name)
 	except Exception:
-		frappe.log_error(frappe.get_traceback(), f"Flow code step continue: {flow_run_name}")
+		log_flow_error(frappe.get_traceback(), f"Flow code step continue: {flow_run_name}")
 
 
 def on_call_closed(call_name: str) -> None:
@@ -404,9 +407,9 @@ def sweep_code_waits(now=None) -> list[str]:
 
 	now = now or now_datetime()
 	touched: list[str] = []
-	for name in frappe.get_all("Flow Run", filters={"status": "Waiting Code"}, pluck="name", limit_page_length=200):
+	for name in frappe.get_all("Agent Flow Run", filters={"status": "Waiting Code"}, pluck="name", limit_page_length=200):
 		try:
-			waiting = engine._load_waiting(frappe.get_doc("Flow Run", name))
+			waiting = engine._load_waiting(frappe.get_doc("Agent Flow Run", name))
 			call_name = waiting.get("agent_tool_call")
 			if not call_name or not frappe.db.exists("Agent Tool Call", call_name):
 				engine.fail_waiting_code_run(name, str(_("The code step lost its record, so the run was stopped.")))
@@ -421,7 +424,9 @@ def sweep_code_waits(now=None) -> list[str]:
 			if deadline and get_datetime(deadline) <= now:
 				approval = waiting.get("approval")
 				if approval and frappe.db.get_value("Agent Execution Approval", approval, "status") == "Pending":
-					from huf.huf.doctype.agent_execution_approval.agent_execution_approval import _mark_expired
+					from huf.huf.doctype.agent_execution_approval.agent_execution_approval import (
+						_mark_expired,
+					)
 
 					_mark_expired(frappe.get_doc("Agent Execution Approval", approval))
 				else:
@@ -437,7 +442,7 @@ def sweep_code_waits(now=None) -> list[str]:
 				engine.resume_code_node(name)
 				touched.append(name)
 		except Exception:
-			frappe.log_error(frappe.get_traceback(), f"Flow code wait sweep: {name}")
+			log_flow_error(frappe.get_traceback(), f"Flow code wait sweep: {name}")
 	return touched
 
 

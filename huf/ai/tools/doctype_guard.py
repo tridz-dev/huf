@@ -25,6 +25,35 @@ _DENYLISTED_DOCTYPES = {
 	"server script",
 	"property setter",
 	"file",
+	# Run, approval and channel records feed trusted decisions (recorded approvals, live or test mode,
+	# what gets sent). Generic tools can run with ``ignore_permissions`` or ``db.set_value``, which
+	# the controllers' write guards do not see.
+	"agent flow run",
+	"flow member state",
+	"agent execution approval",
+	# child rows naming who may use an agent or decide an approval
+	"agent user",
+	"channel outbox",
+	"gateway event",
+}
+
+#: Records that grant roles or permissions, or hold approvals and live-send switches: tools may read them
+#: (permission-checked) but never write them.
+_WRITE_DENYLISTED_DOCTYPES = {
+	"huf user role",
+	"has role",
+	"user permission",
+	"custom docperm",
+	"defaultvalue",  # holds the ledger approval records
+	"flow definition",  # live_send
+	# capability and share grants, send caps and approval defaults (FINAL_REVIEW_2 M5)
+	"huf role permission",
+	"huf role",
+	"docshare",
+	"agent role",
+	"execution profile permission",
+	"flow send counter",
+	"agent settings",
 }
 
 #: Doctype name PREFIXES (case-insensitive) that are denied wholesale, since
@@ -39,7 +68,15 @@ def _error(msg: str) -> str:
 	return json.dumps({"success": False, "error": msg}, default=str)
 
 
-def _check_doctype_allowed(doctype: str):
+def is_denylisted(doctype: str, read_only: bool = False) -> bool:
+	"""Name-only check: is ``doctype`` denied? Write-protected names pass only when ``read_only``."""
+	normalized = doctype.strip().lower()
+	if not read_only and normalized in _WRITE_DENYLISTED_DOCTYPES:
+		return True
+	return normalized in _DENYLISTED_DOCTYPES or normalized.startswith(_DENYLISTED_PREFIXES)
+
+
+def _check_doctype_allowed(doctype: str, read_only: bool = False):
 	"""Return ``(meta, None)`` if ``doctype`` may be accessed through tool
 	surfaces, or ``(None, error_json_str)`` if it is denied.
 
@@ -49,6 +86,7 @@ def _check_doctype_allowed(doctype: str):
 
 	Args:
 		doctype: The doctype name to check.
+		read_only: Pass True only from a handler that cannot write. The default refuses write-protected names.
 
 	Returns:
 		(meta, None) on allow, or (None, error_json_str) on deny.
@@ -56,15 +94,17 @@ def _check_doctype_allowed(doctype: str):
 	if not doctype or not isinstance(doctype, str):
 		return None, _error("'doctype' is required")
 
-	normalized = doctype.strip().lower()
-	if normalized in _DENYLISTED_DOCTYPES:
-		return None, _error(f"Access to doctype '{doctype}' is not permitted through this tool.")
-	if normalized.startswith(_DENYLISTED_PREFIXES):
-		return None, _error(f"Access to doctype '{doctype}' is not permitted through this tool.")
+	denied = _error(f"Access to doctype '{doctype}' is not permitted through this tool.")
+	if is_denylisted(doctype, read_only):
+		return None, denied
 
 	try:
-		if not frappe.db.exists("DocType", doctype):
+		stored = frappe.db.exists("DocType", doctype)
+		if not stored:
 			return None, _error(f"DocType '{doctype}' does not exist.")
+		# The database collation also matches other spellings (accents), so check the stored name too.
+		if isinstance(stored, str) and is_denylisted(stored, read_only):
+			return None, denied
 		meta = frappe.get_meta(doctype)
 	except Exception as e:
 		return None, _error(f"Could not load DocType '{doctype}': {e}")

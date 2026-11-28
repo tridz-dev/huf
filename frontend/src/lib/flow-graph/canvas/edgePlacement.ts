@@ -180,3 +180,38 @@ export function controlCandidates(points: Pt[], length: number, size: Size, pref
   }
   return scored.sort(byDistanceTo(prefer)).map((s) => s.at);
 }
+
+/**
+ * The name pill of a connection, kept ON its own line: where it prefers to be, then slid along the line (nearest first), then
+ * nudged across it, but never so far that the line stops passing under the pill. A name that only had free room far from its line
+ * ("Approved" floating beside the wrong step) reads as belonging to another connection; overlapping a little is better.
+ */
+export function pillCandidatesOnLine(points: Pt[], prefer: Pt, size: Size): Pt[] {
+  const scored: Array<{ at: Pt; extra: number }> = [{ at: prefer, extra: 0 }];
+  let length = 0;
+  for (let i = 0; i < points.length - 1; i++) length += Math.abs(points[i + 1].x - points[i].x) + Math.abs(points[i + 1].y - points[i].y);
+  for (let d = 0; d <= length; d += STEP) {
+    const { at, horizontal } = along(points, d);
+    // Across the line by at most a little under half the pill, so the line still runs through it.
+    const reach = Math.max((horizontal ? size.height : size.width) / 2 - 2, 0);
+    for (let s = 0; s <= reach; s += STEP) {
+      for (const sign of s === 0 ? [1] : [1, -1]) {
+        const o = sign * s;
+        scored.push({ at: horizontal ? { x: at.x, y: at.y + o } : { x: at.x + o, y: at.y }, extra: 2 * s });
+      }
+    }
+  }
+  return scored.sort(byDistanceTo(prefer)).map((s) => s.at);
+}
+
+/** Whether the pill centred at `c` still has its line passing under it. */
+export function pillTouchesLine(points: Pt[], c: Pt, size: Size): boolean {
+  const box = boxAt(c, size);
+  for (let i = 0; i < points.length - 1; i++) {
+    const a = points[i];
+    const b = points[i + 1];
+    const seg = { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), width: Math.abs(a.x - b.x) || 0.01, height: Math.abs(a.y - b.y) || 0.01 };
+    if (overlapArea(box, seg) > 0) return true;
+  }
+  return false;
+}

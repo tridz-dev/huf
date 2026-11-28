@@ -1,3 +1,4 @@
+import { useResourceAccess } from '@/hooks/permissions/useResourceAccess';
 import { useMemo, useState } from 'react';
 import { ArrowUpDown, FileText, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -36,6 +37,7 @@ function getStatusVariant(enabled: 0 | 1): 'success' | 'secondary' {
 
 export function AgentPromptsPage() {
   const navigate = useNavigate();
+  const access = useResourceAccess('prompt');
   const [sorting, setSorting] = useState<SortingState>([]);
 
   const {
@@ -162,7 +164,7 @@ export function AgentPromptsPage() {
   return (
     <PageFrame
       title="Prompts"
-      actions={<Button onClick={() => navigate('/prompts/new')}>New prompt</Button>}
+      actions={access.canCreate ? <Button onClick={() => navigate('/prompts/new')}>New prompt</Button> : undefined}
       filters={
         <FilterBar
           searchPlaceholder="Search prompts..."
@@ -207,7 +209,7 @@ export function AgentPromptsPage() {
               icon={FileText}
               title="No prompts"
               description="Create a prompt template to share across agents."
-              action={{ label: 'New prompt', onClick: () => navigate('/prompts/new') }}
+              action={access.canCreate ? { label: 'New prompt', onClick: () => navigate('/prompts/new') } : undefined}
             />
           )
         ) : (

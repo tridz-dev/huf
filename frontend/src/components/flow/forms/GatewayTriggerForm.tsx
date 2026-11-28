@@ -4,6 +4,7 @@ import { Button } from '../../ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../../ui/collapsible';
 import { FieldHint } from '../FieldHint';
 import { GatewayChooser } from '../triggers/GatewayChooser';
+import { EntryPolicyField } from '../triggers/EntryPolicyField';
 import { GatewayParamField } from '../triggers/GatewayParamField';
 import { TRIGGER_NOTES } from '../triggers/triggerNotes';
 import { useGatewayRegistry } from '@/hooks/flow/useGatewayRegistry';
@@ -98,6 +99,7 @@ export function GatewayTriggerForm({ nodeId, kind }: { nodeId: string; kind: Gat
               <CollapsibleContent className="mt-3 space-y-4" data-testid="flow-gateway-more-body">{more.map(field)}</CollapsibleContent>
             </Collapsible>
           ) : null}
+          <EntryPolicyField value={cfg.entry_policy} disabled={!canManage} onChange={(v) => patch({ entry_policy: v })} />
           {TRIGGER_NOTES[kind].length > 0 ? (
             <ul className="space-y-1 text-meta text-muted-foreground" data-testid="flow-gateway-notes">
               {TRIGGER_NOTES[kind].map((n) => <li key={n}>{n}</li>)}

@@ -20,6 +20,7 @@ NODE_TYPE_LABELS: dict[str, str] = {
 	"trigger.schedule": "Schedule Trigger",
 	"trigger.doc-event": "Doc Event Trigger",
 	"trigger.unset": "Unset Trigger",
+	"trigger.app": "App Trigger",
 	"trigger.gateway": "Chat Message Trigger",
 	"trigger.whatsapp": "WhatsApp Message Trigger",
 	"trigger.telegram": "Telegram Message Trigger",
@@ -38,6 +39,13 @@ NODE_TYPE_LABELS: dict[str, str] = {
 	"state.delete": "Delete State",
 	"doc.create": "Create Document",
 	"code.run": "Execute Code",
+	"wait": "Wait",
+	"stop": "Stop",
+	"doc.get": "Find Document",
+	"doc.update": "Update Document",
+	"flow.call": "Run Another Flow",
+	"member.set": "Remember for this Person",
+	"send.message": "Send Message",
 }
 
 FIELD_LABELS: dict[str, str] = {
@@ -58,6 +66,7 @@ FIELD_LABELS: dict[str, str] = {
 	"input": "inputs",
 	"on_true": "the step when true",
 	"on_false": "the step when false",
+	"fallback_next": "the step when facts cannot be read",
 	"cron": "schedule",
 	"doctype": "document type",
 	"event": "event",
@@ -83,6 +92,7 @@ TYPE_TITLES: dict[str, str] = {
 	"trigger.schedule": "Schedule trigger",
 	"trigger.doc-event": "Data trigger",
 	"trigger.unset": "Trigger",
+	"trigger.app": "App trigger",
 	"trigger.gateway": "Chat message trigger",
 	"trigger.whatsapp": "WhatsApp message trigger",
 	"trigger.telegram": "Telegram message trigger",
@@ -101,6 +111,13 @@ TYPE_TITLES: dict[str, str] = {
 	"state.delete": "Forget saved data",
 	"doc.create": "Create a record",
 	"code.run": "Run code",
+	"wait": "Wait",
+	"stop": "Stop with error",
+	"doc.get": "Find a record",
+	"doc.update": "Update a record",
+	"flow.call": "Run another flow",
+	"member.set": "Remember for this person",
+	"send.message": "Send a message",
 }
 
 TOOL_TITLES: dict[str, str] = {
@@ -214,6 +231,8 @@ def describe_error(graph: dict | None, err) -> str:
 		return f"{who} uses a step type that flows do not support. Delete it."
 	if code == "BAD_EXPRESSION":
 		return f"{who} has an expression that cannot be read. Check the value you typed."
+	if code == "TRIGGER_ON_ERROR":
+		return f"{who} cannot have an error step. Remove the error connection from this trigger."
 	if code == "NOT_AN_OBJECT":
 		return "The flow definition is not valid. Reload the page and try again."
 	return f"{who} has a setting that is not valid. Open the step and check its fields."

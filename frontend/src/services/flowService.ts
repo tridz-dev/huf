@@ -9,7 +9,7 @@
  */
 
 import { announceRunChanged } from '@/lib/flow-run/runChanged';
-import { cancelFlowRun as apiCancelFlowRun } from './flow/flowRunActionsApi';
+import { cancelFlowRun as apiCancelFlowRun, continueWaitingRun as apiContinueWaitingRun, getResumeLink as apiGetResumeLink } from './flow/flowRunActionsApi';
 import { Flow, FlowMetadata, FlowNode, FlowEdge, FlowStatus } from '../types/flow.types';
 import {
   getFlowDefinitions,
@@ -28,9 +28,11 @@ import {
   publishFlow as apiPublishFlow,
   unpublishFlow as apiUnpublishFlow,
 } from './flowApi';
-import type { FlowRunSummary, FlowRunDetail } from './flowApi';
+import type { FlowRunSummary, FlowRunDetail, FlowDefinitionDoc } from './flowApi';
 import { serializeFlow, deserializeFlow, mapBackendStatusToFrontend, defaultContract } from './flowSerializer';
 import type { BackendFlowGraph } from './flowApi';
+import { isEmbedPath, postToHost as reportToHost } from '@/embed/bridge';
+import { validateFlow } from '@/lib/flow-graph/flowValidation';
 
 class FlowService {
   private listeners: Set<() => void> = new Set();
@@ -70,19 +72,24 @@ class FlowService {
       const doc = await getFlowDefinition(id);
       if (!doc) return null;
 
-      const graph = typeof doc.definition_json === 'string'
-        ? JSON.parse(doc.definition_json) as BackendFlowGraph
-        : doc.definition_json;
-
-      const flow = deserializeFlow(doc.flow_id, doc.flow_name, doc.status, graph);
-      // Name, description and category live on the Flow Definition record, not in the graph.
-      flow.description = doc.description || '';
-      flow.category = doc.category || 'Uncategorized';
-      this.flowCache.set(id, flow);
-      return flow;
+      return this.cacheDefinition(id, doc);
     } catch {
       return null;
     }
+  }
+
+  /** Put an already fetched Flow Definition in the cache. */
+  cacheDefinition(id: string, doc: FlowDefinitionDoc): Flow {
+    const graph = typeof doc.definition_json === 'string'
+      ? JSON.parse(doc.definition_json) as BackendFlowGraph
+      : doc.definition_json;
+
+    const flow = deserializeFlow(doc.flow_id, doc.flow_name, doc.status, graph);
+    // Name, description and category live on the Flow Definition record, not in the graph.
+    flow.description = doc.description || '';
+    flow.category = doc.category || 'Uncategorized';
+    this.flowCache.set(id, flow);
+    return flow;
   }
 
   /** Get a flow from the local cache (no API call) */
@@ -153,7 +160,14 @@ class FlowService {
   /** Save the current flow state to the backend */
   async saveFlow(flow: Flow): Promise<void> {
     const graph = serializeFlow(flow);
-    await saveFlowDefinition(flow.id, graph);
+    let saved: { version: number };
+    try {
+      saved = await saveFlowDefinition(flow.id, graph);
+    } catch (error) {
+      reportToHost('guest.error', { code: 'save_failed', flow_id: flow.id });
+      throw error;
+    }
+    reportToHost('guest.saved', { flow_id: flow.id, version: saved?.version, unfinished: isEmbedPath() ? validateFlow(flow.nodes, flow.edges).length : 0 });
     this.flowCache.set(flow.id, { ...flow, updatedAt: new Date() });
     this.notifyListeners();
   }
@@ -214,8 +228,15 @@ class FlowService {
 
   /** Publish (status Active) or unpublish (back to Draft) a flow, then mirror the status in the cache. */
   async setPublished(id: string, published: boolean): Promise<Flow | null> {
-    if (published) await apiPublishFlow(id);
-    else await apiUnpublishFlow(id);
+    if (published) {
+      try {
+        await apiPublishFlow(id);
+      } catch (error) {
+        reportToHost('guest.error', { code: 'publish_refused', flow_id: id });
+        throw error;
+      }
+    } else await apiUnpublishFlow(id);
+    reportToHost('guest.publish_state', { flow_id: id, status: published ? 'Active' : 'Draft' });
     return this.updateFlowLocal(id, { status: published ? 'active' : 'draft' });
   }
 
@@ -260,6 +281,14 @@ class FlowService {
     return apiCancelFlowRun(flowRunId);
   }
 
+  async continueWaitingRun(flowRunId: string) {
+    return apiContinueWaitingRun(flowRunId);
+  }
+
+  async getResumeLink(flowRunId: string) {
+    return apiGetResumeLink(flowRunId);
+  }
+
   // ─── Local-only mutation helpers (update cache, notify) ────────────
 
   /**
@@ -267,6 +296,11 @@ class FlowService {
    * Does NOT save to backend — used for local-only field updates
    * where the backend was already updated separately.
    */
+  /** The step that runs once after a failure no step routed (undefined = off); local until the flow is saved. */
+  setErrorHandler(id: string, next: string | undefined): Flow | null {
+    return this.updateFlowLocal(id, { errorHandler: next });
+  }
+
   private updateFlowLocal(id: string, updates: Partial<Flow>): Flow | null {
     const flow = this.flowCache.get(id);
     if (!flow) return null;

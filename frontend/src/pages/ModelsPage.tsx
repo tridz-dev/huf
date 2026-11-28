@@ -1,3 +1,4 @@
+import { useResourceAccess } from '@/hooks/permissions/useResourceAccess';
 import { Cpu, Settings, Loader2, DollarSign, Trash2 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import {
@@ -112,6 +113,7 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState<ModelFormData>(emptyFormData);
   const [deleteTarget, setDeleteTarget] = useState<AIModel | null>(null);
+  const access = useResourceAccess('model');
   const [deleting, setDeleting] = useState(false);
 
   const providerMap = useMemo(() => buildProviderNameMap(providers), [providers]);
@@ -157,7 +159,7 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
       };
     },
     initialParams: {},
-    pageSize: 9,
+    pageSize: 12,
     debounceMs: 300,
     autoLoad: true,
   });
@@ -414,7 +416,7 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
               icon={Cpu}
               title="No models"
               description="Add a model to use with your AI providers."
-              action={{ label: 'Add model', onClick: handleAddModel }}
+              action={access.canCreate ? { label: 'Add model', onClick: handleAddModel } : undefined}
             />
           )
         }
@@ -444,14 +446,14 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
                   variant: 'ghost',
                 },
               ]}
-              menuActions={[
+              menuActions={access.canDelete ? [
                 {
                   icon: Trash2,
                   label: 'Delete',
                   onClick: () => setDeleteTarget(model),
                   variant: 'destructive',
                 },
-              ]}
+              ] : []}
               onClick={() => handleConfigure(model)}
             />
           );

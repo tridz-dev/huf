@@ -79,6 +79,8 @@ def settable_fields(meta_fields) -> list[dict]:
 @frappe.whitelist()
 def get_create_document_types() -> list[dict]:
 	"""Record types the "Create document" step can make for the signed-in person."""
+	from huf.ai.flow.app_scope.api_guards import guard_app_meta
+	guard_app_meta()
 	_need_flow_read()
 	return create_document_types(frappe.conf, lambda dt: frappe.db.exists("DocType", dt) and frappe.has_permission(dt, "create"))
 
@@ -86,6 +88,8 @@ def get_create_document_types() -> list[dict]:
 @frappe.whitelist()
 def get_create_document_fields(doctype: str) -> list[dict]:
 	"""The fields of ``doctype`` a "Create document" step may fill in (required first)."""
+	from huf.ai.flow.app_scope.api_guards import guard_app_meta
+	guard_app_meta()
 	_need_flow_read()
 	if doctype not in allowed_doctypes(frappe.conf) or not frappe.db.exists("DocType", doctype):
 		frappe.throw(_("Your administrator has not allowed flows to create {0} records.").format(doctype), frappe.PermissionError)
@@ -130,13 +134,76 @@ def approver_role_names() -> list[str]:
 		return []
 
 
-def _holders(names: list[str]) -> set[str]:
-	"""Which of ``names`` hold at least one approver role (one query)."""
-	roles = approver_role_names()
+def _holders(names: list[str], roles: list[str] | None = None) -> set[str]:
+	"""Which of ``names`` hold at least one of ``roles`` (default: the approver roles), in one query."""
+	roles = approver_role_names() if roles is None else roles
 	if not names or not roles:
 		return set()
 	rows = frappe.get_all("Has Role", filters={"parent": ("in", names), "parenttype": "User", "role": ("in", roles)}, pluck="parent", ignore_permissions=True, limit_page_length=0)
 	return set(rows)
+
+
+#: An app narrows who its app-only users may look up: ``{"<app>": "<dotted path>"}``, read from that app's own hooks.
+APPROVER_NARROW_HOOK = "huf_flow_approver_narrow"
+
+
+def _narrow_approvers(app: str, user: str, candidates: set[str]) -> set[str]:
+	"""``candidates`` that every ``huf_flow_approver_narrow`` function of ``app`` keeps. It only removes people.
+
+	No declaration: unchanged. An exception, a bad path or an answer that is not a list of names: nobody.
+	"""
+	path = None
+	try:
+		paths = (frappe.get_hooks(APPROVER_NARROW_HOOK, app_name=app) or {}).get(app) or []
+		kept = set(candidates)
+		for path in [paths] if isinstance(paths, str) else paths:
+			if not kept:
+				break
+			answer = frappe.get_attr(path)({"app": app, "user": user, "candidates": sorted(kept)})
+			if not isinstance(answer, list | tuple | set) or not all(isinstance(n, str) for n in answer):
+				frappe.logger("huf").warning(f"{APPROVER_NARROW_HOOK} {path}: not a list of names; nobody offered")
+				return set()
+			kept &= set(answer)
+		return kept  # noqa: TRY300
+	except Exception as exc:  # noqa: BLE001 - any failure offers nobody; the message may carry data, so only the class
+		frappe.logger("huf").warning(f"{APPROVER_NARROW_HOOK} {path or app}: {type(exc).__name__}; nobody offered")
+		return set()
+
+
+def _edits_a_flow_of(app: str) -> bool:
+	"""Whether the caller may edit at least one flow of ``app``, after the app's narrowing and User Permissions."""
+	from huf.ai.flow.app_scope.access import flow_access
+	from huf.ai.flow.app_scope.ownership import FIELD
+
+	return any(
+		flow_access(frappe.session.user, flow, "edit") and frappe.has_permission("Flow Definition", "write", doc=flow)
+		for flow in frappe.get_all("Flow Definition", filters={FIELD: app}, pluck="name", limit_page_length=0)
+	)
+
+
+def _app_approvers() -> set[str] | None:
+	"""For an app-only user, the only people they may look up. Else None.
+
+	Per app of which the caller may edit at least one flow: holders of its approve roles, narrowed by the app.
+	An empty set when no flow is left to edit.
+	"""
+	from huf.ai.flow.app_scope.access import app_grants, apps_for
+	from huf.ai.flow.app_scope.api_guards import is_app_only
+
+	if not is_app_only():
+		return None
+	apps = [app for app in sorted(apps_for(None, "edit")) if _edits_a_flow_of(app)]
+	if not apps:
+		return set()  # nothing editable: offer nobody rather than an error on form load
+	grants = app_grants()
+	allowed: set[str] = set()
+	for app in apps:
+		roles = sorted(grants.get(app, {}).get("approve") or ())
+		if not roles:
+			continue
+		holders = set(frappe.get_all("Has Role", filters={"parenttype": "User", "role": ("in", roles)}, pluck="parent", ignore_permissions=True, limit_page_length=0))
+		allowed |= _narrow_approvers(app, frappe.session.user, holders - {"Guest", "Administrator"})
+	return allowed
 
 
 def _user_row(row: dict, holders: set[str] | None = None) -> dict:
@@ -156,6 +223,8 @@ def search_flow_users(query: str = "", limit: int = MAX_USERS) -> list[dict]:
 	For people who can edit flows only (viewers get a 403), at most 60 lookups a minute each, and nothing but a name and
 	an address comes back. ``has_approver_role`` is true for someone who holds one of the approver roles.
 	"""
+	from huf.ai.flow.app_scope.api_guards import guard_app_meta
+	guard_app_meta()
 	_need_flow_edit_and_rate()
 	limit = max(1, min(int(limit or MAX_USERS), 50))
 	text = " ".join(str(query or "").split())[:80]
@@ -164,11 +233,16 @@ def search_flow_users(query: str = "", limit: int = MAX_USERS) -> list[dict]:
 	if text:
 		like = f"%{text}%"
 		or_filters = [["name", "like", like], ["full_name", "like", like]]
+	allowed = _app_approvers()
+	if allowed is not None:
+		if not allowed:
+			return []
+		filters["name"] = ("in", sorted(allowed))
 	rows = frappe.get_all(
 		"User", filters=filters, or_filters=or_filters, fields=["name", "full_name", "email"],
 		order_by="full_name asc, name asc", limit_page_length=limit, ignore_permissions=True,
 	)
-	holders = _holders([r["name"] for r in rows])
+	holders = _holders([r["name"] for r in rows]) if allowed is None else allowed
 	return [_user_row(r, holders) for r in rows]
 
 
@@ -178,6 +252,8 @@ def check_flow_users(users) -> list[dict]:
 
 	Same rules as :func:`search_flow_users`: editors only, rate limited. Only enabled people count as found.
 	"""
+	from huf.ai.flow.app_scope.api_guards import guard_app_meta
+	guard_app_meta()
 	_need_flow_edit_and_rate()
 	if isinstance(users, str):
 		import json
@@ -187,8 +263,11 @@ def check_flow_users(users) -> list[dict]:
 		except ValueError:
 			users = [u for u in users.split(",")]
 	names = [str(u).strip() for u in (users or []) if str(u).strip()][:50]
+	allowed = _app_approvers()
 	out = []
 	for name in names:
-		row = frappe.db.get_value("User", {"name": name, "enabled": 1, "user_type": "System User"}, ["name", "full_name"], as_dict=True)
+		row = None
+		if allowed is None or name in allowed:
+			row = frappe.db.get_value("User", {"name": name, "enabled": 1, "user_type": "System User"}, ["name", "full_name"], as_dict=True)
 		out.append({"name": row.name if row else name, "found": bool(row), "full_name": (row.full_name if row else None) or name})
 	return out

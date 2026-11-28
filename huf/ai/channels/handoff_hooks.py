@@ -133,3 +133,13 @@ def communication_after_insert(doc, method=None) -> None:
 	if res.get("status") != "sent":
 		reason = "the 24-hour window is closed; send an approved template" if res.get("needs_template") else res.get("error") or "unknown error"
 		_comment(doc.reference_doctype, doc.reference_name, f"WhatsApp reply not delivered: {reason}")
+
+
+@frappe.whitelist(methods=["POST"])
+def release_conversation(conversation: str) -> list[str]:
+	"""Human side: give a handed-off conversation back to the AI. Needs write on the conversation."""
+	doc = frappe.get_doc("Channel Conversation", conversation)
+	doc.check_permission("write")
+	from huf.ai.flow.nodes.handoff import release_handoff
+
+	return release_handoff(doc.name)

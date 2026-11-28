@@ -103,7 +103,7 @@ class TestListFlowCards(IntegrationTestCase):
 	def tearDown(self):
 		frappe.set_user("Administrator")
 		for flow_id in self.ids:
-			frappe.db.delete("Flow Run", {"flow_id": flow_id})
+			frappe.db.delete("Agent Flow Run", {"flow_id": flow_id})
 			frappe.delete_doc("Flow Definition", flow_id, ignore_permissions=True, force=True)
 		frappe.db.commit()
 
@@ -127,7 +127,7 @@ class TestListFlowCards(IntegrationTestCase):
 
 	def test_card_has_summary_and_last_run(self):
 		flow_id = self.ids[0]
-		run = frappe.get_doc({"doctype": "Flow Run", "flow_id": flow_id, "flow_definition": flow_id, "status": "Failed", "current_node_id": "c", "trigger_type": "Manual"})
+		run = frappe.get_doc({"doctype": "Agent Flow Run", "flow_id": flow_id, "flow_definition": flow_id, "status": "Failed", "current_node_id": "c", "trigger_type": "Manual"})
 		run.insert(ignore_permissions=True)
 		frappe.db.commit()
 		item = next(i for i in flow_cards.list_flow_cards(search=self.tag)["items"] if i["flow_id"] == flow_id)

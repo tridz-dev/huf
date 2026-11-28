@@ -452,7 +452,7 @@
    "fieldname": "flow_run",
    "fieldtype": "Link",
    "label": "Flow Run",
-   "options": "Flow Run",
+   "options": "Agent Flow Run",
    "read_only": 1
   },
   {

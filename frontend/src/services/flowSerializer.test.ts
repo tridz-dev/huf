@@ -243,7 +243,7 @@ describe('flowSerializer: schema-valid output and lossless round trip', () => {
     const flow = flowOf(
       [
         trigger('t', { type: 'schedule', cron: '0 * * * *' }),
-        action('d', { type: 'router-decision', policy: 'by_amount', default: 'e1' }),
+        action('d', { type: 'router-decision', default: 'e1' }),
         end('e1', { value: 1 }),
         end('e2', { value: 2 }),
       ],

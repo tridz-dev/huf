@@ -82,3 +82,11 @@ describe('search', () => {
     expect(matchesSearch(card(), '  ')).toBe(true);
   });
 });
+
+describe('Waiting Timer and Cancelled last-run status', () => {
+  it('maps the new run statuses to their pill kinds and plain words', () => {
+    expect(runStatusKind({ status: 'Waiting Timer', stale: false })).toBe('waiting_timer');
+    expect(runStatusKind({ status: 'Cancelled', stale: false })).toBe('cancelled');
+    expect(lastRunLine({ status: 'Cancelled', stale: false } as never, () => '2 mins ago')).toContain('Cancelled');
+  });
+});

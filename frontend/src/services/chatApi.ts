@@ -25,6 +25,7 @@ export interface AgentConversationDoc {
   host_workspace_fingerprint?: string | null;
   /** Display label, "<device> - <workspace>" (or just one of the two). */
   host_label?: string | null;
+  channel?: string | null;
 }
 
 /**
@@ -47,6 +48,8 @@ export interface ChatListItem {
   project?: string;
   /** Set only for conversations hosted on a desktop; `undefined` for server conversations. */
   host?: DesktopHostRef;
+  /** True for a saved voice call. */
+  isVoice?: boolean;
 }
 
 /** Where a desktop-hosted conversation runs. */
@@ -115,6 +118,8 @@ export interface PendingConversationRun {
   conversation?: string | null;
 }
 
+/** Text chats plus saved voice calls. */
+export const HISTORY_CHANNELS = ['Chat', 'elevenlabs_voice', 'realtime_voice'];
 const CONVERSATION_LIST_FIELDS = [
   'name',
   'title',
@@ -125,6 +130,7 @@ const CONVERSATION_LIST_FIELDS = [
   'execution_host',
   'host_device_id',
   'host_label',
+  'channel',
 ];
 
 /**
@@ -138,6 +144,7 @@ function mapChatListItem(doc: AgentConversationDoc): ChatListItem {
     timestamp: doc.last_activity || doc.modified || undefined,
     project: doc.project || undefined,
     host: hostFromConversation(doc),
+    isVoice: doc.channel === 'elevenlabs_voice' || doc.channel === 'realtime_voice',
   };
 }
 
@@ -250,7 +257,7 @@ export async function getAgentsWithConversationCounts(): Promise<AgentWithCount[
         try {
           count = (await fetchDocCount(doctype['Agent Conversation'], [
             ['agent', '=', agent.name],
-            ['channel', '=', 'Chat'],
+            ['channel', 'in', HISTORY_CHANNELS],
           ])) || 0;
         } catch (error) {
           // One agent's conversation count being denied/unavailable must not
@@ -299,7 +306,7 @@ export async function getConversationsByAgent(
       fields: CONVERSATION_LIST_FIELDS,
       filters: [
         ['agent', '=', agentName],
-        ['channel', '=', 'Chat'],
+        ['channel', 'in', HISTORY_CHANNELS],
       ],
       orderBy: { field: 'modified', order: 'desc' },
       limit,
@@ -330,7 +337,7 @@ export async function getAllConversationsForRecents(
   try {
     const conversations = await db.getDocList(doctype['Agent Conversation'], {
       fields: CONVERSATION_LIST_FIELDS,
-      filters: [['channel', '=', 'Chat']],
+      filters: [['channel', 'in', HISTORY_CHANNELS]],
       orderBy: { field: 'modified', order: 'desc' },
       limit,
     });

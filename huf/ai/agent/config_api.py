@@ -108,6 +108,7 @@ AGENT_SECTIONS: dict[str, tuple[str, ...]] = {
 		"voice_engine",
 		"voice_config",
 		"voice_greeting",
+		"voice_language",
 		"tts_model",
 		"tts_voice",
 		"stt_model",

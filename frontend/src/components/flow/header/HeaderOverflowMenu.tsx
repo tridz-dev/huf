@@ -1,6 +1,6 @@
 import { useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { AlertCircle, CircleHelp, History, Keyboard, LayoutTemplate, MoreHorizontal, Redo2, Search, Settings, ShieldAlert, Sparkles, Undo2 } from 'lucide-react';
+import { AlertCircle, CircleHelp, History, Keyboard, LayoutTemplate, MoreHorizontal, Redo2, Search, Settings, ShieldAlert, Sparkles, Undo2, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -31,6 +31,7 @@ interface HeaderOverflowMenuProps {
   /** Id of the procedure this flow was saved as, when it was. */
   convertedProcedure: string | null;
   onOpenRuns: () => void;
+  onOpenMembers?: () => void;
   onOpenSettings: () => void;
   onTidy: () => void;
   onConvert: () => void;
@@ -50,7 +51,7 @@ interface HeaderOverflowMenuProps {
  * menu (minus the editing tools) sits beside the Run button.
  */
 export function HeaderOverflowMenu({
-  statusKind, canManage, readOnlyReason, hasSteps, convertedProcedure, onOpenRuns, onOpenSettings, onTidy, onConvert, extra, editTools, helpOnly = false, checklistText = '',
+  statusKind, canManage, readOnlyReason, hasSteps, convertedProcedure, onOpenRuns, onOpenMembers, onOpenSettings, onTidy, onConvert, extra, editTools, helpOnly = false, checklistText = '',
 }: HeaderOverflowMenuProps) {
   const openingChecklist = useRef(false);
   const [showHelp, setShowHelp] = useState(false);
@@ -128,6 +129,11 @@ export function HeaderOverflowMenu({
           <DropdownMenuItem className={row} data-testid="flow-runs" onSelect={onOpenRuns}>
             <History className="h-4 w-4" aria-hidden /> Run history
           </DropdownMenuItem>
+          {onOpenMembers && (
+            <DropdownMenuItem className={row} data-testid="flow-members-menu" onSelect={onOpenMembers}>
+              <Users className="h-4 w-4" aria-hidden /> People
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem className={row} data-testid="flow-settings" onSelect={onOpenSettings}>
             <Settings className="h-4 w-4" aria-hidden /> Flow settings
           </DropdownMenuItem>

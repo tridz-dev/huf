@@ -87,10 +87,17 @@ class TestTemplatePolicy(_Fixture, IntegrationTestCase):
 				policy.check_template(gateway, PHONE, {"status": status, "category": "UTILITY"})
 			self.assertEqual(ctx.exception.code, "template_not_approved")
 
-	def test_approved_utility_allowed_and_unknown_row_allowed(self):
+	def test_approved_utility_allowed(self):
 		gateway = self.make_gateway("P", policy="Allow list")
 		policy.check_template(gateway, PHONE, {"status": "APPROVED", "category": "UTILITY"})
-		policy.check_template(gateway, PHONE, None)
+
+	def test_missing_row_or_empty_status_refused(self):
+		# G5 fail closed: an unknown row used to pass; it is now refused like any unapproved template
+		gateway = self.make_gateway("P", policy="Allow list")
+		for row in (None, {}, {"category": "UTILITY"}, {"status": "", "category": "UTILITY"}):
+			with self.subTest(row=row), self.assertRaises(policy.OutboundRefused) as ctx:
+				policy.check_template(gateway, PHONE, row)
+			self.assertEqual(ctx.exception.code, "template_not_approved")
 
 	def test_marketing_refused_after_user_preference_stop(self):
 		gateway = self.make_gateway("P", policy="Allow list")

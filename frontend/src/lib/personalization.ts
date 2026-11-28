@@ -9,6 +9,7 @@ export const SCENERY_IMAGE_URL = import.meta.env.DEV
 
 export type HufTheme = 'winter' | 'midnight' | 'summer' | 'morning';
 export type HufColorScheme = 'light' | 'dark' | 'system';
+export type HostColorMode = 'light' | 'dark';
 
 const DEFAULT_THEME: HufTheme = 'winter';
 const DEFAULT_COLOR_SCHEME: HufColorScheme = 'light';
@@ -21,7 +22,17 @@ const THEME_MODES: Record<HufTheme, HufColorScheme> = {
   morning: 'light',
 };
 
+// Set by an embedding host. Held in memory only, so the user's stored
+// preference is untouched and later system or tab changes cannot override it.
+let hostColorMode: HostColorMode | null = null;
+
+export function setHostColorMode(mode: HostColorMode | null) {
+  hostColorMode = mode;
+  applyEffectiveTheme();
+}
+
 function isEffectivelyDark(): boolean {
+  if (hostColorMode) return hostColorMode === 'dark';
   const scheme = getColorScheme();
   if (scheme === 'dark') return true;
   if (scheme === 'light') return false;

@@ -1,3 +1,4 @@
+import { useResourceAccess } from '@/hooks/permissions/useResourceAccess';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -58,6 +59,7 @@ function MeetingDetailPage() {
   const [retrying, setRetrying] = useState(false);
   const [contextDismissed, setContextDismissed] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const access = useResourceAccess('meeting');
   const [deleting, setDeleting] = useState(false);
   const lastLiveSignatureRef = useRef<string | null>(null);
 
@@ -312,6 +314,7 @@ function MeetingDetailPage() {
           <Button variant="link" size="sm" className="h-auto p-0" onClick={() => navigate('/meetings')}>
             Back to meetings
           </Button>
+          {access.canDelete && (
           <Button
             variant="outline"
             size="sm"
@@ -322,6 +325,7 @@ function MeetingDetailPage() {
             <Trash2 className="h-3.5 w-3.5" aria-hidden />
             Delete meeting
           </Button>
+          )}
         </div>
 
         <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>

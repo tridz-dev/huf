@@ -1,3 +1,4 @@
+import { useResourceAccess } from '@/hooks/permissions/useResourceAccess';
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams, useLocation, Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
@@ -55,6 +56,7 @@ type ExecutionProfileFormValues = z.infer<typeof executionProfileSchema>;
 export function ExecutionProfileFormPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const access = useResourceAccess('executionProfile');
   const location = useLocation();
   const isNew = id === 'new';
   const [loading, setLoading] = useState(!isNew);
@@ -326,7 +328,7 @@ export function ExecutionProfileFormPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          {!isNew && (
+          {!isNew && access.canDelete && (
             <Button variant="outline" size="sm" onClick={handleDelete} disabled={deleting || saving} className="border-line hover:border-ink hover:bg-paper-deep">
               {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4 text-destructive" />}
             </Button>

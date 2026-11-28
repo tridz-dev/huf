@@ -25,7 +25,7 @@ class TestFinishFlowEvent(unittest.TestCase):
 				return "GWE-1"
 			if doctype == "Gateway Event":
 				return {"status": "Running", "error_message": ""}
-			if doctype == "Flow Run":
+			if doctype == "Agent Flow Run":
 				return 1 if replied else 0
 			return None
 
@@ -76,7 +76,7 @@ class TestReplyToolSetsFlag(unittest.TestCase):
 			reply.handle_gateway_reply(text="hi", flow_run_id="FR-1")
 		set_value = fake_frappe.db.set_value
 		send.assert_called_once()
-		set_value.assert_called_once_with("Flow Run", "FR-1", "replied_via_tool", 1, update_modified=False)
+		set_value.assert_called_once_with("Agent Flow Run", "FR-1", "replied_via_tool", 1, update_modified=False)
 
 
 if __name__ == "__main__":

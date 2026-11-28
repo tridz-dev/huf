@@ -356,6 +356,33 @@ def get_me() -> dict:
 		# Granted by the Huf Role but not usable: the user's Frappe roles cannot write Flow Definition. The screens say so
 		# instead of leaving the person to wonder why a "Manage flows" role shows no editing buttons.
 		"withheld_capabilities": withheld,
+		# Create / write / delete rights that come from DocType role permissions rather than a Huf capability.
+		"doc_permissions": _doc_permissions(user),
+	}
+
+
+# DocTypes whose create / write / delete buttons the screens show or hide from the user's own DocType permissions.
+UI_GATED_DOCTYPES = (
+	"Agent Prompt",
+	"Agent Summary Prompt",
+	"Skill",
+	"Automation",
+	"Meeting",
+	"Knowledge Source",
+	"Memory Policy",
+	"MCP Server",
+	"AI Provider",
+	"AI Model",
+	"Integration Settings",
+	"Integration Service",
+	"Gateway",
+)
+
+
+def _doc_permissions(user: str) -> dict:
+	return {
+		doctype: {ptype: bool(frappe.has_permission(doctype, ptype, user=user)) for ptype in ("create", "write", "delete")}
+		for doctype in UI_GATED_DOCTYPES
 	}
 
 

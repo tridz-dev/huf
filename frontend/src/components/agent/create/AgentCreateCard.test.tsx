@@ -27,6 +27,14 @@ describe('AgentCreateCard', () => {
   });
 });
 
+describe('AgentCreateCard name field', () => {
+  it('disables autofill and shows an inline duplicate-name error', () => {
+    render(<AgentCreateCard onCreate={vi.fn()} error="Agent with this name already exists" />);
+    expect(screen.getByLabelText(/^name/i)).toHaveAttribute('autocomplete', 'off');
+    expect(screen.getByText(/name is already used/i)).toBeInTheDocument();
+  });
+});
+
 describe('AgentCreateCard examples', () => {
   it('shows lead, 4 featured chips plus More examples, and the placeholder', () => {
     render(<AgentCreateCard onCreate={vi.fn()} />);

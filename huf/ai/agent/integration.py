@@ -40,7 +40,16 @@ from huf.ai.usage_extraction import extract_round_usage, normalise_usage_payload
 from huf.ai.model_metadata import resolve_model_context_window
 from huf.permissions import has_capability
 from huf.ai.tools.serializer import serialize_tools
-from huf.ai.run_budget import RunBudget, RunBudgetExceeded, get_current_budget, set_current_budget
+from huf.ai.run_budget import (
+    AI_DISABLED,
+    AIDisabled,
+    RunBudget,
+    RunBudgetExceeded,
+    estimate_run_cost,
+    get_current_budget,
+    peek_current_budget,
+    set_current_budget,
+)
 
 class _LazyLogger:
 	"""Defer frappe.logger() until first use so test discovery can import this module."""
@@ -259,14 +268,15 @@ class AgentManager:
             logger.warning(f"Failed to load skill MCP tools: {e!s}")
 
         try:
-            from huf.ai.skills.loader import create_list_skills_tool
+            from huf.ai.skills.loader import create_list_skills_tool, create_load_skill_tool
 
-            list_skills_tool = create_list_skills_tool(self.agent_doc.agent_name)
-            if list_skills_tool:
-                existing_names = {tool.name for tool in self.tools}
-                if list_skills_tool.name not in existing_names:
-                    self.tools.append(list_skills_tool)
-                    self.tool_sources[list_skills_tool.name] = "internal_capability"
+            for skill_tool in (
+                create_list_skills_tool(self.agent_doc.agent_name),
+                create_load_skill_tool(self.agent_doc.agent_name),
+            ):
+                if skill_tool and skill_tool.name not in {t.name for t in self.tools}:
+                    self.tools.append(skill_tool)
+                    self.tool_sources[skill_tool.name] = "internal_capability"
         except Exception as e:
             logger.warning(f"Failed to load skills listing tool: {e!s}")
 
@@ -506,6 +516,10 @@ class AgentManager:
     """
             instructions += tools_instruction
 
+        if getattr(self.agent_doc, "voice_enabled", 0):
+            from huf.ai.voice.language import reply_language_instruction
+            instructions += "\n\n" + reply_language_instruction(getattr(self.agent_doc, "voice_language", None))
+
         instructions += """
             SYSTEM INSTRUCTION - LARGE CONTEXT REFERENCES:
             If you see a data payload or result formatted as a reference like [record_kind: summary · handle=DocType/Name], it means the full massive data payload was truncated to save space.
@@ -547,18 +561,14 @@ class AgentManager:
             if can_search or can_write:
                 instructions += "\n\n                " + "\n                ".join(memory_lines) + "\n            "
 
-            if getattr(self.agent_doc, "memory_policy", None):
-                try:
-                    policy = frappe.get_doc("Memory Policy", self.agent_doc.memory_policy)
-                    from huf.ai.memory_tools import get_injected_memory_text
+            try:
+                from huf.ai.memory.injection import build_memory_injection
 
-                    injected_memory = get_injected_memory_text(
-                        self.agent_doc.name, policy, conversation_id=conversation_id, query=memory_query
-                    )
-                    if injected_memory:
-                        instructions += f"\n\n{injected_memory}\n"
-                except Exception as e:
-                    frappe.log_error(title="Memory Injection Failed", message=str(e))
+                injected_memory = build_memory_injection(self.agent_doc, conversation_id, memory_query)
+                if injected_memory:
+                    instructions += f"\n\n{injected_memory}\n"
+            except Exception as e:
+                frappe.log_error(title="Memory Injection Failed", message=str(e))
 
         if self.agent_doc.allow_chat:
             from huf.ai.capabilities import capability_enabled
@@ -1145,7 +1155,6 @@ def generate_conversation_title(conversation_name, agent_name):
 
         conv_manager = ConversationManager(agent_name=agent_name)
         history = conv_manager.get_conversation_history(conversation_name, limit=5)
-
         if not history:
             return
 
@@ -1162,14 +1171,14 @@ def generate_conversation_title(conversation_name, agent_name):
         model = agent_doc.model
 
         from huf.ai.providers.litellm import get_simple_completion
-
         messages = [{"role": "user", "content": prompt}]
-
-        title = _run_async_safely(
-            get_simple_completion(model, messages, provider)
-        )
+        title = _run_async_safely(get_simple_completion(model, messages, provider))
         if title:
             title = title.strip().strip('"').strip("'")
+            safe_commit()  # new snapshot: the row may have changed during the call (1020)
+            latest = frappe.db.get_value("Agent Conversation", conversation_name, "title", for_update=True)
+            if latest != current_title:
+                return  # renamed while the title was being generated
             frappe.db.set_value("Agent Conversation", conversation_name, "title", title)
             frappe.db.commit()  # nosemgrep: justified background-job commit
             _emit_conversation_title_updated(conversation_name, title)
@@ -1611,7 +1620,9 @@ def run_agent_sync(
     #          )
     # else:
 
-    frappe.db.set_value("Agent Conversation", conversation.name, "model", resolved_model)
+    # Write only on a change: a run may be executing on this conversation right now.
+    if conversation.model != resolved_model:
+        frappe.db.set_value("Agent Conversation", conversation.name, "model", resolved_model)
 
     resolved_prompt_template = prompt_template
     if not resolved_prompt_template:
@@ -1682,7 +1693,7 @@ def run_agent_sync(
     if run_kind:
         run_doc_data["run_kind"] = run_kind
     if flow_run_id:
-        flow_id = frappe.db.get_value("Flow Run", flow_run_id, "flow_id")
+        flow_id = frappe.db.get_value("Agent Flow Run", flow_run_id, "flow_id")
         if flow_id:
             run_doc_data["flow_id"] = flow_id
 
@@ -2316,7 +2327,11 @@ def _execute_agent_run(
             async with mcp_session_pool():
                 return await RunProvider.run(agent, enhanced_prompt, resolved_provider, resolved_model_name, context)
 
-        result = _run_async_safely(_run_with_mcp_pool())
+        try:
+            result = _run_async_safely(_run_with_mcp_pool())
+        finally:
+            # New snapshot: rows committed during the call would otherwise fail later writes (1020).
+            safe_commit()
 
         new_items = getattr(result, "new_items", []) or []
 
@@ -2549,6 +2564,7 @@ def _execute_agent_run(
             # read the normalised payload and fall back to the parts.
             total_tokens = (usage_dict or {}).get("total_tokens") or (input_tokens + output_tokens)
 
+            safe_commit()  # no open snapshot, so the increment below cannot hit 1020
             try:
                 frappe.db.sql("""
                     UPDATE `tabAgent Conversation`
@@ -2654,6 +2670,9 @@ def _execute_agent_run(
                 "cost_calculation_status": "calculated" if cost is not None else "unavailable",
             })
 
+        from huf.ai.orchestration.cancel import finish_if_cancelled
+        if stopped := finish_if_cancelled(run_doc, conversation):
+            return stopped
         agent_message = conv_manager.add_message(conversation, "agent", final_output, resolved_provider, resolved_model, agent_name, run_doc.name)
 
         r_res = context.get("reasoning_resolution") if context else None
@@ -2675,23 +2694,11 @@ def _execute_agent_run(
         _finalized_here = _guarded_finish_started_run(
             run_doc.name, "Success", **{k: v for k, v in run_update.items() if k != "status"}
         )
-        from huf.ai.memory_tools import should_extract_memory
+        from huf.ai.memory.extraction import enqueue_memory_extraction, should_extract_memory
 
-        # An extraction run must never queue another extraction: its own
-        # success would re-trigger the job and loop indefinitely.
+        # Extraction runs never queue another extraction (no recursion).
         if _finalized_here and should_extract_memory(agent_doc, run_doc.run_kind):
-            try:
-                frappe.enqueue(
-                    "huf.ai.memory_tools.extract_memory_from_run",
-                    queue="default",
-                    timeout=300,
-                    is_async=True,
-                    enqueue_after_commit=True,
-                    run_id=run_doc.name,
-                )
-            except (RuntimeError, TypeError, ValueError, KeyError, AttributeError,
-                    frappe.DoesNotExistError, frappe.ValidationError, frappe.PermissionError) as e:
-                frappe.logger("huf").warning(f"Memory extraction enqueue failed: {e!s}")
+            enqueue_memory_extraction(agent_doc, run_doc)
         _emit_run_lifecycle_event(
             run_doc,
             conversation,
@@ -2961,6 +2968,8 @@ def _guarded_fail_started_run(run_name: str, message: str) -> bool:
 def _save_partial_reply(conv_manager, conversation, text, provider, model, agent_name, run_name) -> bool:
     """Best-effort save of a partial reply; never raises so the guarded fail that follows always runs."""
     try:
+        safe_commit()  # new snapshot, then lock the row so no write lands mid-save (MariaDB 1020)
+        frappe.db.get_value("Agent Conversation", conversation.name, "name", for_update=True)
         conv_manager.add_message(conversation, "agent", text, provider, model, agent_name, run_name)
         return True
     except Exception as exc:
@@ -3512,6 +3521,7 @@ def _client_safe_error(e: Exception) -> str:
         return _bounded_public_message(getattr(e, "public_message", None)) or _GENERIC_STREAM_ERROR
     if type(e) in (
         frappe.ValidationError, frappe.PermissionError, frappe.DoesNotExistError, RunBudgetExceeded,
+        AIDisabled,
     ):
         msg = str(e)
         if msg:
@@ -3560,8 +3570,17 @@ async def run_agent_stream(*args, **kwargs):
     raised before that point."""
     state = {"message_saved": False}
     agen = _run_agent_stream_impl(*args, _huf_stream_state=state, **kwargs)
+    previous_budget = peek_current_budget()
     try:
-        async for chunk in agen:
+        while True:
+            # SSE consumers pull each chunk in a new task, which starts from the caller's context:
+            # the run's budget has to be set again before every step.
+            if state.get("budget"):
+                set_current_budget(state["budget"])
+            try:
+                chunk = await agen.__anext__()
+            except StopAsyncIteration:
+                break
             if isinstance(chunk, dict) and chunk.get("type") == "error":
                 chunk = {**chunk, "message_saved": state["message_saved"]}
             yield chunk
@@ -3570,7 +3589,10 @@ async def run_agent_stream(*args, **kwargs):
         yield {"type": "error", "error": _client_safe_error(e), "message_saved": state["message_saved"]}
     finally:
         # Propagate aclose()/cancellation so the impl's salvage `finally` still runs.
-        await agen.aclose()
+        try:
+            await agen.aclose()
+        finally:
+            set_current_budget(previous_budget)
 
 
 async def _run_agent_stream_impl(
@@ -3677,6 +3699,25 @@ async def _run_agent_stream_impl(
             }
             return
 
+        # Kill switch and spend cap, checked before anything is written.
+        try:
+            budget = RunBudget.from_agent(agent_doc)
+            if budget.spend_cap_usd:
+                # Guests may not choose the model, so they must not choose the price either.
+                is_guest = frappe.session.user == "Guest"
+                _provider, cost_model, _name = _resolve_effective_model(
+                    agent_doc,
+                    model=None if is_guest else model,
+                    provider=None if is_guest else provider,
+                )
+                budget.check_spend(estimate_run_cost(agent_doc, model=cost_model, provider=_provider))
+        except RunBudgetExceeded as e:
+            yield {"type": "error", "error": _client_safe_error(e)}
+            return
+        set_current_budget(budget)
+        if _huf_stream_state is not None:
+            _huf_stream_state["budget"] = budget
+
         conv_manager = ConversationManager(
             agent_name=agent_name,
             channel=channel_id,
@@ -3732,7 +3773,8 @@ async def _run_agent_stream_impl(
 
         # Persist the effective model override on the conversation so subsequent
         # turns in the same chat continue using it unless explicitly changed again.
-        frappe.db.set_value("Agent Conversation", conversation.name, "model", resolved_model)
+        if conversation.model != resolved_model:
+            frappe.db.set_value("Agent Conversation", conversation.name, "model", resolved_model)
 
         context_strategy = agent_doc.context_strategy or "Summarize"
         history_limit = agent_doc.history_limit or 20
@@ -3779,7 +3821,11 @@ async def _run_agent_stream_impl(
             "prompt": prompt,
             "prompt_template": resolved_prompt_template,
             "model": resolved_model,
-            "provider": resolved_provider
+            "provider": resolved_provider,
+            "budget_deadline_at": budget.deadline_at,
+            "budget_depth": budget.current_depth,
+            "budget_ancestry": frappe.as_json(budget.ancestry),
+            "budget_spend_usd": budget.spend_so_far_usd,
         }
         if client_idempotency_key:
             run_doc_data["idempotency_key"] = client_idempotency_key
@@ -4057,14 +4103,21 @@ async def _run_agent_stream_impl(
                 try:
                     budget = get_current_budget()
                     budget.check_deadline()
-                except RunBudgetExceeded:
+                except RunBudgetExceeded as budget_error:
                     try:
                         await poll.aclose()
                     except Exception:
                         pass
+                    switched_off = isinstance(budget_error, AIDisabled)
+                    if switched_off:
+                        # Otherwise the disconnect cleanup would record a partial reply as Success.
+                        _guarded_finish_started_run(
+                            run_doc.name, "Failed", error_message=AI_DISABLED, end_time=now_datetime()
+                        )
+                        safe_commit()
                     yield {
                         "type": "error",
-                        "error": "Run budget deadline exceeded",
+                        "error": AI_DISABLED if switched_off else "Run budget deadline exceeded",
                         "success": False,
                         "agent_run_id": run_doc.name,
                         "conversation_id": conversation.name
@@ -4232,6 +4285,7 @@ async def _run_agent_stream_impl(
                         cost = 0.0
 
                     # Update Conversation Metrics
+                    safe_commit()  # as on the sync path (MariaDB 1020)
                     try:
                         frappe.db.sql("""
                             UPDATE `tabAgent Conversation`
@@ -4359,6 +4413,10 @@ async def _run_agent_stream_impl(
                             "conversation_id": conversation.name,
                         }
                         return
+
+                    from huf.ai.memory.extraction import enqueue_memory_extraction
+
+                    enqueue_memory_extraction(agent_doc, run_doc, after_commit=False)  # run committed above
 
                     # Handle Sub-Agent Success Lifecycle Hook
                     if parent_conversation_id and invoked_by_agent:

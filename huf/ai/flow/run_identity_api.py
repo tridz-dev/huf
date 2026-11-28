@@ -17,20 +17,38 @@ from huf.ai.flow.runs.access import require_run_access
 @frappe.whitelist(methods=["GET"])
 def get_flow_run_identity(flow_run_id: str) -> dict:
 	"""``{run_number, started_by, started_by_name}`` for one Flow Run the caller may read."""
+	from huf.ai.flow.app_scope.api_guards import guard_run
+	guard_run(flow_run_id, "view")
 	require_run_access(flow_run_id, "read")
-	run = frappe.db.get_value("Flow Run", flow_run_id, ["flow_id", "creation", "owner"], as_dict=True)
+	run = frappe.db.get_value("Agent Flow Run", flow_run_id, ["flow_id", "creation", "owner"], as_dict=True)
 	if not run:
 		frappe.throw(_("Run not found"), frappe.DoesNotExistError)
 	return {
 		"run_number": run_number(run.flow_id, run.creation),
 		"started_by": run.owner,
 		"started_by_name": _full_name(run.owner),
+		"resume_at": _resume_at(flow_run_id),
 	}
+
+
+def _resume_at(flow_run_id: str) -> str | None:
+	"""When a run parked on a timed Wait continues (UTC, ``YYYY-MM-DDTHH:MM:SS``), else None."""
+	import json
+
+	raw = frappe.db.get_value("Agent Flow Run", flow_run_id, "waiting")
+	try:
+		waiting = json.loads(raw) if isinstance(raw, str) and raw else raw
+	except ValueError:
+		return None
+	if not isinstance(waiting, dict) or waiting.get("type") != "timer" or waiting.get("mode") != "timed":
+		return None
+	at = waiting.get("resume_at")
+	return at if isinstance(at, str) and at else None
 
 
 def run_number(flow_id: str, creation) -> int:
 	"""1-based place of a run among all runs of its flow, oldest first."""
-	return frappe.db.count("Flow Run", {"flow_id": flow_id, "creation": ["<=", creation]})
+	return frappe.db.count("Agent Flow Run", {"flow_id": flow_id, "creation": ["<=", creation]})
 
 
 def _full_name(user: str | None) -> str | None:

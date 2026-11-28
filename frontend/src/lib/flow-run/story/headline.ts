@@ -1,6 +1,6 @@
 import type { FlowRunDetail } from '@/services/flowApi';
 import { formatDuration, friendlyClock, runDuration, spokenDuration, sinceMs } from './time';
-import { stoppedByPerson, whoWords } from './runStatus';
+import { isResumeWait, stoppedByPerson, whoWords } from './runStatus';
 
 export interface RunHeadlineText {
   /** The one sentence a person reads first. */
@@ -32,6 +32,12 @@ export function runHeadline(run: FlowRunDetail, now: number = Date.now(), curren
   if (status === 'Waiting Code' && run.approval_lapsed) return { headline: 'The approval expired', sub: 'Nobody answered in time, so this run will not continue by itself. Start the flow again to retry.' };
   if (status === 'Waiting Code') return { headline: 'Waiting for a code review', sub: 'It continues by itself once the code has been approved.' };
   if (status === 'Waiting User') return { headline: 'Waiting for someone to continue it', sub: '' };
+  if (status === 'Waiting Timer') return { headline: isResumeWait(run) ? 'Waiting for someone to continue it' : 'Waiting for a timer', sub: '' };
+  if (status === 'Cancelled') {
+    const by = stoppedByPerson(run.last_error);
+    if (by) return { headline: `Cancelled by ${whoWords(by.by, currentUser)}`, sub: by.why };
+    return { headline: 'Cancelled', sub: '' };
+  }
   if (status === 'Queued') return { headline: 'Waiting for a worker', sub: 'It is in line and starts as soon as a worker is free.' };
   const took = run.started_at ? formatDuration(sinceMs(run.started_at, now)) : '';
   return { headline: 'Running now', sub: took ? `Started ${took} ago` : '' };

@@ -1,3 +1,4 @@
+import { useResourceAccess } from '@/hooks/permissions/useResourceAccess';
 import { useState } from 'react';
 import { Plus, Download, Store } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -13,6 +14,9 @@ export function SkillsHeaderActions({ onImportSuccess }: SkillsHeaderActionsProp
   const navigate = useNavigate();
   const [importOpen, setImportOpen] = useState(false);
   const [marketplaceOpen, setMarketplaceOpen] = useState(false);
+  const { canCreate } = useResourceAccess('skill');
+
+  if (!canCreate) return null;
 
   return (
     <>

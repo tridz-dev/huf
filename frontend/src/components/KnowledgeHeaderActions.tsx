@@ -1,3 +1,4 @@
+import { useResourceAccess } from '@/hooks/permissions/useResourceAccess';
 import { Plus } from 'lucide-react';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from './ui/button';
@@ -5,9 +6,12 @@ import { Button } from './ui/button';
 export function KnowledgeHeaderActions() {
   const navigate = useNavigate();
 
+  const { canCreate } = useResourceAccess('knowledge');
   const handleNew = () => {
     navigate('/knowledge?new=1');
   };
+
+  if (!canCreate) return null;
 
   return (
     <Button variant="display" onClick={handleNew} size="sm">

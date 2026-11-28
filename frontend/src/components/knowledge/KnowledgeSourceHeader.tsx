@@ -1,3 +1,4 @@
+import { useResourceAccess } from '@/hooks/permissions/useResourceAccess';
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -60,6 +61,7 @@ export function KnowledgeSourceHeader({
   const { id } = useParams<{ id: string }>();
   const [rebuildOpen, setRebuildOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const access = useResourceAccess('knowledge');
   const [deleting, setDeleting] = useState(false);
   const indexing = rebuilding || sourceStatus === 'Indexing' || sourceStatus === 'Rebuilding';
 
@@ -129,11 +131,15 @@ export function KnowledgeSourceHeader({
                   <RotateCcw className="mr-2 h-4 w-4" />
                   Rebuild search index
                 </DropdownMenuItem>
+                {access.canDelete && (
+                <>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem className="text-destructive" onSelect={() => setDeleteOpen(true)} data-testid="delete-source-menu">
                   <Trash2 className="mr-2 h-4 w-4" />
                   Delete
                 </DropdownMenuItem>
+                </>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           </>

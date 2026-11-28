@@ -1,3 +1,4 @@
+import { useResourceAccess } from '@/hooks/permissions/useResourceAccess';
 import { useEffect } from 'react';
 import { Puzzle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -13,6 +14,7 @@ import { getServiceIdentity } from '@/data/serviceIdentity';
 
 export function IntegrationServicesListingPage() {
   const navigate = useNavigate();
+  const access = useResourceAccess('integrationService');
 
   const {
     items: services,
@@ -110,7 +112,7 @@ export function IntegrationServicesListingPage() {
               icon={Puzzle}
               title="No integration services"
               description="Define a service catalog to describe credentials and connection settings."
-              action={{ label: 'New service', onClick: () => navigate('/integration-services/new') }}
+              action={access.canCreate ? { label: 'New service', onClick: () => navigate('/integration-services/new') } : undefined}
             />
           )
         }

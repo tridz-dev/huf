@@ -144,6 +144,8 @@ class TestRouterLlm(unittest.TestCase):
 		cfg = {"prompt": "urgent?", "options": self.OPTIONS, "default": "n_loop"}
 		cfg.update(config or {})
 		with (
+			# the AI kill switch fails closed with no site; it has its own tests
+			patch("huf.ai.run_budget.assert_ai_enabled"),
 			patch.object(flow_engine, "resolve_router_model", side_effect=lambda m: ("OpenAI", m or "default-model")),
 			patch.object(flow_engine, "_router_completion", side_effect=lambda p, prov, mod: completion(p)),
 		):
@@ -197,7 +199,8 @@ class TestRouterLlm(unittest.TestCase):
 
 	def test_unusable_model_routes_to_default_with_reason(self):
 		cfg = {"prompt": "p", "options": self.OPTIONS, "default": "n_loop", "model": "nope"}
-		with patch.object(flow_engine, "resolve_router_model", side_effect=RuntimeError("AI model 'nope' was not found")):
+		with patch("huf.ai.run_budget.assert_ai_enabled"), \
+			patch.object(flow_engine, "resolve_router_model", side_effect=RuntimeError("AI model 'nope' was not found")):
 			out = flow_engine._exec_router_llm(_Run(), {"id": "r"}, cfg, {})
 		self.assertEqual(out["next_node_id"], "n_loop")
 		self.assertIn("not found", out["output"]["reason"])
@@ -216,7 +219,7 @@ class TestRouterLlm(unittest.TestCase):
 
 class TestRouterDecision(unittest.TestCase):
 	def test_disabled_provider_routes_to_default(self):
-		cfg = {"policy": "p", "options": [{"label": "a", "node_id": "A"}], "default": "D"}
+		cfg = {"options": [{"label": "a", "node_id": "A"}], "default": "D"}
 		out = flow_engine._exec_router_decision(_Run(), {"id": "r"}, cfg, {})
 		self.assertEqual(out["next_node_id"], "D")
 

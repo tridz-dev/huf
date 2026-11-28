@@ -38,6 +38,14 @@ describe('chat trigger serialization', () => {
     expect(serializeFlow(back)).toEqual(graph);
   });
 
+  it.each(GATEWAY_TRIGGER_KINDS)('$id keeps the entry policy through save and reload', ({ id }) => {
+    const cfg = { type: id, gateway: 'Support', entry_policy: 'resume_if_waiting' } as TriggerConfig;
+    const graph = serializeFlow(flowOf(cfg));
+    expect(triggerNode(graph).config).toEqual({ gateway: 'Support', entry_policy: 'resume_if_waiting' });
+    expect(problems(graph)).toEqual([]);
+    expect(deserializeFlow('f', 'F', 'Draft', graph).nodes.find((n) => n.id === 't1')!.data.triggerConfig).toEqual(cfg);
+  });
+
   it('a draft with no channel chosen saves, validates against the schema and reloads still unset', () => {
     for (const { id, nodeType } of GATEWAY_TRIGGER_KINDS) {
       const graph = serializeFlow(flowOf({ type: id } as TriggerConfig));
@@ -76,7 +84,7 @@ describe('trigger type tables', () => {
       expect(TRIGGER_CONFIG_KEYS[nodeType]).toBeDefined();
     }
     expect(Object.values(TRIGGER_TO_NODE_TYPE).sort()).toEqual(
-      ['trigger.doc-event', 'trigger.gateway', 'trigger.schedule', 'trigger.telegram', 'trigger.webhook', 'trigger.whatsapp']
+      ['trigger.app', 'trigger.doc-event', 'trigger.gateway', 'trigger.schedule', 'trigger.telegram', 'trigger.webhook', 'trigger.whatsapp']
     );
   });
 

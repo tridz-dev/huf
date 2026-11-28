@@ -6,6 +6,10 @@ import { EndForm } from '../forms/EndForm';
 import { ActionConfigForm, TriggerConfigForm } from '../NodeConfigForms';
 import { nodeKind } from '@/lib/flow-graph/flowValidation';
 import type { FlowNode } from '../../../types/flow.types';
+import { useAppNodeTypes } from '@/lib/flow-graph/appNodeTypes';
+import { embedApp } from '../palette/embedScope';
+import { isStepAllowed } from '../palette/scopeFilter';
+import { OutOfScopeStep } from './OutOfScopeStep';
 import { ConnectionPanel } from './ConnectionPanel';
 import { Pressable } from './Pressable';
 import { clearFocusRequest, requestFocus, useFrame } from './frameStore';
@@ -20,11 +24,21 @@ import { useFlowIssues } from '@/hooks/flow/useFlowIssues';
 
 const TAB_LABEL: Record<FrameTab, string> = { setup: 'Setup', test: 'Test', settings: 'Settings' };
 
+type StepFrameProps = { node: FlowNode; onClose?: () => void; onDelete: () => void };
+
+/** In the embedded editor, a step outside the app's scope is shown read-only. */
+export function StepFrame(props: StepFrameProps) {
+  const { loaded } = useAppNodeTypes();
+  if (embedApp() !== null && !loaded) return null;
+  if (!isStepAllowed(props.node)) return <OutOfScopeStep node={props.node} onClose={props.onClose} />;
+  return <ScopedStepFrame {...props} />;
+}
+
 /**
  * The step panel: sticky header (name, kind, menu, close), status strip, tabs, then the tab's body. All three
  * bodies stay mounted (inactive ones are hidden) so a half-typed field and the "(i)" text survive a tab change.
  */
-export function StepFrame({ node, onClose, onDelete }: { node: FlowNode; onClose?: () => void; onDelete: () => void }) {
+function ScopedStepFrame({ node, onClose, onDelete }: { node: FlowNode; onClose?: () => void; onDelete: () => void }) {
   const { canManage } = useFlowPermissions();
   const issues = useFlowIssues();
   const mine = useMemo(() => issuesForStep(issues, node.id), [issues, node.id]);

@@ -13,7 +13,10 @@ from frappe import _
 from frappe.desk.doctype.notification_log.notification_log import enqueue_create_notification
 from frappe.desk.doctype.notification_settings.notification_settings import is_email_notifications_enabled
 
+from huf.ai.flow.app_scope.access import approval_recipients
+from huf.ai.flow.app_scope.links import flow_link
 from huf.ai.flow.support.approval_card import build_card, facts_html, flow_name_of
+from huf.ai.flow.support.approvers import approver_roles_of
 from huf.ai.transaction import commit_if_background
 
 
@@ -36,19 +39,16 @@ def _send_approval_notifications(flow_run, node: dict, config: dict, waiting_dat
 	approvers = []
 
 	# Same rule as check_approver: no declared approver means System Manager only.
-	if approver_type == "role" and waiting_data.get("approver_role"):
-		approver_role = waiting_data.get("approver_role")
-	elif approver_type == "user" and waiting_data.get("approver_users"):
-		approver_role = None
-	else:
-		approver_type, approver_role = "role", "System Manager"
+	role_names = approver_roles_of(waiting_data)
+	if not (approver_type == "role" and role_names) and not (approver_type == "user" and waiting_data.get("approver_users")):
+		approver_type, role_names = "role", ["System Manager"]
 
 	if approver_type == "role":
-		if approver_role:
+		if role_names:
 			# Optimized role lookup: Get all users with this role directly from Has Role table
 			approver_names = frappe.get_all(
 				"Has Role",
-				filters={"role": approver_role, "parenttype": "User"},
+				filters={"role": ["in", role_names], "parenttype": "User"},
 				pluck="parent"
 			)
 			if approver_names:
@@ -68,7 +68,9 @@ def _send_approval_notifications(flow_run, node: dict, config: dict, waiting_dat
 	# Ensure unique recipients to avoid duplicate emails
 	if approvers:
 		approvers = list(set(approvers))
-	
+	# App-owned flow: only people who may approve this flow. Nobody left is logged below, never widened.
+	approvers = approval_recipients(flow_run, approvers)
+
 	if not approvers:
 		frappe.log_error(
 			title="Flow Approval Notification",
@@ -79,7 +81,7 @@ def _send_approval_notifications(flow_run, node: dict, config: dict, waiting_dat
 	card = build_card(waiting_data.get("flow_name") or flow_name_of(flow_run), waiting_data)
 	headline, lead, facts = card["headline"], card["lead"], card["facts"]
 
-	flow_run_path = f"/huf/flows/{flow_run.flow_id}?run={flow_run.name}"
+	flow_run_path = flow_link("approval", flow_run.flow_id, flow_run.name, owner_app=flow_run.get("owner_app"))
 
 	_host = (frappe.conf.get("host_name") or frappe.utils.get_url()).rstrip("/")
 	flow_run_url = f"{_host}{flow_run_path}"
@@ -97,8 +99,10 @@ def _send_approval_notifications(flow_run, node: dict, config: dict, waiting_dat
 			# 1. Create Frappe Notification Log (appears in bell icon)
 			enqueue_create_notification(user_email, {
 				"type": "Assignment",
-				"document_type": "Flow Run",
+				"document_type": "Agent Flow Run",
 				"document_name": flow_run.name,
+				# The bell opens ``link`` (the owner app's route for an app flow), not the Agent Flow Run form.
+				"link": flow_run_path,
 				"subject": headline,
 				"email_content": f"""
 					{body}
@@ -152,7 +156,7 @@ def _clear_flow_notifications(flow_run):
 			frappe.db.set_value(
 				"Notification Log",
 				{
-					"document_type": "Flow Run",
+					"document_type": "Agent Flow Run",
 					"document_name": flow_run.name,
 					"read": 0
 				},

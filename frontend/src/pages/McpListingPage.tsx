@@ -1,3 +1,4 @@
+import { useResourceAccess } from '@/hooks/permissions/useResourceAccess';
 import { useEffect } from 'react';
 import { Calendar, Settings, Tag, Server } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -22,6 +23,7 @@ function getMcpStatus(server: MCPServerDoc): { label: string; variant: BadgeVari
 
 export default function McpListingPage() {
   const navigate = useNavigate();
+  const access = useResourceAccess('mcp');
 
   const {
     items: servers,
@@ -113,7 +115,7 @@ export default function McpListingPage() {
               icon={Server}
               title="No MCP servers"
               description="Connect a server to expand agent capabilities."
-              action={{ label: 'New MCP server', onClick: () => navigate('/mcp/new') }}
+              action={access.canCreate ? { label: 'New MCP server', onClick: () => navigate('/mcp/new') } : undefined}
             />
           )
         }

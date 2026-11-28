@@ -28,9 +28,15 @@ def get_or_create_voice_conversation(agent_name: str, conversation_id: str | Non
 		channel="realtime_voice",
 		external_id=conversation_id or frappe.generate_hash(length=16),
 	)
-	return cm, cm.get_or_create_conversation(
-		title=f"Voice Call: {agent_name}", conversation_id=conversation_id
-	)
+	title = f"Voice Call: {agent_name}"
+	try:
+		return cm, cm.get_or_create_conversation(title=title, conversation_id=conversation_id)
+	except frappe.PermissionError:
+		if not conversation_id:
+			raise
+		# The recorded conversation is gone or no longer accessible: keep the call
+		# in a fresh conversation rather than losing it.
+		return cm, cm.get_or_create_conversation(title=title)
 
 
 def record_voice_turn(

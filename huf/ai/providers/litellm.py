@@ -1524,7 +1524,12 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
         tool_loop_repeats = 0
         MAX_TOOL_LOOP_REPEATS = 1
 
+        from huf.ai.run_control import is_run_cancelled
+
+        run_id = context.get("agent_run_id") if context else None
         for round_num in range(MAX_ROUNDS):
+            if is_run_cancelled(run_id):
+                break  # Stop pressed: the caller finalizes the run as cancelled.
             # Check deadline at the top of each round (ST-09.3)
             try:
                 budget = get_current_budget()
@@ -1969,6 +1974,8 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
                 raise ProviderUnavailableError(msg)
 
             for tool_call in choice.tool_calls:
+                if is_run_cancelled(run_id):
+                    break
                 function_call = tool_call.function
                 tool_name = function_call.name
                 tool_args = function_call.arguments

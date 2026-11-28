@@ -3,7 +3,7 @@
  * branching step, an End, or several steps at once are copied beside the originals, with the connections among the copies kept.
  */
 import { edgeRoute, makeFlowEdge } from '../../services/flowSerializer';
-import { branchHandlesFor } from '../flow/flowBranches';
+import { branchHandlesFor, isPathRouter } from '../flow/flowBranches';
 import { subtreeIds } from '../flow/flowEdgeLabels';
 import { ROW_GAP } from '../flow/flowLayout';
 import type { FlowEdge, FlowNode } from '../../types/flow.types';
@@ -27,7 +27,7 @@ type Cfg = ({ type?: string } & Record<string, unknown>) | undefined;
 export function isLinearStep(node: FlowNode, edges: FlowEdge[]): boolean {
   if (node.data.nodeType !== 'action') return false;
   const cfg = node.data.actionConfig as Cfg;
-  if (cfg?.type === 'router' || branchHandlesFor(cfg?.type, cfg).length > 0) return false;
+  if (isPathRouter(cfg?.type) || branchHandlesFor(cfg?.type, cfg).length > 0) return false;
   const out = edges.filter((e) => e.source === node.id);
   return out.length === 0 || (out.length === 1 && edgeRoute(out[0]) === 'next');
 }

@@ -63,8 +63,12 @@ export function deriveContract(nodes: BackendNode[]): BackendContract {
     );
     if (toolIds.has('http_request')) contract.permission_envelope.http = ['http_request'];
     if (toolIds.has('run_python')) contract.permission_envelope.code = ['run_python'];
+    const reads = new Set(
+        nodes.filter((n) => n.type === 'doc.get').map((n) => n.config.doctype).filter((d): d is string => typeof d === 'string' && d !== '')
+    );
+    contract.permission_envelope.read = [...reads].sort().map((doctype) => ({ doctype }));
     const writes = new Set(
-        nodes.filter((n) => n.type === 'doc.create').map((n) => n.config.doctype).filter((d): d is string => typeof d === 'string' && d !== '')
+        nodes.filter((n) => n.type === 'doc.create' || n.type === 'doc.update').map((n) => n.config.doctype).filter((d): d is string => typeof d === 'string' && d !== '')
     );
     contract.permission_envelope.write = [...writes].sort().map((doctype) => ({ doctype }));
     return contract;

@@ -45,7 +45,7 @@ class TestFlowRunIdentity(IntegrationTestCase):
 	def _run(self, minutes_ago):
 		run = frappe.get_doc(
 			{
-				"doctype": "Flow Run",
+				"doctype": "Agent Flow Run",
 				"flow_definition": self.flow_doc,
 				"flow_id": self.flow_id,
 				"status": "Success",
@@ -55,7 +55,7 @@ class TestFlowRunIdentity(IntegrationTestCase):
 		)
 		run.insert(ignore_permissions=True)
 		run.db_set("creation", add_to_date(now_datetime(), minutes=-minutes_ago), update_modified=False)
-		self._docs.append(("Flow Run", run.name))
+		self._docs.append(("Agent Flow Run", run.name))
 		return run.name
 
 	def test_number_counts_runs_of_the_same_flow_oldest_first(self):

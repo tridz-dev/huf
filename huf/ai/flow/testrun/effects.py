@@ -72,7 +72,9 @@ _CHANGES = (
 	"export_artifact export_document redline_artifact desktop_write_file desktop_edit_file "
 	"desktop_make_directory desktop_move_path desktop_delete_path desktop_run_command desktop_skill_run "
 	"desktop_process_start desktop_process_stop desktop_local_mcp desktop_mcp_call desktop_browser "
-	"run_flow resume_flow_run approve_flow_run gateway_handoff"
+	"run_flow resume_flow_run approve_flow_run gateway_handoff "
+	# runs another agent, whose own tools may change or send anything and which a test run could not hold back
+	"delegate_to_agent"
 ).split()
 
 # Names not in the lists above that still read: flow tools that only look at a run.

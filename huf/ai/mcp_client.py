@@ -992,7 +992,6 @@ def get_available_mcp_servers() -> list:
         )
         return []
 
-@frappe.whitelist()
 def auto_sync_mcp_server_tools():
     """
     Scheduled job to auto-sync MCP server Tools.

@@ -78,6 +78,8 @@ def _gateway_node(flow_id: str, node_id: str) -> dict:
 @frappe.whitelist()
 def get_gateway_sample(flow_id: str, node_id: str) -> dict:
 	"""``{found: True, sample, real: False}``: an invented example for the node; nothing is sent."""
+	from huf.ai.flow.app_scope.api_guards import guard_huf_flow
+	guard_huf_flow(flow_id)
 	node = _gateway_node(flow_id, node_id)
 	return {"found": True, "sample": sample_for_node(node), "real": False}
 
@@ -85,6 +87,8 @@ def get_gateway_sample(flow_id: str, node_id: str) -> dict:
 @frappe.whitelist()
 def get_last_gateway_message(flow_id: str, node_id: str) -> dict:
 	"""``{found, sample, received_at, real: True}``: the newest real message for this node's channel, numbers masked."""
+	from huf.ai.flow.app_scope.api_guards import guard_huf_flow
+	guard_huf_flow(flow_id)
 	node = _gateway_node(flow_id, node_id)
 	gateway = str((node.get("config") or {}).get("gateway") or "")
 	if not gateway:
@@ -93,7 +97,7 @@ def get_last_gateway_message(flow_id: str, node_id: str) -> dict:
 	if not frappe.has_permission("Gateway", "write", doc=gateway):
 		frappe.throw(_("Not permitted"), frappe.PermissionError)
 	rows = frappe.get_all(
-		"Flow Run",
+		"Agent Flow Run",
 		filters={"flow_id": flow_id, "trigger_type": "Gateway"},
 		fields=["trigger_payload", "creation"],
 		order_by="creation desc",

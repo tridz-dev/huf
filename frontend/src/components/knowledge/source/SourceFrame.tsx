@@ -1,3 +1,4 @@
+import { useResourceAccess } from '@/hooks/permissions/useResourceAccess';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -114,6 +115,7 @@ export function SourceFrame(props: SourceFrameProps) {
   const navigate = useNavigate();
   const [rebuildOpen, setRebuildOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const access = useResourceAccess('knowledge');
   const [deleting, setDeleting] = useState(false);
   const indexing = rebuilding || sourceStatus === 'Indexing' || sourceStatus === 'Rebuilding';
   const name = form.watch('source_name');
@@ -158,19 +160,19 @@ export function SourceFrame(props: SourceFrameProps) {
               <Plus className="mr-2 h-4 w-4" />
               Add content
             </Button>
+            {access.canWrite && (
+              <Button type="button" size="sm" variant="outline" onClick={props.onToggleDisabled} data-testid="toggle-disabled">
+                {disabled ? <PlayCircle className="mr-2 h-4 w-4" /> : <PauseCircle className="mr-2 h-4 w-4" />}
+                {disabled ? 'Turn on' : 'Turn off'}
+              </Button>
+            )}
             <OverflowMenu
               items={[
                 { label: 'Settings', icon: Settings, onSelect: props.onOpenSettings },
                 { label: 'History', icon: History, onSelect: props.onOpenHistory },
                 { label: 'Connect to an agent', icon: Plug, onSelect: props.onConnectAgent },
                 { label: 'Rebuild search index', icon: RotateCcw, disabled: indexing, onSelect: () => setRebuildOpen(true) },
-                {
-                  label: disabled ? 'Turn on' : 'Turn off',
-                  icon: disabled ? PlayCircle : PauseCircle,
-                  separated: true,
-                  onSelect: props.onToggleDisabled,
-                },
-                { label: 'Delete', icon: Trash2, destructive: true, onSelect: () => setDeleteOpen(true) },
+                ...(access.canDelete ? [{ label: 'Delete', icon: Trash2, destructive: true, separated: true, onSelect: () => setDeleteOpen(true) }] : []),
               ]}
             />
           </>

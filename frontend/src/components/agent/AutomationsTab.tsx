@@ -1,3 +1,4 @@
+import { useResourceAccess } from '@/hooks/permissions/useResourceAccess';
 import { useNavigate, Link } from 'react-router-dom';
 import { Plus, Loader2, Workflow, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -33,6 +34,7 @@ const triggerTypesLabel = automationTriggerTypesLabel;
 export function AutomationsTab({ agentId }: AutomationsTabProps) {
   const navigate = useNavigate();
   const list = useAutomationsList({ agent: agentId });
+  const access = useResourceAccess('automation');
 
   const handleAddAutomation = () => {
     navigate(`/automations/new?agent=${encodeURIComponent(agentId)}`);
@@ -51,10 +53,12 @@ export function AutomationsTab({ agentId }: AutomationsTabProps) {
             These automations reference this agent. Changing or deprecating the agent affects every automation listed here.
           </p>
         </div>
-        <Button onClick={handleAddAutomation} size="sm" type="button">
-          <Plus className="w-4 h-4 mr-2" />
-          Add automation
-        </Button>
+        {access.canCreate && (
+          <Button onClick={handleAddAutomation} size="sm" type="button">
+            <Plus className="w-4 h-4 mr-2" />
+            Add automation
+          </Button>
+        )}
       </CardHeader>
       <CardContent>
         {list.runtimeMode === 'legacy' && (
@@ -76,7 +80,7 @@ export function AutomationsTab({ agentId }: AutomationsTabProps) {
             icon={Workflow}
             title="No automations use this agent"
             description="Nothing runs this agent automatically yet. Create an automation to run it on a schedule, a document change, or an external event."
-            action={{ label: 'Add automation', onClick: handleAddAutomation }}
+            action={access.canCreate ? { label: 'Add automation', onClick: handleAddAutomation } : undefined}
           />
         ) : (
           <>

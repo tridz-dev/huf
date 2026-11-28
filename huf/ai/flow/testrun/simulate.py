@@ -60,6 +60,11 @@ def _summary_and_sample(tool_id: str, effect: str, args: dict) -> tuple[str, dic
 		return _to("Would update the sheet range", _first(args, "range"), "Would update a Google Sheet"), {"updatedCells": 1}
 	if tool_id == "gsheets_create":
 		return _to("Would create a Google Sheet called", _first(args, "title"), "Would create a Google Sheet"), {"spreadsheetId": SAMPLE_ID}
+	if tool_id == "delegate_to_agent":
+		return (
+			_to("Would ask the agent", _first(args, "target_agent_name"), "Would ask another agent"),
+			{"success": True, "status": "Success", "result": ""},
+		)
 	if tool_id == "gmail_create_draft":
 		return _to("Would save an email draft for", _first(args, "to"), "Would save an email draft"), {"id": SAMPLE_ID}
 	if tool_id.startswith("gcalendar_"):
@@ -91,6 +96,18 @@ def simulated_document(doctype: Any) -> dict:
 	kind = str(doctype or "").strip()
 	summary = f"Would create a {kind} record" if kind else "Would create a record"
 	return {"simulated": True, "summary": summary, "note": NOTE, "doctype": kind or None, "name": f"(sample) {kind or 'record'}"}
+
+
+def simulated_update(doctype: Any) -> dict:
+	"""What a skipped ``doc.update`` hands to later steps."""
+	kind = str(doctype or "").strip()
+	summary = f"Would change a {kind} record" if kind else "Would change a record"
+	return {"simulated": True, "summary": summary, "note": NOTE, "doctype": kind or None, "name": f"(sample) {kind or 'record'}"}
+
+
+def simulated_handoff() -> dict:
+	"""What a skipped "Hand to a person" step hands to later steps."""
+	return {"simulated": True, "summary": "Would hand the conversation to a person", "note": NOTE, "released": False}
 
 
 def simulated_code(profile: Any) -> dict:

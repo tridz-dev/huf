@@ -12,6 +12,7 @@ import { useUser } from '@/contexts/UserContext';
 import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
 import { useViewport } from '@/lib/ui/responsive';
 import { RUN_BUTTON_LABEL } from '@/lib/flow-run/flowRunPayload';
+import { embedBoot } from '@/embed/bridge';
 
 interface FlowRunHistoryProps {
     flowId: string;
@@ -106,7 +107,8 @@ export function FlowRunHistory({ flowId, open, onOpenChange, onSelectRun, onRunT
                     ) : runs.length === 0 ? (
                         <div className="text-center p-8 text-sm text-muted-foreground bg-muted/30 rounded-lg border border-dashed" data-testid="flow-run-history-empty">
                             <p>
-                                {canManage
+                                {/* The embedded editor has no publish: the host app does that. */}
+                                {canManage && !embedBoot()
                                     ? 'No runs found for this flow yet. Run a test to try it now, or publish it so its trigger starts it.'
                                     : 'No runs yet. Runs show up here once the flow has been started.'}
                             </p>

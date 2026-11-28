@@ -78,6 +78,7 @@ from typing import Any
 
 from huf.ai.graph import transforms
 from huf.ai.graph.expressions import ExpressionError, parse_expression
+from huf.ai.graph.validation import step_checks
 from huf.ai.graph.validation.result import GraphValidationError, ValidationError, ValidationResult
 from huf.ai.graph.validation.schema_stage import (  # noqa: F401 -- re-exported: other modules import these from here
 	GRAPH_IR_SCHEMA,
@@ -127,21 +128,23 @@ FLOW_ONLY_NODE_TYPES: frozenset[str] = frozenset(
 		"trigger.schedule",
 		"trigger.doc-event",
 		"trigger.unset",
+		"trigger.app",
 		"state.get",
 		"state.set",
 		"state.delete",
 		"doc.create",
 		"code.run",
+		"wait", "stop", "doc.get", "doc.update", "flow.call", "member.set", "send.message", "split",
+		"knowledge.search", "handoff",
 	}
 ) | {"trigger.gateway", "trigger.whatsapp", "trigger.telegram"}  # chat triggers: huf/ai/flow/gateways
 
 # ``parallel`` is a Procedure-only node: Flow has no concurrent branches.
 FLOW_NODE_TYPES: frozenset[str] = (PROCEDURE_NODE_TYPES - {"parallel"}) | FLOW_ONLY_NODE_TYPES
 
-_PROFILE_NODE_TYPES: dict[str, frozenset[str]] = {
-	"procedure": PROCEDURE_NODE_TYPES,
-	"flow": FLOW_NODE_TYPES,
-}
+def get_flow_node_types() -> frozenset[str]:
+	"""Built-in Flow step types plus those installed apps register through the ``huf_flow_nodes`` hook."""
+	return FLOW_NODE_TYPES | step_checks.registered_node_types()
 
 
 # Policy ceilings for contract.limits (requirement 6: "within policy", not merely "present").
@@ -221,6 +224,7 @@ def validate_graph(
 	errors: list[ValidationError] = []
 	errors.extend(_check_profile_node_types(nodes, profile))
 	errors.extend(_check_control_flow_targets(graph, nodes_by_id))
+	errors.extend(_check_split_weights(nodes))
 	if draft:
 		# A half-built flow may have loose steps, loops of links, unfinished values and tools whose closure is not
 		# known yet; those are reported as things to finish (see huf.ai.graph.validation.flow_validation), not as a
@@ -228,8 +232,10 @@ def validate_graph(
 		errors.extend(_check_limits_policy(graph))
 		return ValidationResult(ok=not errors, profile=profile, errors=tuple(errors))
 	errors.extend(_check_reachability(graph, nodes_by_id))
+	errors.extend(_check_app_trigger_on_error(nodes))
 	errors.extend(_check_acyclic(graph, nodes_by_id))
-	errors.extend(_check_tool_ids_literal(nodes))
+	errors.extend(step_checks.check_tool_ids_literal(nodes))
+	errors.extend(step_checks.check_app_node_validators(nodes, profile))
 	errors.extend(_check_transform_ops(nodes))
 	errors.extend(_check_expressions(graph, nodes))
 	errors.extend(_check_references(nodes_by_id))
@@ -254,6 +260,27 @@ def validate_graph(
 	return ValidationResult(ok=not errors, profile=profile, errors=tuple(errors), envelope=envelope if not errors else None)
 
 
+def _check_split_weights(nodes: list) -> list[ValidationError]:
+	"""Split steps: branch weights add up to 100 and the holdout share is 0-100 (H-W2-07), in draft and publish."""
+	from huf.ai.flow.nodes.split import config_problems
+
+	errors = []
+	for node in nodes:
+		if isinstance(node, dict) and node.get("type") == "split":
+			for problem in config_problems(node.get("config") or {}):
+				errors.append(ValidationError("SPLIT_WEIGHTS", node.get("id"), "config", problem))
+	return errors
+
+
+def _check_app_trigger_on_error(nodes: list) -> list[ValidationError]:
+	"""An App trigger only refuses starts that are not its app's; an error step would let those carry on."""
+	return [
+		ValidationError("TRIGGER_ON_ERROR", node.get("id"), "on_error", "a trigger.app node must not declare on_error")
+		for node in nodes
+		if isinstance(node, dict) and node.get("type") == "trigger.app" and node.get("on_error") is not None
+	]
+
+
 def validate_procedure_graph(graph: dict, **kwargs: Any) -> ValidationResult:
 	"""Convenience wrapper: ``validate_graph(graph, "procedure", **kwargs)``."""
 	return validate_graph(graph, "procedure", **kwargs)
@@ -269,33 +296,8 @@ def validate_flow_graph(graph: dict, **kwargs: Any) -> ValidationResult:
 # --------------------------------------------------------------------------------------
 
 
-def _check_tool_ids_literal(nodes: list[dict]) -> list[ValidationError]:
-	"""Reconfirms I3 with a dedicated message. The schema already makes this structurally
-	impossible to violate (``config.tool_id`` is ``$defs/ToolId``, a plain string, never a
-	``$defs/Reference`` -- see spec/graph-ir.md section 6), so this only ever fires if a future
-	schema change accidentally widens ``ToolId``; it exists so that regression shows up as this
-	module's own named check rather than a silent schema-only pass.
-	"""
-	errors = []
-	for node in nodes:
-		if not isinstance(node, dict) or node.get("type") != "tool.call":
-			continue
-		tool_id = (node.get("config") or {}).get("tool_id")
-		if not isinstance(tool_id, str) or not tool_id:
-			errors.append(
-				ValidationError(
-					"DYNAMIC_TOOL_DISPATCH",
-					node.get("id"),
-					"config.tool_id",
-					f"tool_id must be a literal string known at validation time, got {tool_id!r} "
-					"-- dynamic tool dispatch is forbidden (I3)",
-				)
-			)
-	return errors
-
-
 def _check_profile_node_types(nodes: list[dict], profile: str) -> list[ValidationError]:
-	allowed = _PROFILE_NODE_TYPES[profile]
+	allowed = get_flow_node_types() if profile == "flow" else PROCEDURE_NODE_TYPES
 	errors = []
 	for node in nodes:
 		if not isinstance(node, dict):
@@ -340,7 +342,8 @@ def _control_flow_targets(node: dict) -> list[tuple[str, str | None]]:
 	if ntype == "condition":
 		targets.append(("config.on_true", config.get("on_true")))
 		targets.append(("config.on_false", config.get("on_false")))
-	elif ntype in {"router.llm", "router.decision"}:
+		targets.append(("config.fallback_next", config.get("fallback_next")))
+	elif ntype in {"router.llm", "router.decision", "split"}:
 		for i, option in enumerate(config.get("options", []) or []):
 			if isinstance(option, dict):
 				targets.append((f"config.options[{i}].node_id", option.get("node_id")))
@@ -349,6 +352,10 @@ def _control_flow_targets(node: dict) -> list[tuple[str, str | None]]:
 		targets.append(("config.approve_next", config.get("approve_next")))
 		targets.append(("config.reject_next", config.get("reject_next")))
 		targets.append(("config.timeout_next", config.get("timeout_next")))
+	elif ntype == "handoff":
+		targets.append(("config.timeout_next", config.get("timeout_next")))
+	elif ntype == "wait":
+		targets.append(("config.resume.timeout_next", (config.get("resume") or {}).get("timeout_next")))
 	elif ntype == "foreach":
 		for i, body_id in enumerate(config.get("body", []) or []):
 			targets.append((f"config.body[{i}]", body_id))
@@ -407,6 +414,8 @@ def _check_control_flow_targets(graph: dict, nodes_by_id: dict[str, dict]) -> li
 						f"{field} points at node id {target!r}, which does not exist in this graph",
 					)
 				)
+
+	errors.extend(step_checks.check_error_handler_target(graph, nodes_by_id))
 
 	for root in _entry_roots(graph):
 		if root not in nodes_by_id:

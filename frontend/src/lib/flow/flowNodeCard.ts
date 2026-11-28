@@ -70,6 +70,11 @@ function hostOf(url: unknown): string | undefined {
   }
 }
 
+/** An app id as a title ("loyal_arrow" reads "Loyal Arrow"), the way Frappe titles a new app. */
+function appTitle(id: string): string {
+  return id.split(/[_-]+/).filter(Boolean).map((w) => w[0].toUpperCase() + w.slice(1)).join(' ');
+}
+
 const DOC_EVENT_WORD: Record<string, string> = {
   after_insert: 'created',
   on_update: 'changed',
@@ -92,6 +97,10 @@ export function triggerSubtitle(cfg: TriggerConfig | undefined, gateways?: reado
       const ev = cfg.event ? DOC_EVENT_WORD[cfg.event] : undefined;
       if (dt && ev) return `When a ${dt} is ${ev}`;
       return dt ? `When a ${dt} changes` : 'Starts when a record changes';
+    }
+    case 'app': {
+      const app = typed((cfg as { app?: unknown }).app);
+      return app ? `Started by ${appTitle(app)}` : 'Started by an app';
     }
     default:
       return 'Choose what starts this flow';
@@ -135,6 +144,24 @@ export function toolSubtitle(cfg: Extract<ActionConfig, { type: 'tool-call' }>):
   }
 }
 
+function waitSubtitle(cfg: Extract<ActionConfig, { type: 'wait' }>): string {
+  if (cfg.mode === 'resume') return 'Waits until someone continues it';
+  if (cfg.mode === 'until') {
+    const until = cfg.until;
+    if (typeof until !== 'string' || !until.trim()) return until ? 'Waits until a date from your data' : 'Wait until a date and time';
+    const zone = cfg.time_zone ? ` (${cfg.time_zone})` : '';
+    const d = new Date(until);
+    const when = Number.isNaN(d.getTime())
+      ? until
+      : d.toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false, ...(cfg.time_zone ? { timeZone: cfg.time_zone } : {}) });
+    return `Waits until ${when}${zone}`;
+  }
+  const value = cfg.duration?.value;
+  if (typeof value !== 'number' || value < 1) return 'Pause for a while';
+  const unit = cfg.duration?.unit ?? 'hours';
+  return `Waits ${value} ${value === 1 ? unit.slice(0, -1) : unit}`;
+}
+
 /** One line saying what the step does, in the user's own values when they are plain text. */
 export function actionSubtitle(cfg: ActionConfig | undefined): string {
   if (!cfg) return '';
@@ -144,11 +171,13 @@ export function actionSubtitle(cfg: ActionConfig | undefined): string {
       return agent ? `Ask ${agent}` : 'Ask an AI agent to do a task';
     }
     case 'tool-call':
-      return toolSubtitle(cfg);
+      return toolSubtitle(cfg) + (cfg.retry && cfg.retry.attempts >= 2 ? ` · tries up to ${cfg.retry.attempts} times` : '');
     case 'router':
       return 'AI picks the next path';
     case 'router-decision':
       return 'Picks the next path by a rule';
+    case 'split':
+      return typeof cfg.holdout === 'number' && cfg.holdout > 0 ? `Weighted paths · ${cfg.holdout}% held out` : 'Weighted paths';
     case 'condition':
       return 'Go one of two ways';
     case 'foreach':
@@ -158,6 +187,8 @@ export function actionSubtitle(cfg: ActionConfig | undefined): string {
       if (cfg.approver_type === 'role' && role) return `Waits for ${role}`;
       return 'Waits for a person to decide';
     }
+    case 'wait':
+      return waitSubtitle(cfg);
     case 'validate':
       return 'Check the data is right';
     case 'transform': {
@@ -182,6 +213,26 @@ export function actionSubtitle(cfg: ActionConfig | undefined): string {
     }
     case 'code-run':
       return 'Run a Python snippet';
+    case 'stop': {
+      const msg = typed(cfg.message);
+      return msg ? `Stops the flow: ${msg}` : 'Stops the flow with an error';
+    }
+    case 'doc-get': {
+      const dt = typed(cfg.doctype);
+      return dt ? `Finds a ${dt}` : 'Find a document';
+    }
+    case 'doc-update': {
+      const dt = typed(cfg.doctype);
+      return dt ? `Updates a ${dt}` : 'Update a document';
+    }
+    case 'member-set': {
+      const n = Object.keys(cfg.vars ?? {}).length;
+      return n > 0 ? `Remembers ${n} ${n === 1 ? 'value' : 'values'} for this person` : 'Save values for this person';
+    }
+    case 'send-message':
+      return cfg.category === 'marketing' ? 'Sends a marketing message' : 'Sends a message';
+    case 'flow-call':
+      return cfg.mode === 'wait' ? 'Runs another flow and waits' : 'Starts another flow';
     default:
       return '';
   }

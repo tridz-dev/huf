@@ -9,6 +9,7 @@ import type { CanvasNodeFacts, FlowNodeData } from '@/types/flow.types';
 import { useGatewayRegistry } from '@/hooks/flow/useGatewayRegistry';
 import { useViewerGatewayStates } from '@/hooks/flow/useViewerGatewayStates';
 import { CARD_STATUS_OF, type RunOverlay } from '@/lib/flow-graph/runOverlay';
+import { missingAppStep, useAppNodeTypes } from '@/lib/flow-graph/appNodeTypes';
 
 type Step = Node<FlowNodeData>;
 
@@ -33,6 +34,7 @@ interface Cached {
   issueCount: number;
   registry: unknown;
   viewer: unknown;
+  appTypes: unknown;
 }
 
 /**
@@ -46,6 +48,9 @@ export function useNodeFacts(nodes: Step[], edges: Edge[], overlay: RunOverlay |
   const { registry } = useGatewayRegistry(false);
   // A view-only person cannot list channels; ask for the on/off state of just the ones this flow uses.
   const viewerRegistry = useViewerGatewayStates(nodes);
+  // The app step catalog arrives after the page: cards of a removed app's steps turn "Not connected" once it has.
+  const { types, loaded: appTypesLoaded } = useAppNodeTypes();
+  const appTypes = appTypesLoaded ? types : null;
   const issues = useRef(new Map<string, Cached>());
   const facts = useRef(new Map<string, CanvasNodeFacts>());
   const reach = useRef<{ edges: unknown; ids: string; set: Set<string> } | null>(null);
@@ -58,9 +63,9 @@ export function useNodeFacts(nodes: Step[], edges: Edge[], overlay: RunOverlay |
     const next = new Map<string, CanvasNodeFacts>();
     for (const n of nodes) {
       let cached = issues.current.get(n.id);
-      if (!cached || cached.data !== n.data || cached.edges !== edges || cached.registry !== registry || cached.viewer !== viewerRegistry) {
+      if (!cached || cached.data !== n.data || cached.edges !== edges || cached.registry !== registry || cached.viewer !== viewerRegistry || cached.appTypes !== appTypes) {
         const found = validateNode({ id: n.id, data: n.data }, edges);
-        cached = { data: n.data, edges, firstIssue: found[0]?.message ?? null, issueCount: found.length, registry, viewer: viewerRegistry };
+        cached = { data: n.data, edges, firstIssue: found[0]?.message ?? null, issueCount: found.length, registry, viewer: viewerRegistry, appTypes };
         issues.current.set(n.id, cached);
       }
       const noLineIn = unreachable.has(n.id) && orphanNote(n.id, nodes, edges) === 'Nothing leads to this step';
@@ -74,7 +79,7 @@ export function useNodeFacts(nodes: Step[], edges: Edge[], overlay: RunOverlay |
         runStatus,
         incomplete: !isEnd && cached.issueCount > 0,
         orphaned: !isTrigger && noLineIn,
-        notConnected: !isEnd && !isTrigger && isToolUnconnected(toolId, integration),
+        notConnected: !isEnd && !isTrigger && (isToolUnconnected(toolId, integration) || (cfg?.type === 'unknown' && missingAppStep((cfg as { backend_type?: unknown }).backend_type) !== null)),
       });
       const prev = facts.current.get(n.id);
       const fact: CanvasNodeFacts =
@@ -85,5 +90,5 @@ export function useNodeFacts(nodes: Step[], edges: Edge[], overlay: RunOverlay |
       next.set(n.id, fact);
     }
     return next;
-  }, [nodes, edges, overlay, integration, onDelete, registry, viewerRegistry]);
+  }, [nodes, edges, overlay, integration, onDelete, registry, viewerRegistry, appTypes]);
 }

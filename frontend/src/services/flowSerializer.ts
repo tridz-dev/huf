@@ -18,11 +18,11 @@
  */
 
 import type {
-    ActionConfig, ActionType, Flow, FlowEdge, FlowEdgeRoute, FlowNode, FlowNodeData, FlowStatus, TriggerConfig,
+    ActionConfig, ActionType, Flow, FlowEdge, FlowEdgeData, FlowEdgeRoute, FlowNode, FlowNodeData, FlowStatus, TriggerConfig,
 } from '@/types/flow.types';
 import type { BackendFlowGraph, BackendNode, BackendNodeType } from './flowApi';
 import { layoutWhenUnplaced } from '../lib/flow/flowLayout';
-import { NODE_TYPE_TO_TRIGGER, REQUIRED_CONFIG_KEYS, TRIGGER_CONFIG_KEYS, TRIGGER_TO_NODE_TYPE, gatewayConfigOut, getDefaultIcon, getDefaultLabel } from './flow/serializerTables';
+import { NODE_TYPE_TO_TRIGGER, REQUIRED_CONFIG_KEYS, TRIGGER_CONFIG_KEYS, TRIGGER_TO_NODE_TYPE, gatewayConfigOut, getDefaultIcon, storedNodeTitle } from './flow/serializerTables';
 import { endOutcomeConfig } from './flow/endOutcome'; import { defaultContract, deriveContract, placeholderFingerprint } from './flow/flowContract';
 
 export { defaultContract };
@@ -45,6 +45,14 @@ export const ACTION_TO_BACKEND_TYPE: Record<ActionType, BackendNodeType> = {
     'state-delete': 'state.delete',
     'doc-create': 'doc.create',
     'code-run': 'code.run',
+    'wait': 'wait',
+    'stop': 'stop',
+    'doc-get': 'doc.get',
+    'doc-update': 'doc.update',
+    'flow-call': 'flow.call',
+    'member-set': 'member.set',
+    'send-message': 'send.message',
+    'split': 'split',
 };
 
 const BACKEND_TO_ACTION_TYPE: Record<string, ActionType> = Object.fromEntries(
@@ -58,19 +66,22 @@ const ROUTING_KEYS: Partial<Record<BackendNodeType, string[]>> = {
     'router.decision': ['options'],
     'human.approval': ['approve_next', 'reject_next', 'timeout_next'],
     'foreach': ['body'],
+    'split': ['options'],
+    // Hand to a person: its "When time runs out" step is the Timed out connection on the canvas.
+    ['handoff' as BackendNodeType]: ['timeout_next'],
 };
 
 /** Node types with no `next` key at all. */
-const NO_NEXT_TYPES = new Set<string>(['condition', 'router.llm', 'router.decision', 'human.approval', 'output']);
+const NO_NEXT_TYPES = new Set<string>(['condition', 'router.llm', 'router.decision', 'human.approval', 'output', 'stop', 'split']);
 
 /** Valid values of a handle id / edge route other than 'next'. */
 export const FLOW_EDGE_ROUTES: readonly FlowEdgeRoute[] = [
-    'next', 'error', 'true', 'false', 'option', 'default', 'approve', 'reject', 'timeout', 'body',
+    'next', 'error', 'true', 'false', 'option', 'default', 'approve', 'reject', 'timeout', 'body', 'fallback',
 ];
 
 const ROUTE_LABELS: Partial<Record<FlowEdgeRoute, string>> = {
     error: 'On error', true: 'True', false: 'False', default: 'Default',
-    approve: 'Approved', reject: 'Rejected', timeout: 'Timed out', body: 'Each item',
+    approve: 'Approved', reject: 'Rejected', timeout: 'Timed out', body: 'Each item', fallback: "Can't tell",
 };
 
 /** Route of a canvas edge: `data.route`, else the source handle id, else 'next'. */
@@ -92,13 +103,18 @@ export interface MakeFlowEdgeOptions {
     label?: string;
     /** position among same-route edges of the source (option/body). */
     index?: number;
+    /** router.decision rule check (route 'option'). */
+    expression?: string;
+    /** split branch weight (route 'option'). */
+    weight?: number;
 }
 
 /** Build the canonical canvas edge for a route. Used by deserialize; WP-D should use it for new connections. */
 export function makeFlowEdge(source: string, target: string, route: FlowEdgeRoute, opts: MakeFlowEdgeOptions = {}): FlowEdge {
     const label = route === 'option' ? opts.label ?? target
         : ROUTE_LABELS[route];
-    const data: { route: FlowEdgeRoute } = { route };
+    const data: FlowEdgeData = opts.expression !== undefined ? { route, expression: opts.expression } : { route };
+    if (typeof opts.weight === 'number') data.weight = opts.weight;
     const edge: FlowEdge = {
         id: makeFlowEdgeId(source, route, target, route === 'option' || route === 'body' ? opts.index ?? 0 : undefined),
         source,
@@ -146,6 +162,7 @@ export function serializeFlow(flow: Flow): BackendFlowGraph {
         fingerprint: placeholderFingerprint(JSON.stringify(nodes.map((n) => [n.id, n.type, n.config, n.next, n.on_error]))),
         entry: triggerIds.length ? triggerIds : flow.nodes[0]?.id ?? '',
         nodes,
+        ...(flow.errorHandler && ids.has(flow.errorHandler) ? { error_handler: { next: flow.errorHandler } } : {}),
         contract: deriveContract(nodes),
     };
 }
@@ -173,12 +190,16 @@ function serializeNode(node: FlowNode, outgoing: FlowEdge[], nextOf: Map<string,
         case 'condition':
             setIf('on_true', first('true'));
             setIf('on_false', first('false'));
+            // fallback_next stays in canvas config only to show the optional "Can't tell" handle; the edge decides.
+            delete config.fallback_next;
+            setIf('fallback_next', first('fallback'));
             break;
         case 'router.llm':
         case 'router.decision': {
             const options = byRoute('option').map((e) => ({
                 label: typeof e.label === 'string' && e.label !== '' ? e.label : e.target,
                 node_id: e.target,
+                ...(typeof e.data?.expression === 'string' ? { expression: e.data.expression } : {}),
             }));
             config.options = options;
             // Recomputed from current edges: a default that is no longer a routed target is dropped.
@@ -186,13 +207,46 @@ function serializeNode(node: FlowNode, outgoing: FlowEdge[], nextOf: Map<string,
             const wanted = first('default') ?? (typeof config.default === 'string' ? config.default : undefined);
             delete config.default;
             setIf('default', wanted && routed.has(wanted) ? wanted : options[0]?.node_id);
+            // Let AI decide: the rule paths are the choices and the Otherwise path is taken when it is unsure.
+            if (type === 'router.decision' && config.decision && typeof config.decision === 'object') {
+                const decision: Record<string, unknown> = { ...(config.decision as Record<string, unknown>) };
+                decision.candidates = options.map((o) => ({ node_id: o.node_id, label: o.label }));
+                delete decision.uncertain_next;
+                const unsure = first('default');
+                if (unsure) decision.uncertain_next = unsure;
+                config.decision = decision;
+                // Rule checks are not used in this mode: an empty one must not reach the server.
+                config.options = options.map((o) => (o.expression ? o : { label: o.label, node_id: o.node_id }));
+            }
             break;
         }
+        case 'split':
+            config.options = byRoute('option').map((e) => ({
+                label: typeof e.label === 'string' && e.label !== '' ? e.label : e.target,
+                node_id: e.target,
+                weight: typeof e.data?.weight === 'number' ? e.data.weight : 0,
+            }));
+            break;
         case 'human.approval':
             setIf('approve_next', first('approve'));
             setIf('reject_next', first('reject'));
             setIf('timeout_next', config.timeout_ms ? first('timeout') : undefined); // a Timed out path exists only with a time limit
             break;
+        case 'handoff' as BackendNodeType:
+            setIf('timeout_next', config.timeout_ms ? first('timeout') : undefined);
+            break;
+        case 'wait': {
+            // The Timed out path of a "until continued" wait lives inside `resume`; it exists only with a time limit.
+            const resume: Record<string, unknown> = { ...(config.resume as Record<string, unknown> | undefined) };
+            delete resume.timeout_next;
+            if (config.mode === 'resume' && resume.timeout_ms) {
+                const target = first('timeout');
+                if (target !== undefined) resume.timeout_next = target;
+            }
+            if (config.mode === 'resume' && Object.keys(resume).length) config.resume = resume;
+            else delete config.resume;
+            break;
+        }
         case 'foreach': {
             const seen = new Set<string>();
             const body = byRoute('body').flatMap((e) => walkChain(e.target, nextOf, seen));
@@ -233,7 +287,7 @@ function serializeNode(node: FlowNode, outgoing: FlowEdge[], nextOf: Map<string,
     return out;
 }
 
-function mapFrontendNodeTypeToBackend(node: FlowNode): BackendNodeType {
+export function mapFrontendNodeTypeToBackend(node: FlowNode): BackendNodeType {
     const nodeType = node.data?.nodeType;
     if (nodeType === 'end') return 'output';
 
@@ -305,6 +359,7 @@ export function deserializeFlow(
         status: mapBackendStatusToFrontend(status),
         nodes: layoutWhenUnplaced(graph.nodes.map((node, index) => deserializeNode(node, index)), edges, graph.nodes.some((n) => !n._position)),
         edges,
+        ...(graph.error_handler?.next ? { errorHandler: graph.error_handler.next } : {}),
         createdAt: new Date(),
         updatedAt: new Date(),
         // Version lives on the Flow Definition doctype record, not in the graph.
@@ -342,7 +397,7 @@ function buildNodeData(node: BackendNode): FlowNodeData {
     const frontendType = mapBackendNodeTypeToFrontend(node.type);
 
     const base: FlowNodeData = {
-        label: node._label || getDefaultLabel(node.type),
+        label: storedNodeTitle(node.type, node._label, node.config),
         nodeType: frontendType as FlowNodeData['nodeType'],
         icon: node._icon || getDefaultIcon(node.type),
         configured: isBackendNodeConfigured(node),
@@ -396,18 +451,32 @@ function deserializeEdgesForNode(node: BackendNode, byId: Map<string, BackendNod
         case 'condition':
             push(cfg.on_true, 'true');
             push(cfg.on_false, 'false');
+            push(cfg.fallback_next, 'fallback');
             break;
         case 'router.llm':
         case 'router.decision': {
-            const options = (cfg.options as Array<{ label: string; node_id: string }> | undefined) ?? [];
-            options.forEach((o, index) => push(o.node_id, 'option', { label: o.label, index }));
+            const options = (cfg.options as Array<{ label: string; node_id: string; expression?: string }> | undefined) ?? [];
+            options.forEach((o, index) => push(o.node_id, 'option', { label: o.label, index, expression: o.expression }));
             if (typeof cfg.default === 'string' && !options.some((o) => o.node_id === cfg.default)) push(cfg.default, 'default');
+            break;
+        }
+        case 'split': {
+            const options = (cfg.options as Array<{ label?: string; node_id: string; weight?: number }> | undefined) ?? [];
+            options.forEach((o, index) => push(o.node_id, 'option', { label: o.label ?? o.node_id, index, weight: o.weight }));
             break;
         }
         case 'human.approval':
             push(cfg.approve_next, 'approve');
             push(cfg.reject_next, 'reject');
             push(cfg.timeout_next, 'timeout');
+            break;
+        case 'wait':
+            push((cfg.resume as { timeout_next?: string } | undefined)?.timeout_next, 'timeout');
+            push(node.next, 'next');
+            break;
+        case 'handoff' as BackendNodeType:
+            push(cfg.timeout_next, 'timeout');
+            push(node.next, 'next');
             break;
         case 'foreach':
             heads((cfg.body as string[] | undefined) ?? []).forEach((id, index) => push(id, 'body', { index }));

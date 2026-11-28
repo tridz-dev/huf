@@ -104,6 +104,11 @@ export function stepPaletteId(step: FlowCardStep): string {
     case 'state.delete': return 'state-delete';
     case 'doc.create': return 'doc-create';
     case 'code.run': return 'code-run';
+    case 'doc.get': return 'doc-get';
+    case 'doc.update': return 'doc-update';
+    case 'flow.call': return 'flow-call';
+    case 'member.set': return 'member-set';
+    case 'send.message': return 'send-message';
     default: return step.type; // condition, human.approval, transform, validate
   }
 }
@@ -125,6 +130,8 @@ export function runStatusKind(run: Pick<FlowCardLastRun, 'status' | 'stale'>): S
     case 'Waiting Approval':
     case 'Waiting User': return 'waiting_approval';
     case 'Waiting Code': return 'waiting_review';
+    case 'Waiting Timer': return 'waiting_timer';
+    case 'Cancelled': return 'cancelled';
     default: return 'queued';
   }
 }
@@ -137,6 +144,8 @@ const RUN_WORD: Record<string, string> = {
   'Waiting Approval': 'Waiting for approval',
   'Waiting User': 'Waiting for you',
   'Waiting Code': 'Waiting for code review',
+  'Waiting Timer': 'Waiting',
+  Cancelled: 'Cancelled',
 };
 
 /** "Last run: Finished 2 mins ago", or "Not run yet". `ago` turns an ISO time into "2 mins ago". */

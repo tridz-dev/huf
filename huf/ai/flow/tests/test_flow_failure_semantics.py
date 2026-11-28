@@ -33,11 +33,11 @@ from huf.testing.factories import make_agent_tool_function
 class TestFlowFailureSemantics(IntegrationTestCase):
 	def setUp(self):
 		frappe.set_user("Administrator")
-		self._names = {"Flow Definition": [], "Flow Run": [], "Agent Tool Function": []}
+		self._names = {"Flow Definition": [], "Agent Flow Run": [], "Agent Tool Function": []}
 
 	def tearDown(self):
 		frappe.set_user("Administrator")
-		for doctype in ("Flow Run", "Flow Definition", "Agent Tool Function"):
+		for doctype in ("Agent Flow Run", "Flow Definition", "Agent Tool Function"):
 			for name in self._names.get(doctype, []):
 				if frappe.db.exists(doctype, name):
 					frappe.delete_doc(doctype, name, ignore_permissions=True, force=True)
@@ -110,7 +110,7 @@ class TestFlowFailureSemantics(IntegrationTestCase):
 		saved = flow_api.save_flow_definition(flow_id, definition)
 		self._names["Flow Definition"].append(saved["flow_id"])
 		flow_run = create_flow_run(flow_id=flow_id, payload={}, trigger_type="Webhook")
-		self._names["Flow Run"].append(flow_run.name)
+		self._names["Agent Flow Run"].append(flow_run.name)
 		failed_tool_result = {"success": False, "error": "simulated tool failure"}
 		with patch("huf.ai.flow.engine.execute_tool", return_value=failed_tool_result):
 			engine_run_flow(flow_run.name)

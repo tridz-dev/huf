@@ -33,6 +33,8 @@ _STEP_TYPE_TITLES = {
 }
 
 from huf.ai.flow.runs.outcome import stored_outcome
+from huf.ai.flow.support.decision_rights import approval_decision_rights
+from huf.ai.flow.support.pii import mask_for_view, mask_text
 
 _DECISION_OUTCOMES = {
 	"approved": ("Approved", "good"),
@@ -68,7 +70,7 @@ def _clean_outcome(raw) -> dict | None:
 
 
 def step_meta_from(defn) -> dict:
-	"""``{node_id: {type, body?, outcome?}}`` for every step of a definition."""
+	"""``{node_id: {type, body?, outcome?, tries?, flow_id?}}`` for every step of a definition."""
 	meta: dict = {}
 	for n in _nodes_of(defn):
 		cfg = n.get("config") if isinstance(n.get("config"), dict) else {}
@@ -79,7 +81,20 @@ def step_meta_from(defn) -> dict:
 			outcome = _clean_outcome(cfg.get("outcome"))
 			if outcome:
 				entry["outcome"] = outcome
+		retry = cfg.get("retry")
+		if isinstance(retry, dict) and isinstance(retry.get("attempts"), int) and retry["attempts"] >= 2:
+			entry["tries"] = retry["attempts"]
+		if n.get("type") == "flow.call" and isinstance(cfg.get("flow_id"), str):
+			entry["flow_id"] = cfg["flow_id"]
 		meta[n["id"]] = entry
+	return meta
+
+
+def _with_flow_names(meta: dict) -> dict:
+	"""Name the flow each Run another flow step starts, for the run story."""
+	for entry in meta.values():
+		if entry.get("flow_id"):
+			entry["flow_name"] = frappe.db.get_value("Flow Definition", entry["flow_id"], "flow_name") or entry["flow_id"]
 	return meta
 
 
@@ -153,7 +168,7 @@ def _full_name(user: str | None) -> str | None:
 
 def run_number(flow_id: str, creation) -> int:
 	"""1-based place of a run among all runs of its flow, oldest first."""
-	return frappe.db.count("Flow Run", {"flow_id": flow_id, "creation": ["<=", creation]})
+	return frappe.db.count("Agent Flow Run", {"flow_id": flow_id, "creation": ["<=", creation]})
 
 
 def extras_for_detail(doc, ctx: dict) -> dict:
@@ -161,7 +176,7 @@ def extras_for_detail(doc, ctx: dict) -> dict:
 	defn = _load_json(doc.pinned_definition) if doc.pinned_definition else _load_json(
 		frappe.db.get_value("Flow Definition", doc.flow_id, "definition_json") if doc.flow_id else None
 	)
-	meta = step_meta_from(defn)
+	meta = _with_flow_names(step_meta_from(defn))
 	return {
 		"step_meta": meta,
 		"outcome": (stored_outcome(doc) if doc.status == "Success" else None) or compute_outcome(doc.status, doc.current_node_id, ctx, meta),
@@ -177,6 +192,66 @@ def _modified_iso(value):
 	from huf.ai.flow.api import _utc_iso
 
 	return _utc_iso(value)
+
+
+# Ids the approval UI and decision rights need: approver emails are identifiers, not trace data.
+_WAITING_KEEP = ("type", "node_id", "approver_type", "approver_role", "approver_roles", "approver_users", "timeout_at", "timeout_ms", "timeout_next")
+
+
+def waiting_for_view(waiting):
+	"""A masked copy of a run's ``waiting`` payload for a read API; approver ids stay intact (G4)."""
+	if not isinstance(waiting, dict) or not waiting:
+		return mask_for_view(waiting)
+	masked = mask_for_view({k: v for k, v in waiting.items() if k not in _WAITING_KEEP})
+	return {**masked, **{k: waiting[k] for k in _WAITING_KEEP if k in waiting}}
+
+
+# What a viewer who cannot decide an approval may still see of it, besides ``_WAITING_KEEP``.
+_UNDECIDABLE_KEEP = ("step_title", "flow_name", "test_run", "test_note")
+REDACTED = "[redacted]"
+
+
+def waiting_of_viewer(status, waiting, flow):
+	"""``waiting`` as this user may see it, before field masking.
+
+	For an approval the user cannot decide, the rendered texts (title, message, summary) are left out and the
+	facts keep only their labels: they quote run data, in which a name cannot be recognised and masked. A
+	cancelled run keeps its approval payload; nobody can decide it any more, so its texts are left out for
+	everyone, former approvers included.
+	"""
+	if not isinstance(waiting, dict) or (status != "Waiting Approval" and waiting.get("type") != "approval"):
+		return waiting
+	if approval_decision_rights(status, waiting, flow)[0]:
+		return waiting
+	kept = {k: waiting[k] for k in (*_WAITING_KEEP, *_UNDECIDABLE_KEEP) if k in waiting}
+	kept["facts"] = [
+		{"label": mask_text(str(f["label"])), "value": REDACTED}
+		for f in waiting.get("facts") or []
+		if isinstance(f, dict) and f.get("label")
+	]
+	return kept
+
+
+def hides_run_data(status, waiting, flow) -> bool:
+	"""True when this user sees an approval's texts redacted: the run data they quote is hidden as well."""
+	return waiting_of_viewer(status, waiting, flow) is not waiting
+
+
+def data_of_viewer(status, waiting, flow, data):
+	"""Run ``data`` (already field-masked) as this user may see it.
+
+	A name under an unknown key or in free text cannot be recognised, so whoever may not read the approval's texts
+	gets the keys only (the steps that ran), with every text and number redacted.
+	"""
+	return _redact_values(data) if hides_run_data(status, waiting, flow) else data
+
+
+def _redact_values(value):
+	if isinstance(value, dict):
+		return {k: _redact_values(v) for k, v in value.items()}
+	if isinstance(value, list):
+		return [_redact_values(v) for v in value]
+	return value if value is None or isinstance(value, bool) or value == "" else REDACTED
 
 
 def approval_lapsed(status, waiting) -> bool:
@@ -208,7 +283,7 @@ def shape_list_rows(rows: list, names: dict, can_fail: bool) -> list:
 	for r in rows:
 		if r.flow_id not in by_flow:
 			created = frappe.get_all(
-				"Flow Run", filters={"flow_id": r.flow_id}, pluck="creation", order_by="creation asc", limit_page_length=0
+				"Agent Flow Run", filters={"flow_id": r.flow_id}, pluck="creation", order_by="creation asc", limit_page_length=0
 			)
 			by_flow[r.flow_id] = created
 			raw = frappe.db.get_value("Flow Definition", r.flow_id, "definition_json") if r.flow_id else None
@@ -217,7 +292,8 @@ def shape_list_rows(rows: list, names: dict, can_fail: bool) -> list:
 			people[r.owner] = _full_name(r.owner)
 	for r in rows:
 		ctx = _load_json(r.pop("context_json", None))
-		r["approval_lapsed"] = approval_lapsed(r.status, _load_json(r.pop("waiting", None)))
+		waiting = _load_json(r.pop("waiting", None))
+		r["approval_lapsed"] = approval_lapsed(r.status, waiting)
 		creation = r.pop("creation", None)
 		r["flow_name"] = names.get(r.flow_id) or r.flow_id
 		r["stale"] = _is_stale(r.status, r.modified)
@@ -228,7 +304,7 @@ def shape_list_rows(rows: list, names: dict, can_fail: bool) -> list:
 		r["started_by"] = r.pop("owner", None)
 		r["started_by_name"] = people.get(r["started_by"])
 		r["run_number"] = bisect_right(by_flow[r.flow_id], creation) if creation is not None else None
-		r["input_hint"] = input_hint(ctx)
+		r["input_hint"] = "" if hides_run_data(r.status, waiting, r.flow_id) else input_hint(mask_for_view(ctx))
 		recorded = stored_outcome(r) if r.status == "Success" else None
 		r["outcome"] = recorded or compute_outcome(r.status, r.current_node_id, ctx, metas.get(r.flow_id, {}))
 		r.pop("outcome_label", None)

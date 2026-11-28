@@ -10,7 +10,8 @@ import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Combobox } from '@/components/ui/combobox';
+import { ProviderModelDialogs } from '@/components/agent/form/ProviderModelDialogs';
 import { AGENT_EXAMPLES, type AgentExample } from './agentExamples';
 import { getWorkspaceDefaultModel } from '@/services/agentForm/agentFormApi';
 import { getModels, getProviders } from '@/services/providerApi';
@@ -52,6 +53,7 @@ export function AgentCreateCard({ onCreate, busy, onCancel, error }: Props) {
   const [gallery, setGallery] = useState(false);
   const [changing, setChanging] = useState(false);
   const [providers, setProviders] = useState<{ name: string; provider_name: string }[]>([]);
+  const [dialog, setDialog] = useState<'provider' | 'model' | null>(null);
   const [models, setModels] = useState<{ name: string; model_name: string }[]>([]);
 
   useEffect(() => {
@@ -76,6 +78,9 @@ export function AgentCreateCard({ onCreate, busy, onCancel, error }: Props) {
     try { setModels(((await getModels(p)) as never[]).filter(isChat)); } catch { /* ignore */ }
   };
 
+  const reloadProviders = async () => { try { setProviders((await getProviders()) as never[]); } catch { /* ignore */ } };
+  const loadModels = async (p: string) => { try { setModels(((await getModels(p)) as never[]).filter(isChat)); } catch { /* ignore */ } };
+
   const pick = (id: string) => {
     const t = AGENT_EXAMPLES.find((x) => x.id === id);
     if (!t) return;
@@ -99,7 +104,9 @@ export function AgentCreateCard({ onCreate, busy, onCancel, error }: Props) {
       provider: model.provider ?? undefined, model: model.model ?? undefined,
     });
   };
-  const errFor = (id: string) => errs.find((e) => e.fieldId === id)?.message;
+  const dupName = !!error && /already|duplicate|exists|used/i.test(error);
+  const errFor = (id: string) => errs.find((e) => e.fieldId === id)?.message
+    ?? (id === 'agent-name' && dupName ? 'This name is already used. Choose a different name.' : undefined);
 
   return (
     <div ref={ref}>
@@ -107,9 +114,9 @@ export function AgentCreateCard({ onCreate, busy, onCancel, error }: Props) {
         submitLabel="Create and try it" onSubmit={submit} busy={busy}
         secondary={onCancel && <Button type="button" variant="ghost" onClick={onCancel}>Cancel</Button>}>
         <ErrorSummary errors={errs} />
-        {error && <p role="alert" className="text-micro text-destructive">{error}</p>}
+        {error && !dupName && <p role="alert" className="text-micro text-destructive">{error}</p>}
         <Field label="Name" required id="agent-name" error={errFor('agent-name')}>
-          <Input id="agent-name" aria-invalid={errFor('agent-name') ? true : undefined} value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Support assistant" autoFocus />
+          <Input id="agent-name" aria-invalid={errFor('agent-name') ? true : undefined} value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Support assistant" autoComplete="off" autoFocus />
         </Field>
         <Field label="Instructions" required id="agent-instructions" error={errFor('agent-instructions')}
           hint="Say who it helps, what it can look up or change, and when to hand off to a person.">
@@ -138,20 +145,21 @@ export function AgentCreateCard({ onCreate, busy, onCancel, error }: Props) {
         {changing && (
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Provider" id="agent-provider">
-              <Select value={model.provider ?? ''} onValueChange={(v) => void pickProvider(v)}>
-                <SelectTrigger><SelectValue placeholder="Choose a provider" /></SelectTrigger>
-                <SelectContent>{providers.map((p) => <SelectItem key={p.name} value={p.name}>{p.provider_name}</SelectItem>)}</SelectContent>
-              </Select>
+              <Combobox id="agent-provider" value={model.provider ?? ''} placeholder="Choose a provider" searchPlaceholder="Search providers..."
+                options={[...providers.map((p) => ({ value: p.name, label: p.provider_name })), { value: '__add_provider', label: '+ Add provider', action: () => setDialog('provider') }]}
+                onValueChange={(v) => { if (v) void pickProvider(v); }} />
             </Field>
             <Field label="Model" id="agent-model">
-              <Select value={model.model ?? ''} onValueChange={(v) => setModel((m) => ({ ...m, model: v }))}>
-                <SelectTrigger><SelectValue placeholder="Choose a model" /></SelectTrigger>
-                <SelectContent>{models.map((m) => <SelectItem key={m.name} value={m.name}>{m.model_name}</SelectItem>)}</SelectContent>
-              </Select>
+              <Combobox id="agent-model" value={model.model ?? ''} placeholder="Choose a model" searchPlaceholder="Search models..."
+                options={[...models.map((m) => ({ value: m.name, label: m.model_name })), ...(model.provider ? [{ value: '__add_model', label: '+ Add model', action: () => setDialog('model') }] : [])]}
+                onValueChange={(v) => { if (v) setModel((m) => ({ ...m, model: v })); }} />
             </Field>
           </div>
         )}
       </OneCardCreate>
+      <ProviderModelDialogs mode={dialog} onClose={() => setDialog(null)} provider={model.provider ?? ''}
+        onProviderCreated={async (n) => { await reloadProviders(); await pickProvider(n); }}
+        onModelCreated={async (n) => { await loadModels(model.provider ?? ''); setModel((m) => ({ ...m, model: n })); }} />
     </div>
   );
 }

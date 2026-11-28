@@ -731,6 +731,8 @@ class TestApproveFlowRunRouting(unittest.TestCase):
 			patch.object(flow_engine, "_", lambda s: s), \
 			patch.object(flow_engine, "load_definition", return_value=defn), \
 			patch.object(flow_engine, "run_flow") as fake_run_flow, \
+			patch("huf.ai.flow.app_scope.api_guards.guard_run"), \
+			patch.object(flow_engine, "refuse_if_vetoed"), \
 			patch.object(flow_engine, "commit_if_background"), \
 			patch.object(flow_engine, "_clear_flow_notifications"), \
 			patch.object(flow_engine, "_publish_flow_event"), \

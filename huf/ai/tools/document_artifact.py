@@ -41,9 +41,11 @@ def handle_list_document_artifacts(**kwargs) -> str:
 	if not conversation_id:
 		return json.dumps({"success": False, "error": "'conversation_id' is required"})
 
-	from huf.ai.artifact_api import list_conversation_artifacts
+	from huf.ai.artifact_api import _check_conversation_access, list_conversation_artifacts
 
 	try:
+		# The model supplies the id, so the tool stays limited to the user's own conversations.
+		_check_conversation_access(conversation_id)
 		rows = list_conversation_artifacts(conversation_id)
 	except frappe.PermissionError:
 		return json.dumps({"success": False, "error": "You do not have permission to list artifacts for this conversation."})

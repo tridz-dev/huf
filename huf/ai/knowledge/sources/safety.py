@@ -16,7 +16,7 @@ import zipfile
 from dataclasses import dataclass, field
 
 # Extensions the knowledge extractors can actually read.
-DEFAULT_EXTENSIONS = (".pdf", ".docx", ".xlsx", ".pptx", ".txt", ".md", ".markdown", ".html", ".htm")
+DEFAULT_EXTENSIONS = (".pdf", ".docx", ".xlsx", ".pptx", ".txt", ".csv", ".md", ".markdown", ".html", ".htm")
 DEFAULT_MAX_FILE_MB = 50
 DEFAULT_MAX_FILES = 1000
 DEFAULT_MAX_UNCOMPRESSED_MB = 1024

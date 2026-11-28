@@ -1,3 +1,4 @@
+import { useResourceAccess } from '@/hooks/permissions/useResourceAccess';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -26,6 +27,7 @@ export default DataPage;
 
 function DataPage() {
 	const navigate = useNavigate();
+	const access = useResourceAccess('dataTable');
 	const { rows, loading, error, legacy, reload } = useTablesList();
 	const [search, setSearch] = useState('');
 	const [group, setGroup] = useState(ALL_GROUPS);
@@ -100,7 +102,7 @@ function DataPage() {
 	return (
 		<PageFrame
 			title="Tables"
-			actions={
+			actions={access.canCreate ? (
 				<div className="flex items-center gap-2">
 					<Button variant="outline" onClick={() => openCreate('csv')}>
 						<Upload className="h-4 w-4" />
@@ -108,11 +110,15 @@ function DataPage() {
 					</Button>
 					<Button onClick={() => openCreate('blank')}>New table</Button>
 				</div>
-			}
+			) : undefined}
 		>
 			<div className="space-y-4 px-6 pb-6">
 				{empty ? (
-					<EmptyTables onStart={openCreate} onNew={() => openCreate('blank')} />
+					access.canCreate ? (
+						<EmptyTables onStart={openCreate} onNew={() => openCreate('blank')} />
+					) : (
+						<p className="py-8 text-center text-ui-text text-steel">{access.isLoading ? 'Loading tables' : 'There are no tables yet.'}</p>
+					)
 				) : (
 					<>
 						<AskField value={search} onChange={setSearch} placeholder="Search tables" />
@@ -144,7 +150,7 @@ function DataPage() {
 								legacy={legacy}
 								onOpen={(r) => navigate(`/data/${r.id}`)}
 								onAgentAccess={(r) => navigate(`/data/${r.id}?tab=agents`)}
-								onDelete={(r) => void askDelete(r)}
+								onDelete={access.canDelete ? (r) => void askDelete(r) : undefined}
 							/>
 						)}
 					</>

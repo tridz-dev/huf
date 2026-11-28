@@ -22,6 +22,8 @@ from uuid import uuid4
 
 import frappe
 from frappe import _
+
+from huf.ai.automation import per_user
 from huf.ai.run_budget import estimate_run_cost, RunBudget, get_current_budget
 
 
@@ -324,6 +326,7 @@ def _execute(automation, trigger_name, trigger_context, now, commit=True, parent
 
 	if (
 		automation.conversation_mode == "Dedicated"
+		and not per_user.is_active(automation)
 		and not automation.conversation
 		and conversation_id_result
 	):
@@ -407,6 +410,9 @@ def _resolve_conversation_routing(automation):
 	"""
 	run_uuid = uuid4().hex[:12]
 	channel_id = "automation"
+
+	if per_user.is_active(automation):
+		return per_user.resolve_routing(automation)
 
 	if automation.conversation_mode == "Dedicated":
 		if automation.conversation:

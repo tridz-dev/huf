@@ -43,6 +43,12 @@ def normalize_google_sheets_url(url: str) -> str:
 	))
 
 
+AUTH_ERROR_MESSAGE = (
+	"This address needs a sign-in. Share the Google Sheet or page publicly "
+	"(anyone with the link can view) and try again."
+)
+
+
 class URLExtractor(TextExtractor):
 	"""Extractor for URL content."""
 
@@ -78,6 +84,8 @@ class URLExtractor(TextExtractor):
 				current_url = next_url
 			else:
 				raise ValueError("Too many redirects")
+			if response.status_code in (401, 403):
+				raise ValueError(AUTH_ERROR_MESSAGE)  # noqa: TRY301
 			response.raise_for_status()
 
 			content_type = response.headers.get("Content-Type", "").split(";", 1)[0].strip().lower()
@@ -139,6 +147,10 @@ class URLExtractor(TextExtractor):
 				},
 			)
 
+		except ValueError as e:
+			if str(e) == AUTH_ERROR_MESSAGE:
+				raise
+			raise ValueError(f"Error extracting text from URL: {e!s}")  # noqa: TRY003
 		except requests.exceptions.RequestException as e:
 			raise ValueError(f"Failed to fetch URL: {e!s}")
 		except Exception as e:

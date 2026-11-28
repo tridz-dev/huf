@@ -1,3 +1,4 @@
+import { useResourceAccess } from '@/hooks/permissions/useResourceAccess';
 import { ArrowRight, Check, CheckCircle2, Cloud, ExternalLink, KeyRound, Loader2, Settings, Sparkles, Trash2, XCircle } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
@@ -91,6 +92,7 @@ const STARTER_PATHS: Record<StarterPath, {
 
 export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
   const navigate = useNavigate();
+  const access = useResourceAccess('provider');
   const [searchParams, setSearchParams] = useSearchParams();
   const configureHandledRef = useRef(false);
   const [models, setModels] = useState<AIModel[]>([]);
@@ -163,7 +165,7 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
       };
     },
     initialParams: {},
-    pageSize: 9,
+    pageSize: 12,
     debounceMs: 300,
     autoLoad: true,
   });
@@ -524,7 +526,7 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
               icon={Cloud}
               title="No providers"
               description="Add an AI provider to connect models and start building agents."
-              action={{ label: 'Add provider', onClick: handleAddProvider }}
+              action={access.canCreate ? { label: 'Add provider', onClick: handleAddProvider } : undefined}
             />
           )
         }
@@ -565,14 +567,14 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
                   variant: 'ghost',
                 },
               ]}
-              menuActions={[
+              menuActions={access.canDelete ? [
                 {
                   icon: Trash2,
                   label: 'Delete',
                   onClick: () => setDeleteTarget(provider),
                   variant: 'destructive',
                 },
-              ]}
+              ] : []}
               onClick={() => handleConfigure(provider)}
             />
           );

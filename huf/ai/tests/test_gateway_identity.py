@@ -209,7 +209,7 @@ def fake_confirm(monkeypatch, send):
 JSONS = [
 	"huf/doctype/gateway_identity_link/gateway_identity_link.json",
 	"huf/doctype/agent_run/agent_run.json",
-	"huf/doctype/flow_run/flow_run.json",
+	"huf/doctype/agent_flow_run/agent_flow_run.json",
 	"huf/doctype/gateway/gateway.json",
 ]
 
@@ -501,7 +501,7 @@ class TestModule(SupportCase):
 		monkeypatch.setattr(identity, "_find_link", lambda g, t, e: None)
 		identity.on_run_success(gw(), ev(), "flow", SimpleNamespace(name="FR-1"))
 		frappe.db.set_value.assert_called_with(
-			"Flow Run", "FR-1",
+			"Agent Flow Run", "FR-1",
 			{"gateway_event": "EV-1", "requester_external_id": "U1", "requester_user": "alice@x.com"},
 			update_modified=False,
 		)

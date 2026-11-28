@@ -54,6 +54,21 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('GatewayTriggerForm', () => {
+  it('"Each new message" defaults to a new run and stores the other choices', async () => {
+    open('whatsapp', { gateway: 'Sales' });
+    const trigger = screen.getByTestId('flow-entry-policy-select');
+    expect(trigger.textContent).toContain('Start a new run');
+    fireEvent.click(trigger);
+    fireEvent.click(await screen.findByRole('option', { name: "Continue the person's waiting run" }));
+    await flush();
+    expect(saved.entry_policy).toBe('resume_if_waiting');
+    expect(screen.getByTestId('flow-hint-entry-policy').textContent).toContain('continues it instead of starting a new run');
+    fireEvent.click(screen.getByTestId('flow-entry-policy-select'));
+    fireEvent.click(await screen.findByRole('option', { name: 'Start a new run' }));
+    await flush();
+    expect(saved.entry_policy).toBeUndefined();
+  });
+
   it('ux44: "More options" stays pinned to the foot of the panel so it is visible without scrolling', () => {
     open('whatsapp');
     const toggle = screen.getByTestId('flow-gateway-more-toggle');

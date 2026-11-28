@@ -172,4 +172,17 @@ describe('ChatInput with a desktop-hosted conversation', () => {
     expect(screen.queryByTestId('desktop-run-banner')).toBeNull();
     expect(getMessages().some((m) => m.error === 'Model quota exceeded')).toBe(true);
   });
+
+  it('shows a reply recovered without deltas on a streaming turn in an existing chat', async () => {
+    sendMessage.mockResolvedValueOnce({
+      message: { success: true, queued: false, status: 'Success', response: 'Recovered reply', conversation_id: 'conv-1', agent_run_id: 'run-1', agent_message_id: 'msg-1' },
+    });
+    const { getMessages } = setup({ hostedDeviceId: undefined });
+    await typeAndSend('hi');
+    await waitFor(() => expect(sendMessage).toHaveBeenCalled());
+    expect(sendMessage.mock.calls[0][1]).toMatchObject({ useStreaming: true });
+    await waitFor(() =>
+      expect(getMessages().find((m) => m.key === 'msg-1')?.versions[0]?.content).toBe('Recovered reply'),
+    );
+  });
 });

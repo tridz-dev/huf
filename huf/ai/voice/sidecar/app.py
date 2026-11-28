@@ -43,6 +43,7 @@ That stash IS the contract between the engine and this sidecar:
           "model": <AI Model docname>,
           "api_key_provider": <AI Provider docname>,
           "conversation_id": <Agent Conversation docname or None>,
+          "user": <Frappe user authenticated at start_session, None if anonymous>,
       }
 
   ``conversation_id`` is optional: when present the sidecar joins that
@@ -70,6 +71,7 @@ import frappe
 from fastapi import FastAPI, WebSocket
 from fastapi.websockets import WebSocketDisconnect
 
+from huf.ai.voice.history import resolve_writer
 from huf.ai.voice.persistence import get_or_create_voice_conversation, record_voice_turn
 
 app = FastAPI(title="HUF Realtime Voice Sidecar")
@@ -212,7 +214,12 @@ async def realtime_bridge(websocket: WebSocket, session_id: str) -> None:
 		cm, conversation = None, None
 		if agent_name:
 			try:
-				cm, conversation = get_or_create_voice_conversation(agent_name, conversation_id)
+				# Save as the user recorded server-side at start_session (re-checked
+				# here); anonymous embed calls are saved as Administrator.
+				writer = resolve_writer(frappe.get_doc("Agent", agent_name), session.get("user"))
+				if writer:
+					frappe.set_user(writer)
+					cm, conversation = get_or_create_voice_conversation(agent_name, conversation_id)
 			except Exception:
 				# Persistence is best-effort: a broken/inaccessible conversation_id
 				# must never block the call itself from connecting.

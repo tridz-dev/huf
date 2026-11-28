@@ -13,7 +13,6 @@ import { AgentsHeaderActions } from './components/AgentsHeaderActions';
 import { McpHeaderActions } from './components/McpHeaderActions';
 import { FlowsListHeaderActions } from './components/FlowsListHeaderActions';
 import { KnowledgeHeaderActions, NewKnowledgeRedirect } from './components/KnowledgeHeaderActions';
-import { SkillsHeaderActions } from './components/skills/SkillsHeaderActions';
 import { AgentPromptsHeaderActions } from './components/AgentPromptsHeaderActions';
 import { AgentSummaryPromptsHeaderActions } from './components/AgentSummaryPromptsHeaderActions';
 import { ExecutionProfilesHeaderActions } from './components/ExecutionProfilesHeaderActions';
@@ -26,6 +25,7 @@ import { DataTableBuilderWrapper } from './pages/DataTableBuilderWrapper';
 import { DataTableViewWrapper } from './pages/DataTableViewWrapper';
 import { Toaster } from './components/ui/sonner';
 import { CommandPalette } from './components/CommandPalette';
+import { isEmbedPath } from './embed/bridge';
 
 const HomePage = lazy(() => import('./pages/HomePage'));
 const AppsPage = lazy(() => import('./pages/AppsPage'));
@@ -43,6 +43,7 @@ const SSHConnectionsPage = lazy(() => import('./pages/SSHConnectionsPage'));
 const SSHConnectionFormPageWrapper = lazy(() => import('./pages/SSHConnectionFormPageWrapper'));
 const NetworkAccessPoliciesPage = lazy(() => import('./pages/NetworkAccessPoliciesPage'));
 const NetworkAccessPolicyFormPage = lazy(() => import('./pages/NetworkAccessPolicyFormPage'));
+const EmbedFlowPage = lazy(() => import('./embed/EmbedFlowPage'));
 const FlowListPage = lazy(() => import('./pages/FlowListPage'));
 const FlowCanvasPageWrapper = lazy(() => import('./pages/FlowCanvasPageWrapper'));
 const DataPage = lazy(() => import('./pages/DataPage'));
@@ -143,6 +144,8 @@ function ChatOnlyRedirectGuard() {
 
 function AppShell() {
   const location = useLocation();
+  // Embed mode has no app chrome (docs/flow/BUILDER_EMBED.md, section 2.4).
+  const embedded = isEmbedPath();
 
   useEffect(() => {
     clearChunkReloadFlag();
@@ -156,7 +159,7 @@ function AppShell() {
     <SocketProvider>
       <UserProvider>
         <PermissionsProvider>
-          <ChatOnlyRedirectGuard />
+          {!embedded && <ChatOnlyRedirectGuard />}
           <Suspense fallback={<AuthenticatingPage />}>
             <AnimatePresence mode="wait" initial={false}>
               <motion.div
@@ -168,6 +171,17 @@ function AppShell() {
                 className="h-full"
               >
                 <Routes location={location}>
+          {['/embed/flow/:flowId', '/embed/*'].map((path) => (
+            <Route
+              key={path}
+              path={path}
+              element={
+                <Suspense fallback={<PageLoader />}>
+                  <EmbedFlowPage />
+                </Suspense>
+              }
+            />
+          ))}
           <Route
             path="/"
             element={
@@ -241,7 +255,7 @@ function AppShell() {
           <Route
             path="/automations/:automationId"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute createResource="automation">
                 <Suspense fallback={<PageLoader />}>
                   <AutomationFormPageWrapper />
                 </Suspense>
@@ -263,7 +277,7 @@ function AppShell() {
           <Route
             path="/prompts/:id"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute createResource="prompt">
                 <Suspense fallback={<PageLoader />}>
                   <AgentPromptFormPageWrapper />
                 </Suspense>
@@ -285,7 +299,7 @@ function AppShell() {
           <Route
             path="/summary-prompts/:id"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute createResource="summaryPrompt">
                 <Suspense fallback={<PageLoader />}>
                   <AgentSummaryPromptFormPageWrapper />
                 </Suspense>
@@ -307,7 +321,7 @@ function AppShell() {
           <Route
             path="/execution-profiles/:id"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute createResource="executionProfile">
                 <Suspense fallback={<PageLoader />}>
                   <ExecutionProfileFormPageWrapper />
                 </Suspense>
@@ -329,7 +343,7 @@ function AppShell() {
           <Route
             path="/ssh-connections/:id"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute createResource="sshConnection">
                 <Suspense fallback={<PageLoader />}>
                   <SSHConnectionFormPageWrapper />
                 </Suspense>
@@ -351,7 +365,7 @@ function AppShell() {
           <Route
             path="/network-policies/:id"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute createResource="networkPolicy">
                 <Suspense fallback={<PageLoader />}>
                   <NetworkAccessPolicyFormPage />
                 </Suspense>
@@ -386,7 +400,7 @@ function AppShell() {
           <Route
             path="/data/new"
             element={
-              <ProtectedRoute requiredCapability="data.tables.manage">
+              <ProtectedRoute createResource="dataTable" requiredCapability="data.tables.manage">
                 <DataTableBuilderWrapper />
               </ProtectedRoute>
             }
@@ -734,7 +748,7 @@ function AppShell() {
           <Route
             path="/memory/policies/:id"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute createResource="memoryPolicy">
                 <Suspense fallback={<PageLoader />}>
                   <MemoryPolicyFormPageWrapper />
                 </Suspense>
@@ -745,7 +759,7 @@ function AppShell() {
             path="/skills"
             element={
               <ProtectedRoute>
-                <UnifiedLayout headerActions={<SkillsHeaderActions />}>
+                <UnifiedLayout>
                   <Suspense fallback={<PageLoader />}>
                     <SkillsPage />
                   </Suspense>
@@ -756,7 +770,7 @@ function AppShell() {
           <Route
             path="/skills/:id"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute createResource="skill">
                 <Suspense fallback={<PageLoader />}>
                   <SkillFormPageWrapper />
                 </Suspense>
@@ -879,7 +893,7 @@ function AppShell() {
           <Route
             path="/integration-services/:serviceId"
             element={
-              <ProtectedRoute requiredCapability="system.integrations.manage">
+              <ProtectedRoute createResource="integrationService" requiredCapability="system.integrations.manage">
                 <Suspense fallback={<PageLoader />}>
                   <IntegrationServiceFormPageWrapper />
                 </Suspense>
@@ -901,7 +915,7 @@ function AppShell() {
           <Route
             path="/mcp/:mcpId"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute createResource="mcp">
                 <Suspense fallback={<PageLoader />}>
                   <McpDetailsPageWrapper />
                 </Suspense>
@@ -981,7 +995,7 @@ function AppShell() {
           <Route
             path="/roles/:id"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute createResource="role">
                 <Suspense fallback={<PageLoader />}>
                   <HufRoleFormPage />
                 </Suspense>
@@ -1005,7 +1019,7 @@ function AppShell() {
             </AnimatePresence>
           </Suspense>
           <Toaster />
-          <CommandPalette />
+          {!embedded && <CommandPalette />}
         </PermissionsProvider>
       </UserProvider>
     </SocketProvider>

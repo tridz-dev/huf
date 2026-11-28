@@ -30,12 +30,14 @@ import asyncio
 import inspect
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from types import SimpleNamespace
 from typing import Any
 
 import frappe
 
 from huf.ai.tools.call_telemetry import finalize_tool_call_telemetry as _finalize_tool_call_telemetry
 from huf.ai.tools.call_telemetry import start_tool_call_telemetry as _start_tool_call_telemetry
+from huf.ai.tools.guest_guard import guest_scope_error
 from huf.ai.tools.support.sync import _run_coroutine_sync
 from huf.ai.tools.types import _GUEST_DOCTYPE_PINNED_TYPES, _GUEST_REPORT_PINNED_TYPES, MUTATING_TOOL_TYPES
 
@@ -102,6 +104,7 @@ REFERENCE_DOCTYPE_PIN_TYPES = frozenset({
 	"Submit Document", "Cancel Document", "Get Amended Document",
 	"Attach File to Document",
 	"Send Email",
+	"Get Value", "Set Value",
 })
 
 # Bare tool-name aliases usable without a backing Agent Tool Function
@@ -179,6 +182,7 @@ def resolve_tool_doc(tool_name: str) -> dict | None:
 			"allowed_for_guest": False,
 			"blocking": False,
 			"base_url": None,
+			"is_alias": True,
 		}
 	return None
 
@@ -343,7 +347,17 @@ async def invoke_tool(
 		from huf.ai.tools.registry import assert_tool_role
 
 		try:
-			assert_tool_role(frappe.get_cached_doc("Agent Tool Function", tool_doc["name"]))
+			try:
+				role_subject = frappe.get_cached_doc("Agent Tool Function", tool_doc["name"])
+			except frappe.DoesNotExistError:
+				if not tool_doc.get("is_alias"):
+					# A resolved row that cannot be loaded has unknown roles: fail closed.
+					return ToolResult(success=False, error=f"Tool '{tool_name}' could not be loaded", denied=True)
+				# A bare alias declares no roles and is not outbound. A row stored under
+				# this name (loaded above) would have been enforced instead; the guest
+				# gate below and the handler's own DocType permissions still apply.
+				role_subject = SimpleNamespace(name=tool_name, required_roles=None, is_outbound=0)
+			assert_tool_role(role_subject)
 		except frappe.PermissionError as e:
 			return ToolResult(success=False, error=str(e), denied=True)
 
@@ -420,6 +434,8 @@ async def invoke_tool(
 					"fixed target report configured."
 				),
 			)
+		if scope_error := guest_scope_error(tool_type, extra_args, args_dict):
+			return ToolResult(success=False, denied=True, error=scope_error)
 		args_dict["ignore_permissions"] = True
 
 		# Override report_name with reference_report if pinned for guest.

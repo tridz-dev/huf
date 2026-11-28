@@ -85,7 +85,7 @@ export async function getDashboardActiveFlows(limit = 10): Promise<DashboardFlow
       active.map(async (flow) => {
         try {
           const [runCount, recentRuns] = await Promise.all([
-            fetchDocCount(doctype['Flow Run'], [['flow_id', '=', flow.flow_id], ['run_mode', '!=', 'Test']]),
+            fetchDocCount(doctype['Agent Flow Run'], [['flow_id', '=', flow.flow_id], ['run_mode', '!=', 'Test']]),
             listFlowRuns(flow.flow_id, undefined, 1, 'real'),
           ]);
 

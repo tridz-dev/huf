@@ -54,3 +54,19 @@ export const triggerOptions: TriggerOption[] = [
     tab: 'explore'
   }
 ];
+
+/** `trigger.app`: started only by its app, so it is shown and kept but never offered in the palette. */
+export const appTriggerOption: TriggerOption = {
+  id: 'app',
+  name: 'Started by an app',
+  nodeTitle: 'App trigger',
+  description: 'Only the app that owns this flow starts it.',
+  icon: 'AppWindow',
+  category: 'app',
+  tab: 'explore'
+};
+
+/** Any trigger kind the builder can show, including the ones the palette never offers. */
+export function findTriggerOption(id: string | undefined): TriggerOption | undefined {
+  return id === appTriggerOption.id ? appTriggerOption : triggerOptions.find((t) => t.id === id);
+}

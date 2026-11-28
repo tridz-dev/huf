@@ -103,6 +103,9 @@ export function isRowShaped(v: unknown): boolean {
   return isPlain(v) && Object.values(v).every((x) => x === null || typeof x !== 'object' || '$from' in (x as object) || '$template' in (x as object));
 }
 
+/** What a set of rows stands for: nothing and an empty object are the same, so a form that stores `{}` for "none" does not wipe a row that was just added. */
+const signature = (v: unknown): string => JSON.stringify(isPlain(v) && Object.keys(v).length === 0 ? null : v ?? null);
+
 /**
  * Name / value rows ("Authorization" / "Bearer ...") for a set of named values, each value a data input. The friendly
  * view of an object; the JSON area next to it edits the same thing.
@@ -124,9 +127,9 @@ export function KeyValueRows({
   const next = useRef(1);
   const fromValue = (v: unknown): Row[] => (isPlain(v) ? Object.entries(v).map(([key, val]) => ({ id: next.current++, key, value: val })) : []);
   const [rows, setRows] = useState<Row[]>(() => fromValue(value));
-  const sent = useRef(JSON.stringify(value ?? null));
+  const sent = useRef(signature(value));
   useEffect(() => {
-    const now = JSON.stringify(value ?? null);
+    const now = signature(value);
     if (now === sent.current) return;
     sent.current = now;
     setRows(fromValue(value));
@@ -138,7 +141,7 @@ export function KeyValueRows({
     const out: KeyValue = {};
     for (const r of list) if (r.key.trim() !== '') out[r.key.trim()] = r.value === undefined ? '' : r.value;
     const result = Object.keys(out).length ? out : undefined;
-    sent.current = JSON.stringify(result ?? null);
+    sent.current = signature(result);
     onChange(result);
   };
   const setRow = (id: number, p: Partial<Row>) => commit(rows.map((r) => (r.id === id ? { ...r, ...p } : r)));

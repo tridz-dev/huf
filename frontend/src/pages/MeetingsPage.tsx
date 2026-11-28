@@ -1,3 +1,4 @@
+import { useResourceAccess } from '@/hooks/permissions/useResourceAccess';
 import { useEffect } from 'react';
 import { Mic } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -22,6 +23,7 @@ const STATUS_FILTER_OPTIONS: Array<{ label: string; value: string }> = [
 
 export default function MeetingsPage() {
   const navigate = useNavigate();
+  const access = useResourceAccess('meeting');
 
   const { overview, version } = useMeetingsOverviewSocket();
 
@@ -127,8 +129,8 @@ export default function MeetingsPage() {
               variant="create"
               icon={Mic}
               title="No meetings yet"
-              description="Start your first recording — you can add a title and participants later."
-              action={{ label: 'Quick start', onClick: handleEmptyStateQuickStart }}
+              description={access.canCreate ? 'Start your first recording — you can add a title and participants later.' : 'There are no meetings to show.'}
+              action={access.canCreate ? { label: 'Quick start', onClick: handleEmptyStateQuickStart } : undefined}
             />
           )
         }

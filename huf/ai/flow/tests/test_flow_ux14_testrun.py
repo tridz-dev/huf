@@ -141,7 +141,7 @@ class TestTestRunSkipsSideEffects(Base):
 	def test_the_api_takes_a_mode_and_lists_it(self):
 		flow_id = self._save(_graph([_out("done", "ok")], WEBHOOK))
 		result = flow_api.run_flow(flow_id, {}, mode="test")
-		self.assertEqual(frappe.db.get_value("Flow Run", result["flow_run_id"], "run_mode"), "Test")
+		self.assertEqual(frappe.db.get_value("Agent Flow Run", result["flow_run_id"], "run_mode"), "Test")
 		self.assertEqual(flow_api.get_flow_run(result["flow_run_id"])["run_mode"], "Test")
 		listed = flow_api.list_flow_runs(flow_id=flow_id, run_mode="test")
 		self.assertEqual([r["name"] for r in listed], [result["flow_run_id"]])
@@ -256,14 +256,14 @@ class TestTestRunsDoNotCount(Base):
 		flow_id = self._save(_graph([_out("done", "ok")], WEBHOOK))
 		flow_engine.run_flow(flow_engine.create_flow_run(flow_id, payload={}, trigger_type="Webhook", mode="real").name)
 		frappe.db.commit()
-		real_name = frappe.get_all("Flow Run", filters={"flow_id": flow_id, "run_mode": "Real"}, pluck="name")[0]
+		real_name = frappe.get_all("Agent Flow Run", filters={"flow_id": flow_id, "run_mode": "Real"}, pluck="name")[0]
 		flow_engine.run_flow(flow_engine.create_flow_run(flow_id, payload={}, trigger_type="Webhook", mode="test").name)
 		frappe.db.commit()
 		last = _last_runs([flow_id], {})
 		self.assertEqual(last[flow_id]["status"], "Success")
 		# only one run counts: the real one
 		rows = frappe.db.sql(
-			"select r.name from `tabFlow Run` r inner join (select flow_id, max(creation) latest from `tabFlow Run` where flow_id = %s and run_mode != 'Test' group by flow_id) m on m.flow_id=r.flow_id and m.latest=r.creation",
+			"select r.name from `tabAgent Flow Run` r inner join (select flow_id, max(creation) latest from `tabAgent Flow Run` where flow_id = %s and run_mode != 'Test' group by flow_id) m on m.flow_id=r.flow_id and m.latest=r.creation",
 			(flow_id,),
 		)
 		self.assertEqual([r[0] for r in rows], [real_name])

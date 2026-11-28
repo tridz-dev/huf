@@ -19,7 +19,7 @@ from typing import Any
 import frappe
 from frappe import _
 
-from . import ChunkResult, KnowledgeBackend
+from . import BackendNotInitializedError, ChunkResult, KnowledgeBackend
 
 try:
 	import redis
@@ -340,6 +340,35 @@ class RedisBackend(KnowledgeBackend):
 			frappe.logger().warning(f"Redis delete_chunks error for {input_id}: {exc!s}")
 			# Propagate: swallowing would let add_chunks append duplicates on re-index.
 			raise
+
+	def get_chunks(self, input_id: str, start: int = 0, limit: int = 20):
+		from redis.commands.search.query import Query
+
+		from .chunk_listing import MAX_LISTED_CHUNKS, page_chunks, to_result
+
+		if not self._initialized or not self.redis_client:
+			raise BackendNotInitializedError
+		query = (
+			Query(
+				f"@site_name:{{{_escape_tag(frappe.local.site)}}} "
+				f"@knowledge_source:{{{_escape_tag(self.knowledge_source)}}} "
+				f"@input_id:{{{_escape_tag(input_id)}}}"
+			)
+			.return_fields("chunk_id", "text", "source_title", "chunk_index")
+			.paging(0, MAX_LISTED_CHUNKS)
+		)
+		docs = self.redis_client.ft(self.index_name).search(query).docs
+		chunks = [
+			to_result(
+				getattr(d, "chunk_id", None) or d.id,
+				getattr(d, "text", ""),
+				{},
+				getattr(d, "source_title", None),
+				getattr(d, "chunk_index", None),
+			)
+			for d in docs
+		]
+		return page_chunks(chunks, start, limit)
 
 	def clear(self) -> None:
 		"""Drop this source's RediSearch index (and its documents), then recreate it."""

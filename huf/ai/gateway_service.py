@@ -7,7 +7,6 @@ does not expose a guest endpoint: each adapter owns its verification contract.
 
 from __future__ import annotations
 
-import hashlib
 import inspect
 import json
 import os
@@ -83,7 +82,7 @@ def _gateway_fallback_reply_text(gateway) -> str:
     return ""
 
 
-from huf.ai.gateway_core.event_helpers import _conversation_race_errors, _flow_trigger_payload, _lang_code
+from huf.ai.gateway_core.event_helpers import _conversation_race_errors, _flow_trigger_payload, _idempotency_key, _lang_code
 from huf.ai.gateway_core.fallback_texts import _FALLBACK_TEXTS, ATTACHMENT_UNAVAILABLE_NOTE  # noqa: F401
 
 
@@ -191,11 +190,6 @@ def _call_instructions_hook(hook, gateway) -> str | None:
 			f"Agent instructions hook failed for provider {getattr(gateway, 'provider', None)}: {type(exc).__name__}"
 		)
 		return None
-
-
-def _idempotency_key(gateway_name: str, provider_event_id: str) -> str:
-    value = f"{gateway_name}:{provider_event_id}".encode()
-    return hashlib.sha256(value).hexdigest()
 
 
 # GW-07: a provider outbound call's HTTPError can carry the request URL
@@ -1940,7 +1934,8 @@ def ingest_gateway_event(
         event.insert(ignore_permissions=True)
     except (frappe.DuplicateEntryError, frappe.UniqueValidationError):
         # A unique-index race surfaces as UniqueValidationError (DuplicateEntryError's sibling).
-        existing = frappe.db.get_value("Gateway Event", {"idempotency_key": key}, "name")
+        # Locking read: the winner's row is newer than this transaction's snapshot.
+        existing = frappe.db.get_value("Gateway Event", {"idempotency_key": key}, "name", for_update=True)
         return {"duplicate": True, "event_name": existing}
 
     if _filter_reason:
@@ -2299,7 +2294,7 @@ def _flow_run_is_active(event_name: str) -> bool:
     run = frappe.db.get_value("Gateway Event", event_name, "flow_run")
     if not run:
         return False
-    status = frappe.db.get_value("Flow Run", run, "status")
+    status = frappe.db.get_value("Agent Flow Run", run, "status")
     return bool(status) and status not in _FLOW_RUN_TERMINAL
 
 
@@ -2404,7 +2399,11 @@ def store_ingest_dead_letter(
             "error_message": reason,
         }
     )
-    doc.insert(ignore_permissions=True)
+    try:
+        doc.insert(ignore_permissions=True)
+    except (frappe.DuplicateEntryError, frappe.UniqueValidationError):
+        # Another delivery of the same event stored it first; its outcome stands.
+        return frappe.db.get_value("Gateway Event", {"idempotency_key": key}, "name", for_update=True)
     return doc.name
 
 
@@ -2506,9 +2505,9 @@ def _start_flow_for_event(event, gateway) -> dict:
 
     attachments = _save_event_media(event, gateway)
     payload = _flow_trigger_payload(event, gateway, attachments)
-    skip_note, wants_voice = dispatch.gate_flow_start(event, gateway, payload)
-    if skip_note:
-        return dispatch.fall_through(event, gateway, skip_note)
+    early, wants_voice = dispatch.prepare_flow_start(event, gateway, payload)
+    if early:
+        return early
     if wants_voice:
         dispatch.add_transcript(payload, gateway)
     # Route authorisation already happened (enabled gateway, flow bound by an admin), so the run is
@@ -2518,6 +2517,7 @@ def _start_flow_for_event(event, gateway) -> dict:
         payload=payload,
         trigger_type="Gateway",
         ignore_permissions=True,
+        gateway_event=event.name,
     )
     event.db_set({"flow_run": flow_run.name, "status": "Running"})
     frappe.enqueue(
@@ -2555,7 +2555,7 @@ def finish_flow_event(flow_run_name: str, status: str, reply_text: str | None = 
         _commit_unless_testing()
         gateway = frappe.get_doc("Gateway", event.gateway)
         text = (reply_text or "").strip()
-        if text and frappe.db.get_value("Flow Run", flow_run_name, "replied_via_tool"):
+        if text and frappe.db.get_value("Agent Flow Run", flow_run_name, "replied_via_tool"):
             event.db_set({"status": "Succeeded", "reply_status": "suppressed", "error_message": "already replied"})
             return
         if not text or _is_no_reply(text):

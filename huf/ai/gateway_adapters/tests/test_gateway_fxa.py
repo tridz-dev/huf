@@ -52,7 +52,7 @@ class Store:
 		return [r["name"] for r in rows] if pluck else [dict(r) for r in rows]
 
 	def get_value(self, doctype, name, fieldname=None, as_dict=False, for_update=False, **kw):
-		if doctype == "Flow Run":
+		if doctype == "Agent Flow Run":
 			return self.flow_runs.get(name)
 		assert doctype == "Gateway Event"
 		if isinstance(name, dict):

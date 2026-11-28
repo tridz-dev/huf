@@ -133,6 +133,14 @@ export function VoiceChannelFields({ form, allModels }: { form: UseFormReturn<Ag
           <FormMessage />
         </FormItem>
       )} />
+      <FormField control={form.control} name="voice_language" render={({ field }) => (
+        <FormItem>
+          <FormLabel>Voice language</FormLabel>
+          <FormControl><Input placeholder="Auto-detect" {...field} value={field.value || ''} /></FormControl>
+          <FormDescription>Leave empty to understand and reply in the language spoken. Set a code or name (e.g. ml, Malayalam) to force it.</FormDescription>
+          <FormMessage />
+        </FormItem>
+      )} />
       <div className="grid gap-4 sm:grid-cols-2">
         <FormField control={form.control} name="tts_model" render={({ field }) => (
           <FormItem>

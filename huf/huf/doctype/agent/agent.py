@@ -14,7 +14,7 @@ import random
 from huf.ai.prompt_cache_capabilities import model_supports_prompt_caching
 
 from huf.ai.orchestration.planning import run_planning
-from huf.ai.orchestration.orchestrator import parse_plan_steps, create_orchestration
+from huf.ai.orchestration.orchestrator import create_orchestration
 
 def get_permission_query_conditions(user):
     if not user:
@@ -549,13 +549,10 @@ class Agent(Document):
         if self.enable_multi_run and (
             prompt_changed or self.has_value_changed("enable_multi_run")
         ):
-            frappe.enqueue(
-                "huf.huf.doctype.agent.agent.generate_default_plan_job",
-                agent=self.name,
-                enqueue_after_commit=True,
-                queue="long"
-            )
-        
+            from huf.huf.doctype.agent.default_plan import enqueue_default_plan
+
+            enqueue_default_plan(self.name)
+
     def on_trash(self):
         if self.is_system and not (
             frappe.flags.in_install or frappe.flags.in_migrate or frappe.flags.in_uninstall
@@ -571,65 +568,10 @@ class Agent(Document):
             frappe.throw(_("System agents cannot be renamed."), title=_("System Agent Protected"))
 
     def generate_default_plan(self):
-        """
-        Generates the default plan using run_agent_sync directly.
-        Returns the agent_run_id so it can be used as a Parent Run.
-        """
-        from huf.ai.prompt_resolver import resolve_prompt
+        """Generate the default plan if empty; see ``default_plan.generate_default_plan``."""
+        from huf.huf.doctype.agent.default_plan import generate_default_plan
 
-        resolved = resolve_prompt(self)
-        if not resolved:
-            return None
-
-        planning_prompt = f"""You are a planning assistant. Break down the user's objective into a sequence of clear, atomic steps that can be executed one at a time.
-
-            Rules:
-            - Each step should be self-contained and actionable
-            - Steps should be in logical order
-            - Return ONLY a numbered list, nothing else
-            - Keep steps concise but clear
-
-            Example format:
-            1. First action to take
-            2. Second action to take
-
-            Now break down this objective:
-            {resolved}"""
-
-        try:
-            result = run_agent_sync(
-                agent_name=self.name,
-                prompt=planning_prompt,
-                provider=self.provider,
-                model=self.model,
-                channel_id="orchestration_planning",
-                now=True
-            )
-            
-            planning_run_id = result.get("agent_run_id")
-            plan_text = result.get("response", "")
-            
-            steps = parse_plan_steps(plan_text)
-            
-            if steps:
-                self.reload()
-                self.set("default_plan", [])
-                for idx, step in enumerate(steps, start=1):
-                    self.append("default_plan", {
-                        "step_index": idx,
-                        "instruction": step,
-                        "status": "pending"
-                    })
-                
-                self.flags.ignore_recursion = True
-                self.save()
-                self.flags.ignore_recursion = False
-            
-            return planning_run_id, steps
-
-        except Exception as e:
-            frappe.log_error(title="Agent Plan Error", message=f"Plan Generation Failed: {str(e)}")
-            return None
+        return generate_default_plan(self)
 
     def set_default_color(self):
         if not self.agent_color:

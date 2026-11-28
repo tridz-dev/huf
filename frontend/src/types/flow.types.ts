@@ -13,7 +13,8 @@ export type TriggerType =
   | 'doc-event'
   | 'gateway'
   | 'whatsapp'
-  | 'telegram';
+  | 'telegram'
+  | 'app';
 
 /**
  * Value (FIELD_CONTRACT section 2): literal, `{$from}` reference, `{$template, vars}`,
@@ -63,7 +64,25 @@ export type ActionType =
   | 'state-set'
   | 'state-delete'
   | 'doc-create'
-  | 'code-run';
+  | 'code-run'
+  | 'wait'
+  | 'stop'
+  | 'doc-get'
+  | 'doc-update'
+  | 'flow-call'
+  | 'member-set'
+  | 'send-message'
+  | 'split';
+
+/** Wait step config (graph-IR `WaitNode`). `until` is a literal, reference or template; the timeout branch is a routing pointer. */
+export type WaitMode = 'duration' | 'until' | 'resume';
+export interface WaitNodeConfig {
+  mode: WaitMode;
+  duration?: { value?: number; unit: 'minutes' | 'hours' | 'days' };
+  until?: FlowValue;
+  time_zone?: string;
+  resume?: { wait_for?: 'token' | 'member_reply'; timeout_ms?: number; timeout_next?: string; message?: string };
+}
 
 // ─── Trigger configs (field names == graph-IR config keys) ────────────
 
@@ -99,8 +118,17 @@ export interface GatewayTriggerUiConfig {
   params?: Array<{ key: string; value: string | number | boolean | string[] | null }>;
 }
 
+/** `trigger.app`: only its app starts the flow (through start_flow_for_member); the builder shows it, never offers it. */
+export interface AppTriggerConfig {
+  type: 'app';
+  /** The app that starts the flow, shown as "Started by <app>". */
+  app?: string;
+  entry_policy?: 'new_run_each_time' | 'resume_if_waiting' | 'once_per_member' | 'one_active_per_member';
+}
+
 export type TriggerConfig =
   | WebhookTriggerConfig
+  | AppTriggerConfig
   | ScheduleTriggerConfig
   | DocEventTriggerConfig
   | GatewayTriggerUiConfig
@@ -118,12 +146,21 @@ export interface AgentRunActionConfig {
   prompt_bindings?: Record<string, FlowValue>;
 }
 
+/** Try again if a step fails (graph-IR `tool.call` config `retry`). Delays are whole seconds. */
+export interface RetryPolicy {
+  attempts: number;
+  backoff: 'fixed' | 'exponential';
+  delay_seconds: number;
+  max_delay_seconds?: number;
+}
+
 export interface ToolCallActionConfig {
   type: 'tool-call';
   tool_id?: string;
   input?: Record<string, FlowValue>;
   timeout_ms?: number;
   approved?: boolean;
+  retry?: RetryPolicy;
 }
 
 export interface RouterLlmActionConfig {
@@ -136,6 +173,15 @@ export interface RouterLlmActionConfig {
    * node; otherwise the serializer falls back to the first option target.
    */
   default?: string;
+}
+
+/** Split / holdout (graph-IR `split`): weighted branches (the option edges, each with a `weight` in percent) and a holdout share. */
+export interface SplitActionConfig {
+  type: 'split';
+  /** Percent of people held out (0-100); held-out runs still walk the graph but skip marketing sends. */
+  holdout?: number;
+  /** Bucketing salt; defaults to the flow version on the server. */
+  salt?: string;
 }
 
 export interface RouterDecisionActionConfig {
@@ -214,6 +260,60 @@ export interface DocCreateActionConfig {
   fields?: Record<string, FlowValue>;
 }
 
+/** Stop with error (graph-IR `stop`). */
+export interface StopActionConfig {
+  type: 'stop';
+  message?: FlowValue;
+}
+
+/** Find document (graph-IR `doc.get`): by name or by matching fields. */
+export interface DocGetActionConfig {
+  type: 'doc-get';
+  doctype?: string;
+  name?: FlowValue;
+  filters?: Record<string, FlowValue>;
+  fields?: string[];
+  on_missing?: 'error' | 'empty';
+}
+
+/** Update document (graph-IR `doc.update`). */
+export interface DocUpdateActionConfig {
+  type: 'doc-update';
+  doctype?: string;
+  name?: FlowValue;
+  values?: Record<string, FlowValue>;
+}
+
+/** Remember for this person (graph-IR `member.set`): values kept for the person the run is about. */
+export interface MemberSetActionConfig {
+  type: 'member-set';
+  vars?: Record<string, FlowValue>;
+}
+
+/** Send message (graph-IR `send.message`): one message to the run's person, always through the guard chain. */
+export interface SendMessageActionConfig {
+  type: 'send-message';
+  gateway?: string;
+  recipient?: FlowValue;
+  template?: FlowValue;
+  text?: FlowValue;
+  variables?: string[];
+  category?: 'marketing' | 'service';
+  header?: Record<string, unknown>;
+  language?: string;
+}
+
+/** Run another flow (graph-IR `flow.call`). */
+export interface FlowCallActionConfig {
+  type: 'flow-call';
+  flow_id?: string;
+  input?: Record<string, FlowValue>;
+  mode?: 'fire_and_forget' | 'wait';
+}
+
+/** Wait (graph-IR `wait`): the canvas config is the node config plus its discriminator. */
+export type WaitActionConfig = { type: 'wait' } & WaitNodeConfig;
+
 /** Execute code (graph-IR `code.run`): sandboxed Python run under an Execution Profile. */
 export interface CodeRunActionConfig {
   type: 'code-run';
@@ -250,6 +350,14 @@ export type ActionConfig =
   | StateDeleteActionConfig
   | DocCreateActionConfig
   | CodeRunActionConfig
+  | WaitActionConfig
+  | StopActionConfig
+  | DocGetActionConfig
+  | DocUpdateActionConfig
+  | FlowCallActionConfig
+  | MemberSetActionConfig
+  | SplitActionConfig
+  | SendMessageActionConfig
   | UnknownActionConfig
   | { type: undefined };
 
@@ -275,6 +383,7 @@ export interface EndOutcome {
  *  next      -> node.next
  *  error     -> node.on_error
  *  true/false-> condition on_true / on_false
+ *  fallback  -> condition fallback_next (taken when the facts cannot be known)
  *  option    -> router options[] (label = edge.label)
  *  default   -> router default when it is not also an option target
  *  approve/reject/timeout -> human.approval approve_next / reject_next / timeout_next
@@ -283,10 +392,14 @@ export interface EndOutcome {
  */
 export type FlowEdgeRoute =
   | 'next' | 'error' | 'true' | 'false' | 'option' | 'default'
-  | 'approve' | 'reject' | 'timeout' | 'body';
+  | 'approve' | 'reject' | 'timeout' | 'body' | 'fallback';
 
 export interface FlowEdgeData {
   route?: FlowEdgeRoute;
+  /** Switch rule check (route 'option' of router.decision); written to the option's `expression`. */
+  expression?: string;
+  /** Split branch share in percent (route 'option' of split); written to the option's `weight`. */
+  weight?: number;
 }
 
 export interface FlowNodeData {
@@ -341,6 +454,8 @@ export interface Flow {
   category?: string;
   nodes: FlowNode[];
   edges: FlowEdge[];
+  /** First step of the "If any step fails" chain; absent = off. */
+  errorHandler?: string;
   createdAt: Date;
   updatedAt: Date;
   version: number;

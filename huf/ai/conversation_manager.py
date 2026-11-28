@@ -454,7 +454,7 @@ class ConversationManager:
             frappe.log_error(title="Conversation Manager", message=f"Error adding message: {str(e)}")
             raise
 
-    def get_conversation_history(self, conversation_name, limit=20):
+    def get_conversation_history(self, conversation_name, limit=20, exclude_runs=None):
         """Get conversation history for model context, applying context policies."""
         messages = frappe.get_all(
             "Agent Message",
@@ -471,6 +471,7 @@ class ConversationManager:
                 "tool_call",
                 "tool_call_id",
                 "tool_calls",
+                "agent_run",
                 "creation"
             ],
             order_by="conversation_index desc",
@@ -478,6 +479,8 @@ class ConversationManager:
         )
 
         messages.reverse()
+        if exclude_runs:
+            messages = [m for m in messages if m.get("agent_run") not in exclude_runs]
 
         result = []
         for msg in messages:

@@ -35,7 +35,7 @@ import frappe
 from frappe import _
 from frappe.utils import get_files_path
 
-from . import ChunkResult, KnowledgeBackend
+from . import BackendNotInitializedError, ChunkResult, KnowledgeBackend
 from .llamaindex_base import LLAMAINDEX_AVAILABLE, LlamaIndexBackend
 
 try:
@@ -396,6 +396,20 @@ class FaissBackend(LlamaIndexBackend, KnowledgeBackend):
 			frappe.logger().warning(f"FAISS delete_chunks error for {input_id}: {exc!s}")
 			# Propagate: swallowing would let add_chunks append duplicates on re-index.
 			raise
+
+	def get_chunks(self, input_id: str, start: int = 0, limit: int = 20):
+		from .chunk_listing import page_chunks, to_result
+
+		if not self._initialized:
+			raise BackendNotInitializedError
+		chunks = []
+		for record in self._chunk_store.values():
+			meta = record.get("metadata") or {}
+			if meta.get("input_id") == input_id:
+				chunks.append(
+					to_result(record.get("chunk_id"), record.get("text"), meta, meta.get("source_title"))
+				)
+		return page_chunks(chunks, start, limit)
 
 	def clear(self) -> None:
 		"""Reset the index and sidecar to empty and persist them."""

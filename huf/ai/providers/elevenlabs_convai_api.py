@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 from huf.ai.conversation_manager import ConversationManager
 from frappe.utils.file_manager import save_file
 from frappe.rate_limiter import rate_limit
+from huf.ai.voice import history as voice_history
 
 SETTINGS_DOCTYPE = "Elevenlabs Settings"
 
@@ -142,77 +143,91 @@ def handle_elevenlabs_webhook(type=None, data=None, event_timestamp=None):
         return {"status": "ignored"}
 
     incoming_agent_id = data.get("agent_id")
+    conversation_id = data.get("conversation_id")
+    if not conversation_id:
+        return {"status": "ignored"}
 
-    # NOTE: `stored_agent_id` (the Elevenlabs Settings singleton) is no longer
-    # the authority here -- multiple Agents can share this AI Provider, each
-    # with its own ElevenLabs agent_id in its own voice_config. The per-Agent
-    # voice_config match below is authoritative; a singleton equality gate
-    # here would reject every webhook except the one Agent that happens to
-    # match the singleton.
-    agent_name = None
-    candidates = frappe.get_all(
+    # The nonce is the only client-echoed value used, and only as a lookup key.
+    nonce = (data.get("conversation_initiation_client_data") or {}).get("dynamic_variables", {}).get(
+        voice_history.NONCE_VARIABLE
+    )
+
+    # NOTE: the Elevenlabs Settings singleton is not the authority here -- many
+    # Agents can share this AI Provider, each with its own agent_id in its own
+    # voice_config. The nonce only chooses among agents the signed payload
+    # already maps to; it never adds one.
+    candidates = []
+    for candidate in frappe.get_all(
         "Agent",
         filters={"voice_enabled": 1, "voice_engine": "elevenlabs_convai"},
         fields=["name", "voice_config"],
         ignore_permissions=True,
-    )
-    for candidate in candidates:
+    ):
         try:
             voice_config = json.loads(candidate.voice_config or "{}")
         except (TypeError, ValueError):
             continue
         if voice_config.get("agent_id") == incoming_agent_id:
-            agent_name = candidate.name
-            break
+            candidates.append(candidate.name)
 
-    if not agent_name:
+    if not candidates:
         frappe.log_error(
             title="Huf Webhook",
             message=f"No Huf Agent found with voice_config.agent_id {incoming_agent_id}",
         )
         return {"status": "error", "message": "Internal Agent not found"}
+    nonce_agent = voice_history.find_nonce_agent(nonce)
+    agent_name = nonce_agent if nonce_agent in candidates else candidates[0]
 
-    from huf.ai.agent.access import assert_agent_access
+    if voice_history.is_duplicate(conversation_id):
+        return {"status": "duplicate"}
 
     agent_doc = frappe.get_doc("Agent", agent_name)
     try:
-        assert_agent_access(agent_doc, user="Guest")
-    except frappe.PermissionError:
+        attr = voice_history.claim_nonce(agent_doc, nonce, conversation_id) or voice_history.claim_guest(
+            agent_doc, conversation_id
+        )
+    except voice_history.DuplicateCall:
+        return {"status": "duplicate"}
+    if attr is None:
         frappe.log_error(
             title="Huf Webhook",
-            message=f"Agent '{agent_name}' does not allow guest access; rejecting ElevenLabs webhook",
+            message=f"Agent '{agent_name}' not accessible for this call; not saved",
         )
         return {"status": "error", "message": "Agent not accessible"}
-    model = frappe.db.get_value("Agent", agent_name, "model")
 
+    with voice_history.acting_as(attr.writer):
+        run_name = _save_call(agent_doc, attr, data, provider, api_key)
+    voice_history.mark_outcome(
+        attr.session_row,
+        outcome="Attributed" if attr.owner_user else "Anonymous",
+        agent_run=run_name,
+    )
+    return {"status": "success", "run_id": run_name}
+
+
+def _save_call(agent_doc, attr, data, provider, api_key):
+    """Write the conversation, Agent Run, recording and messages. Runs as attr.writer."""
+    agent_name = agent_doc.name
+    model = frappe.db.get_value("Agent", agent_name, "model")
     conversation_id = data.get("conversation_id")
     transcript = data.get("transcript", [])
     analysis = data.get("analysis", {})
     metadata = data.get("metadata", {})
 
-    client_data = data.get("conversation_initiation_client_data", {})
-    lead_name = client_data.get("dynamic_variables", {}).get("lead_name", "User")
-    huf_conversation_id = client_data.get("dynamic_variables", {}).get("huf_conversation_id")
-
     cm = ConversationManager(
         agent_name=agent_name, channel="elevenlabs_voice", external_id=conversation_id
     )
-
-    title = f"Voice Call: {lead_name}"
+    title = f"Voice Call: {agent_doc.agent_name or agent_name}"
     try:
-        conversation = cm.get_or_create_conversation(title=title, conversation_id=huf_conversation_id)
+        conversation = cm.get_or_create_conversation(title=title, conversation_id=attr.conversation)
     except frappe.PermissionError:
-        # huf_conversation_id is a client-echoed value from ElevenLabs' own
-        # conversation_initiation_client_data - it was ownership-checked once,
-        # synchronously, against the real caller in huf.ai.voice.api.start_session
-        # (see _check_conversation_access there), before ever being sent to
-        # ElevenLabs. By the time it comes back here the webhook itself runs as
-        # Guest and cannot re-verify who echoed it, so a stale/deleted/tampered
-        # value must degrade to a fresh conversation rather than aborting the
-        # whole webhook - losing the Agent Run audit record and call recording
-        # over a conversation-continuity mismatch would be strictly worse.
-        frappe.log_error(title="Huf Webhook", message=f"huf_conversation_id '{huf_conversation_id}' rejected for agent '{agent_name}'; "
-            "falling back to a fresh conversation")
+        # The recorded conversation was validated at mint; if it was since deleted,
+        # deactivated or reassigned, keep the call by starting a fresh conversation.
+        frappe.log_error(
+            title="Huf Webhook",
+            message=f"Recorded conversation rejected for agent '{agent_name}'; using a fresh conversation",
+        )
         conversation = cm.get_or_create_conversation(title=title)
 
     start_time_unix = metadata.get("start_time_unix_secs")
@@ -238,8 +253,7 @@ def handle_elevenlabs_webhook(type=None, data=None, event_timestamp=None):
             "cost": metadata.get("cost", 0),
         }
     )
-    # Guest webhook runs after signature validation; internal audit record created on behalf of the system.
-    run_doc.insert(ignore_permissions=True)
+    run_doc.insert()
     if api_key and conversation_id:
         try:
             audio_url = f"https://api.elevenlabs.io/v1/convai/conversations/{conversation_id}/audio"
@@ -250,27 +264,21 @@ def handle_elevenlabs_webhook(type=None, data=None, event_timestamp=None):
                     fname=f"call_{conversation_id}.mp3",
                     content=audio_res.content,
                     dt="Agent Run",
-                    dn=run_doc.name
+                    dn=run_doc.name,
                 )
-                
-
                 run_doc.db_set("call_recording", saved_file.file_url)
             else:
                 frappe.log_error(title="ElevenLabs Audio", message=f"Failed to fetch audio: {audio_res.text}")
         except Exception as e:
             frappe.log_error(title="ElevenLabs Audio", message=f"Audio Download Error: {str(e)}")
 
-    
-    transcript.sort(key=lambda x: x.get('time_in_call_secs', 0))
+    transcript.sort(key=lambda x: x.get("time_in_call_secs", 0))
     for turn in transcript:
         role = "agent" if turn.get("role") == "agent" else "user"
         msg_content = turn.get("message")
-        
-        msg_time_offset = turn.get("time_in_call_secs", 0)
-        msg_timestamp = start_time + timedelta(seconds=msg_time_offset)
-
+        msg_timestamp = start_time + timedelta(seconds=turn.get("time_in_call_secs", 0))
         if msg_content:
-            msg_doc=cm.add_message(
+            msg_doc = cm.add_message(
                 conversation=conversation,
                 role=role,
                 content=msg_content,
@@ -280,5 +288,4 @@ def handle_elevenlabs_webhook(type=None, data=None, event_timestamp=None):
                 run_name=run_doc.name,
             )
             msg_doc.db_set("creation", msg_timestamp)
-
-    return {"status": "success", "run_id": run_doc.name}
+    return run_doc.name

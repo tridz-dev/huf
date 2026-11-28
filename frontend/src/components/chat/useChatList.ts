@@ -2,6 +2,7 @@ import { useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import {
   getConversations,
+  HISTORY_CHANNELS,
   type ChatListItem,
   type ConversationListParams,
 } from '@/services/chatApi';
@@ -33,8 +34,8 @@ export function useChatList(options: UseChatListOptions = {}) {
   const initialParams = useMemo(
     () => ({
       filters: (project
-        ? [["channel", "=", "Chat"], ["project", "=", project], ...(agent ? [["agent", "=", agent]] : [])]
-        : [["channel", "=", "Chat"], ...(agent ? [["agent", "=", agent]] : [])]) as ConversationListParams['filters'],
+        ? [["channel", "in", HISTORY_CHANNELS], ["project", "=", project], ...(agent ? [["agent", "=", agent]] : [])]
+        : [["channel", "in", HISTORY_CHANNELS], ...(agent ? [["agent", "=", agent]] : [])]) as ConversationListParams['filters'],
     }),
     [agent, project]
   );

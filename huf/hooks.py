@@ -16,6 +16,11 @@ huf_decision_backends = {
     "fake": "huf.ai.decision.backends.fake.FakeDecisionBackend",
 }
 
+# A STOP keyword (existing ``huf_gateway_opt_out`` notify hook) also exits the sender from every flow.
+huf_gateway_opt_out = ["huf.ai.flow.runs.member.exit_on_opt_out"]
+# Channel outbox (H-W2-15): mirror provider delivery status onto the queued flow send.
+huf_gateway_delivery_status = ["huf.ai.channels.outbox.on_delivery_status"]
+
 # Apps
 # ------------------
 
@@ -146,6 +151,7 @@ after_migrate = [
     "huf.ai.skills.hooks.sync_app_skills",
     "huf.install.seed_voice_engines",
     "huf.ai.channels.run_as.ensure_all_audit_fields",
+    "huf.ai.flow.app_scope.docperms.sync_app_flow_docperms",
 ]
 
 # Uninstallation
@@ -196,6 +202,8 @@ permission_query_conditions = {
     "Agent Run Prompt Snapshot": "huf.ai.agent.integration.get_prompt_snapshot_permission_conditions",
     "Huf API Key": "huf.huf.doctype.huf_api_key.huf_api_key.get_api_key_permission_conditions",
     "Flow Definition": "huf.huf.doctype.flow_definition.flow_definition.get_permission_query_conditions",
+    "Agent Flow Run": "huf.ai.flow.app_scope.access.get_run_permission_query_conditions",
+    "Flow Member State": "huf.ai.flow.app_scope.access.get_member_state_permission_query_conditions",
     "Agent Procedure": "huf.huf.doctype.agent_procedure.agent_procedure.get_permission_query_conditions",
     "Agent Procedure Binding": "huf.huf.doctype.agent_procedure_binding.agent_procedure_binding.get_permission_query_conditions",
     "Agent Procedure Run": "huf.huf.doctype.agent_procedure_run.agent_procedure_run.get_permission_query_conditions",
@@ -215,6 +223,9 @@ permission_query_conditions = {
 }
 
 has_permission = {
+	"Flow Definition": "huf.ai.flow.app_scope.access.has_permission_flow_definition",
+	"Agent Flow Run": "huf.ai.flow.app_scope.access.has_permission_flow_run",
+	"Flow Member State": "huf.ai.flow.app_scope.access.has_permission_member_state",
 	"Agent Run": "huf.ai.hooks.has_permission_agent_run",
 	"Agent Message": "huf.ai.hooks.has_permission_agent_message",
 	"Agent Conversation": "huf.ai.hooks.has_permission_agent_conversation",
@@ -302,7 +313,7 @@ doc_events = {
         "on_update": "huf.ai.telegram_web_access_enforce.on_binding_update",
         "on_trash": "huf.ai.telegram_web_access_enforce.on_binding_trash",
     },
-    "Flow Run": {
+    "Agent Flow Run": {
         "on_update": "huf.ai.gateways.flow_reply.on_flow_run_update",
     },
     "Flow Definition": {"after_insert": "huf.ai.flow.triggers.clear_trigger_cache", "on_update": "huf.ai.flow.triggers.clear_trigger_cache", "on_trash": "huf.ai.flow.triggers.clear_trigger_cache"},
@@ -358,8 +369,9 @@ scheduler_events = {
         "huf.ai.gateway_service.purge_old_rejected_gateway_events",
         "huf.ai.gateway_service.cleanup_stale_access_entries",
         "huf.ai.flow.state.purge_expired",
-        # Leftover scratch folders of Execute code steps (a step removes its own; this is for killed workers).
-        "huf.ai.flow.code_node.purge_scratch",
+        "huf.ai.flow.runs.member.purge_inactive",
+        "huf.ai.flow.policy.frequency_cap.purge_expired",
+        "huf.ai.flow.code_node.purge_scratch",  # leftover Execute-code scratch folders (killed workers)
         "huf.ai.whatsapp.send_keys.purge_expired",
         "huf.ai.secrets.purge_expired",
         "huf.ai.channels.commerce.catalog.sync_all_catalogs",
@@ -370,10 +382,11 @@ scheduler_events = {
             "huf.ai.orchestration.scheduler.process_orchestrations",
             "huf.ai.agent.integration.recover_stalled_agent_runs",
             "huf.ai.gateways.teams.outbox.retry_due",
+            "huf.ai.channels.outbox.retry_due",  # flow sends: backoff passed, or a worker died mid-delivery
             "huf.ai.flow.triggers.run_due_schedule_flows",
             "huf.ai.flow.triggers.expire_due_approvals",
-            # Flow runs parked on an Execute code step: continue finished ones, give up on lost ones.
-            "huf.ai.flow.code_node.sweep_code_waits",
+            "huf.ai.flow.runs.park.wake_due_waits",
+            "huf.ai.flow.code_node.sweep_code_waits",  # runs parked on Execute code: continue finished, give up lost
             "huf.ai.knowledge.bulk_recovery.recover_stalled_ingestions",  # bulk ingestion safety net
         ],
         "*/10 * * * *": [
@@ -406,6 +419,10 @@ scheduler_events = {
         "huf.ai.meetings.meeting_recording.recover_stuck_uploaded_chunks"
     ]
 }
+
+# >>> H-W5-05 AI memory retention (site config huf_ai_memory_retention_days; unset keeps everything)
+scheduler_events["daily"].append("huf.ai.memory.purge.purge_expired_memory")
+# <<< H-W5-05
 
 # Testing
 # -------
@@ -498,3 +515,10 @@ huf_decision_backends.update({
     "classifier": "huf.ai.decision.backends.classifier.ClassifierBackend",
     "similarity": "huf.ai.decision.backends.similarity.SimilarityBackend",
 })
+
+# Pre-send guard chain (huf.ai.channels.guard): app steps after Huf's built-in ones. While a conversation is
+# handed to a person (``handoff`` flow node), no automated send reaches that contact on that gateway.
+huf_pre_send_hooks = ["huf.ai.flow.nodes.handoff.handed_off_guard"]
+
+# Flow trace reason codes Huf adds through its own hook (huf.ai.flow.support.reason_codes).
+huf_flow_reason_codes = ["handed_off"]

@@ -1,3 +1,4 @@
+import { useResourceAccess } from '@/hooks/permissions/useResourceAccess';
 import { useMemo, useState } from 'react';
 import { ArrowUpDown, FileText, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -36,6 +37,7 @@ function getStatusVariant(enabled: 0 | 1): 'success' | 'secondary' {
 
 export function AgentSummaryPromptsPage() {
   const navigate = useNavigate();
+  const access = useResourceAccess('summaryPrompt');
   const [sorting, setSorting] = useState<SortingState>([]);
 
   const {
@@ -205,7 +207,7 @@ export function AgentSummaryPromptsPage() {
               icon={FileText}
               title="No summary prompts"
               description="Create a summary prompt template to share across agents."
-              action={{ label: 'New summary prompt', onClick: () => navigate('/summary-prompts/new') }}
+              action={access.canCreate ? { label: 'New summary prompt', onClick: () => navigate('/summary-prompts/new') } : undefined}
             />
           )
         ) : (

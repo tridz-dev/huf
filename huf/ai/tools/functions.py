@@ -16,7 +16,7 @@ def get_document(doctype: str, document_id: str):
 	"""
 	Get a document from the database
 	"""
-	_meta, _guard_err = _check_doctype_allowed(doctype)
+	_meta, _guard_err = _check_doctype_allowed(doctype, read_only=True)
 	if _guard_err:
 		return json.loads(_guard_err)
 
@@ -29,7 +29,7 @@ def get_documents(doctype: str, document_ids: list):
 	"""
 	Get documents from the database
 	"""
-	_meta, _guard_err = _check_doctype_allowed(doctype)
+	_meta, _guard_err = _check_doctype_allowed(doctype, read_only=True)
 	if _guard_err:
 		return json.loads(_guard_err)
 
@@ -68,7 +68,8 @@ def create_document(doctype: str, data: dict, function=None):
 			"permission_denied": True
 		}
 
-	doc = frappe.get_doc({"doctype": doctype, **data})
+	# the checked doctype goes last: a "doctype" key in data must not replace it
+	doc = frappe.get_doc({**data, "doctype": doctype})
 	doc.insert()
 	return {"document_id": doc.name, "message": "Document created", "doctype": doctype}
 
@@ -141,6 +142,7 @@ def update_document(doctype: str, document_id: str, data: dict, tool=None):
                 if param.default_value and not data.get(param.fieldname):
                     data[param.fieldname] = param.default_value
 
+        data = {key: value for key, value in data.items() if key != "doctype"}
         doc.update(data)
         doc.save()
 
@@ -334,7 +336,7 @@ def get_amended_document(doctype: str, document_id: str):
     """
     Return the amended document (first match) for a given document, if any.
     """
-    _meta, _guard_err = _check_doctype_allowed(doctype)
+    _meta, _guard_err = _check_doctype_allowed(doctype, read_only=True)
     if _guard_err:
         return json.loads(_guard_err)
 
@@ -347,7 +349,7 @@ def get_list(doctype: str, filters: dict = None, fields: list = None, limit: int
 	"""
 	Get a list of documents from the database
 	"""
-	_meta, _guard_err = _check_doctype_allowed(doctype)
+	_meta, _guard_err = _check_doctype_allowed(doctype, read_only=True)
 	if _guard_err:
 		return json.loads(_guard_err)
 
@@ -379,7 +381,7 @@ def get_value(doctype: str, filters: dict = None, fieldname: str | list = "name"
 	        :param fieldname: Field to be returned (default `name`) - can be a list of fields(str) or a single field(str)
 	        :param filters: dict or string for identifying the record
 	"""
-	_meta_guard, _guard_err = _check_doctype_allowed(doctype)
+	_meta_guard, _guard_err = _check_doctype_allowed(doctype, read_only=True)
 	if _guard_err:
 		return json.loads(_guard_err)
 
@@ -416,6 +418,7 @@ def set_value(doctype: str, document_id: str, fieldname: str | dict, value: str 
 		return json.loads(_guard_err)
 
 	if isinstance(fieldname, dict):
+		fieldname = {key: val for key, val in fieldname.items() if key != "doctype"}
 		return client.set_value(doctype, document_id, fieldname)
 	else:
 		return client.set_value(doctype, document_id, fieldname, value)
@@ -432,7 +435,7 @@ def get_report_result(
 	"""
 	Run a report and return the columns and result
 	"""
-	_meta, _guard_err = _check_doctype_allowed("Report")
+	_meta, _guard_err = _check_doctype_allowed("Report", read_only=True)
 	if _guard_err:
 		return json.loads(_guard_err)
 

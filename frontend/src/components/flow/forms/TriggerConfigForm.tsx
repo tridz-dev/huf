@@ -59,8 +59,18 @@ export function TriggerConfigForm({ nodeId }: { nodeId: string }) {
         : type === 'schedule' ? <ScheduleTriggerForm nodeId={nodeId} />
         : type === 'whatsapp' ? <WhatsAppTriggerForm nodeId={nodeId} />
         : type === 'telegram' ? <TelegramTriggerForm nodeId={nodeId} />
+        : type === 'app' ? <AppTriggerInfo app={(node.data.triggerConfig as { app?: string }).app} />
         : type === 'gateway' ? <GatewayTriggerForm nodeId={nodeId} kind="gateway" />
         : <DataTriggerForm nodeId={nodeId} />}
     </Section>
+  );
+}
+
+/** `trigger.app` has nothing to set here: its app starts the flow, so the panel only says which app. */
+function AppTriggerInfo({ app }: { app?: string }) {
+  return (
+    <p className="text-sm text-muted-foreground" data-testid="flow-trigger-app">
+      Started by {app || 'its app'}. No event, schedule or web request starts this flow.
+    </p>
   );
 }

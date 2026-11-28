@@ -50,14 +50,15 @@ export interface BackendFlowGraph {
     /** One node id, or (when the graph starts from one or more triggers) an array of trigger node ids. */
     entry: string | string[];
     nodes: BackendNode[];
+    error_handler?: { next: string }; // optional flow-level handler: run once after a failure no step routed
     contract: BackendContract;
 }
 
 export type BackendNodeType =
     | 'trigger.webhook' | 'trigger.schedule' | 'trigger.doc-event' | 'trigger.unset' | 'trigger.gateway' | 'trigger.whatsapp' | 'trigger.telegram'
-    | 'agent.run' | 'tool.call' | 'router.llm' | 'router.decision' | 'human.approval'
+    | 'agent.run' | 'tool.call' | 'router.llm' | 'router.decision' | 'member.set' | 'wait' | 'human.approval'
     | 'condition' | 'transform' | 'foreach' | 'validate' | 'output'
-    | 'state.get' | 'state.set' | 'state.delete' | 'doc.create' | 'code.run';
+    | 'state.get' | 'state.set' | 'state.delete' | 'doc.create' | 'code.run' | 'stop' | 'doc.get' | 'doc.update' | 'flow.call' | 'send.message' | 'split';
 
 export interface BackendNode {
     id: string;
@@ -125,7 +126,7 @@ export interface FlowRunSummary extends RunStoryFields {
     flow_version: number;
     mode: string;
     run_mode?: 'Real' | 'Test';
-    status: 'Queued' | 'Running' | 'Waiting Approval' | 'Waiting User' | 'Waiting Code' | 'Success' | 'Failed';
+    status: 'Queued' | 'Running' | 'Waiting Approval' | 'Waiting User' | 'Waiting Code' | 'Waiting Timer' | 'Cancelled' | 'Success' | 'Failed';
     current_node_id: string;
     hop_count: number;
     trigger_type: string;

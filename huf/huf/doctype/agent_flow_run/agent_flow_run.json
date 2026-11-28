@@ -1,0 +1,364 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "hash",
+ "creation": "2026-02-18 10:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "overview_tab",
+  "flow_definition",
+  "flow_id",
+  "owner_app",
+  "flow_version",
+  "pinned_fingerprint",
+  "pinned_definition",
+  "column_break_ov1",
+  "mode",
+  "status",
+  "resume_at",
+  "member_key",
+  "parent_run",
+  "parent_node",
+  "trigger_type",
+  "run_mode",
+  "execution_section",
+  "current_node_id",
+  "hop_count",
+  "max_hops",
+  "column_break_ex1",
+  "last_agent_run",
+  "conversation",
+  "context_section",
+  "context_json",
+  "trigger_payload",
+  "waiting_section",
+  "waiting",
+  "last_error",
+  "outcome_label",
+  "outcome_tone",
+  "timing_tab",
+  "started_at",
+  "column_break_tm1",
+  "completed_at",
+  "gateway_event",
+  "replied_via_tool",
+  "requester_external_id",
+  "requester_user"
+ ],
+ "fields": [
+  {
+   "fieldname": "overview_tab",
+   "fieldtype": "Tab Break",
+   "label": "Overview"
+  },
+  {
+   "fieldname": "flow_definition",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Flow Definition",
+   "options": "Flow Definition",
+   "reqd": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "flow_id",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Flow ID",
+   "read_only": 1
+  },
+  {
+   "fieldname": "flow_version",
+   "fieldtype": "Int",
+   "label": "Flow Version",
+   "read_only": 1
+  },
+  {
+   "fieldname": "pinned_fingerprint",
+   "fieldtype": "Data",
+   "label": "Pinned Fingerprint",
+   "read_only": 1,
+   "description": "sha256 of the definition content this run pinned at start. Immutable for the life of the run."
+  },
+  {
+   "fieldname": "pinned_definition",
+   "fieldtype": "JSON",
+   "label": "Pinned Definition",
+   "read_only": 1,
+   "hidden": 1,
+   "description": "The exact graph this run executes, snapshotted at start."
+  },
+  {
+   "fieldname": "column_break_ov1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "Normal",
+   "fieldname": "mode",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Mode",
+   "options": "Normal\nAgentic",
+   "read_only": 1
+  },
+  {
+   "default": "Queued",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Status",
+   "options": "Queued\nRunning\nWaiting Approval\nWaiting User\nWaiting Code\nWaiting Timer\nSuccess\nFailed\nCancelled",
+   "read_only": 1
+  },
+  {
+   "fieldname": "resume_at",
+   "fieldtype": "Datetime",
+   "label": "Resume At",
+   "read_only": 1,
+   "hidden": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "member_key",
+   "fieldtype": "Data",
+   "label": "Member Key",
+   "length": 140,
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "parent_run",
+   "fieldtype": "Link",
+   "label": "Parent Run",
+   "options": "Agent Flow Run",
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "parent_node",
+   "fieldtype": "Data",
+   "label": "Parent Node",
+   "read_only": 1
+  },
+  {
+   "default": "Manual",
+   "fieldname": "trigger_type",
+   "fieldtype": "Select",
+   "label": "Trigger Type",
+   "options": "Manual\nWebhook\nSchedule\nDoc Event\nGateway\nApp",
+   "read_only": 1
+  },
+  {
+   "default": "Real",
+   "description": "A test run reads for real but never sends or changes anything outside the flow.",
+   "fieldname": "run_mode",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Run Mode",
+   "options": "Real\nTest",
+   "read_only": 1
+  },
+  {
+   "fieldname": "execution_section",
+   "fieldtype": "Section Break",
+   "label": "Execution"
+  },
+  {
+   "fieldname": "current_node_id",
+   "fieldtype": "Data",
+   "label": "Current Node ID",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "hop_count",
+   "fieldtype": "Int",
+   "label": "Hop Count",
+   "read_only": 1
+  },
+  {
+   "default": "100",
+   "fieldname": "max_hops",
+   "fieldtype": "Int",
+   "label": "Max Hops",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_ex1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "last_agent_run",
+   "fieldtype": "Link",
+   "label": "Last Agent Run",
+   "options": "Agent Run",
+   "read_only": 1
+  },
+  {
+   "fieldname": "conversation",
+   "fieldtype": "Link",
+   "label": "Conversation",
+   "options": "Agent Conversation",
+   "read_only": 1
+  },
+  {
+   "fieldname": "context_section",
+   "fieldtype": "Section Break",
+   "label": "Context"
+  },
+  {
+   "default": "{}",
+   "fieldname": "context_json",
+   "fieldtype": "JSON",
+   "label": "Context JSON",
+   "read_only": 1
+  },
+  {
+   "fieldname": "trigger_payload",
+   "fieldtype": "JSON",
+   "label": "Trigger Payload",
+   "read_only": 1
+  },
+  {
+   "fieldname": "waiting_section",
+   "fieldtype": "Section Break",
+   "label": "Waiting"
+  },
+  {
+   "fieldname": "waiting",
+   "fieldtype": "JSON",
+   "label": "Waiting",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_error",
+   "fieldtype": "Small Text",
+   "label": "Last Error",
+   "read_only": 1
+  },
+  {
+   "description": "What the run came to for the business, from the End step's outcome ('Approved', 'Rejected'...).",
+   "fieldname": "outcome_label",
+   "fieldtype": "Data",
+   "label": "Outcome",
+   "read_only": 1
+  },
+  {
+   "fieldname": "outcome_tone",
+   "fieldtype": "Select",
+   "label": "Outcome Tone",
+   "options": "\ngood\nneutral\nbad",
+   "read_only": 1
+  },
+  {
+   "fieldname": "timing_tab",
+   "fieldtype": "Tab Break",
+   "label": "Timing"
+  },
+  {
+   "fieldname": "started_at",
+   "fieldtype": "Datetime",
+   "label": "Started At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_tm1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "completed_at",
+   "fieldtype": "Datetime",
+   "label": "Completed At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "gateway_event",
+   "fieldtype": "Link",
+   "label": "Gateway Event",
+   "options": "Gateway Event",
+   "read_only": 1
+  },
+  {
+   "fieldname": "requester_external_id",
+   "fieldtype": "Data",
+   "label": "Requester external ID",
+   "read_only": 1
+  },
+  {
+   "fieldname": "requester_user",
+   "fieldtype": "Link",
+   "label": "Requester user",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "description": "Set when a reply tool already answered the chat message, so the End output is not sent again.",
+   "fieldname": "replied_via_tool",
+   "fieldtype": "Check",
+   "label": "Replied via tool",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "owner_app",
+   "fieldtype": "Data",
+   "label": "Owner App",
+   "read_only": 1,
+   "search_index": 1,
+   "set_only_once": 1,
+   "no_copy": 1,
+   "description": "Copied from the flow when the run is created."
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-11-27 18:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Huf",
+ "name": "Agent Flow Run",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 0,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Huf Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 0,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Huf User",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

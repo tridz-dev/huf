@@ -6,6 +6,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '
 import { flowService } from '../services/flowService';
 import { Button } from './ui/button';
 import { toast } from '@/lib/toast';
+import { copyText } from '@/lib/clipboard';
 import { useOptionalFlowContext } from '../contexts/FlowContext';
 import { useSiteTimezone } from '@/lib/serverTime';
 import { useFlowRunDetail } from '@/hooks/flow/useFlowRunDetail';
@@ -28,7 +29,7 @@ import { RunDetailsFold } from './flow/run/RunDetailsFold';
 import { RunInputBlocks } from './flow/run/RunInputBlocks';
 import { RunError } from './flow/run/RunError';
 import { plainRunError } from '@/lib/flow-run/story/runErrors';
-import { stoppedByPerson } from '@/lib/flow-run/story/runStatus';
+import { isResumeWait, stoppedByPerson } from '@/lib/flow-run/story/runStatus';
 
 interface FlowRunViewerProps {
     runId: string | null;
@@ -137,6 +138,28 @@ export function FlowRunViewer({ runId, onClose, onBack }: FlowRunViewerProps) {
         }
     };
 
+    const handleCopyResumeLink = async () => {
+        if (!runId) return;
+        try {
+            const { url } = await flowService.getResumeLink(runId);
+            if (await copyText(url)) toast.success('Resume link copied.');
+            else toast.error('Could not copy the resume link');
+        } catch (err) {
+            toast.error('Could not copy the resume link', { description: humanizeFlowError(err) });
+        }
+    };
+
+    const handleContinueNow = async () => {
+        if (!runId) return;
+        try {
+            await flowService.continueWaitingRun(runId);
+            toast.success('Continuing the run.');
+            await refreshRun();
+        } catch (err) {
+            toast.error('Could not continue this run', { description: humanizeFlowError(err) });
+        }
+    };
+
     const handleResume = async () => {
         if (!runId) return;
         let parsed: Record<string, unknown> | undefined;
@@ -192,7 +215,7 @@ export function FlowRunViewer({ runId, onClose, onBack }: FlowRunViewerProps) {
                     <div className="space-y-5 pb-6">
                         <div data-testid="flow-run-headline">
                             <div className="flex flex-wrap items-center gap-2">
-                                <RunStatusPill status={run.status} stale={run.stale} lapsed={run.approval_lapsed} />
+                                <RunStatusPill status={run.status} stale={run.stale} lapsed={run.approval_lapsed} resumeWait={isResumeWait(run)} />
                                 {run.outcome && <OutcomeChip outcome={run.outcome} />}
                                 {run.run_mode === 'Test' && <TestRunChip label="Test run" testId="flow-run-test-pill" />}
                             </div>
@@ -204,7 +227,7 @@ export function FlowRunViewer({ runId, onClose, onBack }: FlowRunViewerProps) {
                             <RunError reason={plainRunError(run.last_error)} canManage={canManage} />
                         )}
 
-                        <RunStatusBanner run={run} canManage={canManage} onStop={handleStop} onCancel={handleCancel} />
+                        <RunStatusBanner run={run} canManage={canManage} onStop={handleStop} onCancel={handleCancel} onContinue={handleContinueNow} onCopyResumeLink={handleCopyResumeLink} />
 
                         <RunWaitingCard
                             run={run}

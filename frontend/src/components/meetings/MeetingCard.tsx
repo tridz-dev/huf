@@ -1,3 +1,4 @@
+import { useResourceAccess } from '@/hooks/permissions/useResourceAccess';
 import { useState } from 'react';
 import { Calendar, Clock, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -84,6 +85,7 @@ export function MeetingCard({
 }: MeetingCardProps) {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const access = useResourceAccess('meeting');
 
   const status = statusPresentation(meeting.status, chunksTranscribed, chunksTotal);
   const title = meeting.title?.trim() || `Meeting — ${formatTimeAgo(meeting.started_at || meeting.modified)}`;
@@ -117,14 +119,14 @@ export function MeetingCard({
           { label: 'When', value: formatTimeAgo(meeting.started_at || meeting.modified), icon: Calendar },
           { label: 'Duration', value: formatDuration(meeting.duration_seconds), icon: Clock },
         ]}
-        menuActions={[
+        menuActions={access.canDelete ? [
           {
             icon: Trash2,
             label: 'Delete',
             variant: 'destructive',
             onClick: () => setDeleteDialogOpen(true),
           },
-        ]}
+        ] : []}
         onClick={onClick}
       />
 

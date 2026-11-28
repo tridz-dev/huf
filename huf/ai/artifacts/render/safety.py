@@ -19,15 +19,25 @@ without actually solving the problem.
 
 from urllib.parse import urlparse
 
+#: False when WeasyPrint (or a system library it needs, e.g. libpango) cannot
+#: be loaded. A missing shared library raises OSError, not ImportError, so
+#: both are caught; otherwise one absent library takes down every module that
+#: imports this one, including the HTML preview path that never needs it.
+WEASYPRINT_AVAILABLE = True
+
 try:
-	# WeasyPrint < 69
-	from weasyprint import default_url_fetcher
-except ImportError:
 	try:
-		from weasyprint.urls import default_url_fetcher
+		# WeasyPrint < 69
+		from weasyprint import default_url_fetcher
 	except ImportError:
-		# WeasyPrint >= 70 replaced the function with the URLFetcher class.
-		default_url_fetcher = None
+		try:
+			from weasyprint.urls import default_url_fetcher
+		except ImportError:
+			# WeasyPrint >= 70 replaced the function with the URLFetcher class.
+			default_url_fetcher = None
+except OSError:
+	WEASYPRINT_AVAILABLE = False
+	default_url_fetcher = None
 
 from huf.ai.artifacts.render.design_tokens import (
 	BODY_STACK,
@@ -166,6 +176,19 @@ if default_url_fetcher is not None:
 					close()
 				raise
 		return result
+
+elif not WEASYPRINT_AVAILABLE:
+
+	class WeasyPrintUnavailableError(RuntimeError):
+		"""WeasyPrint or one of its system libraries cannot be loaded."""
+
+		def __init__(self):
+			super().__init__("WeasyPrint is unavailable; see docs/ARTIFACT_RENDERING_DEPENDENCIES.md")
+
+	def safe_url_fetcher(url: str):
+		"""Same allow-list check, but there is no engine to fetch with."""
+		_check_url_allowed(url)
+		raise WeasyPrintUnavailableError
 
 else:
 	from weasyprint.urls import URLFetcher

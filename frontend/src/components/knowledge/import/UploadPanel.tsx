@@ -49,7 +49,7 @@ export function UploadPanel({ staged, allowedExtensions, maxMb = MAX_FILE_MB, di
           Drop files anywhere here, or <span className="text-signal-ink underline">choose files</span>
         </p>
         <p className="text-xs text-steel-soft">
-          PDF, Word, PowerPoint, Excel, text, Markdown or web pages · up to {maxMb} MB each · a .zip is unpacked
+          PDF, Word, PowerPoint, Excel, CSV, text, Markdown or web pages · up to {maxMb} MB each · a .zip is unpacked
         </p>
         <Input
           ref={inputRef}

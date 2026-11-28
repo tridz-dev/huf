@@ -57,6 +57,7 @@ if not _HAS_REAL_FRAPPE:
 	sys.modules["agents"] = _mock_agents
 
 from huf.ai import memory_tools
+from huf.ai.memory import extraction
 from huf.ai.sdk_tools import create_agent_tools
 
 
@@ -316,23 +317,23 @@ class TestInjectModeRelevance(unittest.TestCase):
             token_budget=1000,
         )
 
-    @patch.object(memory_tools, "search_memory_records")
+    @patch.object(memory_tools, "_query_readable_rows")
     def test_relevant_only_passes_query_through(self, mock_search):
-        mock_search.return_value = {"success": True, "results": []}
+        mock_search.return_value = []
         memory_tools.get_injected_memory_text(
             "agent-1", self._make_policy("Relevant Only"), query="renewal date"
         )
-        self.assertEqual(mock_search.call_args.kwargs["query"], "renewal date")
+        self.assertEqual(mock_search.call_args.args[0], "renewal date")
 
-    @patch.object(memory_tools, "search_memory_records")
+    @patch.object(memory_tools, "_query_readable_rows")
     def test_always_ignores_query(self, mock_search):
-        mock_search.return_value = {"success": True, "results": []}
+        mock_search.return_value = []
         memory_tools.get_injected_memory_text(
             "agent-1", self._make_policy("Always"), query="renewal date"
         )
-        self.assertIsNone(mock_search.call_args.kwargs["query"])
+        self.assertIsNone(mock_search.call_args.args[0])
 
-    @patch.object(memory_tools, "search_memory_records")
+    @patch.object(memory_tools, "_query_readable_rows")
     def test_never_and_tool_only_do_not_retrieve(self, mock_search):
         for mode in ("Never", "Tool Only"):
             mock_search.reset_mock()
@@ -358,18 +359,18 @@ class TestMemoryExtractionGating(unittest.TestCase):
 
     def test_memory_disabled_with_stale_policy_does_not_extract(self):
         agent = MagicMock(enable_memory=0, memory_policy="Research")
-        self.assertFalse(memory_tools.should_extract_memory(agent, "agent"))
+        self.assertFalse(extraction.should_extract_memory(agent, "agent"))
 
     def test_extraction_run_never_queues_another_extraction(self):
         agent = MagicMock(enable_memory=1, memory_policy="Research")
         self.assertFalse(
-            memory_tools.should_extract_memory(agent, memory_tools.MEMORY_EXTRACTION_RUN_KIND)
+            extraction.should_extract_memory(agent, extraction.MEMORY_EXTRACTION_RUN_KIND)
         )
 
     def test_memory_enabled_with_policy_extracts(self):
         agent = MagicMock(enable_memory=1, memory_policy="Research")
-        self.assertTrue(memory_tools.should_extract_memory(agent, "agent"))
-        self.assertTrue(memory_tools.should_extract_memory(agent, None))
+        self.assertTrue(extraction.should_extract_memory(agent, "agent"))
+        self.assertTrue(extraction.should_extract_memory(agent, None))
 
     def _set_db_values(self, run, agent):
         def get_value(doctype, name, fields=None, as_dict=False):
@@ -386,15 +387,15 @@ class TestMemoryExtractionGating(unittest.TestCase):
             {"agent": "A", "conversation": "C", "run_kind": "agent"},
             {"enable_memory": 0, "memory_policy": "Research"},
         )
-        memory_tools.extract_memory_from_run("RUN-1")
+        extraction.extract_memory_from_run("RUN-1")
         _mock_frappe.get_doc.assert_not_called()
 
     def test_extract_skips_extraction_runs(self):
         self._set_db_values(
-            {"agent": "A", "conversation": "C", "run_kind": memory_tools.MEMORY_EXTRACTION_RUN_KIND},
+            {"agent": "A", "conversation": "C", "run_kind": extraction.MEMORY_EXTRACTION_RUN_KIND},
             {"enable_memory": 1, "memory_policy": "Research"},
         )
-        memory_tools.extract_memory_from_run("RUN-1")
+        extraction.extract_memory_from_run("RUN-1")
         _mock_frappe.get_doc.assert_not_called()
 
 

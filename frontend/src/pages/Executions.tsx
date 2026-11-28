@@ -37,7 +37,7 @@ import { Tabs, TabsContent } from '@/components/ui/tabs';
 import AnalyticsPage from '@/pages/AnalyticsPage';
 import { ExecutionsFlowRunsTab } from '@/components/executions/FlowRunsTab';
 import { ExecutionsTabsBar } from '@/components/executions/ExecutionsTabsBar';
-import { DEFAULT_RANGE, TIME_RANGE_MS, TIME_RANGE_OPTIONS } from '@/components/executions/executionsRange';
+import { DEFAULT_RANGE, TIME_RANGE_OPTIONS, normalizeRange, rangeStart } from '@/components/executions/executionsRange';
 import { fetchAgentRunsPage } from '@/components/executions/fetchAgentRunsPage';
 import { useFlowStepLabelsFor } from '@/hooks/flow/useFlowStepLabelsFor';
 
@@ -104,7 +104,7 @@ function ExecutionsRunsTab() {
     const initialSearch = searchParams.get('q') ?? '';
     const initialStatus = searchParams.get('status') ?? 'all';
     const initialAgents = searchParams.get('agents') ?? 'all';
-    const initialRange = searchParams.get('range') ?? DEFAULT_RANGE;
+    const initialRange = normalizeRange(searchParams.get('range'));
 
     if (initialSearch) {
       setSearch(initialSearch);
@@ -191,11 +191,9 @@ function ExecutionsRunsTab() {
   // the analytics API caps a window at 93 days — so it's approximated with
   // a 90-day lookback instead.
   const analyticsFromDate = useMemo(() => {
-    const rangeMs = TIME_RANGE_MS[selectedRange];
-    const ms = rangeMs ?? 90 * 24 * 60 * 60 * 1000;
-    return new Date(Date.now() - ms).toISOString();
+    return (rangeStart(selectedRange) ?? new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)).toISOString();
   }, [selectedRange]);
-  const analyticsGranularity: 'hour' | 'day' = selectedRange === '24h' ? 'hour' : 'day';
+  const analyticsGranularity: 'hour' | 'day' = selectedRange === '24h' || selectedRange === 'today' ? 'hour' : 'day';
 
   // Define table columns
   const columns = useMemo<ColumnDef<AgentRunDoc>[]>(

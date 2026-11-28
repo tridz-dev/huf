@@ -96,6 +96,14 @@ class TestDraftVsPublish(unittest.TestCase):
 		self.assertFalse(publish.ok)
 		self.assertTrue(any("agent" in m.lower() for m in publish.messages(g)))
 
+	def test_new_remember_for_this_person_step_with_no_values_saves_as_a_draft(self):
+		# What "Add step > Remember for this person" writes before a value is added: vars is {} (minProperties).
+		g = _graph([_trigger("m"), {"id": "m", "type": "member.set", "config": {"vars": {}}, "next": "end"}, _end()])
+		draft, publish = validate_flow(g, "draft"), validate_flow(g, "publish")
+		self.assertTrue(draft.ok, draft.errors)
+		self.assertFalse(draft.finished)
+		self.assertFalse(publish.ok)
+
 	def test_empty_strings_count_as_unfinished_not_broken(self):
 		g = _graph([_trigger("a"), {"id": "a", "type": "agent.run", "config": {"agent": "", "prompt": "   "}, "next": "end"}, _end()])
 		self.assertTrue(validate_flow(g, "draft").ok)
@@ -206,7 +214,7 @@ class TestDraftSaveOnBench(IntegrationTestCase):
 	def tearDown(self):
 		frappe.set_user("Administrator")
 		for flow_id in self._flows:
-			frappe.db.delete("Flow Run", {"flow_id": flow_id})
+			frappe.db.delete("Agent Flow Run", {"flow_id": flow_id})
 			if frappe.db.exists("Flow Definition", flow_id):
 				frappe.delete_doc("Flow Definition", flow_id, ignore_permissions=True, force=True)
 		frappe.db.commit()

@@ -15,6 +15,8 @@ import { Button } from '../ui/button';
 import { CheckCircle2, Search } from 'lucide-react';
 import { triggerOptions } from '../../data/triggers';
 import { ACTION_SECTIONS, actionOptions } from '../../data/actions';
+import { appActionOptions, useAppNodeTypes } from '../../lib/flow-graph/appNodeTypes';
+import { isActionAllowed, isTriggerAllowed } from '../flow/palette/scopeFilter';
 import { paletteIcon } from '../nodes/nodeIcons';
 import { TriggerConfig, ActionConfig } from '../../types/flow.types';
 import type { ActionOption } from '../../types/modal.types';
@@ -56,6 +58,7 @@ export function NodeSelectionModal({
   const { canExecuteCode } = useFlowPermissions();
   const codeAvailable = Boolean(codeStatus?.available) && canExecuteCode;
   // The channels are only needed (and only readable by flow editors) while the trigger chooser is open.
+  const { types: appTypes } = useAppNodeTypes();
   const { registry } = useGatewayRegistry(open && mode === 'trigger');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedItem, setSelectedItem] = useState<string | null>(
@@ -76,10 +79,11 @@ export function NodeSelectionModal({
   const query = searchQuery.trim().toLowerCase();
   const matches = (text: Array<string | undefined>) => !query || text.some((t) => t?.toLowerCase().includes(query));
 
-  const filteredTriggers = triggerOptions.filter((trigger) => matches([trigger.name, trigger.description]));
+  const filteredTriggers = triggerOptions.filter((trigger) => isTriggerAllowed(trigger.id) && matches([trigger.name, trigger.description]));
 
-  const filteredActions = actionOptions.filter(
+  const filteredActions = [...actionOptions, ...appActionOptions(appTypes)].filter(
     (action) =>
+      isActionAllowed(action.id) &&
       (!actionCategory || action.category === actionCategory) &&
       (action.id !== CODE_RUN_ACTION || codeAvailable) &&
       matches([action.name, action.description, ...(action.keywords ?? [])])

@@ -15,13 +15,15 @@ def get_last_webhook_request(flow_id: str) -> dict:
 	Only people who can edit the flow may look (the body can hold customer data); the secret and other credentials in the
 	body are hidden, long text is shortened and the whole sample stays under 8 KB.
 	"""
+	from huf.ai.flow.app_scope.api_guards import guard_huf_flow
+	guard_huf_flow(flow_id)
 	if not flow_id or not frappe.db.exists("Flow Definition", flow_id):
 		frappe.throw(_("Flow not found"), frappe.DoesNotExistError)
 	if not frappe.has_permission("Flow Definition", "write", doc=flow_id):
 		frappe.throw(_("Not permitted"), frappe.PermissionError)
 
 	rows = frappe.get_all(
-		"Flow Run",
+		"Agent Flow Run",
 		filters={"flow_id": flow_id, "trigger_type": "Webhook"},
 		fields=["trigger_payload", "creation"],
 		order_by="creation desc",

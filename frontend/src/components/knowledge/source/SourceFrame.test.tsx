@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
+import { PermissionsContext } from '@/contexts/PermissionsContext';
 import { SourceFrame, type SourceFrameProps } from './SourceFrame';
 
 const counts = (o: Partial<SourceFrameProps['counts']> = {}) => ({ total: 5, ready: 5, failed: 0, skipped: 0, inProgress: 0, ...o });
@@ -68,5 +69,33 @@ describe('SourceFrame status sentence', () => {
     unmount();
     render(<Host counts={counts({ total: 0, ready: 0 })} />);
     expect(text()).toContain('No documents yet');
+  });
+});
+
+describe('SourceFrame header toggle', () => {
+  it('shows Turn off as a visible header button and calls the handler', () => {
+    const onToggleDisabled = vi.fn();
+    render(<Host onToggleDisabled={onToggleDisabled} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Turn off' }));
+    expect(onToggleDisabled).toHaveBeenCalledTimes(1);
+  });
+  it('shows Turn on when the source is off', () => {
+    render(<Host disabled />);
+    expect(screen.getByRole('button', { name: 'Turn on' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Turn off' })).toBeNull();
+  });
+  it('hides the toggle from a user who cannot write the source', () => {
+    for (const disabled of [false, true]) {
+      const { unmount } = render(
+        <PermissionsContext.Provider
+          value={{ hufRole: null, capabilities: [], withheldCapabilities: [], docPermissions: { 'Knowledge Source': { create: false, write: false, delete: false } }, isLoading: false, hasCapability: () => false, refresh: async () => {} }}
+        >
+          <Host disabled={disabled} />
+        </PermissionsContext.Provider>,
+      );
+      expect(screen.queryByTestId('toggle-disabled')).toBeNull();
+      expect(screen.getByTestId('add-content')).toBeTruthy();
+      unmount();
+    }
   });
 });

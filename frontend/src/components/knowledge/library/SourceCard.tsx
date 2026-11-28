@@ -19,10 +19,11 @@ interface SourceCardProps {
   agentCount: number;
   onOpen: () => void;
   onTest: () => void;
-  onAddFiles: () => void;
+  onAddFiles?: () => void;
   onRename: () => void;
   onToggleDisabled: () => void;
-  onDelete: () => void;
+  /** Absent when the person may not delete sources. */
+  onDelete?: () => void;
 }
 
 export function SourceCard({ source, counts, agentCount, onOpen, onTest, onAddFiles, onRename, onToggleDisabled, onDelete }: SourceCardProps) {
@@ -47,7 +48,7 @@ export function SourceCard({ source, counts, agentCount, onOpen, onTest, onAddFi
         <p className="text-xs">{hint}</p>
       </div>
       <div className="mt-auto flex items-center gap-2 pt-1">
-        <Button size="sm" variant="outline" onClick={stop(onAddFiles)}>Add content</Button>
+        {onAddFiles && <Button size="sm" variant="outline" onClick={stop(onAddFiles)}>Add content</Button>}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="ml-auto" title="More actions" onClick={(e) => e.stopPropagation()}>
@@ -61,9 +62,11 @@ export function SourceCard({ source, counts, agentCount, onOpen, onTest, onAddFi
               {source.disabled ? <Play className="w-4 h-4 mr-2" /> : <Pause className="w-4 h-4 mr-2" />}
               {source.disabled ? 'Turn on' : 'Turn off'}
             </DropdownMenuItem>
+            {onDelete && (
             <DropdownMenuItem onClick={stop(onDelete)} className="text-destructive focus:text-destructive">
               <Trash2 className="w-4 h-4 mr-2" />Delete
             </DropdownMenuItem>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

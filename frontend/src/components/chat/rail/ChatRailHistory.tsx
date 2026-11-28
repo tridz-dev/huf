@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronRight, MessageSquare } from 'lucide-react';
+import { ChevronRight, MessageSquare, Mic } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ChatListItem } from '@/services/chatApi';
 import { useLocalStorageBoolean } from '@/hooks/useLocalStorageBoolean';
@@ -60,6 +60,7 @@ function ConversationRow({
   onProjectChange,
   onPinChange,
 }: ConversationRowProps) {
+  const RowIcon = chat.isVoice ? Mic : MessageSquare;
   return (
     <ConversationMenu
       conversationId={chat.id}
@@ -91,7 +92,8 @@ function ConversationRow({
           isSelected ? 'bg-chat-row-selected' : 'hover:bg-chat-row-hover'
         )}
       >
-        <MessageSquare
+        <RowIcon
+          aria-label={chat.isVoice ? 'Voice call' : undefined}
           className={cn('h-[15px] w-[15px] shrink-0', isSelected ? 'text-steel' : 'text-steel-soft')}
         />
         <ConversationTitle
@@ -193,7 +195,6 @@ export function ChatRailHistory({
     }
   }, [addItem, onAddItemReady]);
 
-  const hasPinned = pinnedChats.length > 0;
 
   // §19 collapse-state-persistence: Pinned/Recents each persist their
   // expand/collapse choice separately for the global vs. project-scoped
@@ -210,7 +211,12 @@ export function ChatRailHistory({
   );
 
   // A conversation shown under Pinned must not also appear under Recents.
-  const pinnedIds = useMemo(() => new Set(pinnedChats.map((chat) => chat.id)), [pinnedChats]);
+  const visiblePinned = useMemo(
+    () => (agent ? pinnedChats.filter((chat) => chat.agent === agent) : pinnedChats),
+    [agent, pinnedChats]
+  );
+  const hasPinned = visiblePinned.length > 0;
+  const pinnedIds = useMemo(() => new Set(visiblePinned.map((chat) => chat.id)), [visiblePinned]);
   const recentChats = useMemo(
     () => chats.filter((chat) => !pinnedIds.has(chat.id) && (!agent || chat.agent === agent)),
     [agent, chats, pinnedIds]
@@ -226,7 +232,7 @@ export function ChatRailHistory({
             onToggle={() => setPinnedExpanded(!pinnedExpanded)}
           />
           {pinnedExpanded &&
-            pinnedChats.map((chat) => (
+            visiblePinned.map((chat) => (
               <ConversationRow
                 key={chat.id}
                 chat={chat}

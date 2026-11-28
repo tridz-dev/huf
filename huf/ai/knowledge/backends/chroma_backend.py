@@ -7,7 +7,7 @@ from typing import Any
 
 import frappe
 
-from . import ChunkResult, KnowledgeBackend
+from . import BackendNotInitializedError, ChunkResult, KnowledgeBackend
 from .llamaindex_base import LLAMAINDEX_AVAILABLE, LlamaIndexBackend
 
 try:
@@ -142,6 +142,23 @@ class ChromaBackend(LlamaIndexBackend, KnowledgeBackend):
 			frappe.logger().warning(f"Chroma delete_chunks error for {input_id}: {exc!s}")
 			# Propagate: swallowing would let add_chunks append duplicates on re-index.
 			raise
+
+	def get_chunks(self, input_id: str, start: int = 0, limit: int = 20):
+		from .chunk_listing import page_chunks, to_result
+
+		if not self._initialized or not self.collection:
+			raise BackendNotInitializedError
+		found = self.collection.get(where={"input_id": input_id}, include=["documents", "metadatas"])
+		ids = found.get("ids") or []
+		docs = found.get("documents") or []
+		metas = found.get("metadatas") or []
+		chunks = []
+		for i, chunk_id in enumerate(ids):
+			meta = (metas[i] if i < len(metas) else None) or {}
+			chunks.append(
+				to_result(chunk_id, docs[i] if i < len(docs) else "", meta, meta.get("source_title"))
+			)
+		return page_chunks(chunks, start, limit)
 
 	def clear(self) -> None:
 		if not self._initialized or not self.collection:

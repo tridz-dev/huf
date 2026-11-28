@@ -21,6 +21,8 @@ const CONDITION: BranchHandle[] = [
   { route: 'true', handleId: 'true', label: 'Yes' },
   { route: 'false', handleId: 'false', label: 'No' },
 ];
+/** Path taken when the facts cannot be known (backend `fallback_next`); shown only on a condition that has one. */
+const CONDITION_FALLBACK: BranchHandle = { route: 'fallback', handleId: 'fallback', label: "Can't tell", optional: true };
 const HUMAN: BranchHandle[] = [
   { route: 'approve', handleId: 'approve', label: 'Approved' },
   { route: 'reject', handleId: 'reject', label: 'Rejected' },
@@ -32,15 +34,33 @@ const FOREACH: BranchHandle[] = [
   { route: 'next', handleId: 'next', label: 'When done', optional: true },
 ];
 
+const WAIT_WITH_TIMEOUT: BranchHandle[] = [
+  { route: 'next', handleId: 'next', label: 'Continued', optional: true },
+  HUMAN_TIMEOUT,
+];
+
+const HANDOFF_WITH_TIMEOUT: BranchHandle[] = [
+  { route: 'next', handleId: 'next', label: 'Handed back', optional: true },
+  HUMAN_TIMEOUT,
+];
+
 /** Fixed branch handles of an action config (`type` is the canvas discriminator). */
 export function branchHandlesFor(actionType: string | undefined, config?: Record<string, unknown>): BranchHandle[] {
   switch (actionType) {
     case 'condition':
-      return CONDITION;
+      return config && config.fallback_next ? [...CONDITION, CONDITION_FALLBACK] : CONDITION;
     case 'human.approval':
       return config && config.timeout_ms ? [...HUMAN, HUMAN_TIMEOUT] : HUMAN;
     case 'foreach':
       return FOREACH;
+    case 'wait': {
+      // A Timed out path exists only while "until continued" has a time limit.
+      const resume = (config?.resume ?? {}) as { timeout_ms?: unknown };
+      return config?.mode === 'resume' && resume.timeout_ms ? WAIT_WITH_TIMEOUT : [];
+    }
+    case 'unknown':
+      // Hand to a person gets a Timed out path while it has a time limit.
+      return config?.backend_type === 'handoff' && config.timeout_ms ? HANDOFF_WITH_TIMEOUT : [];
     default:
       return [];
   }
@@ -48,6 +68,9 @@ export function branchHandlesFor(actionType: string | undefined, config?: Record
 
 /** Whether a node type keeps a single free-form fan-out handle (router: one 'option' edge per path). */
 export const ROUTER_HANDLE = 'option';
+
+/** Steps whose paths are free-form `option` connections from one handle: Choose with AI, Choose by rules and Split audience. */
+export const isPathRouter = (type: string | undefined): boolean => type === 'router' || type === 'router-decision' || type === 'split';
 
 /** Colour family of a branch name pill. */
 export type BranchTone = 'good' | 'bad' | 'warn' | 'loop' | 'neutral';
@@ -63,6 +86,7 @@ export function branchTone(route: FlowEdgeRoute): BranchTone {
     case 'error':
       return 'bad';
     case 'timeout':
+    case 'fallback':
       return 'warn';
     case 'body':
     case 'next':

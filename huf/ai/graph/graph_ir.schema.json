@@ -423,6 +423,34 @@
                 },
                 "approved": {
                   "type": "boolean"
+                },
+                "retry": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "attempts"
+                  ],
+                  "properties": {
+                    "attempts": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 10
+                    },
+                    "backoff": {
+                      "enum": [
+                        "fixed",
+                        "exponential"
+                      ]
+                    },
+                    "delay_seconds": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "max_delay_seconds": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  }
                 }
               }
             }
@@ -494,6 +522,9 @@
                   "$ref": "#/$defs/NodeId"
                 },
                 "on_false": {
+                  "$ref": "#/$defs/NodeId"
+                },
+                "fallback_next": {
                   "$ref": "#/$defs/NodeId"
                 }
               }
@@ -1036,6 +1067,43 @@
         }
       ]
     },
+    "TriggerAppNode": {
+      "description": "Started only by the named app through start_flow_for_member. No event, schedule or webhook starts it.",
+      "allOf": [
+        {
+          "$ref": "#/$defs/NodeCommon"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "trigger.app"
+            },
+            "config": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "app"
+              ],
+              "properties": {
+                "app": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The app that starts this flow. Shown as Started by <app>."
+                },
+                "entry_policy": {
+                  "enum": [
+                    "new_run_each_time",
+                    "resume_if_waiting",
+                    "once_per_member",
+                    "one_active_per_member"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
     "TriggerScheduleNode": {
       "allOf": [
         {
@@ -1154,6 +1222,14 @@
           "type": "string",
           "maxLength": 140
         },
+        "entry_policy": {
+          "enum": [
+            "new_run_each_time",
+            "resume_if_waiting",
+            "once_per_member",
+            "one_active_per_member"
+          ]
+        },
         "params": {
           "type": "array",
           "maxItems": 40,
@@ -1244,6 +1320,9 @@
           "$ref": "#/$defs/RouterDecisionNode"
         },
         {
+          "$ref": "#/$defs/WaitNode"
+        },
+        {
           "$ref": "#/$defs/HumanApprovalNode"
         },
         {
@@ -1257,6 +1336,9 @@
         },
         {
           "$ref": "#/$defs/TriggerUnsetNode"
+        },
+        {
+          "$ref": "#/$defs/TriggerAppNode"
         },
         {
           "$ref": "#/$defs/TriggerGatewayNode"
@@ -1281,6 +1363,33 @@
         },
         {
           "$ref": "#/$defs/CodeRunNode"
+        },
+        {
+          "$ref": "#/$defs/StopNode"
+        },
+        {
+          "$ref": "#/$defs/DocGetNode"
+        },
+        {
+          "$ref": "#/$defs/DocUpdateNode"
+        },
+        {
+          "$ref": "#/$defs/FlowCallNode"
+        },
+        {
+          "$ref": "#/$defs/MemberSetNode"
+        },
+        {
+          "$ref": "#/$defs/SendMessageNode"
+        },
+        {
+          "$ref": "#/$defs/SplitNode"
+        },
+        {
+          "$ref": "#/$defs/KnowledgeSearchNode"
+        },
+        {
+          "$ref": "#/$defs/HandoffNode"
         }
       ]
     },
@@ -1366,6 +1475,19 @@
             "$ref": "#/$defs/FlowNode"
           }
         },
+        "error_handler": {
+          "description": "Optional flow-level handler: the node chain run once, with the failure in context error.*, after a failure no step routed. The run still ends Failed.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "next"
+          ],
+          "properties": {
+            "next": {
+              "$ref": "#/$defs/NodeId"
+            }
+          }
+        },
         "contract": {
           "$ref": "#/$defs/Contract"
         }
@@ -1389,11 +1511,6 @@
             "config": {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "policy",
-                "options",
-                "default"
-              ],
               "properties": {
                 "options": {
                   "type": "array",
@@ -1412,6 +1529,9 @@
                       },
                       "node_id": {
                         "$ref": "#/$defs/NodeId"
+                      },
+                      "expression": {
+                        "type": "string"
                       }
                     }
                   }
@@ -1419,11 +1539,182 @@
                 "default": {
                   "$ref": "#/$defs/NodeId"
                 },
-                "policy": {
+                "decision": {
+                  "type": "object",
+                  "description": "Let the Decision runtime choose the next step. Leave empty to choose by rules.",
+                  "additionalProperties": false,
+                  "required": [
+                    "candidates",
+                    "uncertain_next"
+                  ],
+                  "properties": {
+                    "candidates": {
+                      "type": "array",
+                      "minItems": 2,
+                      "description": "The steps the decision may choose from.",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "node_id"
+                        ],
+                        "properties": {
+                          "node_id": {
+                            "$ref": "#/$defs/NodeId"
+                          },
+                          "label": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    "instructions": {
+                      "type": "string",
+                      "description": "What the decision should pick."
+                    },
+                    "minimum_confidence": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "uncertain_next": {
+                      "$ref": "#/$defs/NodeId",
+                      "description": "Step taken on any doubt or failure."
+                    },
+                    "backend": {
+                      "type": "string",
+                      "description": "Registered Decision backend id."
+                    },
+                    "policy_id": {
+                      "type": "string"
+                    },
+                    "state": {
+                      "type": "object"
+                    }
+                  }
+                }
+              },
+              "anyOf": [
+                {
+                  "required": [
+                    "options",
+                    "default"
+                  ]
+                },
+                {
+                  "required": [
+                    "decision"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "WaitNode": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/NodeCommon"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "wait"
+            },
+            "config": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "mode"
+              ],
+              "properties": {
+                "mode": {
+                  "enum": [
+                    "duration",
+                    "until",
+                    "resume"
+                  ]
+                },
+                "duration": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "value",
+                    "unit"
+                  ],
+                  "properties": {
+                    "value": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "unit": {
+                      "enum": [
+                        "minutes",
+                        "hours",
+                        "days"
+                      ]
+                    }
+                  }
+                },
+                "until": {
+                  "$ref": "#/$defs/Value",
+                  "description": "The date and time to continue at: a literal, a reference, or a template."
+                },
+                "time_zone": {
                   "type": "string",
                   "minLength": 1
+                },
+                "resume": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "wait_for": {
+                      "enum": [
+                        "token",
+                        "member_reply"
+                      ]
+                    },
+                    "timeout_ms": {
+                      "type": "integer",
+                      "minimum": 60000
+                    },
+                    "timeout_next": {
+                      "$ref": "#/$defs/NodeId"
+                    }
+                  }
                 }
-              }
+              },
+              "allOf": [
+                {
+                  "if": {
+                    "properties": {
+                      "mode": {
+                        "const": "duration"
+                      }
+                    }
+                  },
+                  "then": {
+                    "required": [
+                      "duration"
+                    ]
+                  }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "mode": {
+                        "const": "until"
+                      }
+                    }
+                  },
+                  "then": {
+                    "required": [
+                      "until"
+                    ]
+                  }
+                }
+              ]
             }
           }
         }
@@ -1600,6 +1891,422 @@
                   "type": "integer",
                   "minimum": 1,
                   "description": "Wall-clock limit for this step; at most the profile's own limit."
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "StopNode": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/NodeCommon"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "stop"
+            },
+            "config": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "DocGetNode": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/NodeCommon"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "doc.get"
+            },
+            "config": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "doctype"
+              ],
+              "properties": {
+                "doctype": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "name": {
+                  "$ref": "#/$defs/Value"
+                },
+                "filters": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "$ref": "#/$defs/Value"
+                  }
+                },
+                "fields": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "on_missing": {
+                  "enum": [
+                    "error",
+                    "empty"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "DocUpdateNode": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/NodeCommon"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "doc.update"
+            },
+            "config": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "doctype",
+                "name",
+                "values"
+              ],
+              "properties": {
+                "doctype": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "name": {
+                  "$ref": "#/$defs/Value"
+                },
+                "values": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "$ref": "#/$defs/Value"
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "FlowCallNode": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/NodeCommon"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "flow.call"
+            },
+            "config": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "flow_id"
+              ],
+              "properties": {
+                "flow_id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "input": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "$ref": "#/$defs/Value"
+                  }
+                },
+                "mode": {
+                  "enum": [
+                    "fire_and_forget",
+                    "wait"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "MemberSetNode": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/NodeCommon"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "member.set"
+            },
+            "config": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "vars"
+              ],
+              "properties": {
+                "vars": {
+                  "type": "object",
+                  "minProperties": 1,
+                  "additionalProperties": {
+                    "$ref": "#/$defs/Value"
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "SendMessageNode": {
+      "description": "Send one message to the run's person. Always passes the pre-send guard chain.",
+      "allOf": [
+        {
+          "$ref": "#/$defs/NodeCommon"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "send.message"
+            },
+            "config": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "gateway",
+                "recipient",
+                "category"
+              ],
+              "properties": {
+                "gateway": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Gateway to send from"
+                },
+                "recipient": {
+                  "$ref": "#/$defs/Value"
+                },
+                "template": {
+                  "$ref": "#/$defs/Value"
+                },
+                "text": {
+                  "$ref": "#/$defs/Value"
+                },
+                "variables": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "description": "Template token names, bound at send time"
+                },
+                "category": {
+                  "enum": [
+                    "marketing",
+                    "service"
+                  ]
+                },
+                "header": {
+                  "type": "object"
+                },
+                "language": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "SplitNode": {
+      "description": "Weighted branches plus a holdout share, bucketed per member.",
+      "allOf": [
+        {
+          "$ref": "#/$defs/NodeCommon"
+        },
+        {
+          "not": {
+            "required": [
+              "next"
+            ]
+          },
+          "properties": {
+            "type": {
+              "const": "split"
+            },
+            "config": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "options"
+              ],
+              "properties": {
+                "options": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "label",
+                      "node_id",
+                      "weight"
+                    ],
+                    "properties": {
+                      "label": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "node_id": {
+                        "$ref": "#/$defs/NodeId"
+                      },
+                      "weight": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 100
+                      }
+                    }
+                  }
+                },
+                "holdout": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 100,
+                  "description": "Percent of members held out from marketing sends"
+                },
+                "salt": {
+                  "type": "string",
+                  "description": "Bucket salt; defaults to the flow version"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "KnowledgeSearchNode": {
+      "description": "Search one knowledge source as the run's user and return the best passages.",
+      "allOf": [
+        {
+          "$ref": "#/$defs/NodeCommon"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "knowledge.search"
+            },
+            "config": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "query",
+                "knowledge_source"
+              ],
+              "properties": {
+                "query": {
+                  "$ref": "#/$defs/Value",
+                  "description": "The text to search for."
+                },
+                "knowledge_source": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Knowledge Source name."
+                },
+                "top_k": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 20,
+                  "default": 5
+                },
+                "filters": {
+                  "type": "object",
+                  "description": "Optional metadata filters."
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "HandoffNode": {
+      "description": "Hand the conversation to a person and wait until they release it.",
+      "allOf": [
+        {
+          "$ref": "#/$defs/NodeCommon"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "handoff"
+            },
+            "config": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "conversation": {
+                  "$ref": "#/$defs/Value",
+                  "description": "Channel Conversation to hand over."
+                },
+                "gateway": {
+                  "$ref": "#/$defs/Value",
+                  "description": "Channel of the contact (with recipient)."
+                },
+                "recipient": {
+                  "$ref": "#/$defs/Value",
+                  "description": "Contact whose open conversation is handed over."
+                },
+                "reason": {
+                  "type": "string",
+                  "description": "Reason code stored on the run."
+                },
+                "target": {
+                  "type": "string",
+                  "description": "Queue or person to hand to."
+                },
+                "summary": {
+                  "$ref": "#/$defs/Expression",
+                  "description": "Short note for the person taking over."
+                },
+                "priority": {
+                  "type": "string",
+                  "enum": [
+                    "low",
+                    "normal",
+                    "high",
+                    "urgent"
+                  ],
+                  "default": "normal"
+                },
+                "message": {
+                  "type": "string",
+                  "description": "Message sent to the contact on handoff."
+                },
+                "timeout_ms": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "timeout_next": {
+                  "$ref": "#/$defs/NodeId",
+                  "description": "Step taken when nobody releases it in time."
                 }
               }
             }

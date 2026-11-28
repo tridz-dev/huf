@@ -8,6 +8,7 @@ Run with:
 """
 
 import json
+from unittest.mock import patch
 
 import frappe
 from frappe.tests import IntegrationTestCase
@@ -61,13 +62,13 @@ class TestDataCatalogApi(IntegrationTestCase):
 	def _run(self, status="Success", payload=None, outputs=None):
 		run = frappe.get_doc(
 			{
-				"doctype": "Flow Run", "flow_definition": self.flow, "flow_id": self.flow_id, "status": status, "trigger_type": "Webhook",
+				"doctype": "Agent Flow Run", "flow_definition": self.flow, "flow_id": self.flow_id, "status": status, "trigger_type": "Webhook",
 				"started_at": now_datetime(), "trigger_payload": json.dumps(payload or {}),
 				"context_json": json.dumps({**(payload or {}), "__node_outputs__": outputs or {}}),
 			}
 		)
 		run.insert(ignore_permissions=True)
-		self._docs.append(("Flow Run", run.name))
+		self._docs.append(("Agent Flow Run", run.name))
 		return run.name
 
 	def test_lists_the_trigger_first_and_only_steps_before_the_step(self):
@@ -182,3 +183,53 @@ class TestDataTriggerCatalog(IntegrationTestCase):
 		for f in trigger["fields"]:
 			if f["path"].startswith("input._links.allocated_to."):
 				self.assertIn(f["path"].rsplit(".", 1)[1], row)
+
+
+class TestNodeTypeCatalogApi(IntegrationTestCase):
+	"""D2: ``list_node_types`` lists app-registered step types (``huf_flow_nodes``) for the editor palette."""
+
+	def setUp(self):
+		frappe.set_user("Administrator")
+		entry = {
+			"type": "huf.demo_echo",
+			"label": "Demo echo",
+			"category": "Demo",
+			"icon": "message-square",
+			"description": "Echoes text",
+			"handler": "huf.ai.flow.tests.test_flow_app_nodes.echo",
+			"routing": "next",
+			"config_schema": {"type": "object", "properties": {"text": {"type": "string"}}},
+		}
+		real = frappe.get_hooks
+
+		def fake(hook=None, *a, **k):
+			if hook == "huf_flow_nodes":
+				return [entry] if k.get("app_name") == "huf" else []
+			return real(hook, *a, **k)
+
+		patcher = patch("frappe.get_hooks", side_effect=fake)
+		patcher.start()
+		self.addCleanup(patcher.stop)
+
+	def tearDown(self):
+		frappe.set_user("Administrator")
+
+	def test_list_node_types_shape(self):
+		types = catalog_api.list_node_types()
+		by_type = {t["type"]: t for t in types}
+		self.assertIn("huf.demo_echo", by_type)
+		self.assertEqual(
+			by_type["huf.demo_echo"],
+			{
+				"type": "huf.demo_echo", "label": "Demo echo", "category": "Demo", "icon": "message-square",
+				"description": "Echoes text",
+				"config_schema": {"type": "object", "properties": {"text": {"type": "string"}}},
+				"routing": "next", "outputs": [], "app": "huf", "builtin": False,
+			},
+		)
+		# Built-in step types are not part of the app catalog.
+		self.assertFalse({"tool.call", "condition", "trigger.webhook"} & set(by_type))
+
+	def test_requires_login(self):
+		frappe.set_user("Guest")
+		self.assertRaises(frappe.PermissionError, catalog_api.list_node_types)

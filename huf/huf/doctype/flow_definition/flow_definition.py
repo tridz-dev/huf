@@ -6,6 +6,8 @@ from frappe.model.document import Document
 from frappe.utils import now_datetime
 
 from huf.ai import system_records
+from huf.ai.flow.app_scope import access as app_access
+from huf.ai.flow.app_scope import ownership
 from huf.ai.graph.validation.flow_validation import validate_flow
 from huf.ai.graph.error_copy import describe_errors
 from huf.ai.graph.validator import FLOW_NODE_TYPES, MODE_DRAFT, MODE_PUBLISH
@@ -22,7 +24,12 @@ SYSTEM_RECORD_UNLOCKED_FIELDS: tuple = ("updated_by", "updated_at")
 
 def get_permission_query_conditions(user=None):
 	"""Hide system Flow Definitions from non-System-Managers. Registered in hooks.py."""
-	return system_records.make_permission_query_conditions("Flow Definition")(user)
+	conds = [
+		system_records.make_permission_query_conditions("Flow Definition")(user),
+		app_access.flow_scope_condition(user),
+	]
+	conds = [c for c in conds if c]
+	return " and ".join(f"({c})" for c in conds) if conds else None
 
 
 # Kept as a re-export for any external caller that used to introspect Flow's allowed
@@ -49,10 +56,31 @@ class FlowDefinition(Document):
 		self.updated_at = now_datetime()
 		system_records.guard_flag_tamper(self)
 		system_records.guard_field_immutability(self, unlocked_fields=SYSTEM_RECORD_UNLOCKED_FIELDS)
+		ownership.guard_owner_app(self)
+		app_access.guard_server_only_fields(self)
+
+	def db_set(self, fieldname, value=None, *args, **kwargs):
+		ownership.guard_db_set(self, fieldname, value)
+		app_access.guard_server_only_db_set(self, fieldname, value)
+		return super().db_set(fieldname, value, *args, **kwargs)
 
 	def before_save(self):
 		if not self.is_new():
 			self.version = (self.version or 0) + 1
+		self._reset_live_send_on_republish()
+
+	def _reset_live_send_on_republish(self):
+		"""G3: a republish (new definition, or becoming Active) turns ``live_send`` off; it is switched on again
+		on its own save, after the new version was looked at."""
+		before = None if self.is_new() else self.get_doc_before_save()
+		if before is None:
+			republished = self.status == "Active"
+		else:
+			republished = before.definition_json != self.definition_json or (
+				self.status == "Active" and before.status != "Active"
+			)
+		if republished:
+			self.live_send = 0
 
 	def on_update(self):
 		self._maybe_convert_to_procedure()
@@ -62,6 +90,7 @@ class FlowDefinition(Document):
 
 	def before_rename(self, old_name: str, new_name: str, merge: bool = False):
 		system_records.guard_rename(self, old_name, new_name, merge)
+		app_access.guard_app_flow_rename(self, old_name, new_name, merge)
 
 	def _maybe_convert_to_procedure(self):
 		"""On save, if the checkbox is set, (re)compile this Flow into a Draft Agent
@@ -245,7 +274,7 @@ class FlowDefinition(Document):
 		flags = frappe.flags
 		if getattr(flags, "in_install", False) or getattr(flags, "in_migrate", False) or getattr(flags, "in_patch", False):
 			return
-		from huf.ai.flow.publish_guard import check_can_publish
+		from huf.ai.flow.publish_guard import check_can_publish, check_preflight
 
 		previous = None
 		before = self.get_doc_before_save() if not self.is_new() else None
@@ -255,6 +284,7 @@ class FlowDefinition(Document):
 			except (json.JSONDecodeError, TypeError):
 				previous = None
 		check_can_publish(defn, previous)
+		check_preflight(defn, self.name, owner_app=self.get("owner_app"))  # after the permission checks: app checks run only for a permitted publish
 
 	def _validate_activation(self, defn: dict):
 		"""Active flows must be runnable: Draft/Archived saves stay permissive. Reports
@@ -269,7 +299,7 @@ class FlowDefinition(Document):
 			)
 		# Whatever else keeps the flow from running (a loop of links, a value from a step that has not run yet,
 		# a short secret): the same publish-mode check a run makes.
-		finished = validate_flow(defn, MODE_PUBLISH)
+		finished = validate_flow(defn, MODE_PUBLISH, flow_id=self.name)
 		if not finished.ok:
 			frappe.throw(
 				_("Flow cannot be Active: {0}").format(" ".join(finished.messages(defn))),

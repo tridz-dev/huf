@@ -82,6 +82,15 @@ If you are starting work from the shared agent workspace at `/Users/safwan/Code/
 
 This keeps the source checkout clean, prevents unrelated local changes from leaking into PRs, and ensures the workspace worktree rules are followed. If you are already inside a dedicated worktree, this rule does not apply and you may edit normally.
 
+## Standards Guards (agents)
+-   Run `python3 scripts/run_standards.py` before handing off a work package and again before the merge gate.
+-   Baselined files (`scripts/baselines/`) default to a growth budget of 0 (wiring allowance only); put new logic in new modules.
+-   Never raise a baseline to pass; `--update --force` needs reviewed owner approval.
+
+## UI Verification Before Merge (agents)
+-   A UI-touching change (nodes, panels, forms, settings, list views) is not merge-ready on unit tests alone. Run it on a live bench in a real browser and check: every new backend field is reachable in the UI, defaults and labels are right, no placeholder or scaffold values are active, save and reload persists, status states render, and the console is clean.
+-   Record what you checked (screenshots or a short report) in the PR. If your environment has a UI-verification skill (for example `visual-bench-verify`), use it; otherwise do the same checks by hand. The skill is optional, the checks are not.
+
 ## Security Considerations
 -   Do not commit secrets or API keys. The `AI Provider` DocType stores API keys in the database using the `Password` field type, which encrypts the value.
 -   Custom functions exposed to agents via `Agent Tool Function` must be carefully designed. They are executed with the permissions of the user running the agent. Always validate inputs and perform permission checks inside custom tool functions.
@@ -864,7 +873,7 @@ Assigns custom capability-based Huf Roles to Users.
 | **Updated At** | `updated_at` | Datetime |  |
 
 
-#### 42. Flow Run
+#### 42. Agent Flow Run
 
 -   **Python Class**: `FlowRun(Document)`
 -   **File**: `huf/huf/doctype/flow_run/flow_run.py`
@@ -2016,7 +2025,7 @@ The Flow Engine provides graph-based workflow orchestration that reuses existing
 ### Core Concepts
 
 1. **Flow Definition**: Stores the entire graph as a single JSON blob (React Flow compatible). No separate Node/Edge doctypes.
-2. **Flow Run**: Persists runtime state (status, context, current node, hop count).
+2. **Agent Flow Run**: Persists runtime state (status, context, current node, hop count).
 3. **Agent Run as Node Run**: Each node execution is logged as an existing Agent Run extended with flow linkage fields.
 
 ### DocTypes
@@ -2050,7 +2059,7 @@ Stores the complete workflow graph definition as JSON.
 - Only allowed node types (v0.2): `trigger.webhook`, `trigger.schedule`, `trigger.doc-event`, `agent.run`, `tool.call`, `router.llm`, `human.approval`, `http_request`, `condition`, `transform`, `loop`, `end`
 - Expression edges must have a condition string
 
-#### Flow Run
+#### Agent Flow Run
 
 Single execution instance of a flow.
 
@@ -2085,7 +2094,7 @@ Existing Agent Run with additional flow linkage fields.
 
 | Label | Fieldname | Type | Description |
 |:------|:----------|:-----|:------------|
-| **Flow Run** | `flow_run` | Link(Flow Run) | Optional link to flow |
+| **Flow Run** | `flow_run` | Link(Agent Flow Run) | Optional link to flow |
 | **Flow Node ID** | `flow_node_id` | Data | Node ID from JSON |
 | **Flow ID** | `flow_id` | Data | Convenience field |
 | **Run Kind** | `run_kind` | Select | `agent`, `tool`, `orchestrator` |
@@ -2165,7 +2174,7 @@ Registered via `huf_tools` hook so agents can interact with flows:
 
 - **Expression edges**: AST-based restricted evaluator; no imports, no function calls, no attribute access
 - **Human approval**: User/role verification before approve/reject (`approval_type` `user` and `users` are treated as synonyms)
-- **Permissions**: Huf Manager has `create` on Flow Run (requires `bench migrate` on deploy to apply); agent tool handlers (`run_flow`, `get_flow_run`, `resume_flow_run`, `approve_flow_run`) enforce the same permission checks and approver-identity verification as the REST endpoints
+- **Permissions**: Huf Manager has `create` on Agent Flow Run (requires `bench migrate` on deploy to apply); agent tool handlers (`run_flow`, `get_flow_run`, `resume_flow_run`, `approve_flow_run`) enforce the same permission checks and approver-identity verification as the REST endpoints
 - **Hop limit**: Safety guard against infinite loops (default 100)
 
 ## Subsystems and Advanced Architectures

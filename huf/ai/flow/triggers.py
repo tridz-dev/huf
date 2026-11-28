@@ -22,6 +22,7 @@ from datetime import datetime, timedelta, timezone
 import frappe
 
 from huf.ai.flow.catalog.links import LINK_KEY, linked_values
+from huf.ai.flow.support.pii import log_flow_error
 
 WEBHOOK_TYPE = "trigger.webhook"
 SCHEDULE_TYPE = "trigger.schedule"
@@ -44,7 +45,7 @@ DOC_EVENT_MAP = {
 # the rows its own run writes would loop). Everything in the "Huf" module is skipped too.
 RECURSION_SKIP_DOCTYPES = frozenset(
 	{
-		"Flow Run",
+		"Agent Flow Run",
 		"Flow Definition",
 		"Agent Run",
 		"Agent Run Event",
@@ -191,12 +192,20 @@ def start_flow_run(
 
 	The row is created for the trusted dispatcher (activation of the flow by its owner already
 	authorised the trigger); execution identity is ``user``. When the graph has several triggers the
-	run starts at the one that fired (``trigger_node_id``).
+	run starts at the one that fired (``trigger_node_id``). The trigger's entry policy may instead resume the member's
+	waiting run (that run is returned) or skip the start (``None``).
 	"""
 	from huf.ai.flow import engine
+	from huf.ai.flow.runs import entry
 
 	if user:
 		frappe.set_user(user)
+	if trigger_node_id:
+		early = entry.apply_entry_policy(flow_id, trigger_node_id, trigger_type, payload)
+		if early == "skip":
+			return None
+		if early:
+			return frappe.get_doc("Agent Flow Run", early)
 	flow_run = engine.create_flow_run(
 		flow_id=flow_id, payload=payload, trigger_type=trigger_type, ignore_permissions=True
 	)
@@ -249,7 +258,7 @@ def _already_fired(flow_id: str, node_id: str, scheduled_for: str) -> bool:
 	"""Durable once-per-minute marker: the Flow Run created for that (node, minute) is the record."""
 	return bool(
 		frappe.db.exists(
-			"Flow Run",
+			"Agent Flow Run",
 			[
 				["flow_definition", "=", flow_id],
 				["trigger_type", "=", "Schedule"],
@@ -304,7 +313,7 @@ def run_due_schedule_flows(now: datetime | None = None) -> list[str]:
 				)
 				started.append(flow_id)
 			except Exception:
-				frappe.log_error(frappe.get_traceback(), f"Flow schedule dispatch: {flow_id}")
+				log_flow_error(frappe.get_traceback(), f"Flow schedule dispatch: {flow_id}")
 	return started
 
 
@@ -335,7 +344,7 @@ def expire_due_approvals(now: datetime | None = None, enqueue: bool = False) -> 
 
 	now = now or now_datetime()
 	rows = frappe.get_all(
-		"Flow Run",
+		"Agent Flow Run",
 		filters={"status": "Waiting Approval", "waiting": ["like", "%timeout_at%"]},
 		fields=["name", "waiting"],
 		limit_page_length=500,
@@ -346,7 +355,7 @@ def expire_due_approvals(now: datetime | None = None, enqueue: bool = False) -> 
 			if expire_approval(name, now, enqueue=enqueue):
 				expired.append(name)
 		except Exception:
-			frappe.log_error(frappe.get_traceback(), f"Flow approval expiry: {name}")
+			log_flow_error(frappe.get_traceback(), f"Flow approval expiry: {name}")
 	return expired
 
 
@@ -484,4 +493,4 @@ def run_doc_event_flows(doc, method=None, *args, **kwargs):
 				run_as=owner,
 			)
 		except Exception:
-			frappe.log_error(frappe.get_traceback(), f"Flow doc-event dispatch: {entry['flow']}")
+			log_flow_error(frappe.get_traceback(), f"Flow doc-event dispatch: {entry['flow']}")

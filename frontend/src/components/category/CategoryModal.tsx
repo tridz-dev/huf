@@ -17,6 +17,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { createCategory, updateCategory, deleteCategory } from '@/services/categoryApi';
+import { getFrappeErrorMessage } from '@/lib/frappe-error';
+import { useIsHufAdmin } from '@/contexts/PermissionsContext';
 import * as Icons from 'lucide-react';
 import { Edit, Tag, Trash2 } from 'lucide-react';
 import { TABLE_ICONS, TABLE_ICON_MAP } from '@/data/tableIcons';
@@ -55,6 +57,7 @@ export function CategoryModal({
   onEditComplete,
   categoryType = 'prompt',
 }: CategoryModalProps) {
+  const isHufAdmin = useIsHufAdmin();
   const [localCategories, setLocalCategories] = useState<Category[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -238,7 +241,7 @@ export function CategoryModal({
   } catch (error) {
     console.error(error);
     toast.error(editingCategory ? 'Failed to update category' : 'Failed to create category', {
-      description: 'Please try again',
+      description: isHufAdmin ? getFrappeErrorMessage(error) : "You don't have permission to change categories.",
     });
   }
 };

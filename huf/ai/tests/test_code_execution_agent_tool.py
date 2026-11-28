@@ -161,13 +161,17 @@ class TestCodeExecutionGates(FrappeTestCase):
 			"blocking": 0,
 			"base_url": None,
 		}
+		# The role check loads the tool document before the refusal; "x" is not a stored row.
+		tool_row = frappe._dict(doc, doctype="Agent Tool Function")
 		with (
 			patch.object(tool_invocation, "resolve_tool_doc", return_value=doc),
+			patch.object(tool_invocation.frappe, "get_cached_doc", return_value=tool_row),
 			patch.object(tool_invocation, "get_function_from_name") as getter,
 		):
 			res = asyncio.run(tool_invocation.invoke_tool("run_python", {"code": "1", "agent_doc": "A"}))
 		self.assertFalse(res.success)
 		self.assertTrue(res.denied)
+		self.assertEqual(res.error, "Code Execution tools are only available to an agent run.")
 		getter.assert_not_called()
 
 

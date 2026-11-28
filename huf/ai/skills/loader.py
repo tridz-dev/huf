@@ -13,6 +13,10 @@ from typing import Any, Optional
 import frappe
 from agents import FunctionTool
 
+from huf.ai.prompts.lineage import latest_row
+from huf.ai.skills.auto_load import format_skill_content, is_injected_up_front
+from huf.ai.tools.types import _GUEST_DOCTYPE_PINNED_TYPES
+
 
 # Map of standard tool types to their handler function paths.
 # Mirrors the mapping in huf.ai.sdk_tools.create_agent_tools.
@@ -49,8 +53,8 @@ def _skill_doctypes_exist() -> bool:
         return False
 
 
-def get_agent_skills(agent_name: str, mode: Optional[str] = None):
-    """Return Skill docs attached to an agent, optionally filtered by mode.
+def get_agent_skill_entries(agent_name: str, mode: str | None = None):
+    """Return (Skill doc, Agent Skill row) pairs attached to an agent.
 
     Only skills with status "Active" are returned.
     """
@@ -62,7 +66,7 @@ def get_agent_skills(agent_name: str, mode: Optional[str] = None):
     except Exception:
         return []
 
-    skills = []
+    entries = []
     for row in agent.get("agent_skill", []):
         if mode and getattr(row, "mode", None) != mode:
             continue
@@ -70,11 +74,28 @@ def get_agent_skills(agent_name: str, mode: Optional[str] = None):
             skill = frappe.get_doc("Skill", row.skill)
             if getattr(skill, "status", "Active") != "Active":
                 continue
-            skills.append(skill)
+            entries.append((skill, row))
         except Exception:
             continue
 
-    return skills
+    return entries
+
+
+def get_agent_skills(agent_name: str, mode: Optional[str] = None):
+    """Return Skill docs attached to an agent, optionally filtered by mode.
+
+    Only skills with status "Active" are returned.
+    """
+    return [skill for skill, _row in get_agent_skill_entries(agent_name, mode)]
+
+
+def get_deferred_skills(agent_name: str):
+    """Return Active skills attached as Optional that are not injected up front."""
+    return [
+        skill
+        for skill, row in get_agent_skill_entries(agent_name, "Optional")
+        if not is_injected_up_front(skill, row)
+    ]
 
 
 def get_agent_skill_mcp_servers(agent_name: str) -> list[str]:
@@ -153,6 +174,14 @@ def _build_extra_args(tool_doc, skill_tool_row=None) -> dict:
         }
         and tool_doc.reference_doctype
     ):
+        extra_args["reference_doctype"] = tool_doc.reference_doctype
+
+    elif (
+        tool_type in _GUEST_DOCTYPE_PINNED_TYPES
+        and tool_doc.reference_doctype
+        and frappe.session.user == "Guest"
+    ):
+        # Types this path does not pin for signed-in callers; a Guest call needs the pin.
         extra_args["reference_doctype"] = tool_doc.reference_doctype
 
     elif tool_type == "Client Side Tool" and tool_doc.function_name:
@@ -262,10 +291,12 @@ def get_mandatory_skill_knowledge(agent_name: str) -> list[dict[str, Any]]:
 
 
 def get_skill_instructions(agent_name: str) -> str:
-    """Concatenate instructions from all attached skills."""
+    """Concatenate instructions from attached skills that are injected up front."""
     parts = []
 
-    for skill in get_agent_skills(agent_name):
+    for skill, row in get_agent_skill_entries(agent_name):
+        if not is_injected_up_front(skill, row):
+            continue
         instructions = getattr(skill, "instructions", None)
         if instructions and instructions.strip():
             parts.append(instructions.strip())
@@ -289,40 +320,94 @@ def get_skill_prompts(agent_name: str) -> list[dict[str, str]]:
     if not frappe.db.exists("DocType", "Agent Prompt"):
         return prompts
 
-    for skill in get_agent_skills(agent_name):
-        for row in skill.get("skill_prompts", []):
-            try:
-                prompt_doc = frappe.get_doc("Agent Prompt", row.prompt)
-                if not getattr(prompt_doc, "is_active", 1):
-                    continue
-                prompts.append(
-                    {
-                        "usage": row.usage or "System",
-                        "body": prompt_doc.prompt_body or "",
-                        "skill": skill.skill_name,
-                    }
-                )
-            except Exception:
-                continue
+    for skill, attachment in get_agent_skill_entries(agent_name):
+        if not is_injected_up_front(skill, attachment):
+            continue
+        prompts.extend(_skill_prompts(skill))
 
+    return prompts
+
+
+def _skill_prompts(skill) -> list[dict[str, str]]:
+    """Return the active prompt bodies declared by one skill."""
+    prompts: list[dict[str, str]] = []
+    for row in skill.get("skill_prompts", []):
+        try:
+            prompt_doc = frappe.get_doc("Agent Prompt", latest_row("Agent Prompt", row.prompt))
+            if not getattr(prompt_doc, "is_active", 1):
+                continue
+            prompts.append(
+                {
+                    "usage": row.usage or "System",
+                    "body": prompt_doc.prompt_body or "",
+                    "skill": skill.skill_name,
+                }
+            )
+        except Exception:
+            continue
     return prompts
 
 
 def get_optional_skills_preamble(agent_name: str) -> str:
     """Return a system prompt section listing optional skills."""
     optional_skills = []
+    has_deferred = False
 
-    for skill in get_agent_skills(agent_name, mode="Optional"):
+    for skill, row in get_agent_skill_entries(agent_name, mode="Optional"):
         description = getattr(skill, "description", None) or ""
-        optional_skills.append(f"- {skill.skill_name}: {description}".strip())
+        line = f"- {skill.skill_name}: {description}".strip()
+        if not is_injected_up_front(skill, row):
+            has_deferred = True
+            line += " (not loaded yet)"
+        optional_skills.append(line)
 
     if not optional_skills:
         return ""
 
-    return (
+    preamble = (
         "\n\nOptional skills available. "
         "Only use an optional skill when the user's request clearly matches its description:\n"
         + "\n".join(optional_skills)
+    )
+    if has_deferred:
+        preamble += (
+            "\nSkills marked (not loaded yet) are not in your instructions. "
+            "Call load_skill with the skill name to read one before using it."
+        )
+    return preamble
+
+
+def handle_load_skill(agent_name: str, skill_name: str = "", **kwargs) -> str:
+    """Handler for the runtime load_skill tool."""
+    wanted = (skill_name or "").strip()
+    for skill in get_agent_skills(agent_name):
+        if wanted in (skill.skill_name, skill.name):
+            bodies = [p["body"] for p in _skill_prompts(skill)]
+            return format_skill_content(skill, bodies)
+    return f"Skill '{wanted}' is not attached to this agent. Use list_skills to see available skills."
+
+
+def create_load_skill_tool(agent_name: str) -> FunctionTool | None:
+    """Build a runtime load_skill tool when the agent has skills not injected up front."""
+    if not get_deferred_skills(agent_name):
+        return None
+
+    # Lazy import to avoid circular dependency.
+    from huf.ai.sdk_tools import create_function_tool
+
+    return create_function_tool(
+        name="load_skill",
+        description=(
+            "Load the instructions of an optional skill that is not already "
+            "in your instructions, by skill name."
+        ),
+        tool_name="huf.ai.skills.loader.handle_load_skill",
+        parameters={
+            "type": "object",
+            "properties": {"skill_name": {"type": "string", "description": "Name of the skill to load."}},
+            "required": ["skill_name"],
+        },
+        extra_args={"agent_name": agent_name},
     )
 
 

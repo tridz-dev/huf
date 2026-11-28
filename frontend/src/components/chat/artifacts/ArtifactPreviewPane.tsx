@@ -16,8 +16,7 @@
  */
 import { useCallback, useEffect, useState } from 'react';
 import { X } from 'lucide-react';
-import { DocumentPreview } from '@/components/chat/DocumentPreview';
-import { isDocumentType } from '@/components/chat/ArtifactsPanel';
+import { ArtifactPaneBody } from './ArtifactPaneBody';
 import {
   Select,
   SelectContent,
@@ -85,7 +84,7 @@ export function ArtifactPreviewPane({
     return null;
   }
 
-  const documentArtifacts = artifacts.filter((a) => isDocumentType(a.artifact_type));
+  const documentArtifacts = artifacts;
 
   return (
     <div
@@ -145,7 +144,7 @@ export function ArtifactPreviewPane({
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        <DocumentPreview artifactName={artifact.name} />
+        <ArtifactPaneBody key={artifact.name} name={artifact.name} artifactType={artifact.artifact_type} />
       </div>
     </div>
   );

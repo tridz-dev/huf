@@ -11,6 +11,7 @@ export const TRIGGER_TO_NODE_TYPE: Record<TriggerType, string> = {
   webhook: 'trigger.webhook',
   schedule: 'trigger.schedule',
   'doc-event': 'trigger.doc-event',
+  app: 'trigger.app',
   ...Object.fromEntries(GATEWAY_TRIGGER_KINDS.map((k) => [k.id, k.nodeType])),
 } as Record<TriggerType, string>;
 
@@ -24,7 +25,8 @@ export const TRIGGER_CONFIG_KEYS: Record<string, string[]> = {
   'trigger.webhook': ['method', 'secret'],
   'trigger.schedule': ['cron', 'time_zone'],
   'trigger.doc-event': ['doctype', 'event'],
-  ...Object.fromEntries(GATEWAY_TRIGGER_KINDS.map((k) => [k.nodeType, ['gateway', 'params']])),
+  'trigger.app': ['app', 'entry_policy'],
+  ...Object.fromEntries(GATEWAY_TRIGGER_KINDS.map((k) => [k.nodeType, ['gateway', 'entry_policy', 'params']])),
 };
 
 /** A chat trigger's saved config: the channel as typed, and `params` only while something is set. */
@@ -42,11 +44,12 @@ export const REQUIRED_CONFIG_KEYS: Partial<Record<string, string[]>> = {
     'trigger.webhook': ['method', 'secret'],
     'trigger.schedule': ['cron'],
     'trigger.doc-event': ['doctype', 'event'],
+    'trigger.app': ['app'],
     ...Object.fromEntries(GATEWAY_TRIGGER_KINDS.map((k) => [k.nodeType, ['gateway']])),
     'agent.run': ['agent', 'prompt'],
     'tool.call': ['tool_id'],
     'router.llm': ['prompt'],
-    'router.decision': ['policy'],
+    'wait': ['mode'],
     'human.approval': ['message'],
     'condition': ['expression'],
     'foreach': ['items'],
@@ -55,10 +58,32 @@ export const REQUIRED_CONFIG_KEYS: Partial<Record<string, string[]>> = {
     'state.set': ['key'],
     'state.delete': ['key'],
     'doc.create': ['doctype'],
+    'stop': ['message'],
+    'doc.get': ['doctype'],
+    'doc.update': ['doctype', 'name', 'values'],
+    'flow.call': ['flow_id'],
+    'member.set': ['vars'],
+    'send.message': ['gateway', 'category'],
     'code.run': ['code', 'profile'],
     'transform': ['op'],
 };
 
+
+/** Title of a rules step while "Let AI choose the path" is on (the rules title comes from the palette). */
+export const AI_CHOICE_TITLE = 'Let AI choose';
+
+/**
+ * Title a loaded step shows: the stored one, or the default when there is none or it is only the raw node type (as
+ * some app-built flows store it). A rules step that lets AI choose is named for that unless the user renamed it.
+ */
+export function storedNodeTitle(type: string, label: unknown, config: Record<string, unknown> | undefined): string {
+    const stored = typeof label === 'string' ? label.trim() : '';
+    const fallback = getDefaultLabel(type);
+    const decision = config?.decision;
+    const aiChoice = type === 'router.decision' && decision !== null && typeof decision === 'object';
+    if (!stored || stored === type) return aiChoice ? AI_CHOICE_TITLE : fallback;
+    return aiChoice && stored === fallback ? AI_CHOICE_TITLE : stored;
+}
 
 export function getDefaultLabel(backendType: string): string {
     const labels: Record<string, string> = {
@@ -68,11 +93,13 @@ export function getDefaultLabel(backendType: string): string {
         'trigger.gateway': 'Chat message',
         'trigger.whatsapp': 'WhatsApp message',
         'trigger.telegram': 'Telegram message',
+        'trigger.app': 'App trigger',
         'trigger.unset': 'Select trigger',
         'agent.run': 'Run agent',
         'tool.call': 'Call tool',
         'router.llm': 'LLM router',
-        'router.decision': 'Decision router',
+        'router.decision': 'Choose by rules',
+        'wait': 'Wait',
         'human.approval': 'Human approval',
         'condition': 'Condition (IF)',
         'transform': 'Transform data',
@@ -82,7 +109,16 @@ export function getDefaultLabel(backendType: string): string {
         'state.set': 'Set state',
         'state.delete': 'Delete state',
         'doc.create': 'Create document',
+        'stop': 'Stop with error',
+        'doc.get': 'Find document',
+        'doc.update': 'Update document',
+        'flow.call': 'Run another flow',
+        'member.set': 'Remember for this person',
+        'send.message': 'Send message',
         'code.run': 'Execute code',
+        'split': 'Split audience',
+        'knowledge.search': 'Search knowledge',
+        'handoff': 'Hand to a person',
         'output': 'End',
     };
     return labels[backendType] || backendType;
@@ -97,11 +133,15 @@ export function getDefaultIcon(backendType: string): string {
         'trigger.gateway': 'MessageSquare',
         'trigger.whatsapp': 'MessageCircle',
         'trigger.telegram': 'Send',
+        'trigger.app': 'AppWindow',
         'trigger.unset': 'CircleDashed',
         'agent.run': 'SquareAsterisk',
         'tool.call': 'Play',
         'router.llm': 'GitBranch',
-        'router.decision': 'GitBranch',
+        'router.decision': 'Split',
+        'knowledge.search': 'BookOpen',
+        'handoff': 'UserRound',
+        'wait': 'Hourglass',
         'human.approval': 'UserCheck',
         'condition': 'GitBranch',
         'transform': 'Repeat',
@@ -111,7 +151,14 @@ export function getDefaultIcon(backendType: string): string {
         'state.set': 'Save',
         'state.delete': 'Trash2',
         'doc.create': 'FilePlus',
+        'stop': 'OctagonX',
+        'doc.get': 'FileSearch',
+        'doc.update': 'FilePen',
+        'flow.call': 'Workflow',
+        'member.set': 'UserPen',
+        'send.message': 'Send',
         'code.run': 'Terminal',
+        'split': 'Split',
         'output': 'CheckCircle2',
     };
     return icons[backendType] || 'Play';

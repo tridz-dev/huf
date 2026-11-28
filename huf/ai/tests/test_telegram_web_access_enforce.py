@@ -199,6 +199,12 @@ class TestRevoke(unittest.TestCase):
 		db.delete.assert_called_once_with("Sessions", {"sid": "s1"})
 		self.assertIn("like", db.sql.call_args[0][0])
 
+	def test_row_data_parses_json_with_null_and_python_repr(self):
+		marker = {"tg_origin": {"binding": "B1"}, "user_agent": None, "x": True}
+		for raw in (json.dumps(marker), str(marker)):
+			with self.subTest(raw=raw):
+				self.assertEqual(E._session_row_data(raw), marker)
+
 
 class TestSessionExpiry(unittest.TestCase):
 	def test_expired_session_end_is_denied_and_unreadable_fails_closed(self):
