@@ -143,16 +143,67 @@ def _holders(names: list[str], roles: list[str] | None = None) -> set[str]:
 	return set(rows)
 
 
+#: An app narrows who its app-only users may look up: ``{"<app>": "<dotted path>"}``, read from that app's own hooks.
+APPROVER_NARROW_HOOK = "huf_flow_approver_narrow"
+
+
+def _narrow_approvers(app: str, user: str, candidates: set[str]) -> set[str]:
+	"""``candidates`` that every ``huf_flow_approver_narrow`` function of ``app`` keeps. It only removes people.
+
+	No declaration: unchanged. An exception, a bad path or an answer that is not a list of names: nobody.
+	"""
+	path = None
+	try:
+		paths = (frappe.get_hooks(APPROVER_NARROW_HOOK, app_name=app) or {}).get(app) or []
+		kept = set(candidates)
+		for path in [paths] if isinstance(paths, str) else paths:
+			if not kept:
+				break
+			answer = frappe.get_attr(path)({"app": app, "user": user, "candidates": sorted(kept)})
+			if not isinstance(answer, list | tuple | set) or not all(isinstance(n, str) for n in answer):
+				frappe.logger("huf").warning(f"{APPROVER_NARROW_HOOK} {path}: not a list of names; nobody offered")
+				return set()
+			kept &= set(answer)
+		return kept  # noqa: TRY300
+	except Exception as exc:  # noqa: BLE001 - any failure offers nobody; the message may carry data, so only the class
+		frappe.logger("huf").warning(f"{APPROVER_NARROW_HOOK} {path or app}: {type(exc).__name__}; nobody offered")
+		return set()
+
+
+def _edits_a_flow_of(app: str) -> bool:
+	"""Whether the caller may edit at least one flow of ``app``, after the app's narrowing and User Permissions."""
+	from huf.ai.flow.app_scope.access import flow_access
+	from huf.ai.flow.app_scope.ownership import FIELD
+
+	return any(
+		flow_access(frappe.session.user, flow, "edit") and frappe.has_permission("Flow Definition", "write", doc=flow)
+		for flow in frappe.get_all("Flow Definition", filters={FIELD: app}, pluck="name", limit_page_length=0)
+	)
+
+
 def _app_approvers() -> set[str] | None:
-	"""For an app-only user, the only people they may look up: holders of their app's approve roles. Else None."""
-	from huf.ai.flow.app_scope.api_guards import app_approve_roles, is_app_only
+	"""For an app-only user, the only people they may look up. Else None.
+
+	Per app of which the caller may edit at least one flow: holders of its approve roles, narrowed by the app.
+	Refused when no flow is left to edit.
+	"""
+	from huf.ai.flow.app_scope.access import app_grants, apps_for
+	from huf.ai.flow.app_scope.api_guards import is_app_only
 
 	if not is_app_only():
 		return None
-	roles = sorted(app_approve_roles("edit"))
-	if not roles:
-		return set()
-	return set(frappe.get_all("Has Role", filters={"parenttype": "User", "role": ("in", roles)}, pluck="parent", ignore_permissions=True, limit_page_length=0)) - {"Guest", "Administrator"}
+	apps = [app for app in sorted(apps_for(None, "edit")) if _edits_a_flow_of(app)]
+	if not apps:
+		frappe.throw(_("Only people who can edit flows can look up approvers."), frappe.PermissionError)
+	grants = app_grants()
+	allowed: set[str] = set()
+	for app in apps:
+		roles = sorted(grants.get(app, {}).get("approve") or ())
+		if not roles:
+			continue
+		holders = set(frappe.get_all("Has Role", filters={"parenttype": "User", "role": ("in", roles)}, pluck="parent", ignore_permissions=True, limit_page_length=0))
+		allowed |= _narrow_approvers(app, frappe.session.user, holders - {"Guest", "Administrator"})
+	return allowed
 
 
 def _user_row(row: dict, holders: set[str] | None = None) -> dict:
