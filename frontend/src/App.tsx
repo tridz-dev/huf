@@ -26,6 +26,7 @@ import { DataTableViewWrapper } from './pages/DataTableViewWrapper';
 import { Toaster } from './components/ui/sonner';
 import { CommandPalette } from './components/CommandPalette';
 import { isEmbedPath } from './embed/bridge';
+import { EMBED_PATHS, EmbedRoute } from './embed/EmbedRoute';
 
 const HomePage = lazy(() => import('./pages/HomePage'));
 const AppsPage = lazy(() => import('./pages/AppsPage'));
@@ -43,7 +44,6 @@ const SSHConnectionsPage = lazy(() => import('./pages/SSHConnectionsPage'));
 const SSHConnectionFormPageWrapper = lazy(() => import('./pages/SSHConnectionFormPageWrapper'));
 const NetworkAccessPoliciesPage = lazy(() => import('./pages/NetworkAccessPoliciesPage'));
 const NetworkAccessPolicyFormPage = lazy(() => import('./pages/NetworkAccessPolicyFormPage'));
-const EmbedFlowPage = lazy(() => import('./embed/EmbedFlowPage'));
 const FlowListPage = lazy(() => import('./pages/FlowListPage'));
 const FlowCanvasPageWrapper = lazy(() => import('./pages/FlowCanvasPageWrapper'));
 const DataPage = lazy(() => import('./pages/DataPage'));
@@ -171,17 +171,7 @@ function AppShell() {
                 className="h-full"
               >
                 <Routes location={location}>
-          {['/embed/flow/:flowId', '/embed/*'].map((path) => (
-            <Route
-              key={path}
-              path={path}
-              element={
-                <Suspense fallback={<PageLoader />}>
-                  <EmbedFlowPage />
-                </Suspense>
-              }
-            />
-          ))}
+          {EMBED_PATHS.map((path) => <Route key={path} path={path} element={<EmbedRoute />} />)}
           <Route
             path="/"
             element={
