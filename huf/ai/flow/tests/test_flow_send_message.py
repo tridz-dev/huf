@@ -39,12 +39,13 @@ class TestSendMessageNode(IntegrationTestCase):
 		self.hooks = {}
 		self.transport = MagicMock(return_value=None)
 		self.requests = []
+		real_get_attr = frappe.get_attr  # only the send hooks are faked; any other hook path (erpnext, etc.) stays real
 		for patcher in (
 			patch.object(guard, "BUILTIN_STEPS", [("record", self._record)]),
 			patch.object(guard, "_hook_paths", side_effect=lambda: list(self.hooks)),
 			patch.object(guard_steps, "window_resolvers", return_value=[]),
 			patch.object(guard_steps, "resolve_caps", return_value=[]),
-			patch.object(frappe, "get_attr", side_effect=lambda p: self.hooks[p]),
+			patch.object(frappe, "get_attr", side_effect=lambda p: self.hooks[p] if p in self.hooks else real_get_attr(p)),
 			patch.object(send, "_enqueue", self.transport),
 			patch.object(send, "channel_of", return_value="whatsapp"),
 			patch("huf.ai.flow.testrun.gate.live_send_on", return_value=True),  # H-W2-05: live needs live_send
