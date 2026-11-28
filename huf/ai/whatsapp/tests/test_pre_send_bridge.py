@@ -53,10 +53,16 @@ def _boom(**payload):
 
 
 def _hooks(*handlers):
+	"""Register ``handlers`` as ``huf_gateway_pre_send``; every other hook name keeps its real answer.
+
+	``frappe.get_hooks`` is one global: Frappe itself reads ``extend_doctype_class`` (a dict) while it loads an
+	uncached DocType meta, so answering ``[]`` for other names made the test fail whenever the meta cache was cold.
+	"""
 	paths = [f"{MOD}.{h.__name__}" for h in handlers]
+	real = frappe.get_hooks
 	return patch(
 		"huf.ai.whatsapp.gateway_hooks.frappe.get_hooks",
-		side_effect=lambda n, *a, **k: paths if n == "huf_gateway_pre_send" else [],
+		side_effect=lambda n, *a, **k: paths if n == "huf_gateway_pre_send" else real(n, *a, **k),
 	)
 
 
@@ -65,6 +71,14 @@ def _ok():
 	r.status_code = 200
 	r.json.return_value = {"messages": [{"id": "wamid.9"}]}
 	return r
+
+
+class TestHooksHelper(unittest.TestCase):
+	def test_other_hook_names_keep_their_real_answer(self):
+		"""Frappe reads ``extend_doctype_class`` (a dict) while loading a cold DocType meta inside a send."""
+		with _hooks(_allow):
+			self.assertEqual(frappe.get_hooks("huf_gateway_pre_send"), [f"{MOD}._allow"])
+			self.assertIsInstance(frappe.get_hooks("extend_doctype_class", {}), dict)
 
 
 class _Base(unittest.TestCase):
