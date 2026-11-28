@@ -3,7 +3,7 @@
  * docs/flow/FIELD_CONTRACT.md so a user sees "Choose an agent" next to the field instead of a raw
  * JSON-schema error after Save. Field names are the contract's config keys.
  */
-import { splitProblems } from '@/lib/flow/splitConfig';
+import { splitProblems } from '@/lib/flow-steps/splitConfig';
 import { getTransformOp } from './flowTransformOps';
 import { transformParamHelp } from '../flow/flowHelp';
 import { branchHandlesFor } from '../flow/flowBranches';

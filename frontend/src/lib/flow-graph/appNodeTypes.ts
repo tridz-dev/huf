@@ -7,7 +7,7 @@ import { actionOptions } from '@/data/actions';
 import { embedApp, isBackendTypeAllowed, setScopeTypes } from '@/components/flow/palette/embedScope';
 import type { ActionOption } from '@/types/modal.types';
 import { listNodeTypes, type AppNodeType, type SchemaProp } from '@/services/flow/steps/nodeTypesApi';
-import { BUILTIN_SCHEMA_STEPS, builtinSchemaStep } from './builtinSchemaSteps';
+import { BUILTIN_SCHEMA_STEPS, builtinSchemaStep } from '@/lib/flow-steps/builtinSchemaSteps';
 
 let cached: AppNodeType[] | null = null;
 let inFlight: Promise<AppNodeType[]> | null = null;
