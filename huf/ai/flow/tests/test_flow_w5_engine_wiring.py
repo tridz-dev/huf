@@ -40,7 +40,7 @@ def _budget(**kw) -> RunBudget:
 
 class TestDispatch(unittest.TestCase):
 	def test_router_decision_adapter_calls_the_decision_node(self):
-		with patch("huf.ai.flow.nodes.router_decision.exec_router_decision", return_value={"status": "success"}) as run, \
+		with patch("huf.ai.flow.nodes.routing.router_decision.exec_router_decision", return_value={"status": "success"}) as run, \
 			patch.object(adapters, "_ctx", return_value="ctx"):
 			out = adapters.exec_router_decision("run", {"id": "r"}, {"decision": {}}, {})
 		self.assertEqual(out, {"status": "success"})

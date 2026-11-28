@@ -56,7 +56,7 @@ from huf.ai.flow.app_scope.access import flow_access
 from huf.ai.flow.catalog import node_registry
 from huf.ai.flow.integrations import friendly_tool_error
 from huf.ai.flow.nodes import adapters, subflow
-from huf.ai.flow.nodes.condition import exec_facts_condition
+from huf.ai.flow.nodes.routing.condition import exec_facts_condition
 from huf.ai.flow.nodes.error_handler import first_error, run_error_handler
 from huf.ai.flow.nodes.retry import policy_of as retry_policy_of
 from huf.ai.flow.nodes.retry import run_with_retry
