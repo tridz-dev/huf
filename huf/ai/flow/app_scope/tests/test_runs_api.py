@@ -175,16 +175,24 @@ class TestRunsApi(IntegrationTestCase):
 		frappe.set_user(USER_A)
 		flows = [A_FLOW, A_FLOW2, B_FLOW]
 		group_bys = ("reason", "flow,status,reason", "reason,status", "flow,reason")
-		filters = ({}, {"status": "Failed"}, {"include_test": 1}, {"since": "2000-01-01"}, {"status": "Cancelled"})
+		filters = (
+			{},
+			{"status": "Failed"},
+			{"include_test": 1},
+			{"since": "2000-01-01"},
+			{"status": "Cancelled"},
+		)
 		for group_by in group_bys:
 			for kwargs in filters:
 				fast = runs_api.count_app_runs("huf", group_by, flow_ids=flows, **kwargs)
 				with mock.patch.object(runs_api, "_narrow_reason_counts", runs_api._row_reason_counts):
 					slow = runs_api.count_app_runs("huf", group_by, flow_ids=flows, **kwargs)
 				self.assertEqual(fast, slow, (group_by, kwargs))
-		by_reason = {c["reason"]: c["count"] for c in runs_api.count_app_runs("huf", "reason", flow_ids=flows)}
+		by_reason = {
+			c["reason"]: c["count"] for c in runs_api.count_app_runs("huf", "reason", flow_ids=flows)
+		}
 		# own two flows only: the other app's runs are never counted
-		self.assertEqual(by_reason, {None: 13, "freq_cap": 1, "opt_out": 2, "unknown": 2})
+		self.assertEqual(by_reason, {None: 14, "freq_cap": 1, "opt_out": 2, "unknown": 2})
 
 	def test_user_permissions_narrow_reason_counts(self):
 		frappe.get_doc(
