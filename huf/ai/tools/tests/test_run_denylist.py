@@ -25,6 +25,9 @@ PROTECTED = (
 )
 
 
+GRANTS = ("Huf User Role", "Has Role", "User Permission", "Custom DocPerm", "DefaultValue", "Flow Definition")
+
+
 class TestRunDenylist(IntegrationTestCase):
 	def setUp(self):
 		frappe.set_user("Administrator")
@@ -87,7 +90,7 @@ class TestRunDenylist(IntegrationTestCase):
 		self.assertEqual(self._status(), "Queued")
 
 	def test_every_tool_write_handler_refuses_every_protected_doctype(self):
-		for doctype in PROTECTED:
+		for doctype in PROTECTED + GRANTS:
 			pinned = {"reference_doctype": doctype, "ignore_permissions": True}
 			calls = {
 				"create": lambda: crud.handle_create_document(**pinned),
@@ -118,12 +121,19 @@ class TestRunDenylist(IntegrationTestCase):
 	def test_code_execution_broker_cannot_write_them(self):
 		profile = {"permissions": [{"capability": "doc.create"}, {"capability": "doc.update"}]}
 		broker = _make_broker_handler(profile, "Administrator")
-		for doctype in PROTECTED:
+		for doctype in PROTECTED + GRANTS:
 			for capability in ("doc.create", "doc.update"):
 				with self.subTest(doctype=doctype, capability=capability):
 					ok, reason = broker(capability, {"doctype": doctype, "name": "x", "values": {}})
 					self.assertFalse(ok)
 					self.assertRefused(reason)
+
+	def test_grant_records_stay_readable_but_not_writable(self):
+		for doctype in GRANTS:
+			with self.subTest(doctype=doctype):
+				self.assertIsNone(_check_doctype_allowed(doctype, read_only=True)[1])
+				self.assertRefused(_check_doctype_allowed(doctype)[1])
+				self.assertRefused(_check_doctype_allowed(doctype.upper() + " ")[1])
 
 	def test_database_spelling_variants_are_refused(self):
 		# the database collation ignores case, accents and trailing spaces
