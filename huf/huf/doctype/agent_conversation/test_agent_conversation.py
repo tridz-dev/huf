@@ -2,6 +2,7 @@
 # See license.txt
 
 import frappe
+# import frappe
 from frappe.tests import IntegrationTestCase
 
 

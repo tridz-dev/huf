@@ -108,7 +108,15 @@ class TestHasManualOAuthConfig(unittest.TestCase):
 @unittest.skip("quarantined pending RegressionCI triage - see Tracks/RegressionCI/CONTEXT.md Quarantine backlog")
 class TestResolveAndStartOAuthFlow(unittest.TestCase):
     def setUp(self):
-        frappe_mock.get_doc.reset_mock()
+        for target, attr in (
+            ("get_doc", "mock_get_doc"),
+            ("has_permission", "mock_has_permission"),
+            ("log_error", "mock_log_error"),
+        ):
+            patcher = patch(f"huf.ai.mcp_oauth.frappe.{target}")
+            setattr(self, attr, patcher.start())
+            self.addCleanup(patcher.stop)
+        self.mock_has_permission.return_value = True
 
     @patch("huf.ai.mcp_oauth.start_oauth_flow")
     @patch("huf.ai.mcp_oauth.discover_mcp_server")
@@ -122,7 +130,7 @@ class TestResolveAndStartOAuthFlow(unittest.TestCase):
             oauth_authorization_endpoint="https://idp.example.com/authorize",
             oauth_token_endpoint="https://idp.example.com/token",
         )
-        frappe_mock.get_doc.return_value = server
+        self.mock_get_doc.return_value = server
         mock_start_oauth.return_value = {"auth_url": "https://idp.example.com/authorize?client_id=manual-client-id"}
 
         result = resolve_and_start_oauth_flow("manual-server")
@@ -143,7 +151,7 @@ class TestResolveAndStartOAuthFlow(unittest.TestCase):
             oauth_authorization_endpoint="",
             oauth_token_endpoint="",
         )
-        frappe_mock.get_doc.return_value = server
+        self.mock_get_doc.return_value = server
         mock_discover.return_value = {
             "discovery_status": "Ready",
             "client_id": "dynamic-client-id",
@@ -163,7 +171,7 @@ class TestResolveAndStartOAuthFlow(unittest.TestCase):
     ):
         """When discovery fails and no manual config exists, return the discovery error."""
         server = MockServer("dynamic-only-server")
-        frappe_mock.get_doc.return_value = server
+        self.mock_get_doc.return_value = server
         mock_discover.return_value = {
             "discovery_status": "Failed",
             "discovery_error": "Dynamic Client Registration is not available for this server.",
@@ -183,7 +191,7 @@ class TestResolveAndStartOAuthFlow(unittest.TestCase):
     ):
         """A server with no manual config but successful DCR starts OAuth."""
         server = MockServer("dcr-server")
-        frappe_mock.get_doc.return_value = server
+        self.mock_get_doc.return_value = server
         mock_discover.return_value = {
             "discovery_status": "Ready",
             "client_id": "dcr-client-id",
