@@ -10,6 +10,7 @@ from unittest.mock import MagicMock, patch
 import frappe
 
 from huf.ai.gateway_adapters import whatsapp_bridge as wb
+from huf.ai.gateway_adapters.whatsapp_parts.message_status_order import message_status_regresses
 from huf.ai.gateway_adapters.whatsapp_parts import header_upload
 
 NOW = datetime(2026, 1, 10, 12, 0, 0)
@@ -683,6 +684,29 @@ class TestBridge(unittest.TestCase):
 		with avail():  # module missing -> ImportError swallowed
 			with patch.object(wb.importlib, "import_module", side_effect=ImportError):
 				self.assertFalse(wb.forward_status(tpl_change))
+
+	def test_message_status_regresses_only_backwards(self):
+		for cur, new, expected in [
+			(None, "sent", False), ("", "read", False), ("sent", "delivered", False), ("delivered", "read", False),
+			("read", "delivered", True), ("read", "sent", True), ("read", "read", True), ("read", "failed", True),
+			("delivered", "failed", True), ("sent", "failed", False), ("failed", "sent", True), ("failed", "delivered", False),
+			("failed", "read", False), ("READ", "Delivered", True),
+		]:
+			self.assertEqual(message_status_regresses(cur, new), expected, (cur, new))
+
+	def test_forward_status_drops_a_stale_status(self):
+		"""A failed (or late delivered) callback after read must not reach frappe_whatsapp's last-write-wins update."""
+		mod = ModuleType("frappe_whatsapp.utils.webhook")
+		mod.update_status = MagicMock()
+		change = lambda status: {"field": "messages", "value": {"statuses": [{"id": "w1", "status": status}]}}  # noqa: E731
+		with avail(), patch.dict(sys.modules, {"frappe_whatsapp.utils.webhook": mod}), patch.object(frappe.db, "exists", return_value=True):
+			with patch.object(frappe.db, "get_value", return_value="read"):
+				self.assertFalse(wb.forward_status(change("failed")))
+				self.assertFalse(wb.forward_status(change("delivered")))
+				mod.update_status.assert_not_called()
+			with patch.object(frappe.db, "get_value", return_value="delivered"):
+				self.assertTrue(wb.forward_status(change("read")))
+			mod.update_status.assert_called_once()
 
 	def test_retry_forward_status_waits_then_forwards_once(self):
 		change = {"field": "messages", "value": {"statuses": [{"id": "w1"}]}}
