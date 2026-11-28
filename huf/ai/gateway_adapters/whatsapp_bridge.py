@@ -34,6 +34,7 @@ import frappe.utils
 from huf.ai.whatsapp import outbound_policy as policy, pre_send, template_plain
 from huf.ai.gateway_adapters.whatsapp_parts.bridge_utils import _button_sig, _clean_reason, _parse_ts
 from huf.ai.gateway_adapters import whatsapp_messages as wm
+from huf.ai.gateway_adapters.whatsapp_parts.message_status_order import message_status_regresses
 from huf.ai.gateway_adapters import whatsapp_templates as wt
 from huf.ai.gateway_adapters.whatsapp_template_parts import carousel as wt_carousel, send_params as wt_send_params
 from huf.ai.gateway_adapters.whatsapp_parts import header_upload
@@ -3477,6 +3478,8 @@ def forward_status(change: dict[str, Any], _retry: bool = False) -> bool:
 				if statuses and not _retry:
 					_enqueue_forward_retry(change)
 				return False
+			if message_status_regresses(frappe.db.get_value("WhatsApp Message", {"message_id": statuses[0].get("id")}, "status"), statuses[0].get("status")):
+				return False  # stale or replayed callback: keep the later state
 		webhook = importlib.import_module("frappe_whatsapp.utils.webhook")
 		webhook.update_status(change)
 		return True
