@@ -33,7 +33,7 @@ _STEP_TYPE_TITLES = {
 }
 
 from huf.ai.flow.runs.outcome import stored_outcome
-from huf.ai.flow.support.decision_rights import approval_decision_rights
+from huf.ai.flow.support.approvals.decision_rights import approval_decision_rights
 from huf.ai.flow.support.pii import mask_for_view, mask_text
 
 _DECISION_OUTCOMES = {

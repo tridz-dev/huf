@@ -37,7 +37,7 @@ HUF_CODES = frozenset(
 		"window_defer_exhausted",
 		# a send the window deferred: the run is parked (runs.park.SEND_WINDOW_REASON)
 		"send_window",
-		# a step that is turned off was skipped (support.turned_off)
+		# a step that is turned off was skipped (support.results.turned_off)
 		"turned_off",
 		# send step: no outbox transport for this channel; a send step cannot be retried (G2)
 		"channel_unsupported",

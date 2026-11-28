@@ -35,7 +35,7 @@ from huf.ai.flow.runs.shape import (
 	waiting_of_viewer,
 )
 from huf.ai.flow.support.approval_card import api_card, build_card
-from huf.ai.flow.support.decision_rights import approval_decision_rights
+from huf.ai.flow.support.approvals.decision_rights import approval_decision_rights
 from huf.ai.flow.support.node_schemas import _node_config_schema, build_node_schemas  # noqa: F401  (re-exported)
 from huf.ai.flow.support.pii import log_flow_error, mask_for_view
 from huf.ai.flow.support.redact import definition_for_user

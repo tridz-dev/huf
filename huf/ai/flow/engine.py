@@ -71,8 +71,8 @@ from huf.ai.flow.runs.outcome import record_outcome
 from huf.ai.flow.support import facts
 from huf.ai.flow.support.approval_card import waiting_fields
 from huf.ai.flow.support.approval_notifications import _clear_flow_notifications, _send_approval_notifications
-from huf.ai.flow.support.approver_veto import refuse_if_vetoed
-from huf.ai.flow.support.approvers import approval_expired, check_approver, evaluate_approval_policy
+from huf.ai.flow.support.approvals.approver_veto import refuse_if_vetoed
+from huf.ai.flow.support.approvals.approvers import approval_expired, check_approver, evaluate_approval_policy
 from huf.ai.flow.support.pii import log_flow_error, mask_text
 from huf.ai.flow.support.plain.transform_text import plain_transform_error
 from huf.ai.flow.support.redact import pinned_json
@@ -83,8 +83,8 @@ from huf.ai.flow.support.router_text import (
 	render_text_refs,
 	resolve_router_model,
 )
-from huf.ai.flow.support.tool_result import normalize_tool_result
-from huf.ai.flow.support.turned_off import is_turned_off, turned_off_result
+from huf.ai.flow.support.results.tool_result import normalize_tool_result
+from huf.ai.flow.support.results.turned_off import is_turned_off, turned_off_result
 from huf.ai.flow.testrun import gate as test_gate
 from huf.ai.flow.testrun import stored_mode
 from huf.ai.flow.tool_executor import execute as execute_tool

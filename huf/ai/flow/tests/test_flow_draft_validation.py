@@ -20,7 +20,7 @@ from frappe.tests import IntegrationTestCase
 from huf.ai.flow import api as flow_api
 from huf.ai.flow import engine as flow_engine
 from huf.ai.graph.validation.flow_validation import validate_flow
-from huf.ai.flow.support.turned_off import SKIPPABLE_NODE_TYPES
+from huf.ai.flow.support.results.turned_off import SKIPPABLE_NODE_TYPES
 
 LIMITS = {
 	"max_nodes": 20,
