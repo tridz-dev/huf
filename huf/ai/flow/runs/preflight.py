@@ -76,11 +76,34 @@ def _lint(defn, flow_id: str | None) -> list[Finding]:
 	return [Finding(item.code, item.node_id) for item in (*result.errors, *result.issues)]
 
 
-def template_exists(name: str) -> bool:
+def template_exists(name: str, gateway: str | None = None, language: str | None = None) -> bool:
+	"""Whether ``name`` is a template a send can use.
+
+	frappe_whatsapp names its rows ``<template_name>-<language_code>``, so a bare Meta name is also looked up
+	by ``actual_name`` / ``template_name`` (within the gateway's account, and language, when known).
+	"""
 	return any(
-		frappe.db.exists("DocType", doctype) and frappe.db.exists(doctype, name)
+		frappe.db.exists("DocType", doctype) and _template_row_exists(doctype, name, gateway, language)
 		for doctype in TEMPLATE_DOCTYPES
 	)
+
+
+def _template_row_exists(doctype: str, name: str, gateway: str | None, language: str | None) -> bool:
+	account = None
+	if doctype == "WhatsApp Templates" and gateway:
+		account = frappe.db.get_value("Gateway", gateway, "whatsapp_account")
+	scope = {"whatsapp_account": account} if account else {}
+	if frappe.db.exists(doctype, {"name": name, **scope}):
+		return True
+	if doctype != "WhatsApp Templates":
+		return False
+	for field in ("actual_name", "template_name"):
+		filters = {**scope, field: name}
+		if language:
+			filters["language_code"] = language
+		if frappe.db.exists(doctype, filters):
+			return True
+	return False
 
 
 def gateway_channel(name: str) -> str:
@@ -120,7 +143,11 @@ def _send_checks(defn, flow_id: str | None) -> list[Finding]:
 		elif not isinstance(template, str):
 			# Chosen while the flow runs: nothing to look up now; the guard chain judges it at send time.
 			found.append(Finding("TEMPLATE_UNCHECKED", node_id, WARNING))
-		elif not template_exists(template):
+		elif not template_exists(
+			template,
+			config.get("gateway") if isinstance(config.get("gateway"), str) else None,
+			config.get("language") if isinstance(config.get("language"), str) else None,
+		):
 			found.append(Finding("TEMPLATE_MISSING", node_id))
 	if sends:
 		# Stub: no audience estimator exists yet; say so rather than report a number.

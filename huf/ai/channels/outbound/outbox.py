@@ -37,7 +37,7 @@ from datetime import datetime, timezone
 import frappe
 from frappe.utils import add_to_date, convert_utc_to_system_timezone, get_datetime, now_datetime
 
-from huf.ai.channels.outbound import guard, guard_steps, recipient_binder, token_binder
+from huf.ai.channels.outbound import button_tokens, guard, guard_steps, recipient_binder, token_binder
 from huf.ai.channels.outbound.outbox_errors import (
 	AMBIGUOUS,
 	BLOCKED,
@@ -80,7 +80,8 @@ def enqueue(request: dict, *, deliver_now: bool = True) -> str:
 	step_key = request.get("step_key")
 	if not step_key:
 		raise ValueError("step_key")
-	if guard_steps.normalise_recipient(request.get("recipient_ref")):
+	recipient_ref = recipient_binder.encode_ref(request.get("recipient_ref"))
+	if guard_steps.normalise_recipient(recipient_ref):
 		raise LiteralRecipient("recipient_ref")
 	existing = frappe.db.get_value(DOCTYPE, {"step_key": step_key}, "name")
 	if existing:
@@ -104,10 +105,10 @@ def enqueue(request: dict, *, deliver_now: bool = True) -> str:
 					"category",
 					"template",
 					"language",
-					"recipient_ref",
 					"text_ref",
 				)
 			},
+			"recipient_ref": recipient_ref,
 		}
 	)
 	try:
@@ -257,7 +258,7 @@ def resolve_from_run(row) -> tuple[str | None, str | None]:
 	if recipient_binder.is_member_ref(row.recipient_ref):
 		raw = recipient_binder.resolve(row.gateway, row.member_key, _refs(row, flow_run))
 	else:
-		raw = ctx.resolve(row.recipient_ref)
+		raw = ctx.resolve(recipient_binder.decode_ref(row.recipient_ref))
 	recipient = guard_steps.normalise_recipient(raw) or (raw if isinstance(raw, str) else None)
 	text = ctx.resolve(row.text_ref) if row.text_ref else None
 	return recipient, (str(text) if text is not None else None)
@@ -278,12 +279,15 @@ def whatsapp_transport(row, recipient, text, values) -> dict:
 	if row.template:
 		token_names = json.loads(row.token_names or "[]")
 		header = json.loads(row.header) if row.header else None
+		buttons = button_tokens.required_buttons(row.gateway, row.template)
+		body_names, button_params = button_tokens.split(token_names, buttons, values)
 		return bridge.send_template(
 			account,
 			phone,
 			row.template,
-			_body_params(token_names, values, named=template_is_named(row.template)) if token_names else [],
+			_body_params(body_names, values, named=template_is_named(row.template)) if body_names else [],
 			[header] if header else [],
+			button_params=button_params or None,
 			language_code=row.language or None,
 			gateway_name=row.gateway,
 			run_id=row.run_id,

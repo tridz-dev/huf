@@ -18,6 +18,8 @@ writes nothing; its error carries the code only and its log line the hook path a
 run, step output, outbox row (``recipient_ref = "$member"``) and trace never hold it (G4).
 """
 
+import json
+
 import frappe
 
 HOOK = "huf_send_recipient_providers"
@@ -38,6 +40,30 @@ class RecipientUnbound(Exception):
 def is_member_ref(ref) -> bool:
 	"""Whether a step's ``recipient`` is the run's member sentinel."""
 	return isinstance(ref, str) and ref.strip() == MEMBER
+
+
+def encode_ref(ref) -> str | None:
+	"""The text form of a step's ``recipient`` reference, for the Data column ``recipient_ref``.
+
+	``"$member"`` stays as is; a reference such as ``{"$from": "input.phone"}`` is stored as canonical JSON
+	(a pointer into the run context, never the number). :func:`decode_ref` reverses it.
+	"""
+	if ref is None or isinstance(ref, str):
+		return ref
+	if isinstance(ref, dict):
+		return json.dumps(ref, sort_keys=True, separators=(",", ":"))
+	raise TypeError("recipient_ref")
+
+
+def decode_ref(text):
+	"""The reference stored by :func:`encode_ref`: a dict for a JSON object, else the text itself."""
+	if isinstance(text, str) and text.lstrip().startswith("{"):
+		try:
+			value = json.loads(text)
+		except ValueError:
+			return text
+		return value if isinstance(value, dict) else text
+	return text
 
 
 def resolve(gateway: str, member_key: str | None, ctx: dict) -> str:
