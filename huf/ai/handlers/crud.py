@@ -420,7 +420,7 @@ def handle_get_list(
                 "error": "No reference doctype provided. Please specify a valid DocType.",
             }
 
-        _meta, _guard_err = _check_doctype_allowed(reference_doctype)
+        _meta, _guard_err = _check_doctype_allowed(reference_doctype, read_only=True)
         if _guard_err:
             return json.loads(_guard_err)
 
@@ -576,7 +576,7 @@ def handle_get_document(document_id=None, reference_doctype=None, **filters):
         if not reference_doctype:
             return {"success": False, "error": "No reference doctype provided."}
 
-        _meta, _guard_err = _check_doctype_allowed(reference_doctype)
+        _meta, _guard_err = _check_doctype_allowed(reference_doctype, read_only=True)
         if _guard_err:
             return json.loads(_guard_err)
 
@@ -630,7 +630,7 @@ def handle_get_documents(reference_doctype: str = None, document_ids: list = Non
         if not reference_doctype:
             return {"success": False, "error": "No reference doctype provided."}
 
-        _meta, _guard_err = _check_doctype_allowed(reference_doctype)
+        _meta, _guard_err = _check_doctype_allowed(reference_doctype, read_only=True)
         if _guard_err:
             return json.loads(_guard_err)
 
@@ -781,7 +781,7 @@ def handle_get_value(doctype: str = None, filters: dict = None, fieldname=None, 
             "error": "Missing required parameters: doctype, filters, fieldname"
         }
 
-    _meta, _guard_err = _check_doctype_allowed(doctype)
+    _meta, _guard_err = _check_doctype_allowed(doctype, read_only=True)
     if _guard_err:
         return json.loads(_guard_err)
 
@@ -871,7 +871,7 @@ def handle_set_value(doctype: str = None, filters: dict = None, fieldname: str =
 
 
 def handle_get_report_result(report_name: str, filters: dict | None = None, limit: int | None = None, ignore_permissions=False, **kwargs):
-    _meta, _guard_err = _check_doctype_allowed("Report")
+    _meta, _guard_err = _check_doctype_allowed("Report", read_only=True)
     if _guard_err:
         return json.loads(_guard_err)
 

@@ -16,7 +16,7 @@ def get_document(doctype: str, document_id: str):
 	"""
 	Get a document from the database
 	"""
-	_meta, _guard_err = _check_doctype_allowed(doctype)
+	_meta, _guard_err = _check_doctype_allowed(doctype, read_only=True)
 	if _guard_err:
 		return json.loads(_guard_err)
 
@@ -29,7 +29,7 @@ def get_documents(doctype: str, document_ids: list):
 	"""
 	Get documents from the database
 	"""
-	_meta, _guard_err = _check_doctype_allowed(doctype)
+	_meta, _guard_err = _check_doctype_allowed(doctype, read_only=True)
 	if _guard_err:
 		return json.loads(_guard_err)
 
@@ -336,7 +336,7 @@ def get_amended_document(doctype: str, document_id: str):
     """
     Return the amended document (first match) for a given document, if any.
     """
-    _meta, _guard_err = _check_doctype_allowed(doctype)
+    _meta, _guard_err = _check_doctype_allowed(doctype, read_only=True)
     if _guard_err:
         return json.loads(_guard_err)
 
@@ -349,7 +349,7 @@ def get_list(doctype: str, filters: dict = None, fields: list = None, limit: int
 	"""
 	Get a list of documents from the database
 	"""
-	_meta, _guard_err = _check_doctype_allowed(doctype)
+	_meta, _guard_err = _check_doctype_allowed(doctype, read_only=True)
 	if _guard_err:
 		return json.loads(_guard_err)
 
@@ -381,7 +381,7 @@ def get_value(doctype: str, filters: dict = None, fieldname: str | list = "name"
 	        :param fieldname: Field to be returned (default `name`) - can be a list of fields(str) or a single field(str)
 	        :param filters: dict or string for identifying the record
 	"""
-	_meta_guard, _guard_err = _check_doctype_allowed(doctype)
+	_meta_guard, _guard_err = _check_doctype_allowed(doctype, read_only=True)
 	if _guard_err:
 		return json.loads(_guard_err)
 
@@ -435,7 +435,7 @@ def get_report_result(
 	"""
 	Run a report and return the columns and result
 	"""
-	_meta, _guard_err = _check_doctype_allowed("Report")
+	_meta, _guard_err = _check_doctype_allowed("Report", read_only=True)
 	if _guard_err:
 		return json.loads(_guard_err)
 
