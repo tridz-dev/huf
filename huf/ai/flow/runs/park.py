@@ -287,14 +287,12 @@ def _drain_due_waits(now: datetime | None, limit: int | None) -> list[str]:
 
 def _due_page(now: datetime, after, page_size: int) -> list:
 	"""One page of due runs, oldest first, strictly after the row ``after`` (keyset on ``resume_at, name``)."""
-	filters = {"status": WAIT_STATUS, "resume_at": ["<=", now]}
+	# A timer wait with no ``resume_at`` (a handoff waiting for a person) is never due: Frappe reads ``<=`` on a
+	# NULL datetime as ``ifnull(..., '0001-01-01') <=``, which listed those rows first and broke the keyset.
+	filters = [["status", "=", WAIT_STATUS], ["resume_at", "is", "set"], ["resume_at", "<=", now]]
 	or_filters = None
 	if after:
-		filters = [
-			["status", "=", WAIT_STATUS],
-			["resume_at", "<=", now],
-			["resume_at", ">=", after.resume_at],
-		]
+		filters.append(["resume_at", ">=", after.resume_at])
 		or_filters = [["resume_at", ">", after.resume_at], ["name", ">", after.name]]
 	return frappe.get_all(
 		"Agent Flow Run",
