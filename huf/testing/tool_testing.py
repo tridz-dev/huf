@@ -31,6 +31,13 @@ import time
 import frappe
 
 
+def _refuse_app_only() -> None:
+    """These handlers stay whitelisted (a "Custom Function" tool requires it), so gate direct calls."""
+    from huf.ai.flow.app_scope.api_guards import guard_huf_only
+
+    guard_huf_only()
+
+
 class DeterministicTestToolFailure(Exception):
     """Raised by ``deterministic_fail`` — a known, stable exception type/message
     used to test the tool-handler-exception failure path end to end."""
@@ -46,6 +53,7 @@ def echo(**kwargs) -> dict:
     handler has no way to distinguish them from LLM-supplied arguments and
     the point of this tool is to prove "what came in is what goes out."
     """
+    _refuse_app_only()
     if not frappe.conf.developer_mode:
         return {"echoed": {}, "blocked": True, "error": "echo is only available in developer mode"}
     return {"echoed": dict(kwargs)}
@@ -56,6 +64,7 @@ def deterministic_add(numbers: list = None) -> dict:
     """Deterministic arithmetic: sum a list of numbers, returning a fixed,
     computable result. No randomness, no clock, no I/O.
     """
+    _refuse_app_only()
     values = numbers or []
     total = sum(values)
     return {"success": True, "sum": total, "count": len(values)}
@@ -71,6 +80,7 @@ def deterministic_fail(**kwargs) -> dict:
     into ``{"error": ...}`` fed back to the model — not this function
     swallowing it itself.
     """
+    _refuse_app_only()
     raise DeterministicTestToolFailure("deterministic_fail: intentional test failure")
 
 
@@ -93,6 +103,7 @@ def permission_protected_mutation(record_id: str, value: str) -> dict:
     ``huf/ai/tools/registry.py`` is actually exercised (that gate only fires when
     ``reference_doctype`` is set — huf/ai/tools/registry.py:91-105).
     """
+    _refuse_app_only()
     reference_doctype = "ToDo"
 
     if not frappe.has_permission(reference_doctype, "write"):
@@ -125,6 +136,7 @@ def slow_or_timeout(duration=0.1) -> dict:
     `try/except (TypeError, ValueError)` fallback below. Leaving this
     parameter untyped keeps that fallback in charge of invalid input.
     """
+    _refuse_app_only()
     if not frappe.conf.developer_mode:
         return {
             "success": False,
