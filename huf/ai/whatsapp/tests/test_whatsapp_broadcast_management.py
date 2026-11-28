@@ -13,6 +13,7 @@ if isinstance(frappe, MagicMock):
 	frappe.whitelist = lambda *args, **kwargs: (lambda fn: fn)
 	frappe.PermissionError = PermissionError
 
+from huf.ai.whatsapp import broadcast as _broadcast_pkg  # noqa: E402
 from huf.ai.whatsapp.broadcast import api as mgmt
 from huf.ai.whatsapp.broadcast import api_read as mgmt_read  # noqa: E402
 
@@ -61,6 +62,10 @@ class _Base(unittest.TestCase):
 			sys.modules,
 			{"huf.ai.whatsapp.broadcast.runner": self.runner, "huf.ai.whatsapp.broadcast.recipients": self.recips},
 		).start()
+		# `from pkg import runner` reads the package attribute first: once another module imported the real
+		# runner, sys.modules alone no longer reaches the code under test (order-dependent failures).
+		patch.object(_broadcast_pkg, "runner", self.runner, create=True).start()
+		patch.object(_broadcast_pkg, "recipients", self.recips, create=True).start()
 		patch.object(mgmt, "_broadcast_row", side_effect=lambda b: self.row).start()
 		self.row = _row()
 		self.frappe.db.count.return_value = 3

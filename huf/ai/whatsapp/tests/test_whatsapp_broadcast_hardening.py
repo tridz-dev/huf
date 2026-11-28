@@ -16,6 +16,7 @@ if isinstance(frappe, MagicMock):
 
 from huf.ai.whatsapp.broadcast import recipients as br  # noqa: E402
 from huf.ai.whatsapp.broadcast import policy  # noqa: E402
+from huf.ai.whatsapp import broadcast as _broadcast_pkg  # noqa: E402
 from huf.ai.whatsapp.broadcast import api as mgmt
 from huf.ai.whatsapp.broadcast import api_read as mgmt_read  # noqa: E402
 from huf.huf.doctype.whatsapp_broadcast import whatsapp_broadcast as wb  # noqa: E402
@@ -89,6 +90,9 @@ class _Base(unittest.TestCase):
 		self.runner = MagicMock()
 		self.runner.start.return_value = {}
 		patch.dict(sys.modules, {"huf.ai.whatsapp.broadcast.recipients": br, "huf.ai.whatsapp.broadcast.runner": self.runner}).start()
+		# `from pkg import runner` reads the package attribute first: once another module imported the real
+		# runner, sys.modules alone no longer reaches the code under test (order-dependent failures).
+		patch.object(_broadcast_pkg, "runner", self.runner, create=True).start()
 
 
 class TestIntakeLimits(_Base):
