@@ -2,7 +2,7 @@
 
 Module: `huf/ai/flow/tests/perf/test_w1_gate.py`. Seed: `huf/ai/flow/tests/perf/seed.py` (see its README).
 
-**Status: DEFERRED to the pre-PR gate.** No load has been run and no target below is shown to be met.
+**Status: load run at the pre-PR gate (2026-11-28).** Every automated target passed; the manual worker kill was not run.
 
 ## How to run
 
@@ -29,21 +29,23 @@ before the 1M seed.
 
 | Metric | Target | Result | Status |
 |---|---|---|---|
-| `sweep_query_p95_ms` (1M runs) | < 20 | - | DEFERRED |
-| `sweep_query_keys` (EXPLAIN) | `idx_agent_flow_run_status_resume_at` | - | DEFERRED |
-| `drain_seconds_per_100k` | < 600 | - | DEFERRED |
-| `drain_rows_per_minute` | recorded only | - | DEFERRED |
-| `undrained_runs` | 0 | - | DEFERRED |
-| `double_wakes` | 0 | - | DEFERRED |
-| `duplicate_entries` (50-way) | 0 | - | DEFERRED |
-| `entry_p95_ms` | < 30 | - | DEFERRED |
-| `replay_duplicate_effects` (10k replays) | 0 | - | DEFERRED |
-| `replay_ms_per_event` | < 5 | - | DEFERRED |
-| `stuck_locks` | 0 | - | DEFERRED |
-| Real worker kill (manual, below) | 0 stuck locks | - | DEFERRED |
-| `member_retention_seconds_per_100k` | < 60 | - | DEFERRED |
-| `state_retention_seconds_per_100k` | < 60 | - | DEFERRED |
-| `parked_row_avg_bytes` | < 4096 | - | DEFERRED |
+| `sweep_query_p95_ms` (1M runs) | < 20 | 1.5 | PASS |
+| `sweep_query_keys` (EXPLAIN) | `idx_agent_flow_run_status_resume_at` | `idx_agent_flow_run_status_resume_at` | PASS |
+| `drain_seconds_per_100k` | < 600 | 124.6 | PASS |
+| `drain_rows_per_minute` | recorded only | 48136 | recorded |
+| `undrained_runs` | 0 | 0 | PASS |
+| `double_wakes` | 0 | 0 | PASS |
+| `duplicate_entries` (50-way) | 0 | 0 | PASS |
+| `entry_p95_ms` | < 30 | 25.3 | PASS |
+| `replay_duplicate_effects` (10k replays) | 0 | 0 | PASS |
+| `replay_ms_per_event` | < 5 | 0.27 | PASS |
+| `stuck_locks` | 0 | 0 | PASS |
+| Real worker kill (manual, below) | 0 stuck locks | - | NOT RUN |
+| `member_retention_seconds_per_100k` | < 60 | 2.8 | PASS |
+| `state_retention_seconds_per_100k` | < 60 | 2.4 | PASS |
+| `parked_row_avg_bytes` | < 4096 | 335 | PASS |
+
+Measured 2026-11-28 at 72d989e99. Host: 8 vCPU AMD EPYC 7R13, 31 GiB, MariaDB 11.8.6 (buffer pool 2 GiB, `innodb_flush_log_at_trx_commit=0`, no binlog), no workers: one process. The real worker kill below was not run.
 
 ## What the numbers do not cover
 

@@ -2,8 +2,7 @@
 
 Module: `huf/ai/flow/tests/perf/test_w2_gate.py` (H-W2-21). Seed helpers: `huf/ai/flow/tests/perf/seed.py`.
 
-**Status: DEFERRED to the pre-PR gate.** No load has been run and no target below is shown to be met. Only the
-smoke (at most 20 rows, behaviour only) has been run.
+**Status: load run at the pre-PR gate (2026-11-28).** Bulk entry misses its target; the other targets in the table passed.
 
 ## How to run
 
@@ -41,15 +40,21 @@ deletes its rows afterwards (flows `perfseed-w2-flow-*`, their runs and members,
 
 | Metric | Target | Result | Status |
 |---|---|---|---|
-| `duplicate_runs` (bulk entry, incl. resubmission) | 0 | - | DEFERRED |
-| `bulk_entry_seconds_per_100k` | < 300 | - | DEFERRED |
-| `duplicate_sends` (G2, step keys) | 0 | - | DEFERRED |
-| `sends_outside_window` | 0 | - | DEFERRED |
-| `unsent_in_window` | 0 | - | DEFERRED |
-| `pii_in_trace` (G4) | 0 | - | DEFERRED |
-| `replay_duplicate_effects` (duplicate webhooks) | 0 | - | DEFERRED |
-| `guard_sends_per_minute` (G5 chain) | >= 3000 | - | DEFERRED |
-| All W1 targets | see W1 gate | - | DEFERRED |
+| `duplicate_runs` (bulk entry, incl. resubmission) | 0 | 0 | PASS |
+| `bulk_entry_seconds_per_100k` | < 300 | 1071 | **FAIL** |
+| `duplicate_sends` (G2, step keys) | 0 | 0 | PASS |
+| `sends_outside_window` | 0 | 0 | PASS |
+| `unsent_in_window` | 0 | 0 | PASS |
+| `pii_in_trace` (G4) | 0 | 0 | PASS |
+| `replay_duplicate_effects` (duplicate webhooks) | 0 | 0 | PASS |
+| `guard_sends_per_minute` (G5 chain) | >= 3000 | 46283 (one process) | PASS |
+| All W1 targets | see W1 gate | see W1 gate | PASS (manual kill not run) |
+
+Measured 2026-11-28 at 72d989e99. Host: 8 vCPU AMD EPYC 7R13, 31 GiB, MariaDB 11.8.6 (buffer pool 2 GiB, `innodb_flush_log_at_trx_commit=0`, no binlog), no workers: one process.
+
+H-W2-18 republish drain (`test_republish_drain_gate`): 100000 parked runs finished, 0 wrong version, **1448 s** against < 600 s (**FAIL**), one process.
+
+The inline jobs start with fresh per-job state (`seed.new_job`), as a worker's would.
 
 ## What the numbers do not cover
 
