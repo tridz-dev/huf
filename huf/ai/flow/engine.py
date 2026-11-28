@@ -562,39 +562,82 @@ def run_flow(flow_run_name: str):
 	the shared :class:`~huf.ai.graph.executor.GraphExecutor`.
 
 	Args:
-	    flow_run_name: Name of the Flow Run document
+		flow_run_name: Name of the Flow Run document
 	"""
 	if not _acquire_run_lock(flow_run_name):
-		# Another worker is already advancing this run; a second cursor
-		# writer is exactly the race F-4 describes.
+		# Another worker is already advancing this run.
 		return
+
+	worker_user = frappe.session.user
+	flow_run = None
 
 	try:
 		flow_run = frappe.get_doc("Flow Run", flow_run_name)
-		if flow_run.status in WAITING_STATUSES:
-			# A queued job for a run that has since paused again: only approve / resume / expiry move a
-			# waiting run (they set it Running first). Re-entering here would run the paused step twice.
+
+		# Waiting and terminal runs must never be revived by a stale queued job.
+		if flow_run.status in WAITING_STATUSES or flow_run.status in TERMINAL_STATUSES:
 			return
+
+		run_owner = getattr(flow_run, "owner", None)
+		owner = (
+			frappe.db.get_value(
+				"User", run_owner, ["enabled", "user_type"], as_dict=True
+			)
+			if run_owner and run_owner != "Guest"
+			else None
+		)
+
+		if (
+			not owner
+			or not owner.get("enabled")
+			or owner.get("user_type") == "Guest"
+		):
+			frappe.throw(
+				_("The Flow Run owner is missing, disabled, or Guest; execution is refused.")
+			)
+
+		frappe.set_user(run_owner)
+
 		version = _pinned_version(flow_run)
 		defn = version.graph
-
 		nodes_map = {n["id"]: n for n in defn.get("nodes", [])}
 		edges_list = effective_edges(defn)
 		run_ctx = _build_run_context(flow_run, version)
 
-		if flow_run.status in TERMINAL_STATUSES:
-			return  # finished (or failed by an operator) while this job was queued: never revive it
-		if not _transition_run(flow_run, {"status": "Running", "last_error": ""}, not_from_statuses=TERMINAL_STATUSES):
+		if not _transition_run(
+			flow_run,
+			{"status": "Running", "last_error": ""},
+			from_statuses=("Queued", "Running"),
+		):
 			return
+
 		commit_if_background()
+		_execute_loop(flow_run, nodes_map, edges_list, run_ctx)
+
+	except Exception as e:
+		if flow_run is not None:
+			try:
+				_fail_flow_run(
+					flow_run,
+					describe_exception(e),
+					from_statuses=("Queued", "Running"),
+				)
+			except Exception:
+				pass
 
 		try:
-			_execute_loop(flow_run, nodes_map, edges_list, run_ctx)
-		except Exception as e:
-			_fail_flow_run(flow_run, describe_exception(e))
-			frappe.log_error(f"Flow engine error: {frappe.get_traceback()}", "Flow Engine")
+			frappe.log_error(
+				f"Flow engine error: {frappe.get_traceback()}",
+				"Flow Engine",
+			)
+		except Exception:
+			pass
+
 	finally:
-		_release_run_lock(flow_run_name)
+		try:
+			frappe.set_user(worker_user)
+		finally:
+			_release_run_lock(flow_run_name)
 
 
 def _build_run_context(flow_run, version: PinnedVersion) -> FlowRunContext:
@@ -2333,18 +2376,25 @@ def _complete_flow_run(flow_run, reply_text: str | None = None) -> bool:
 	return True
 
 
-def _fail_flow_run(flow_run, error_msg: str) -> bool:
-	"""Mark a flow run as failed. A run that already finished is left alone (returns False).
-
-	The write is conditional on the run not being terminal already, so a live worker finishing a run
-	cannot be overwritten by "Mark as failed" or the stale sweep, and neither can undo a finished run.
-	"""
+def _fail_flow_run(
+	flow_run,
+	error_msg: str,
+	*,
+	from_statuses: tuple | list | None = None,
+) -> bool:
+	"""Mark a Flow Run as failed, optionally restricting its current status."""
 	if not _transition_run(
 		flow_run,
-		{"status": "Failed", "last_error": error_msg, "completed_at": now_datetime()},
+		{
+			"status": "Failed",
+			"last_error": error_msg,
+			"completed_at": now_datetime(),
+		},
+		from_statuses=from_statuses,
 		not_from_statuses=TERMINAL_STATUSES,
 	):
 		return False
+
 	commit_if_background()
 	_sync_gateway_event(flow_run, "Failed", error=error_msg)
 	_publish_flow_event(flow_run, "flow_failed", {"error": error_msg})

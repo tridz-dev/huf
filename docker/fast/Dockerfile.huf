@@ -32,8 +32,8 @@ COPY --chown=frappe:frappe docker/fast/.bake-output /seed
 
 # Build frontend assets.
 RUN cd apps/huf/frontend \
-    && yarn install --frozen-lockfile \
-    && yarn build \
+    && npm ci \
+    && npm run build \
     && rm -rf node_modules \
     && cd /home/frappe/frappe-bench
 

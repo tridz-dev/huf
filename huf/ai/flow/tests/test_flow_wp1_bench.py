@@ -62,6 +62,7 @@ class TestFlowWp1(IntegrationTestCase):
 	def setUp(self):
 		frappe.set_user("Administrator")
 		self._flows = []
+		self._users = []
 
 	def tearDown(self):
 		frappe.set_user("Administrator")
@@ -69,6 +70,9 @@ class TestFlowWp1(IntegrationTestCase):
 			frappe.db.delete("Flow Run", {"flow_id": flow_id})
 			if frappe.db.exists("Flow Definition", flow_id):
 				frappe.delete_doc("Flow Definition", flow_id, ignore_permissions=True, force=True)
+		for email in self._users:
+			if frappe.db.exists("User", email):
+				frappe.delete_doc("User", email, ignore_permissions=True, force=True)
 		frappe.db.commit()
 
 	def _save(self, graph, active=False):
@@ -80,6 +84,21 @@ class TestFlowWp1(IntegrationTestCase):
 			doc.status = "Active"
 			doc.save(ignore_permissions=True)
 		return flow_id
+
+	def _user(self):
+		email = f"wp1-trigger-{frappe.generate_hash(length=8)}@example.com"
+		user = frappe.get_doc({
+			"doctype": "User",
+			"email": email,
+			"first_name": "Wp1 Trigger",
+			"user_type": "System User",
+			"send_welcome_email": 0,
+			"roles": [{"role": "Huf User"}],
+		})
+		user.flags.ignore_permissions = True
+		user.insert()
+		self._users.append(email)
+		return user
 
 	def _approval_flow(self):
 		graph = _graph(
@@ -119,6 +138,73 @@ class TestFlowWp1(IntegrationTestCase):
 		waiting["timeout_at"] = (now_datetime() - timedelta(seconds=5)).isoformat()
 		frappe.db.set_value("Flow Run", run.name, "waiting", json.dumps(waiting))
 		frappe.db.commit()
+
+	# -- trigger execution identity -------------------------------------
+
+	def test_trigger_job_runs_as_run_as_and_restores_worker_context(self):
+		graph = _graph([_out("done", "ok")], WEBHOOK)
+		graph["nodes"][0]["next"] = "done"
+		flow_id = self._save(graph, active=True)
+		run_as = self._user()
+		had_origin_flag = hasattr(frappe.flags, "huf_flow_run_origin")
+		previous_origin_flag = getattr(frappe.flags, "huf_flow_run_origin", None)
+		try:
+			if had_origin_flag:
+				delattr(frappe.flags, "huf_flow_run_origin")
+
+			run = triggers.run_trigger_job(flow_id, {}, "Webhook", "start", run_as.name)
+
+			self.assertEqual(run.owner, run_as.name)
+			self.assertEqual(run.status, "Success", run.last_error)
+			self.assertEqual(frappe.session.user, "Administrator")
+			self.assertFalse(hasattr(frappe.flags, "huf_flow_run_origin"))
+		finally:
+			if had_origin_flag:
+				frappe.flags.huf_flow_run_origin = previous_origin_flag
+			elif hasattr(frappe.flags, "huf_flow_run_origin"):
+				delattr(frappe.flags, "huf_flow_run_origin")
+
+	def test_trigger_job_restores_existing_origin_flag_on_error(self):
+		graph = _graph([_out("done", "ok")], WEBHOOK)
+		graph["nodes"][0]["next"] = "done"
+		flow_id = self._save(graph, active=True)
+		run_as = self._user()
+		had_origin_flag = hasattr(frappe.flags, "huf_flow_run_origin")
+		previous_origin_flag = getattr(frappe.flags, "huf_flow_run_origin", None)
+		frappe.flags.huf_flow_run_origin = False
+		try:
+			with patch(
+				"huf.ai.flow.triggers.start_flow_run",
+				side_effect=RuntimeError("simulated trigger failure"),
+			):
+				with self.assertRaisesRegex(RuntimeError, "simulated trigger failure"):
+					triggers.run_trigger_job(flow_id, {}, "Webhook", "start", run_as.name)
+			self.assertEqual(frappe.session.user, "Administrator")
+			self.assertIs(frappe.flags.huf_flow_run_origin, False)
+		finally:
+			if had_origin_flag:
+				frappe.flags.huf_flow_run_origin = previous_origin_flag
+			elif hasattr(frappe.flags, "huf_flow_run_origin"):
+				delattr(frappe.flags, "huf_flow_run_origin")
+
+	def test_start_flow_run_restores_caller_identity_when_enqueue_fails(self):
+		graph = _graph([_out("done", "ok")], WEBHOOK)
+		graph["nodes"][0]["next"] = "done"
+		flow_id = self._save(graph)
+		run_as = self._user()
+		with patch(
+			"huf.ai.flow.triggers.frappe.enqueue",
+			side_effect=RuntimeError("simulated enqueue failure"),
+		):
+			with self.assertRaisesRegex(RuntimeError, "simulated enqueue failure"):
+				triggers.start_flow_run(flow_id, {}, "Webhook", user=run_as.name)
+
+		runs = frappe.get_all(
+			"Flow Run", filters={"flow_id": flow_id}, fields=["name", "owner"]
+		)
+		self.assertEqual(len(runs), 1)
+		self.assertEqual(runs[0].owner, run_as.name)
+		self.assertEqual(frappe.session.user, "Administrator")
 
 	# -- approval expiry -------------------------------------------------
 
