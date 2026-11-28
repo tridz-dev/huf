@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 import frappe
 from frappe.tests import IntegrationTestCase
 
-from huf.ai.channels import guard
+from huf.ai.channels.outbound import guard
 from huf.ai.flow import engine
 from huf.ai.flow.nodes import retry, send, subflow
 from huf.ai.flow.runs import member

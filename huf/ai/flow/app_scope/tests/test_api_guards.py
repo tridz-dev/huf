@@ -227,7 +227,7 @@ class TestApiGuards(IntegrationTestCase):
 
 	def test_dry_run_by_app_user_never_sends(self):
 		"""G2/G5: a test by an app-only user is always a dry run and queues nothing on the outbox."""
-		from huf.ai.channels import outbox
+		from huf.ai.channels.outbound import outbox
 		from huf.ai.flow.api import run_flow
 
 		frappe.set_user(USER_A)

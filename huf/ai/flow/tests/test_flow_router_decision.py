@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 from huf.ai.decision.backends.fake import FakeDecisionBackend
 from huf.ai.decision.types import DecisionAnswer, DecisionStatus, QuestionKind
-from huf.ai.flow.nodes import router_decision as rd
+from huf.ai.flow.nodes.routing import router_decision as rd
 from huf.ai.run_budget import AIDisabled, RunBudget, RunBudgetExceeded
 
 DECISION = {
@@ -72,7 +72,7 @@ class TestFlowRouterDecision(unittest.TestCase):
 		self.assertEqual(out["status"], "failed")
 
 	def test_rule_mode_without_decision(self):
-		with patch("huf.ai.flow.nodes.switch.exec_switch", return_value={"status": "success", "next_node_id": "d"}) as sw:
+		with patch("huf.ai.flow.nodes.routing.switch.exec_switch", return_value={"status": "success", "next_node_id": "d"}) as sw:
 			out = rd.exec_router_decision(None, {}, {"default": "d"}, {}, None)
 		self.assertEqual(out["next_node_id"], "d")
 		sw.assert_called_once()

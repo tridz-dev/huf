@@ -8,7 +8,7 @@ import { type ActionFormProps, Section } from '../formKit';
 import { useFlowContext } from '../../../../contexts/FlowContext';
 import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
 import { buildBranchOptionLabels, findUpstreamNodeIds } from '@/lib/flow/flowBranchTargets';
-import { SPLIT_LABEL_MAX, SPLIT_SALT_MAX, splitProblems, splitWeightTotal } from '@/lib/flow/splitConfig';
+import { SPLIT_LABEL_MAX, SPLIT_SALT_MAX, splitProblems, splitWeightTotal } from '@/lib/flow-steps/splitConfig';
 import { edgeRoute, makeFlowEdge, makeFlowEdgeId } from '../../../../services/flowSerializer';
 import type { FlowEdge } from '../../../../types/flow.types';
 

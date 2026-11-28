@@ -1,6 +1,6 @@
 """``router.decision`` node, Decision mode: ask the Decision runtime which candidate node comes next.
 
-Config ``decision`` (when absent the node keeps its rule mode, see ``nodes/switch.py``)::
+Config ``decision`` (when absent the node keeps its rule mode, see ``nodes/routing/switch.py``)::
 
     {
         "candidates": [{"node_id": "billing", "label": "Billing question"}, ...],  # two or more
@@ -43,7 +43,7 @@ def uses_decision(config: dict) -> bool:
 def exec_router_decision(flow_run, node: dict, config: dict, settings: dict, context=None, *, backend: Any = None) -> dict:
 	"""Run the Decision mode when configured, else the rule mode (``exec_switch``)."""
 	if not uses_decision(config):
-		from huf.ai.flow.nodes.switch import exec_switch
+		from huf.ai.flow.nodes.routing.switch import exec_switch
 
 		return exec_switch(flow_run, node, config, settings, context)
 	return exec_decision_route(config["decision"], backend=backend)

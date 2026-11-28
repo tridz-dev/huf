@@ -51,12 +51,33 @@ from frappe import _
 from frappe.realtime import get_doc_room, get_user_room
 from frappe.utils import now_datetime
 
-from huf.ai.flow import state as flow_state
+from huf.ai.flow import state as flow_state  # noqa: F401  tests patch engine.flow_state
 from huf.ai.flow.app_scope.access import flow_access
 from huf.ai.flow.catalog import node_registry
+from huf.ai.flow.engine_parts.code_run import (  # noqa: F401  moved out of this module; kept importable here
+	_exec_code_run,
+	_finish_code_step,
+	_json_dict,
+	fail_waiting_code_run,
+	resume_code_node,
+)
+from huf.ai.flow.engine_parts.router_llm import _exec_router_llm, _router_llm_ai_block  # noqa: F401  moved out of this module; kept importable here
+from huf.ai.flow.engine_parts.run_lock import (  # noqa: F401  moved out of this module; kept importable here
+	_acquire_run_lock,
+	_release_run_lock,
+	_run_lock_key,
+	_start_run_lock_heartbeat,
+	_stop_run_lock_heartbeat,
+)
+from huf.ai.flow.engine_parts.state_nodes import (  # noqa: F401  moved out of this module; kept importable here
+	_exec_state_delete,
+	_exec_state_get,
+	_exec_state_set,
+	_state_node,
+)
 from huf.ai.flow.integrations import friendly_tool_error
 from huf.ai.flow.nodes import adapters, subflow
-from huf.ai.flow.nodes.condition import exec_facts_condition
+from huf.ai.flow.nodes.routing.condition import exec_facts_condition
 from huf.ai.flow.nodes.error_handler import first_error, run_error_handler
 from huf.ai.flow.nodes.retry import policy_of as retry_policy_of
 from huf.ai.flow.nodes.retry import run_with_retry
@@ -71,8 +92,8 @@ from huf.ai.flow.runs.outcome import record_outcome
 from huf.ai.flow.support import facts
 from huf.ai.flow.support.approval_card import waiting_fields
 from huf.ai.flow.support.approval_notifications import _clear_flow_notifications, _send_approval_notifications
-from huf.ai.flow.support.approver_veto import refuse_if_vetoed
-from huf.ai.flow.support.approvers import approval_expired, check_approver, evaluate_approval_policy
+from huf.ai.flow.support.approvals.approver_veto import refuse_if_vetoed
+from huf.ai.flow.support.approvals.approvers import approval_expired, check_approver, evaluate_approval_policy
 from huf.ai.flow.support.pii import log_flow_error, mask_text
 from huf.ai.flow.support.plain.transform_text import plain_transform_error
 from huf.ai.flow.support.redact import pinned_json
@@ -83,8 +104,8 @@ from huf.ai.flow.support.router_text import (
 	render_text_refs,
 	resolve_router_model,
 )
-from huf.ai.flow.support.tool_result import normalize_tool_result
-from huf.ai.flow.support.turned_off import is_turned_off, turned_off_result
+from huf.ai.flow.support.results.tool_result import normalize_tool_result
+from huf.ai.flow.support.results.turned_off import is_turned_off, turned_off_result
 from huf.ai.flow.testrun import gate as test_gate
 from huf.ai.flow.testrun import stored_mode
 from huf.ai.flow.tool_executor import execute as execute_tool
@@ -461,74 +482,6 @@ def sweep_stale_runs(now=None, minutes: int | None = None) -> list[str]:
 	return failed
 
 
-def _run_lock_key(flow_run_name: str) -> str:
-	return f"huf:flow:run_lock:{flow_run_name}"
-
-
-def _acquire_run_lock(flow_run_name: str) -> bool:
-	"""Take the single-writer lock for a run.
-
-	Same shape as the distributed lock in ``agent/integration.py``: a Redis
-	``SET key value EX ttl NX``, which is atomic, so exactly one of two
-	concurrent callers gets ``True``. Before T-22 ``run_flow`` took no lock at
-	all and two concurrent calls could both advance the same cursor (F-4).
-
-	The value is a per-acquisition owner token; refresh and release only act while the key still
-	holds it (:data:`_EXPIRE_IF_OWNER`, :data:`_RELEASE_IF_OWNER`).
-	"""
-	key = _run_lock_key(flow_run_name)
-	token = frappe.generate_hash(length=32)
-	try:
-		cache = frappe.cache()
-		if not cache.set(key, token, ex=RUN_LOCK_TTL_SECONDS, nx=True):
-			return False
-	except Exception:
-		# A cache that cannot serve the lock must not silently serialize
-		# nothing *and* block execution; the executor's status guard is the
-		# second line of defence.
-		return True
-	_run_lock_tokens[key] = token
-	_start_run_lock_heartbeat(cache, key, token)
-	return True
-
-
-def _start_run_lock_heartbeat(cache, key: str, token: str) -> None:
-	"""Keep a held run lock alive. ``cache`` is passed in: the thread has no frappe request context."""
-	_stop_run_lock_heartbeat(key)  # a previous holder that never released
-	stop = _run_lock_heartbeats[key] = threading.Event()
-
-	def beat():
-		while not stop.wait(RUN_LOCK_HEARTBEAT_SECONDS):
-			try:
-				if not cache.eval(_EXPIRE_IF_OWNER, 1, key, token, int(RUN_LOCK_TTL_SECONDS)):
-					return  # the lock is gone or another worker owns it now; never extend theirs
-			except Exception:  # noqa: BLE001, S110
-				pass  # try again on the next beat, while the TTL still has room
-
-	threading.Thread(target=beat, name=f"run-lock-heartbeat:{key}", daemon=True).start()
-
-
-def _stop_run_lock_heartbeat(key: str) -> None:
-	stop = _run_lock_heartbeats.pop(key, None)
-	if stop:
-		stop.set()
-
-
-def _release_run_lock(flow_run_name: str) -> None:
-	key = _run_lock_key(flow_run_name)
-	_stop_run_lock_heartbeat(key)
-	token = _run_lock_tokens.pop(key, None)
-	if token is None:
-		return  # not ours (never taken here, or the cache was down at acquire)
-	try:
-		# Raw key, not ``delete_value``: the lock is taken with a raw ``SET NX``, while
-		# ``delete_value`` removes the site-prefixed key. Compare-and-delete, so a holder
-		# whose lock expired cannot remove the lock a new holder has since taken.
-		frappe.cache().eval(_RELEASE_IF_OWNER, 1, key, token)
-	except Exception:
-		pass
-
-
 #: A run in one of these statuses is finished: nothing may move it again.
 TERMINAL_STATUSES = ("Success", "Failed", "Cancelled")
 
@@ -794,7 +747,7 @@ def run_flow(flow_run_name: str):
 		commit_if_background()
 
 		try:
-			from huf.ai.channels import guard
+			from huf.ai.channels.outbound import guard
 
 			with guard.batch():  # one run's sends share template reads and consent allows (H-W2-19)
 				_execute_loop(flow_run, nodes_map, edges_list, run_ctx)
@@ -1754,93 +1707,6 @@ def _exec_tool_call(flow_run, node: dict, config: dict, settings: dict) -> dict:
 		return {"status": "failed", "error": error_text}
 
 
-def _exec_router_llm(flow_run, node: dict, config: dict, settings: dict) -> dict:
-	"""Execute router.llm node (config: ``prompt``, ``options[{label,node_id}]``, ``default``, ``model``).
-
-	The model picks an option by label; no match, an unusable reply, or any failure routes to
-	``default`` (required, so routing is total). ``model`` is an optional AI Model name; absent means
-	the first keyed provider's default chat model. Output is
-	``{"label", "node_id", "reason", "model", "provider"}`` (``model`` is the one used, or attempted).
-	"""
-	options = [o for o in (config.get("options") or []) if isinstance(o, dict) and o.get("node_id")]
-	default = config.get("default")
-	if not default:
-		return {"status": "failed", "error": "Choose which path to take when the AI cannot decide, then run again."}
-	if not options:
-		return {"status": "failed", "error": "Add at least one path for the AI to choose from, then run again."}
-
-	blocked = _router_llm_ai_block(_run_context(settings))
-	if blocked:
-		return blocked
-	ctx = _context_of(flow_run, settings)
-	chosen, reason = None, ""
-	provider, model = None, config.get("model") or None
-	try:
-		provider, model = resolve_router_model(model)
-		reply = _router_completion(
-			build_router_llm_prompt(
-				render_text_refs(config.get("prompt") or "", ctx),
-				options,
-				{"input": ctx.as_dict(), "steps": ctx.node_outputs},
-			),
-			provider,
-			model,
-		)
-		if not reply:
-			reason = "The AI did not answer, so the default path was taken."
-		else:
-			chosen = choose_option(reply, options)
-			reason = "matched" if chosen else "The answer did not match any path, so the default path was taken."
-	except Exception as e:
-		reason = f"The AI could not be asked, so the default path was taken. {describe_exception(e)}"
-
-	if chosen:
-		node_id, label = chosen["node_id"], chosen.get("label")
-	else:
-		node_id, label = default, "default"
-	return {
-		"status": "success",
-		"next_node_id": node_id,
-		"output": {"label": label, "node_id": node_id, "reason": reason, "model": model, "provider": provider},
-	}
-
-
-def _router_llm_ai_block(run_ctx) -> dict | None:
-	"""A failed result when the AI switch is off, the run's deadline passed or its spend cap is used up, else None.
-
-	Checked before any provider is asked, so a switched-off site never reaches a model (H-W5-05).
-	"""
-	from huf.ai.run_budget import AI_DISABLED, AIDisabled, RunBudgetExceeded, assert_ai_enabled
-
-	try:
-		assert_ai_enabled(getattr(run_ctx, "agent", None))
-		budget = getattr(run_ctx, "budget", None)
-		if budget is not None:
-			budget.check_deadline()
-			if budget.spend_cap_usd and budget.spend_so_far_usd >= budget.spend_cap_usd:
-				raise RunBudgetExceeded("spend cap reached")
-			budget.check_spend(0.0)
-	except AIDisabled:
-		return {
-			"status": "failed",
-			"reason_code": AI_DISABLED,
-			"error": "AI features are switched off on this site, so this step did not run.",
-		}
-	except RunBudgetExceeded:
-		return {
-			"status": "failed",
-			"reason_code": "ai_budget_exceeded",
-			"error": "This run has used up its AI budget, so this step did not run.",
-		}
-	except Exception:  # noqa: BLE001 - a kill switch must not fail open
-		return {
-			"status": "failed",
-			"reason_code": AI_DISABLED,
-			"error": "AI features could not be checked, so this step did not run.",
-		}
-	return None
-
-
 _exec_router_decision = adapters.exec_router_decision
 _exec_knowledge_search = adapters.exec_knowledge_search
 _exec_handoff = adapters.exec_handoff
@@ -1930,163 +1796,6 @@ def _exec_human_approval(flow_run, node: dict, config: dict, settings: dict) -> 
 	_send_approval_notifications(flow_run, node, config, waiting_data)
 	flow_hooks.notify_approvers(flow_run)
 	return {"status": "waiting_approval"}
-
-
-# ---------------------------------------------------------------------------
-# code.run -- run Python in the sandbox, park the run until it finishes
-# ---------------------------------------------------------------------------
-
-def _exec_code_run(flow_run, node: dict, config: dict, settings: dict):
-	"""``code.run``: config ``code``, ``profile``, ``inputs`` (name -> value / ``$from``), ``timeout_s``.
-
-	The code and profile are read from ``config`` of the node in the run's PINNED definition (the
-	published flow); ``inputs`` are resolved to plain data and reach the code as the ``inputs`` variable.
-	The code runs in an RQ worker (or waits behind an approval), so this node PAUSES the run in
-	``Waiting Code``; :func:`resume_code_node` moves it on, and the step is entered once more to turn
-	the finished audit row into its output (``stdout``, ``result``, ``exit_status``, ``truncated``) or a
-	readable failure that ``on_error`` routes. Output: see :func:`huf.ai.flow.code_node.output_from_call`.
-	"""
-	from huf.ai.flow import code_node
-	from huf.ai.tools import code_execution
-
-	node_id = node.get("id")
-	ctx = _context_of(flow_run, settings)
-	waiting = _load_waiting(flow_run)
-
-	if waiting.get("type") == "code" and waiting.get("node_id") == node_id:
-		if flow_run.status == "Waiting Code":
-			return Outcome.paused(PauseRequest(kind="code", status_label="Waiting Code"))
-		return _finish_code_step(flow_run, waiting)
-
-	problem = code_node.run_problem(flow_run, config)
-	if problem:
-		return {"status": "failed", "error": problem}
-	done = code_node.runs_so_far(flow_run.name)
-	if done >= code_node.MAX_CODE_RUNS_PER_FLOW_RUN:
-		return {
-			"status": "failed",
-			"error": f"This run already ran {code_node.MAX_CODE_RUNS_PER_FLOW_RUN} code steps, which is the most one run may start. Use fewer code steps or a smaller loop.",
-		}
-	try:
-		inputs = json.loads(json.dumps(ctx.resolve(config.get("inputs") or {}), default=str))
-	except (TypeError, ValueError) as exc:
-		return {"status": "failed", "error": "The data given to this code step could not be read. Check the values you pass in."}
-
-	try:
-		dispatched = code_execution.run_flow_code(
-			flow_run, node, config.get("code"), config.get("profile"), inputs, timeout_s=config.get("timeout_s")
-		)
-	except (frappe.PermissionError, frappe.ValidationError) as exc:
-		return {"status": "failed", "error": plain_error(str(exc)) or "This code step was not allowed to run."}
-
-	call_name = dispatched["agent_tool_call"]
-	approval = dispatched.get("approval")
-	snapshot = _json_dict(frappe.db.get_value("Agent Tool Call", call_name, "execution_profile_snapshot"))
-	wall = int((snapshot.get("limits") or {}).get("max_wall_time_s") or code_node.DEFAULT_TIMEOUT_S)
-	waiting_data = {
-		"type": "code",
-		"node_id": node_id,
-		"agent_tool_call": call_name,
-		"agent_run": dispatched.get("agent_run"),
-		"approval": approval,
-		"timeout_at": code_node.deadline_iso(wall, dispatched.get("expires_on") if approval else None),
-		"message": "Waiting for an approval" if approval else "Running in the sandbox",
-	}
-
-	status = frappe.db.get_value("Agent Tool Call", call_name, "status")
-	if status in ("Completed", "Failed"):
-		# It already ran (in-process execution, as in tests): no need to park.
-		return _finish_code_step(flow_run, waiting_data)
-
-	_persist_context(flow_run, ctx, settings)
-	if not _transition_run(
-		flow_run,
-		{"status": "Waiting Code", "waiting": json.dumps(waiting_data)},
-		not_from_statuses=TERMINAL_STATUSES,
-	):
-		return {"status": "failed", "error": "The run had already ended before this code step could start."}
-	commit_if_background()
-	return Outcome.paused(PauseRequest(kind="code", status_label="Waiting Code"))
-
-
-def _json_dict(value) -> dict:
-	if isinstance(value, str):
-		try:
-			value = json.loads(value)
-		except (TypeError, ValueError):
-			return {}
-	return value if isinstance(value, dict) else {}
-
-
-def _finish_code_step(flow_run, waiting: dict):
-	"""Turn the finished audit row of a code step into the node's outcome, and close its Agent Run."""
-	from huf.ai.flow import code_node
-
-	call = frappe.get_doc("Agent Tool Call", waiting.get("agent_tool_call"))
-	ok, output, error = code_node.output_from_call(call)
-	if getattr(flow_run, "waiting", None):
-		flow_run.db_set("waiting", None)
-		flow_run.waiting = None
-	run_name = waiting.get("agent_run")
-	if run_name and frappe.db.exists("Agent Run", run_name):
-		frappe.db.set_value(
-			"Agent Run",
-			run_name,
-			{
-				"status": "Success" if ok else "Failed",
-				"response": json.dumps(output, default=str),
-				"error_message": error if not ok else None,
-				"end_time": now_datetime(),
-			},
-		)
-		flow_run.db_set("last_agent_run", run_name)
-	commit_if_background()
-	if ok:
-		return {"status": "success", "result": output, "output": output}
-	return {"status": "failed", "error": error, "output": output}
-
-
-def resume_code_node(flow_run_name: str) -> bool:
-	"""Move a run out of ``Waiting Code`` once its step's audit row is final (completed, failed, rejected, expired).
-
-	Takes the run lock (briefly retried: the worker may finish while the run that parked is still
-	releasing it) and leaves the waiting state with one conditional UPDATE, so a worker nudge and the
-	sweeper cannot both advance the run. The step itself is entered again by :func:`run_flow` and
-	reads the outcome from the audit row (:func:`_finish_code_step`). Returns True when it resumed.
-	"""
-	import time
-
-	if frappe.db.get_value("Agent Flow Run", flow_run_name, "status") != "Waiting Code":
-		return False  # nothing to continue (already moved on, or the step ran in-process)
-	for _attempt in range(50):
-		if _acquire_run_lock(flow_run_name):
-			break
-		time.sleep(0.2)
-	else:
-		return False
-	try:
-		flow_run = frappe.get_doc("Agent Flow Run", flow_run_name)
-		if flow_run.status != "Waiting Code":
-			return False
-		waiting = _load_waiting(flow_run)
-		status = frappe.db.get_value("Agent Tool Call", waiting.get("agent_tool_call"), "status")
-		if status not in ("Completed", "Failed"):
-			return False
-		if not _transition_run(flow_run, {"status": "Running"}, from_statuses=("Waiting Code",)):
-			return False
-		frappe.db.commit()  # nosemgrep
-	finally:
-		_release_run_lock(flow_run_name)
-	run_flow(flow_run_name)
-	return True
-
-
-def fail_waiting_code_run(flow_run_name: str, reason: str) -> bool:
-	"""Fail a run parked on a code step whose record is gone (operator / sweeper path)."""
-	flow_run = frappe.get_doc("Agent Flow Run", flow_run_name)
-	if flow_run.status != "Waiting Code":
-		return False
-	return _fail_flow_run(flow_run, reason)
 
 
 def _exec_condition(flow_run, node: dict, config: dict, settings: dict) -> dict:
@@ -2367,61 +2076,6 @@ def _exec_output(flow_run, node: dict, config: dict, settings: dict) -> dict:
 	record_outcome(flow_run, config.get("outcome"), ctx)
 	return {"status": "success", "output": value, "result": value}
 
-
-# ---------------------------------------------------------------------------
-# Per-key flow state (state.get / state.set / state.delete)
-# ---------------------------------------------------------------------------
-
-
-def _state_node(flow_run, node: dict, config: dict, settings: dict, allowed: set, op):
-	"""Shared shell: validate config keys, resolve inputs, scope to the *running* flow."""
-	unknown = sorted(set(config) - allowed - {"scope"})
-	if unknown or config.get("scope") not in (None, "flow", "member"):
-		return {"status": "failed", "error": f'{step_ref(node, True)} has settings this step does not use. Remove them and save again.'}
-	flow_id = getattr(flow_run, "flow_id", None)
-	ctx = _context_of(flow_run, settings)
-	resolved = {k: ctx.resolve(v) for k, v in config.items() if k != "scope"}
-	if config.get("scope") == "member":  # one value per person, kept apart from every other person's
-		scoped = flow_member.scoped_state_key(flow_run, resolved.get("key"))
-		if not scoped:
-			return {"status": "failed", "error": f'{step_ref(node, True)} is saved per person, but this run does not know who it is about.'}
-		resolved["key"] = scoped
-	try:
-		output = op(flow_id, resolved)
-	except flow_state.FlowStateError as exc:
-		return {"status": "failed", "error": plain_error(str(exc))}
-	except frappe.QueryDeadlockError:  # another run saved the same key at the same moment
-		return {"status": "failed", "error": f'{step_ref(node, True)} could not save because another run was saving the same data at that moment. Run it again.'}
-	return {"status": "success", "result": output, "output": output}
-
-
-def _exec_state_get(flow_run, node: dict, config: dict, settings: dict) -> dict:
-	"""``state.get``: config ``key`` (required), ``default``. Output ``{"found": bool, "value": ...}``."""
-
-	def op(flow_id, cfg):
-		found, value = flow_state.get_state(flow_id, cfg.get("key"))
-		return {"found": found, "value": value if found else cfg.get("default")}
-
-	return _state_node(flow_run, node, config, settings, {"key", "default"}, op)
-
-
-def _exec_state_set(flow_run, node: dict, config: dict, settings: dict) -> dict:
-	"""``state.set``: config ``key``, ``value``, ``ttl_seconds`` (default 24h). Output ``{"stored": true}``."""
-
-	def op(flow_id, cfg):
-		flow_state.set_state(flow_id, cfg.get("key"), cfg.get("value"), cfg.get("ttl_seconds"))
-		return {"stored": True}
-
-	return _state_node(flow_run, node, config, settings, {"key", "value", "ttl_seconds"}, op)
-
-
-def _exec_state_delete(flow_run, node: dict, config: dict, settings: dict) -> dict:
-	"""``state.delete``: config ``key``. Output ``{"deleted": bool}``."""
-
-	def op(flow_id, cfg):
-		return {"deleted": flow_state.delete_state(flow_id, cfg.get("key"))}
-
-	return _state_node(flow_run, node, config, settings, {"key"}, op)
 
 
 # ---------------------------------------------------------------------------

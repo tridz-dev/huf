@@ -19,7 +19,7 @@ huf_decision_backends = {
 # A STOP keyword (existing ``huf_gateway_opt_out`` notify hook) also exits the sender from every flow.
 huf_gateway_opt_out = ["huf.ai.flow.runs.member.exit_on_opt_out"]
 # Channel outbox (H-W2-15): mirror provider delivery status onto the queued flow send.
-huf_gateway_delivery_status = ["huf.ai.channels.outbox.on_delivery_status"]
+huf_gateway_delivery_status = ["huf.ai.channels.outbound.outbox.on_delivery_status"]
 
 # Apps
 # ------------------
@@ -192,58 +192,8 @@ after_app_uninstall = "huf.ai.app_seeding.apps_loader.on_app_uninstalled"
 # permission_query_conditions = {
 # 	"Event": "frappe.desk.doctype.event.event.get_permission_query_conditions",
 # }
-permission_query_conditions = {
-    "Agent": "huf.huf.doctype.agent.agent.get_permission_query_conditions",
-    "Agent Conversation": "huf.ai.agent.integration.get_conversation_permission_conditions",
-    "Agent Message": "huf.ai.agent.integration.get_message_permission_conditions",
-    "Agent Run": "huf.ai.agent.integration.get_run_permission_conditions",
-    "Agent Context Artifact": "huf.ai.agent.integration.get_context_artifact_permission_conditions",
-    "Agent Tool Call": "huf.ai.agent.integration.get_tool_call_permission_conditions",
-    "Agent Run Prompt Snapshot": "huf.ai.agent.integration.get_prompt_snapshot_permission_conditions",
-    "Huf API Key": "huf.huf.doctype.huf_api_key.huf_api_key.get_api_key_permission_conditions",
-    "Flow Definition": "huf.huf.doctype.flow_definition.flow_definition.get_permission_query_conditions",
-    "Agent Flow Run": "huf.ai.flow.app_scope.access.get_run_permission_query_conditions",
-    "Flow Member State": "huf.ai.flow.app_scope.access.get_member_state_permission_query_conditions",
-    "Agent Procedure": "huf.huf.doctype.agent_procedure.agent_procedure.get_permission_query_conditions",
-    "Agent Procedure Binding": "huf.huf.doctype.agent_procedure_binding.agent_procedure_binding.get_permission_query_conditions",
-    "Agent Procedure Run": "huf.huf.doctype.agent_procedure_run.agent_procedure_run.get_permission_query_conditions",
-    "Agent Run Feedback": "huf.ai.record_access.get_feedback_permission_conditions",
-    "Gateway": "huf.ai.gateway_webhook.get_permission_query_conditions_gateway_family",
-    "Gateway Access Entry": "huf.ai.gateway_webhook.get_permission_query_conditions_gateway_family",
-    "Gateway Event": "huf.ai.gateway_webhook.get_permission_query_conditions_gateway_family",
-    "Gateway Binding": "huf.ai.gateway_webhook.get_permission_query_conditions_gateway_family",
-    "Integration Settings": "huf.ai.gateway_webhook.get_permission_query_conditions_gateway_family",
-    "Integration Service": "huf.ai.gateway_webhook.get_permission_query_conditions_gateway_family",
-    "Integration Credential": "huf.ai.gateway_webhook.get_permission_query_conditions_gateway_family",
-    "Solution": "huf.ai.gateway_webhook.get_permission_query_conditions_gateway_family",
-    "Conversation Assignment": "huf.ai.gateway_webhook.get_permission_query_conditions_gateway_family",
-    "Template Usage": "huf.ai.gateway_webhook.get_permission_query_conditions_gateway_family",
-    "HUF Document": "huf.huf.doctype.huf_document.huf_document.get_permission_query_conditions",
-    "HUF Document Comment": "huf.huf.doctype.huf_document_comment.huf_document_comment.get_permission_query_conditions",
-}
-
-has_permission = {
-	"Flow Definition": "huf.ai.flow.app_scope.access.has_permission_flow_definition",
-	"Agent Flow Run": "huf.ai.flow.app_scope.access.has_permission_flow_run",
-	"Flow Member State": "huf.ai.flow.app_scope.access.has_permission_member_state",
-	"Agent Run": "huf.ai.hooks.has_permission_agent_run",
-	"Agent Message": "huf.ai.hooks.has_permission_agent_message",
-	"Agent Conversation": "huf.ai.hooks.has_permission_agent_conversation",
-	"Agent Tool Call": "huf.ai.hooks.has_permission_agent_tool_call",
-	"Agent Context Artifact": "huf.ai.hooks.has_permission_agent_context_artifact",
-	"Gateway": "huf.ai.gateway_webhook.has_permission_gateway_family",
-	"Gateway Access Entry": "huf.ai.gateway_webhook.has_permission_gateway_family",
-	"Gateway Event": "huf.ai.gateway_webhook.has_permission_gateway_family",
-	"Gateway Binding": "huf.ai.gateway_webhook.has_permission_gateway_family",
-	"Integration Settings": "huf.ai.gateway_webhook.has_permission_gateway_family",
-	"Integration Service": "huf.ai.gateway_webhook.has_permission_gateway_family",
-	"Integration Credential": "huf.ai.gateway_webhook.has_permission_gateway_family",
-	"Solution": "huf.ai.gateway_webhook.has_permission_gateway_family",
-	"Conversation Assignment": "huf.ai.gateway_webhook.has_permission_gateway_family",
-	"Template Usage": "huf.ai.gateway_webhook.has_permission_gateway_family",
-	"HUF Document": "huf.huf.doctype.huf_document.huf_document.has_permission",
-	"HUF Document Comment": "huf.huf.doctype.huf_document_comment.huf_document_comment.has_permission",
-}
+# Permission maps live in huf/hooks_permissions.py; re-exported here because Frappe reads module attributes.
+from huf.hooks_permissions import has_permission, permission_query_conditions  # noqa: F401
 
 # DocType Class
 # ---------------
@@ -382,7 +332,7 @@ scheduler_events = {
             "huf.ai.orchestration.scheduler.process_orchestrations",
             "huf.ai.agent.integration.recover_stalled_agent_runs",
             "huf.ai.gateways.teams.outbox.retry_due",
-            "huf.ai.channels.outbox.retry_due",  # flow sends: backoff passed, or a worker died mid-delivery
+            "huf.ai.channels.outbound.outbox.retry_due",  # flow sends: backoff passed, or a worker died mid-delivery
             "huf.ai.flow.triggers.run_due_schedule_flows",
             "huf.ai.flow.triggers.expire_due_approvals",
             "huf.ai.flow.runs.park.wake_due_waits",
@@ -516,7 +466,7 @@ huf_decision_backends.update({
     "similarity": "huf.ai.decision.backends.similarity.SimilarityBackend",
 })
 
-# Pre-send guard chain (huf.ai.channels.guard): app steps after Huf's built-in ones. While a conversation is
+# Pre-send guard chain (huf.ai.channels.outbound.guard): app steps after Huf's built-in ones. While a conversation is
 # handed to a person (``handoff`` flow node), no automated send reaches that contact on that gateway.
 huf_pre_send_hooks = ["huf.ai.flow.nodes.handoff.handed_off_guard"]
 

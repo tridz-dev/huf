@@ -2,7 +2,7 @@ import { embedPolicy } from '@/embed/bridge';
 import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
 import { fromTextRefs, toTextRefs } from '@/lib/flow-data/textRefs';
 import { appMissingMessage, getAppNodeType, missingAppStep } from '@/lib/flow-graph/appNodeTypes';
-import { HUF_APP } from '@/lib/flow-graph/builtinSchemaSteps';
+import { HUF_APP } from '@/lib/flow-steps/builtinSchemaSteps';
 import { useFlowContext } from '@/contexts/FlowContext';
 import { edgeRoute, makeFlowEdge } from '@/services/flowSerializer';
 import type { FlowEdge } from '@/types/flow.types';

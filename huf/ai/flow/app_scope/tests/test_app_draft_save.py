@@ -18,7 +18,7 @@ from huf.ai.flow.app_scope import access, docperms, targets
 from huf.ai.flow.app_scope import gateways as app_gateway_list
 from huf.ai.flow.app_scope.ownership import create_app_flow
 from huf.ai.flow.gateways.api import get_app_flow_gateways
-from huf.ai.flow.preflight import run_preflight
+from huf.ai.flow.runs.preflight import run_preflight
 from huf.ai.flow.tests.test_flow_draft_validation import _end, _graph
 
 FLOW, OTHER = "test-secsave-a", "test-secsave-b"

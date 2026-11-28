@@ -10,7 +10,7 @@ from unittest.mock import patch
 import frappe
 from frappe.tests import IntegrationTestCase
 
-from huf.ai.channels import guard
+from huf.ai.channels.outbound import guard
 
 RECIPIENT = "+15550001234"
 

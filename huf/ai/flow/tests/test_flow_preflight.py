@@ -14,7 +14,8 @@ import frappe
 from frappe.tests import IntegrationTestCase
 
 from huf.ai.flow import api as flow_api
-from huf.ai.flow import preflight, publish_guard
+from huf.ai.flow import publish_guard
+from huf.ai.flow.runs import preflight
 from huf.ai.flow.tests.test_flow_draft_validation import _end, _graph, _trigger, finished_flow
 
 MODULE = __name__

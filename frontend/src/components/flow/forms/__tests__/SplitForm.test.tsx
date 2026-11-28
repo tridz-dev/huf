@@ -8,7 +8,7 @@ vi.mock('@/services/flow/catalogApi', async () => (await import('./formTestKit')
 
 import { SplitForm } from '../steps/SplitForm';
 import { flow, latest, renderForm, updateEdges } from './formTestKit';
-import { splitProblems } from '@/lib/flow/splitConfig';
+import { splitProblems } from '@/lib/flow-steps/splitConfig';
 import { validateNode } from '@/lib/flow-graph/flowValidation';
 import { actionOptions, ACTION_CARD_CONTRACT } from '@/data/actions';
 import { defaultActionConfig } from '@/lib/flow-history/actionDefaults';

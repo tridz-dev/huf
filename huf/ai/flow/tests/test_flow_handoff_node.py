@@ -7,7 +7,7 @@ import frappe
 from frappe.tests import IntegrationTestCase
 
 from huf.ai.channels import conversation as conv
-from huf.ai.channels import guard, recipient_binder
+from huf.ai.channels.outbound import guard, recipient_binder
 from huf.ai.channels import handoff as channel_handoff
 from huf.ai.flow.nodes import handoff as node_handoff
 from huf.ai.flow.testrun import gate

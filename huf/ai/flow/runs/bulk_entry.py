@@ -15,7 +15,7 @@ from frappe import _
 
 from huf.ai.flow.runs.access import require_flow_read
 from huf.ai.flow.runs.start import _check_key, start_flow_for_member
-from huf.ai.channels import guard_steps
+from huf.ai.channels.outbound import guard_steps
 from huf.ai.flow.support import facts
 
 CHUNK_SIZE = 500
