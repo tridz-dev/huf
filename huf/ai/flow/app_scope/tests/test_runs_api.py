@@ -167,11 +167,14 @@ class TestRunsApi(IntegrationTestCase):
 		)
 		for i, ctx in enumerate(contexts):
 			for flow, status in ((A_FLOW, "Failed"), (A_FLOW2, "Success"), (B_FLOW, "Failed")):
-				frappe.get_doc(
+				run = frappe.get_doc(
 					{"doctype": "Agent Flow Run", "flow_definition": flow, "flow_id": flow, "status": status,
-					 "run_mode": "Test" if i == 4 else None,
+					 "run_mode": "Test" if i == 4 else "Real",
 					 "context_json": frappe.as_json(ctx) if ctx is not None else None}
 				).insert(ignore_permissions=True)  # fmt: skip
+				# insert applies the "Real" default, so a stored NULL needs set_value; with and without a reason
+				if i in (0, 1, 3, 5):
+					frappe.db.set_value("Agent Flow Run", run.name, "run_mode", None, update_modified=False)
 		frappe.set_user(USER_A)
 		flows = [A_FLOW, A_FLOW2, B_FLOW]
 		group_bys = ("reason", "flow,status,reason", "reason,status", "flow,reason")
