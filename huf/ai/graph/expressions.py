@@ -76,6 +76,8 @@ try:
 		_safe_mod,
 		_safe_mul,
 	)
+	from huf.ai.graph.expr.facts_attribute import _FactsAttribute
+	from huf.ai.graph.expr.helpers import HELPERS
 except ImportError:  # loaded by file path in a frappe-less sandbox (see tests/test_graph_expressions.py)
 	import importlib.util as _ilu
 	import os as _os
@@ -84,6 +86,11 @@ except ImportError:  # loaded by file path in a frappe-less sandbox (see tests/t
 	_limits = _ilu.module_from_spec(_spec)
 	_spec.loader.exec_module(_limits)
 	globals().update({k: getattr(_limits, k) for k in ("LIMIT_MESSAGE", "MAX_INT_MAGNITUDE", "MAX_SEQUENCE_RESULT", "ExpressionLimitError", "_check_int", "_check_result", "_safe_add", "_safe_mod", "_safe_mul")})
+	for _name in ("helpers", "facts_attribute"):
+		_spec = _ilu.spec_from_file_location(f"huf_graph_expression_{_name}", _os.path.join(_os.path.dirname(__file__), "expr", f"{_name}.py"))
+		_module = _ilu.module_from_spec(_spec)
+		_spec.loader.exec_module(_module)
+		globals().update({k: getattr(_module, k) for k in ("HELPERS", "_FactsAttribute") if hasattr(_module, k)})
 
 MAX_EXPRESSION_LENGTH = 500
 
@@ -150,50 +157,6 @@ _CMP_OPS: dict[type, Any] = {
 	ast.NotIn: lambda a, b: a not in b if isinstance(b, (list, tuple, dict, str, set)) else None,
 }
 
-# ----------------------------------------------------------------------------------------------
-# Helper functions: the only calls an expression may make (fixed names, fixed arity, total)
-# ----------------------------------------------------------------------------------------------
-
-_NUMBER_RE = re.compile(r"^[+-]?(\d+(\.\d*)?|\.\d+)$")
-
-
-def _h_number(value: Any) -> Any:
-	"""A number from a number or from text that is only a number (``"150"``, `` 2.5 ``); anything else is ``None``."""
-	if isinstance(value, bool):
-		return None
-	if isinstance(value, (int, float)):
-		return value
-	if isinstance(value, str):
-		text = value.strip()
-		if len(text) <= 64 and _NUMBER_RE.match(text):
-			try:
-				return float(text) if "." in text else int(text)
-			except (ValueError, OverflowError):
-				return None
-	return None
-
-
-def _h_lower(value: Any) -> Any:
-	"""Text in lower case (so two texts can be compared ignoring capital letters); other values are returned as they are."""
-	return value.lower() if isinstance(value, str) else value
-
-
-def _h_startswith(value: Any, prefix: Any) -> bool:
-	return isinstance(value, str) and isinstance(prefix, str) and value.startswith(prefix)
-
-
-def _h_endswith(value: Any, suffix: Any) -> bool:
-	return isinstance(value, str) and isinstance(suffix, str) and value.endswith(suffix)
-
-
-# name -> (function, number of positional arguments)
-HELPERS: dict[str, tuple[Any, int]] = {
-	"number": (_h_number, 1),
-	"lower": (_h_lower, 1),
-	"startswith": (_h_startswith, 2),
-	"endswith": (_h_endswith, 2),
-}
-
 
 # Explicit node-type allow-list. Anything not a key here (ast.Call, ast.Attribute, ast.Lambda,
 # comprehensions, ast.NamedExpr, ast.JoinedStr/FormattedValue, ast.Starred, ast.Import*, ...) is
@@ -254,18 +217,6 @@ def parse_expression(expression: str) -> ParsedExpression:
 	_validate_node(tree, depth=0)
 	return ParsedExpression(source=source, _tree=tree.body)
 
-
-class _FactsAttribute(ast.NodeTransformer):
-	"""``facts.<name>`` is read as ``facts['<name>']``. Every other attribute stays and is rejected."""
-
-	def visit_Attribute(self, node: ast.Attribute) -> ast.AST:
-		self.generic_visit(node)
-		if isinstance(node.value, ast.Name) and node.value.id == "facts" and not node.attr.startswith("_"):
-			return ast.copy_location(
-				ast.Subscript(value=node.value, slice=ast.copy_location(ast.Constant(node.attr), node), ctx=ast.Load()),
-				node,
-			)
-		return node
 
 
 def _validate_node(node: ast.AST, depth: int) -> None:
