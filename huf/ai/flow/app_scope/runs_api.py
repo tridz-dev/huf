@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 
 import frappe
+from frappe.core.doctype.user_permission.user_permission import get_user_permissions
 from frappe.utils import cint, get_datetime
 
 from huf.ai.flow.app_scope.access import flow_access
@@ -58,11 +59,12 @@ def count_app_runs(
 	exclude_test = not cint(include_test)
 	if "reason" not in keys:
 		return _sql_counts(app, flows, keys, status, since, exclude_test)
-	counts: dict[tuple, int] = {}
-	for r in _runs(app, status, flows, None, since, limit=None, exclude_test=exclude_test):
-		row = _row(r)
-		key = tuple(row[ROW_KEYS.get(k, k)] for k in keys)
-		counts[key] = counts.get(key, 0) + 1
+	# ``node`` is free text that SQL groups without regard to case, and User Permissions are checked run by run:
+	# both read every run instead of correcting SQL totals.
+	if "node" in keys or get_user_permissions(frappe.session.user):
+		counts = _row_reason_counts(app, flows, keys, status, since, exclude_test)
+	else:
+		counts = _narrow_reason_counts(app, flows, keys, status, since, exclude_test)
 	return [{**dict(zip(keys, key, strict=True)), "count": n} for key, n in sorted(counts.items(), key=str)]
 
 
@@ -134,6 +136,52 @@ def _sql_counts(app, flows, keys, status, since, exclude_test) -> list[dict]:
 		order_by=", ".join(group),
 		ignore_permissions=True,
 	)
+
+
+def _row_reason_counts(app, flows, keys, status, since, exclude_test) -> dict[tuple, int]:
+	counts: dict[tuple, int] = {}
+	for r in _runs(app, status, flows, None, since, limit=None, exclude_test=exclude_test):
+		row = _row(r)
+		key = tuple(row[ROW_KEYS.get(k, k)] for k in keys)
+		counts[key] = counts.get(key, 0) + 1
+	return counts
+
+
+def _narrow_reason_counts(app, flows, keys, status, since, exclude_test) -> dict[tuple, int]:
+	"""Totals from SQL, then only the contexts that mention ``reason_code`` are read and moved to their reason.
+
+	A run whose context text has no ``reason_code`` cannot have a reason (the JSON writers never escape the key).
+	Both queries run in one transaction, so they see the same runs.
+	"""
+	plain = [k for k in keys if k != "reason"]
+
+	def key_of(values, reason) -> tuple:
+		return tuple(reason if k == "reason" else values[k] for k in keys)
+
+	if plain:
+		totals = _sql_counts(app, flows, plain, status, since, exclude_test)
+	else:
+		filters = _filters(app, flows, status, None, since, exclude_test)
+		totals = [{"count": frappe.db.count(DOCTYPE, filters)}]
+	counts = {key_of(t, None): t["count"] for t in totals}
+	candidates = get_user_permitted_runs(
+		DOCTYPE,
+		filters={
+			**_filters(app, flows, status, None, since, exclude_test),
+			"context_json": ("like", "%reason_code%"),
+		},
+		fields=[*(f"{GROUP_COLUMNS[k]} as {k}" for k in plain), "context_json"],
+		order_by=None,
+		ignore_permissions=True,
+	)
+	for r in candidates:
+		reason = final_reason(r.context_json)
+		if reason is None:
+			continue
+		counts[key_of(r, None)] -= 1
+		key = key_of(r, reason)
+		counts[key] = counts.get(key, 0) + 1
+	return {key: n for key, n in counts.items() if n}
 
 
 # --- shaping ------------------------------------------------------------------------------------------------

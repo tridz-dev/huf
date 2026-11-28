@@ -152,6 +152,54 @@ class TestRunsApi(IntegrationTestCase):
 			self.assertEqual(by_node, {"end__blocked": 1, None: 2}, group_by)
 		self.assertNotIn(PHONE, frappe.as_json(runs_api.count_app_runs("huf", "node,reason", flow_ids=flows)))
 
+	def test_narrow_reason_counts_equal_row_by_row(self):
+		outputs = "__node_outputs__"
+		contexts = (
+			None,
+			{},
+			{"note": "reason_code"},
+			{"reason_code": "freq_cap"},
+			{outputs: {"s1": {"reason_code": "freq_cap"}, "s2": {"reason_code": "opt_out"}}},
+			{outputs: {"s1": {"reason_code": "opt_out"}, "s2": {"status": "ok"}}},
+			{outputs: {"s1": {"reason_code": ""}}},
+			{outputs: {"s1": {"reason_code": "not registered " + PHONE}}},
+			{outputs: ["reason_code"]},
+		)
+		for i, ctx in enumerate(contexts):
+			for flow, status in ((A_FLOW, "Failed"), (A_FLOW2, "Success"), (B_FLOW, "Failed")):
+				frappe.get_doc(
+					{"doctype": "Agent Flow Run", "flow_definition": flow, "flow_id": flow, "status": status,
+					 "run_mode": "Test" if i == 4 else None,
+					 "context_json": frappe.as_json(ctx) if ctx is not None else None}
+				).insert(ignore_permissions=True)  # fmt: skip
+		frappe.set_user(USER_A)
+		flows = [A_FLOW, A_FLOW2, B_FLOW]
+		group_bys = ("reason", "flow,status,reason", "reason,status", "flow,reason")
+		filters = ({}, {"status": "Failed"}, {"include_test": 1}, {"since": "2000-01-01"}, {"status": "Cancelled"})
+		for group_by in group_bys:
+			for kwargs in filters:
+				fast = runs_api.count_app_runs("huf", group_by, flow_ids=flows, **kwargs)
+				with mock.patch.object(runs_api, "_narrow_reason_counts", runs_api._row_reason_counts):
+					slow = runs_api.count_app_runs("huf", group_by, flow_ids=flows, **kwargs)
+				self.assertEqual(fast, slow, (group_by, kwargs))
+		by_reason = {c["reason"]: c["count"] for c in runs_api.count_app_runs("huf", "reason", flow_ids=flows)}
+		# own two flows only: the other app's runs are never counted
+		self.assertEqual(by_reason, {None: 13, "freq_cap": 1, "opt_out": 2, "unknown": 2})
+
+	def test_user_permissions_narrow_reason_counts(self):
+		frappe.get_doc(
+			{"doctype": "User Permission", "user": USER_A, "allow": "Flow Definition", "for_value": A_FLOW}
+		).insert(ignore_permissions=True)
+		self.addCleanup(frappe.clear_cache, user=USER_A)
+		self.addCleanup(frappe.db.delete, "User Permission", {"user": USER_A})
+		self.addCleanup(frappe.set_user, "Administrator")
+		frappe.set_user(USER_A)
+		flows = [A_FLOW, A_FLOW2]
+		rows = runs_api.list_app_runs("huf", flow_ids=flows)
+		counts = runs_api.count_app_runs("huf", "flow,reason", flow_ids=flows)
+		self.assertEqual(sum(c["count"] for c in counts), len(rows))
+		self.assertEqual({c["flow"] for c in counts}, {A_FLOW})
+
 	def test_bad_group_by_refused(self):
 		frappe.set_user(USER_A)
 		with self.assertRaises(frappe.ValidationError):
