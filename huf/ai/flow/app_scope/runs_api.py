@@ -161,8 +161,14 @@ def _narrow_reason_counts(app, flows, keys, status, since, exclude_test) -> dict
 	if plain:
 		totals = _sql_counts(app, flows, plain, status, since, exclude_test)
 	else:
-		filters = _filters(app, flows, status, None, since, exclude_test)
-		totals = [{"count": frappe.db.count(DOCTYPE, filters)}]
+		# not ``db.count``: it skips ``get_all``'s IFNULL on ``run_mode != 'Test'`` and loses runs with none
+		totals = get_user_permitted_runs(
+			DOCTYPE,
+			filters=_filters(app, flows, status, None, since, exclude_test),
+			fields=[{"COUNT": "name", "as": "count"}],
+			order_by=None,
+			ignore_permissions=True,
+		)
 	counts = {key_of(t, None): t["count"] for t in totals}
 	candidates = get_user_permitted_runs(
 		DOCTYPE,
