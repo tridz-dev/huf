@@ -1,5 +1,5 @@
 import { findActionOption } from '../flow-graph/appNodeTypes';
-import { triggerOptions } from '../../data/triggers';
+import { findTriggerOption } from '../../data/triggers';
 import { triggerIsConfigured } from '../flow-gateway/gatewayDefaults';
 import type { TriggerConfig } from '../../types/flow.types';
 
@@ -12,13 +12,13 @@ export function actionLabel(actionId: string): string {
 }
 
 export function triggerLabel(triggerId: string | undefined): string {
-  const option = triggerOptions.find((t) => t.id === triggerId);
+  const option = findTriggerOption(triggerId);
   return option?.nodeTitle ?? option?.name ?? 'What starts the flow';
 }
 
 /** Palette icon name of a trigger kind (the webhook's when nothing is chosen). */
 export function triggerIcon(triggerId: string | undefined): string {
-  return triggerOptions.find((t) => t.id === triggerId)?.icon ?? 'Webhook';
+  return findTriggerOption(triggerId)?.icon ?? 'Webhook';
 }
 
 /** The fields of a trigger step that follow from its config: its title, icon and whether it is set up. */

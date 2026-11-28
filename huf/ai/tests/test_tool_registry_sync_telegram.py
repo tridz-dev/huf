@@ -5,11 +5,12 @@ from unittest.mock import MagicMock, patch
 
 import frappe
 
+from huf.ai.tests.telegram_fakes import set_local_flags
 from huf.ai.tools import registry as tool_registry
 from huf.ai.tools._registry import ALL_INTEGRATION_TOOLS
 
 
-def _run_sync(existing):
+def _run_sync(testcase, existing):
 	"""Run the sync with registry tools; return (created payloads, updated docs)."""
 	tools = [t for t in ALL_INTEGRATION_TOOLS if t["tool_name"] in ("telegram", "telegram_admin")]
 	created, updated = [], []
@@ -32,7 +33,7 @@ def _run_sync(existing):
 	frappe_mock.get_doc.side_effect = get_doc
 	frappe_mock.get_all.side_effect = get_all
 	frappe_mock.db.exists.return_value = True
-	frappe.local.flags = frappe._dict(in_test=False)
+	set_local_flags(testcase, in_test=False)
 	with (
 		patch.object(tool_registry, "frappe", frappe_mock),
 		patch.object(tool_registry, "get_tools_by_app", return_value={"huf": tools}),
@@ -51,7 +52,7 @@ class TestTelegramToolSync(unittest.TestCase):
 	def test_telegram_rows_are_the_argument_table(self):
 		from huf.ai.tools import telegram_tool_spec as spec
 
-		_, _, updated = _run_sync(existing=["telegram", "telegram_admin"])
+		_, _, updated = _run_sync(self, existing=["telegram", "telegram_admin"])
 		(doc,) = [d for n, d in updated if n == "telegram"]
 		fields = [p["fieldname"] for p in doc.update.call_args[0][0]["parameters"]]
 		declared = {n for a in spec.ACTION_ARGS.values() for n in a}
@@ -60,7 +61,7 @@ class TestTelegramToolSync(unittest.TestCase):
 		self.assertFalse(set(spec.INTERNAL_ARGS) & set(fields))
 
 	def test_new_admin_entry_is_created(self):
-		result, created, updated = _run_sync(existing=["telegram"])
+		result, created, updated = _run_sync(self, existing=["telegram"])
 		self.assertEqual(result["error_count"], 0, result["errors"])
 		self.assertEqual([c["tool_name"] for c in created], ["telegram_admin"])
 		payload = created[0]
@@ -79,7 +80,7 @@ class TestTelegramToolSync(unittest.TestCase):
 		self.assertIn("short_description", fields)
 
 	def test_existing_telegram_row_is_refreshed(self):
-		_, _, updated = _run_sync(existing=["telegram", "telegram_admin"])
+		_, _, updated = _run_sync(self, existing=["telegram", "telegram_admin"])
 		self.assertEqual({n for n, _ in updated}, {"telegram", "telegram_admin"})
 		reg = {t["tool_name"]: t for t in ALL_INTEGRATION_TOOLS}
 		for name, doc in updated:

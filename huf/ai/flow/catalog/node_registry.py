@@ -32,6 +32,9 @@ from typing import Callable
 
 import frappe
 
+from huf.ai.flow.nodes import split as split_node
+from huf.ai.flow.support import step_keys
+from huf.ai.flow.support.pii import log_flow_error
 from huf.ai.graph.error_copy import describe_exception, step_failed_sentence
 from huf.ai.graph.executor import Outcome, RoutingMode
 
@@ -42,6 +45,15 @@ _ROUTING = {
 	"terminal": RoutingMode.TERMINAL,
 }
 _TEST_MODES = ("skip", "run")
+
+#: Built-in types the app-scoped (embed) palette may offer (docs/flow/BUILDER_EMBED.md section 3). Generic write paths
+#: (``code.run``, ``tool.call``, ``doc.create``, ``doc.update``) stay out; a new built-in is excluded until added here.
+EMBED_BUILTIN_TYPES = (
+	"trigger.unset", "trigger.schedule", "trigger.doc-event", "trigger.app", "condition", "router.decision", "transform", "foreach",
+	"wait", "stop", "output", "human.approval", "member.set", "send.message", "knowledge.search", "split",
+	# Member-only in an app flow: see huf/ai/flow/app_scope/targets.py.
+	"handoff",
+)
 
 
 @dataclass
@@ -55,6 +67,10 @@ class NodeCallContext:
 	park: Callable[..., Outcome]  # park(resume_at=None, token=False); only for ``can_wait`` types
 	is_resume: bool  # True when the run was woken after this step parked
 	waiting: dict | None  # the park record (``woke`` holds the wake reason and payload) when ``is_resume``
+	node_id: str = ""  # the step's id in the flow (H-W2-13)
+	step_key: str = ""  # idempotency token for this try of this step (H-W2-13, CONTRACTS section 12)
+	live: bool = False  # live_send AND NOT dry_run (G3); False in test runs and before live_send is on
+	holdout: bool = False  # the run was held out by a split node (H-W2-07, CONTRACTS section 16)
 
 
 @dataclass(frozen=True)
@@ -80,9 +96,15 @@ class NodeType:
 
 
 def builtin_types() -> frozenset[str]:
-	from huf.ai.graph.validator import PROCEDURE_NODE_TYPES, FLOW_ONLY_NODE_TYPES
+	from huf.ai.graph.validator import FLOW_ONLY_NODE_TYPES, PROCEDURE_NODE_TYPES
 
 	return PROCEDURE_NODE_TYPES | FLOW_ONLY_NODE_TYPES
+
+
+def embed_builtin_types() -> list[str]:
+	"""The allow-listed built-ins that exist on this version."""
+	existing = builtin_types()
+	return [t for t in EMBED_BUILTIN_TYPES if t in existing]
 
 
 def _entries(value) -> list[dict]:
@@ -117,7 +139,7 @@ def _normalize(raw: dict, app: str, builtins: frozenset[str]) -> NodeType | None
 	elif "flow" not in (raw.get("profiles") or ["flow"]):
 		problem = "only the flow profile is supported"
 	if problem:
-		frappe.log_error(f"{HOOK}: ignored {type_id or raw!r} from {app}: {problem}", "Flow node hook")
+		log_flow_error(f"{HOOK}: ignored {type_id or raw!r} from {app}: {problem}", "Flow node hook")
 		return None
 	return NodeType(
 		type=type_id,
@@ -170,15 +192,32 @@ def can_wait(type_id: str | None) -> bool:
 	return bool(node_type and node_type.can_wait)
 
 
+APP_TRIGGER_TYPE = "trigger.app"
+
+
+def _exec_trigger_app(flow_run, node: dict, config: dict, settings: dict) -> dict:
+	"""trigger.app: a passthrough for runs its app started (trigger_type "App") and for dry runs; anything else fails."""
+	from huf.ai.flow.engine import _context_of
+	from huf.ai.flow.testrun import gate as test_gate
+
+	if str(getattr(flow_run, "trigger_type", "") or "") != "App" and not test_gate.is_dry_run(flow_run):
+		app = str((config or {}).get("app") or "its app")
+		return {"status": "failed", "error": frappe._("This flow is started by {0} only.").format(app)}
+	return {"status": "success", "output": _context_of(flow_run, settings).as_dict()}
+
+
 def executor_for(type_id: str | None):
-	"""An engine executor ``(flow_run, node, config, settings) -> dict | Outcome`` for a registered type, else None."""
+	"""An engine executor ``(flow_run, node, config, settings) -> dict | Outcome`` for a registered type, else None.
+	``trigger.app`` is a built-in served here so the engine needs no branch for it."""
+	if type_id == APP_TRIGGER_TYPE:
+		return _exec_trigger_app
 	node_type = get_type(type_id)
 	if node_type is None:
 		return None
 
 	def execute(flow_run, node: dict, config: dict, settings: dict):
-		from huf.ai.flow.runs import park
 		from huf.ai.flow.engine import _context_of, _transition_run
+		from huf.ai.flow.runs import park
 		from huf.ai.flow.testrun import gate as test_gate
 
 		ctx = _context_of(flow_run, settings)
@@ -212,6 +251,10 @@ def executor_for(type_id: str | None):
 			park=park_step,
 			is_resume=bool(waiting),
 			waiting=waiting,
+			live=test_gate.is_live(flow_run),
+			holdout=split_node.is_holdout(ctx.data),
+			node_id=node.get("id") or "",
+			step_key=step_keys.key_of(node),
 		)
 		path = node_type.handler
 		if test_gate.is_test_run(flow_run) and node_type.test_simulate not in _TEST_MODES:
@@ -219,7 +262,7 @@ def executor_for(type_id: str | None):
 		try:
 			result = frappe.get_attr(path)(call)
 		except Exception as exc:  # the app's code failed: fail this step, never the worker
-			frappe.log_error(frappe.get_traceback(), f"Flow app step {node_type.type} raised")
+			log_flow_error(frappe.get_traceback(), f"Flow app step {node_type.type} raised")
 			return {"status": "failed", "error": step_failed_sentence(node_type.label, describe_exception(exc))}
 		if isinstance(result, (dict, Outcome)):
 			return result

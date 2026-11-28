@@ -22,7 +22,9 @@ import { StatusPill, flowStatusKind } from '@/components/common/StatusPill';
 import { cn } from '@/lib/utils';
 import { toast } from '@/lib/toast';
 import { RUN_BUTTON_LABEL } from '@/lib/flow-run/flowRunPayload';
+import { isActionAllowed } from './scopeFilter';
 import { paletteFilter } from './paletteFilter';
+import { embedPolicy } from '@/embed/bridge';
 
 interface CommandPaletteProps {
   open: boolean;
@@ -41,6 +43,8 @@ export function FlowCommandPalette({ open, onOpenChange, getSelectedIds, onOpenH
   const navigate = useNavigate();
   const { activeFlow, flows, activeFlowId, hasUnsavedChanges, undo, redo, canUndo, canRedo, undoLabel, redoLabel, tidyLayout, setSelectedNode } = useFlowContext();
   const { canManage, canExecuteCode } = useFlowPermissions();
+  // An app-owned flow in the embed: publishing, settings and other flows belong to the host.
+  const hostOwned = embedPolicy() !== null;
   const { status: codeStatus } = useCodeFlowStatus();
   const { setOpen: openShortcuts } = useShortcutsHelp();
   const actions = useFlowStepActions();
@@ -63,7 +67,7 @@ export function FlowCommandPalette({ open, onOpenChange, getSelectedIds, onOpenH
   const afterNode = spot ? nodes.find((n) => n.id === spot.sourceId) : undefined;
   const codeAvailable = Boolean(codeStatus?.available) && canExecuteCode;
   const { types: appTypes } = useAppNodeTypes();
-  const addable = [...actionOptions, ...appActionOptions(appTypes)].filter((a) => a.id !== CODE_RUN_ACTION || codeAvailable);
+  const addable = [...actionOptions, ...appActionOptions(appTypes)].filter((a) => isActionAllowed(a.id) && (a.id !== CODE_RUN_ACTION || codeAvailable));
   const ordered = addable;
   const isLive = activeFlow?.status === 'active';
   const clip = open ? readClipboard() : null;
@@ -149,7 +153,7 @@ export function FlowCommandPalette({ open, onOpenChange, getSelectedIds, onOpenH
               {canManage && (
                 <PaletteAction id="save" icon={Save} label="Save" shortcut="flow-save" hint={hasUnsavedChanges ? undefined : 'Nothing new to save'} onSelect={run(() => runFlowCommand('save'))} className={row} />
               )}
-              {canManage && !isLive && <PaletteAction id="publish" icon={Upload} label="Publish" onSelect={run(() => runFlowCommand('publish'))} className={row} />}
+              {canManage && !isLive && !hostOwned && <PaletteAction id="publish" icon={Upload} label="Publish" onSelect={run(() => runFlowCommand('publish'))} className={row} />}
               {canManage && <PaletteAction id="run" icon={Play} label={RUN_BUTTON_LABEL} hint="Starts the flow once with sample input" shortcut="flow-run" onSelect={run(() => runFlowCommand('run'))} className={row} />}
               {canManage && nodes.length > 1 && <PaletteAction id="tidy" icon={LayoutTemplate} label="Tidy layout" hint="Line the steps up neatly" onSelect={run(tidyLayout)} className={row} />}
               {canManage && canUndo && <PaletteAction id="undo" icon={Undo2} label="Undo" hint={undoLabel} shortcut="flow-undo" onSelect={run(undo)} className={row} />}
@@ -157,13 +161,13 @@ export function FlowCommandPalette({ open, onOpenChange, getSelectedIds, onOpenH
               {canManage && afterId && <PaletteAction id="duplicate" icon={Copy} label="Duplicate the selected step" shortcut="flow-duplicate" onSelect={run(() => actions.duplicate(selected))} className={row} />}
               {canManage && selected.length > 0 && <PaletteAction id="copy" icon={FileText} label={selected.length > 1 ? 'Copy the selected steps' : 'Copy the selected step'} shortcut="flow-copy" onSelect={run(() => actions.copy(selected))} className={row} />}
               {canManage && clip && <PaletteAction id="paste" icon={ClipboardPaste} label={`Paste ${clip.nodes.length === 1 ? '1 copied step' : `${clip.nodes.length} copied steps`}`} shortcut="flow-paste" onSelect={run(() => actions.paste())} className={row} />}
-              <PaletteAction id="settings" icon={Settings} label="Flow settings" onSelect={run(() => runFlowCommand('settings'))} className={row} />
+              {!hostOwned && <PaletteAction id="settings" icon={Settings} label="Flow settings" onSelect={run(() => runFlowCommand('settings'))} className={row} />}
               <PaletteAction id="runs" icon={History} label="Run history" onSelect={run(() => runFlowCommand('runs'))} className={row} />
               <PaletteAction id="help" icon={CircleHelp} label="Help" onSelect={run(onOpenHelp)} className={row} />
               <PaletteAction id="shortcuts" icon={Keyboard} label="Keyboard shortcuts" hint="Every shortcut of the editor" onSelect={run(() => openShortcuts(true))} className={row} />
             </CommandGroup>
 
-            {flowRows.length > 0 && (
+            {flowRows.length > 0 && !hostOwned && (
               <CommandGroup heading={searching ? 'Open a flow' : 'Recent flows'} data-testid="flow-palette-flows">
                 {flowRows.map((f) => (
                   <CommandItem

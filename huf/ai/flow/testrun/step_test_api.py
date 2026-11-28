@@ -38,6 +38,8 @@ def _editor_node(flow_id: str, node_id: str) -> tuple[dict, dict]:
 @frappe.whitelist()
 def get_step_test_info(flow_id: str, node_id: str) -> dict:
 	"""How the step behaves in a test (``effect``, ``calls_ai``, ``simulated``) and the data it would receive."""
+	from huf.ai.flow.app_scope.api_guards import guard_huf_flow
+	guard_huf_flow(flow_id)
 	graph, node = _editor_node(flow_id, node_id)
 	info = st.describe_step(node)
 	out = {"flow_id": flow_id, "node_id": node_id, **info, "trigger_kind": _TRIGGER_KINDS.get(node.get("type")), "parts": [], "sample_input": {"input": {}, "steps": {}}}
@@ -53,6 +55,8 @@ def get_step_test_info(flow_id: str, node_id: str) -> dict:
 @frappe.whitelist(methods=["POST"])
 def test_step(flow_id: str, node_id: str, sample_input=None) -> dict:
 	"""Run ONE step against sample data and return what it did. Nothing is sent or changed outside the flow."""
+	from huf.ai.flow.app_scope.api_guards import guard_huf_flow
+	guard_huf_flow(flow_id)
 	_, node = _editor_node(flow_id, node_id)
 	st.check_rate()
 	if str(node.get("type", "")).startswith("trigger."):
@@ -63,6 +67,8 @@ def test_step(flow_id: str, node_id: str, sample_input=None) -> dict:
 @frappe.whitelist()
 def get_step_test_result(token: str) -> dict:
 	"""Poll a slow step test. Same permission as ``test_step`` plus: it must be the test of the person asking."""
+	from huf.ai.flow.app_scope.api_guards import guard_huf_only
+	guard_huf_only()
 	import re
 
 	if not isinstance(token, str) or not re.fullmatch(r"[0-9a-f]{32}", token):
@@ -146,6 +152,8 @@ def _plain_title(value, fallback: str) -> str:
 @frappe.whitelist()
 def list_recent_documents(flow_id: str, node_id: str) -> dict:
 	"""The five most recently changed documents of the watched type that the caller may open."""
+	from huf.ai.flow.app_scope.api_guards import guard_huf_flow
+	guard_huf_flow(flow_id)
 	_, doctype = _doc_trigger(flow_id, node_id)
 	if not frappe.has_permission(doctype, "read"):
 		return {"doctype": doctype, "documents": []}
@@ -159,6 +167,8 @@ def list_recent_documents(flow_id: str, node_id: str) -> dict:
 @frappe.whitelist()
 def get_document_sample(flow_id: str, node_id: str, docname: str) -> dict:
 	"""One document as the flow would receive it when it changes (fields the caller may not read are left out)."""
+	from huf.ai.flow.app_scope.api_guards import guard_huf_flow
+	guard_huf_flow(flow_id)
 	from huf.ai.flow.triggers import build_doc_event_payload
 
 	node, doctype = _doc_trigger(flow_id, node_id)

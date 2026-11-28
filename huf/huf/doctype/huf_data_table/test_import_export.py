@@ -50,7 +50,8 @@ class TestImportExport(IntegrationTestCase):
 		self.assertIn("C", r["rejected_csv"])
 		url2 = self._file("Title,Qty\nA,10\nZ,1\n")
 		r = ie.run_import(self.table, url2, {"Title": "title", "Qty": "qty"}, "update", "title")
-		self.assertEqual((r["updated"], r["rejected"]), (1, 1))
+		self.assertEqual((r["updated"], r["rejected"], r["skipped"]), (1, 0, 1))
+		self.assertEqual(r["skipped_rows"], [{"row": 3, "message": "key not found"}])
 		with self.assertRaises(Exception):
 			ie.run_import(self.table, url2, {"Title": "title"}, "replace")
 		r = ie.run_import(self.table, url2, {"Title": "title", "Qty": "qty"}, "replace", confirm_replace=True)

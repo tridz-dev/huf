@@ -23,6 +23,7 @@ REQUIRED_CONFIG_KEYS: dict[str, tuple[str, ...]] = {
 	"trigger.webhook": ("method", "secret"),
 	"trigger.schedule": ("cron",),
 	"trigger.doc-event": ("doctype", "event"),
+	"trigger.app": ("app",),
 	"trigger.gateway": ("gateway",),
 	"trigger.whatsapp": ("gateway",),
 	"trigger.telegram": ("gateway",),

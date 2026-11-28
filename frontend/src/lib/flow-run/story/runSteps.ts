@@ -64,7 +64,10 @@ function decisionSentence(output: unknown): { sentence: string; comment?: string
 function waitingFor(waiting: Record<string, unknown> | undefined): string | undefined {
   if (!waiting || waiting.type !== 'approval') return undefined;
   const users = Array.isArray(waiting.approver_users) ? (waiting.approver_users as unknown[]).filter((u) => typeof u === 'string') : [];
-  if (waiting.approver_type === 'role' && typeof waiting.approver_role === 'string' && waiting.approver_role) return `Waiting for someone with the ${waiting.approver_role} role`;
+  const listed = Array.isArray(waiting.approver_roles) ? (waiting.approver_roles as unknown[]) : [];
+  const roles = [...new Set([...listed, waiting.approver_role].filter((r): r is string => typeof r === 'string' && r !== ''))];
+  if (waiting.approver_type === 'role' && roles.length === 1) return `Waiting for someone with the ${roles[0]} role`;
+  if (waiting.approver_type === 'role' && roles.length > 1) return `Waiting for someone with one of these roles: ${roles.join(', ')}`;
   if (users.length) return `Waiting for ${users.join(', ')}`;
   return undefined;
 }

@@ -19,6 +19,8 @@ def cancel_flow_run(flow_run_id: str) -> dict:
 	that finished meanwhile, is left alone with a plain message.
 	"""
 	# Edit rights on this run's own flow (not "can edit some flow"), and write on the run itself.
+	from huf.ai.flow.app_scope.api_guards import guard_run
+	guard_run(flow_run_id, "edit")
 	require_run_access(flow_run_id, "write", "write", _("Only people who can edit this flow can cancel its runs."))
 
 	from huf.ai.flow.runs import park
@@ -34,6 +36,8 @@ def cancel_flow_run(flow_run_id: str) -> dict:
 @frappe.whitelist(methods=["POST"])
 def continue_waiting_run(flow_run_id: str) -> dict:
 	"""Skip the rest of a timed wait and carry on now. Needs permission to edit THE FLOW this run belongs to."""
+	from huf.ai.flow.app_scope.api_guards import guard_run
+	guard_run(flow_run_id, "edit")
 	require_run_access(flow_run_id, "write", "write", _("Only people who can edit this flow can continue its runs."))
 
 	from huf.ai.flow.runs import park
@@ -47,6 +51,8 @@ def continue_waiting_run(flow_run_id: str) -> dict:
 @frappe.whitelist(methods=["POST"])
 def get_resume_link(flow_run_id: str) -> dict:
 	"""The single-use link that continues a run parked on a resume-mode wait. Needs permission to edit THE FLOW."""
+	from huf.ai.flow.app_scope.api_guards import guard_run
+	guard_run(flow_run_id, "edit")
 	require_run_access(flow_run_id, "write", "write", _("Only people who can edit this flow can see its resume link."))
 
 	from urllib.parse import urlencode

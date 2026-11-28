@@ -70,6 +70,11 @@ function hostOf(url: unknown): string | undefined {
   }
 }
 
+/** An app id as a title ("loyal_arrow" reads "Loyal Arrow"), the way Frappe titles a new app. */
+function appTitle(id: string): string {
+  return id.split(/[_-]+/).filter(Boolean).map((w) => w[0].toUpperCase() + w.slice(1)).join(' ');
+}
+
 const DOC_EVENT_WORD: Record<string, string> = {
   after_insert: 'created',
   on_update: 'changed',
@@ -92,6 +97,10 @@ export function triggerSubtitle(cfg: TriggerConfig | undefined, gateways?: reado
       const ev = cfg.event ? DOC_EVENT_WORD[cfg.event] : undefined;
       if (dt && ev) return `When a ${dt} is ${ev}`;
       return dt ? `When a ${dt} changes` : 'Starts when a record changes';
+    }
+    case 'app': {
+      const app = typed((cfg as { app?: unknown }).app);
+      return app ? `Started by ${appTitle(app)}` : 'Started by an app';
     }
     default:
       return 'Choose what starts this flow';
@@ -167,6 +176,8 @@ export function actionSubtitle(cfg: ActionConfig | undefined): string {
       return 'AI picks the next path';
     case 'router-decision':
       return 'Picks the next path by a rule';
+    case 'split':
+      return typeof cfg.holdout === 'number' && cfg.holdout > 0 ? `Weighted paths · ${cfg.holdout}% held out` : 'Weighted paths';
     case 'condition':
       return 'Go one of two ways';
     case 'foreach':
@@ -218,6 +229,8 @@ export function actionSubtitle(cfg: ActionConfig | undefined): string {
       const n = Object.keys(cfg.vars ?? {}).length;
       return n > 0 ? `Remembers ${n} ${n === 1 ? 'value' : 'values'} for this person` : 'Save values for this person';
     }
+    case 'send-message':
+      return cfg.category === 'marketing' ? 'Sends a marketing message' : 'Sends a message';
     case 'flow-call':
       return cfg.mode === 'wait' ? 'Runs another flow and waits' : 'Starts another flow';
     default:

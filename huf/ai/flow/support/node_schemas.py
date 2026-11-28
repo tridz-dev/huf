@@ -13,6 +13,7 @@ _NODE_DISPLAY = {
 	"trigger.schedule": ("Schedule Trigger", "Clock", "trigger"),
 	"trigger.doc-event": ("Doc Event Trigger", "FileText", "trigger"),
 	"trigger.unset": ("Unset Trigger", "CircleDashed", "trigger"),
+	"trigger.app": ("App Trigger", "AppWindow", "trigger"),
 	"trigger.gateway": ("Chat Message Trigger", "MessageSquare", "trigger"),
 	"trigger.whatsapp": ("WhatsApp Message Trigger", "MessageCircle", "trigger"),
 	"trigger.telegram": ("Telegram Message Trigger", "Send", "trigger"),
@@ -27,6 +28,8 @@ _NODE_DISPLAY = {
 	"doc.update": ("Update document", "FilePen", "data"),
 	"flow.call": ("Run another flow", "Workflow", "advanced"),
 	"member.set": ("Remember for this person", "UserPen", "data"),
+	"send.message": ("Send message", "Send", "data"),
+	"split": ("Split / holdout", "Split", "control"),
 	"condition": ("Condition (IF)", "GitFork", "control"),
 	"foreach": ("Loop", "RotateCw", "control"),
 	"validate": ("Validate", "ShieldCheck", "control"),
@@ -37,7 +40,43 @@ _NODE_DISPLAY = {
 	"state.delete": ("Delete State", "Trash2", "state"),
 	"doc.create": ("Create Document", "FilePlus", "data"),
 	"code.run": ("Execute Code", "Terminal", "data"),
+	"knowledge.search": ("Search knowledge", "BookOpen", "ai"),
+	"handoff": ("Hand to a person", "UserRound", "control"),
 }
+
+_NODE_ID = {"$ref": "#/$defs/NodeId"}
+_EXPR = {"$ref": "#/$defs/Expression"}
+
+#: ``router.decision`` Decision mode (``nodes/router_decision.py``). When ``decision`` is set the rule
+#: settings (``options``, ``default``) are not used, so neither is required in the form.
+_DECISION_PROPERTY = {
+	"type": "object",
+	"description": "Let the Decision runtime choose the next step. Leave empty to choose by rules.",
+	"additionalProperties": False,
+	"required": ["candidates", "uncertain_next"],
+	"properties": {
+		"candidates": {
+			"type": "array",
+			"minItems": 2,
+			"description": "The steps the decision may choose from.",
+			"items": {
+				"type": "object",
+				"additionalProperties": False,
+				"required": ["node_id"],
+				"properties": {"node_id": _NODE_ID, "label": {"type": "string"}},
+			},
+		},
+		"instructions": {"type": "string", "description": "What the decision should pick."},
+		"minimum_confidence": {"type": "number", "minimum": 0, "maximum": 1},
+		"uncertain_next": {**_NODE_ID, "description": "Step taken on any doubt or failure."},
+		"backend": {"type": "string", "description": "Registered Decision backend id."},
+		"policy_id": {"type": "string"},
+		"state": {"type": "object"},
+	},
+}
+
+#: Types only an app can start (start_flow_for_member); the palette marks them "app only".
+APP_ONLY_TYPES = frozenset({"trigger.app"})
 
 _SCHEMA_FILE = None
 
@@ -84,7 +123,7 @@ def _field_type(schema: dict) -> dict:
 			if src in schema:
 				out[dst] = schema[src]
 		return out
-	if kind == "integer":
+	if kind in ("integer", "number"):
 		out = {"type": "number"}
 		for src, dst in (("minimum", "min"), ("maximum", "max")):
 			if src in schema:
@@ -114,6 +153,38 @@ def _node_config_schema(node_def: dict) -> tuple[str | None, dict, bool]:
 	return node_type, config, forbids_next
 
 
+def _with_decision(config: dict) -> dict:
+	"""``router.decision`` config with the optional Decision mode added (rule fields no longer required)."""
+	props = dict(config.get("properties") or {})
+	props.setdefault("decision", _DECISION_PROPERTY)
+	required = [r for r in config.get("required", []) if r not in ("options", "default")]
+	return {**config, "properties": props, "required": required}
+
+
+def _descriptor(node_type: str, description: str | None, config: dict, forbids_next: bool) -> dict:
+	required = set(config.get("required", []))
+	fields = []
+	for name, prop in (config.get("properties") or {}).items():
+		descriptor = _field_type(prop)
+		descriptor.update({"name": name, "label": name.replace("_", " ").title(), "required": name in required})
+		if prop.get("description"):
+			descriptor["description"] = prop["description"]
+		if "default" in prop:
+			descriptor["default"] = prop["default"]
+		fields.append(descriptor)
+	label, icon, category = _NODE_DISPLAY.get(node_type, (node_type, "Circle", "other"))
+	return {
+		"label": label,
+		"icon": icon,
+		"category": category,
+		"description": description or label,
+		"has_backend": True,
+		"routing": {"next": not forbids_next, "on_error": True},
+		"config_schema": fields,
+		"json_schema": config,
+	}
+
+
 def build_node_schemas(schema: dict | None = None) -> dict:
 	"""Node-type -> UI descriptor, generated from ``graph_ir.schema.json`` (FlowGraph node list)."""
 	schema = schema or _graph_schema()
@@ -124,27 +195,9 @@ def build_node_schemas(schema: dict | None = None) -> dict:
 		node_type, config, forbids_next = _node_config_schema(node_def)
 		if not node_type:
 			continue
-		required = set(config.get("required", []))
-		fields = []
-		for name, prop in (config.get("properties") or {}).items():
-			descriptor = _field_type(prop)
-			descriptor.update(
-				{"name": name, "label": name.replace("_", " ").title(), "required": name in required}
-			)
-			if prop.get("description"):
-				descriptor["description"] = prop["description"]
-			if "default" in prop:
-				descriptor["default"] = prop["default"]
-			fields.append(descriptor)
-		label, icon, category = _NODE_DISPLAY.get(node_type, (node_type, "Circle", "other"))
-		out[node_type] = {
-			"label": label,
-			"icon": icon,
-			"category": category,
-			"description": node_def.get("description") or label,
-			"has_backend": True,
-			"routing": {"next": not forbids_next, "on_error": True},
-			"config_schema": fields,
-			"json_schema": config,
-		}
+		if node_type == "router.decision":
+			config = _with_decision(config)
+		out[node_type] = _descriptor(node_type, node_def.get("description"), config, forbids_next)
+		if node_type in APP_ONLY_TYPES:
+			out[node_type]["app_only"] = True
 	return out

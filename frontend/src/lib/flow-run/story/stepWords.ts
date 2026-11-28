@@ -27,6 +27,7 @@ const DONE: Record<string, string> = {
   stop: 'Stopped the flow',
   wait: 'Waited',
   'member.set': 'Remembered values for this person',
+  'send.message': 'Sent a message',
   'doc.get': 'Found a document',
   'doc.update': 'Updated a document',
   'flow.call': 'Ran another flow',

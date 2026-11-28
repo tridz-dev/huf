@@ -69,7 +69,7 @@ def _run(graph):
 		patch.object(flow_engine, "_publish_flow_event", lambda *a, **k: None),
 		patch.dict(flow_engine._NODE_EXECUTORS, {"stop": spy_for("stop"), "output": spy_for("output")}),
 		patch.object(flow_engine, "_FlowEventListener", lambda fr: NullListener()),
-		patch.object(flow_engine, "_FlowStateStore", lambda fr: _MemStore()),
+		patch.object(flow_engine, "_FlowStateStore", lambda *_: _MemStore()),
 	):
 		flow_engine._execute_loop(flow_run, nodes_map, flow_engine.effective_edges(graph), ctx)
 	return calls

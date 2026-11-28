@@ -13,7 +13,8 @@ export type TriggerType =
   | 'doc-event'
   | 'gateway'
   | 'whatsapp'
-  | 'telegram';
+  | 'telegram'
+  | 'app';
 
 /**
  * Value (FIELD_CONTRACT section 2): literal, `{$from}` reference, `{$template, vars}`,
@@ -69,7 +70,9 @@ export type ActionType =
   | 'doc-get'
   | 'doc-update'
   | 'flow-call'
-  | 'member-set';
+  | 'member-set'
+  | 'send-message'
+  | 'split';
 
 /** Wait step config (graph-IR `WaitNode`). `until` is a literal, reference or template; the timeout branch is a routing pointer. */
 export type WaitMode = 'duration' | 'until' | 'resume';
@@ -115,8 +118,17 @@ export interface GatewayTriggerUiConfig {
   params?: Array<{ key: string; value: string | number | boolean | string[] | null }>;
 }
 
+/** `trigger.app`: only its app starts the flow (through start_flow_for_member); the builder shows it, never offers it. */
+export interface AppTriggerConfig {
+  type: 'app';
+  /** The app that starts the flow, shown as "Started by <app>". */
+  app?: string;
+  entry_policy?: 'new_run_each_time' | 'resume_if_waiting' | 'once_per_member' | 'one_active_per_member';
+}
+
 export type TriggerConfig =
   | WebhookTriggerConfig
+  | AppTriggerConfig
   | ScheduleTriggerConfig
   | DocEventTriggerConfig
   | GatewayTriggerUiConfig
@@ -161,6 +173,15 @@ export interface RouterLlmActionConfig {
    * node; otherwise the serializer falls back to the first option target.
    */
   default?: string;
+}
+
+/** Split / holdout (graph-IR `split`): weighted branches (the option edges, each with a `weight` in percent) and a holdout share. */
+export interface SplitActionConfig {
+  type: 'split';
+  /** Percent of people held out (0-100); held-out runs still walk the graph but skip marketing sends. */
+  holdout?: number;
+  /** Bucketing salt; defaults to the flow version on the server. */
+  salt?: string;
 }
 
 export interface RouterDecisionActionConfig {
@@ -269,6 +290,19 @@ export interface MemberSetActionConfig {
   vars?: Record<string, FlowValue>;
 }
 
+/** Send message (graph-IR `send.message`): one message to the run's person, always through the guard chain. */
+export interface SendMessageActionConfig {
+  type: 'send-message';
+  gateway?: string;
+  recipient?: FlowValue;
+  template?: FlowValue;
+  text?: FlowValue;
+  variables?: string[];
+  category?: 'marketing' | 'service';
+  header?: Record<string, unknown>;
+  language?: string;
+}
+
 /** Run another flow (graph-IR `flow.call`). */
 export interface FlowCallActionConfig {
   type: 'flow-call';
@@ -322,6 +356,8 @@ export type ActionConfig =
   | DocUpdateActionConfig
   | FlowCallActionConfig
   | MemberSetActionConfig
+  | SplitActionConfig
+  | SendMessageActionConfig
   | UnknownActionConfig
   | { type: undefined };
 
@@ -347,6 +383,7 @@ export interface EndOutcome {
  *  next      -> node.next
  *  error     -> node.on_error
  *  true/false-> condition on_true / on_false
+ *  fallback  -> condition fallback_next (taken when the facts cannot be known)
  *  option    -> router options[] (label = edge.label)
  *  default   -> router default when it is not also an option target
  *  approve/reject/timeout -> human.approval approve_next / reject_next / timeout_next
@@ -355,12 +392,14 @@ export interface EndOutcome {
  */
 export type FlowEdgeRoute =
   | 'next' | 'error' | 'true' | 'false' | 'option' | 'default'
-  | 'approve' | 'reject' | 'timeout' | 'body';
+  | 'approve' | 'reject' | 'timeout' | 'body' | 'fallback';
 
 export interface FlowEdgeData {
   route?: FlowEdgeRoute;
   /** Switch rule check (route 'option' of router.decision); written to the option's `expression`. */
   expression?: string;
+  /** Split branch share in percent (route 'option' of split); written to the option's `weight`. */
+  weight?: number;
 }
 
 export interface FlowNodeData {

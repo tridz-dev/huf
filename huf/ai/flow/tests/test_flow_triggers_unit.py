@@ -126,7 +126,7 @@ class TestNodeSchemas(unittest.TestCase):
 		for entry in defs["FlowNode"]["oneOf"]:
 			expected.add(flow_api._node_config_schema(defs[entry["$ref"].rsplit("/", 1)[-1]])[0])
 		self.assertEqual(set(self.out), expected)
-		self.assertEqual(len(expected), 28)  # + the three chat triggers (gateway, whatsapp, telegram) + wait, stop, doc.get, doc.update, flow.call, member.set
+		self.assertEqual(len(expected), 33)  # every FlowNode.oneOf entry (incl. trigger.app, send.message, split, knowledge.search, handoff)
 
 	def test_fields_match_schema_exactly(self):
 		for node_type, desc in self.out.items():
@@ -144,7 +144,7 @@ class TestNodeSchemas(unittest.TestCase):
 		self.assertEqual(wh["secret"]["min_length"], 32)
 		self.assertEqual(f("trigger.doc-event")["event"]["options"], ["after_insert", "on_update", "on_submit", "on_cancel", "on_trash"])
 		self.assertEqual(set(f("trigger.schedule")), {"cron", "time_zone"})
-		self.assertEqual(set(f("condition")), {"expression", "on_true", "on_false"})
+		self.assertEqual(set(f("condition")), {"expression", "on_true", "on_false", "fallback_next"})
 		self.assertEqual(f("foreach")["body"]["type"], "node_list")
 		self.assertEqual(f("human.approval")["approver_users"]["type"], "string_list")
 		self.assertEqual(set(f("agent.run")), {"agent", "prompt", "prompt_bindings"})

@@ -47,6 +47,10 @@ def _install_standalone_frappe_stub():
 	sys.modules["frappe.utils"] = fake_utils
 
 
+# Stubs must not outlive this module: they are taken out of sys.modules once the
+# code under test is imported, and put back only while these tests run.
+_before = set(sys.modules)
+
 _install_standalone_frappe_stub()
 
 from huf.ai.graph import procedure_binding
@@ -58,6 +62,23 @@ from huf.ai.graph.procedure_binding import (
 	get_bound_procedures_for_agent,
 	invoke_bound_procedure,
 )
+
+_stubs = {
+	name: sys.modules.pop(name)
+	for name, module in list(sys.modules.items())
+	if name not in _before and name.split(".")[0] in ("frappe",) and not hasattr(module, "__file__")
+}
+_run_patch = patch.dict(sys.modules, _stubs)
+
+
+def setUpModule():
+	if _stubs:
+		_run_patch.start()
+
+
+def tearDownModule():
+	if _stubs:
+		_run_patch.stop()
 
 
 class _Row(dict):

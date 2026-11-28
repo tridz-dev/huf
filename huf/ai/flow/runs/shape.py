@@ -33,6 +33,8 @@ _STEP_TYPE_TITLES = {
 }
 
 from huf.ai.flow.runs.outcome import stored_outcome
+from huf.ai.flow.support.decision_rights import approval_decision_rights
+from huf.ai.flow.support.pii import mask_for_view, mask_text
 
 _DECISION_OUTCOMES = {
 	"approved": ("Approved", "good"),
@@ -192,6 +194,66 @@ def _modified_iso(value):
 	return _utc_iso(value)
 
 
+# Ids the approval UI and decision rights need: approver emails are identifiers, not trace data.
+_WAITING_KEEP = ("type", "node_id", "approver_type", "approver_role", "approver_roles", "approver_users", "timeout_at", "timeout_ms", "timeout_next")
+
+
+def waiting_for_view(waiting):
+	"""A masked copy of a run's ``waiting`` payload for a read API; approver ids stay intact (G4)."""
+	if not isinstance(waiting, dict) or not waiting:
+		return mask_for_view(waiting)
+	masked = mask_for_view({k: v for k, v in waiting.items() if k not in _WAITING_KEEP})
+	return {**masked, **{k: waiting[k] for k in _WAITING_KEEP if k in waiting}}
+
+
+# What a viewer who cannot decide an approval may still see of it, besides ``_WAITING_KEEP``.
+_UNDECIDABLE_KEEP = ("step_title", "flow_name", "test_run", "test_note")
+REDACTED = "[redacted]"
+
+
+def waiting_of_viewer(status, waiting, flow):
+	"""``waiting`` as this user may see it, before field masking.
+
+	For an approval the user cannot decide, the rendered texts (title, message, summary) are left out and the
+	facts keep only their labels: they quote run data, in which a name cannot be recognised and masked. A
+	cancelled run keeps its approval payload; nobody can decide it any more, so its texts are left out for
+	everyone, former approvers included.
+	"""
+	if not isinstance(waiting, dict) or (status != "Waiting Approval" and waiting.get("type") != "approval"):
+		return waiting
+	if approval_decision_rights(status, waiting, flow)[0]:
+		return waiting
+	kept = {k: waiting[k] for k in (*_WAITING_KEEP, *_UNDECIDABLE_KEEP) if k in waiting}
+	kept["facts"] = [
+		{"label": mask_text(str(f["label"])), "value": REDACTED}
+		for f in waiting.get("facts") or []
+		if isinstance(f, dict) and f.get("label")
+	]
+	return kept
+
+
+def hides_run_data(status, waiting, flow) -> bool:
+	"""True when this user sees an approval's texts redacted: the run data they quote is hidden as well."""
+	return waiting_of_viewer(status, waiting, flow) is not waiting
+
+
+def data_of_viewer(status, waiting, flow, data):
+	"""Run ``data`` (already field-masked) as this user may see it.
+
+	A name under an unknown key or in free text cannot be recognised, so whoever may not read the approval's texts
+	gets the keys only (the steps that ran), with every text and number redacted.
+	"""
+	return _redact_values(data) if hides_run_data(status, waiting, flow) else data
+
+
+def _redact_values(value):
+	if isinstance(value, dict):
+		return {k: _redact_values(v) for k, v in value.items()}
+	if isinstance(value, list):
+		return [_redact_values(v) for v in value]
+	return value if value is None or isinstance(value, bool) or value == "" else REDACTED
+
+
 def approval_lapsed(status, waiting) -> bool:
 	"""True for a run parked on a code approval whose ``expires_on`` has passed.
 
@@ -230,7 +292,8 @@ def shape_list_rows(rows: list, names: dict, can_fail: bool) -> list:
 			people[r.owner] = _full_name(r.owner)
 	for r in rows:
 		ctx = _load_json(r.pop("context_json", None))
-		r["approval_lapsed"] = approval_lapsed(r.status, _load_json(r.pop("waiting", None)))
+		waiting = _load_json(r.pop("waiting", None))
+		r["approval_lapsed"] = approval_lapsed(r.status, waiting)
 		creation = r.pop("creation", None)
 		r["flow_name"] = names.get(r.flow_id) or r.flow_id
 		r["stale"] = _is_stale(r.status, r.modified)
@@ -241,7 +304,7 @@ def shape_list_rows(rows: list, names: dict, can_fail: bool) -> list:
 		r["started_by"] = r.pop("owner", None)
 		r["started_by_name"] = people.get(r["started_by"])
 		r["run_number"] = bisect_right(by_flow[r.flow_id], creation) if creation is not None else None
-		r["input_hint"] = input_hint(ctx)
+		r["input_hint"] = "" if hides_run_data(r.status, waiting, r.flow_id) else input_hint(mask_for_view(ctx))
 		recorded = stored_outcome(r) if r.status == "Success" else None
 		r["outcome"] = recorded or compute_outcome(r.status, r.current_node_id, ctx, metas.get(r.flow_id, {}))
 		r.pop("outcome_label", None)

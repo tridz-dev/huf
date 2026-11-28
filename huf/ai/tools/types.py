@@ -14,6 +14,11 @@ _GUEST_DOCTYPE_PINNED_TYPES = {
     "Delete Document",
     "Delete Multiple Documents",
     "Attach File to Document",
+    "Submit Document",
+    "Cancel Document",
+    "Get Amended Document",
+    "Get Value",
+    "Set Value",
 }
 
 # Guest-allowed tools of these types MUST pin a reference_report; otherwise the

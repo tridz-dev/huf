@@ -12,6 +12,12 @@ from huf.permissions import (
 	_bust_cache,
 )
 
+APP_ROLES_HOOK = "huf_app_roles"
+# An app cannot claim these as its own: they would withhold the default from ordinary users.
+_NOT_APP_ROLES = frozenset(
+	{"Administrator", "System Manager", "Guest", "All", "Desk User", *HUF_ROLE_FRAPPE_ROLE_MAP.values()}
+)
+
 
 class HufUserRole(Document):
 	"""
@@ -25,6 +31,11 @@ class HufUserRole(Document):
 	# ------------------------------------------------------------------
 	# Lifecycle hooks
 	# ------------------------------------------------------------------
+
+	def before_validate(self):
+		# Only ensure_default_huf_roles may mark a record as a default grant; any other save makes it explicit.
+		if not self.flags.default_grant:
+			self.granted_by_default = 0
 
 	def before_insert(self):
 		if not self.invited_on:
@@ -126,6 +137,7 @@ def sync_from_frappe_user(doc, method=None):
 				frappe.flags.syncing_huf_roles = True
 				try:
 					huf_user_role.db_set("enabled", 0)
+					huf_user_role.db_set("granted_by_default", 0)
 					_bust_cache(doc.name)
 				finally:
 					frappe.flags.syncing_huf_roles = False
@@ -139,6 +151,7 @@ def sync_from_frappe_user(doc, method=None):
 			try:
 				huf_user_role.db_set("huf_role", highest_huf_role)
 				huf_user_role.db_set("enabled", 1)
+				huf_user_role.db_set("granted_by_default", 0)
 				_bust_cache(doc.name)
 			finally:
 				frappe.flags.syncing_huf_roles = False
@@ -166,13 +179,40 @@ def grant_default_huf_roles(doc, method=None):
 	ensure_default_huf_roles(doc.name, doc.user_type, doc.enabled, user_doc=doc)
 
 
+def app_declared_roles() -> set[str]:
+	"""Roles installed apps declare as their own (``huf_app_roles = ["My App Manager", ...]`` in their hooks.py).
+
+	A user holding one of them gets no default Huf role. Huf's and Frappe's own roles are ignored. A
+	malformed entry raises, so that the caller grants nothing.
+	"""
+	roles = frappe.get_hooks(APP_ROLES_HOOK) or []
+	if not isinstance(roles, (list, tuple)) or not all(isinstance(role, str) and role for role in roles):
+		raise ValueError(f"{APP_ROLES_HOOK} must be a list of role names")  # noqa: TRY003
+	return set(roles) - _NOT_APP_ROLES
+
+
+def _revoke_default_grant(user: str, record: str, user_doc=None) -> None:
+	"""Take back a default grant (never an assigned role) from a user who turned out to be an app's user."""
+	defaults = {HUF_ROLE_FRAPPE_ROLE_MAP[DEFAULT_SYSTEM_USER_HUF_ROLE], GATEWAY_FRAPPE_ROLE}
+	# Direct deletes: this runs inside the User's on_update, where removing roles through the doc would re-save it.
+	frappe.db.delete("Huf User Role", {"name": record})
+	frappe.db.delete("Has Role", {"parent": user, "parenttype": "User", "role": ("in", list(defaults))})
+	if user_doc is not None:
+		user_doc.set("roles", [row for row in user_doc.roles if row.role not in defaults])
+	frappe.clear_cache(user=user)
+	_bust_cache(user)
+
+
 def ensure_default_huf_roles(
 	user: str, user_type: str | None = None, enabled: int | None = None, user_doc=None
 ) -> bool:
-	"""Give a Frappe System User the default Huf roles. Returns True when anything was granted.
+	"""Give a Frappe System User the default Huf roles. Returns True when any role changed.
 
 	- No Huf role yet: they become ``Huf Manager`` (DEFAULT_SYSTEM_USER_HUF_ROLE).
 	- Everyone gets the ``Huf Gateway User`` role on top, so they can be a channel's Run as user.
+	- Except an app's user (holds a ``huf_app_roles`` role) with no assigned Huf role: they get nothing, and a
+	  default granted before they got the app role (``granted_by_default``) is taken back. If the hook cannot be
+	  read, nothing is granted or taken back.
 
 	Never downgrades or replaces a Huf role an admin assigned, never touches a user whose Huf access
 	was switched off (disabled Huf User Role), and never grants Huf Admin / System Manager (Administrator
@@ -193,11 +233,24 @@ def ensure_default_huf_roles(
 		user_type, enabled = row.user_type, row.enabled
 	if user_type != "System User" or not enabled:
 		return False
-	existing = frappe.db.get_value("Huf User Role", {"user": user}, ["name", "enabled"], as_dict=True)
+	existing = frappe.db.get_value(
+		"Huf User Role", {"user": user}, ["name", "enabled", "granted_by_default"], as_dict=True
+	)
 	if existing and not existing.enabled:
 		return False
 
 	roles = set(frappe.get_all("Has Role", {"parent": user, "parenttype": "User"}, pluck="role"))
+	try:
+		app_user = bool(roles & app_declared_roles())
+	except Exception:  # noqa: BLE001 - fail closed on any hook error
+		frappe.log_error(title=f"{APP_ROLES_HOOK}: no default Huf role granted")
+		return False
+	if app_user:
+		if existing and existing.granted_by_default:
+			_revoke_default_grant(user, existing.name, user_doc)
+			return True
+		if not existing and not roles & set(HUF_ROLE_FRAPPE_ROLE_MAP.values()):
+			return False
 	granted = []
 	if not existing and not roles & set(HUF_ROLE_FRAPPE_ROLE_MAP.values()):
 		record = frappe.get_doc(
@@ -207,8 +260,10 @@ def ensure_default_huf_roles(
 				"huf_role": DEFAULT_SYSTEM_USER_HUF_ROLE,
 				"enabled": 1,
 				"invited_by": "Administrator",
+				"granted_by_default": 1,
 			}
 		)
+		record.flags.default_grant = True
 		record.flags.skip_frappe_role_sync = True
 		record.insert(ignore_permissions=True)
 		granted.append(HUF_ROLE_FRAPPE_ROLE_MAP[DEFAULT_SYSTEM_USER_HUF_ROLE])

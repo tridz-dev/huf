@@ -1,3 +1,4 @@
+import { embedPolicy } from '../../embed/bridge';
 import type { ActionConfig } from '../../types/flow.types';
 import { getAppNodeType } from '../flow-graph/appNodeTypes';
 import { CODE_RUN_ACTION, DEFAULT_CODE_PROFILE, DEFAULT_CODE_TIMEOUT_S } from '../flow-graph/codeFlow';
@@ -11,6 +12,7 @@ export function defaultActionConfig(actionId: string, defaultCodeProfile?: strin
     condition: { type: 'condition', expression: '' },
     router: { type: 'router', prompt: '' },
     switch: { type: 'router-decision' },
+    split: { type: 'split', holdout: 0 },
     loop: { type: 'foreach', items: { $from: '' }, max_iterations: 100, on_item_error: 'fail', collect: { $from: '' } },
     'human.approval': { type: 'human.approval', message: '' },
     wait: { type: 'wait', mode: 'duration', duration: { unit: 'hours' } },
@@ -19,6 +21,7 @@ export function defaultActionConfig(actionId: string, defaultCodeProfile?: strin
     'doc-update': { type: 'doc-update', doctype: '', name: '', values: {} },
     'flow-call': { type: 'flow-call', flow_id: '', input: {}, mode: 'fire_and_forget' },
     'member-set': { type: 'member-set', vars: {} },
+    'send-message': { type: 'send-message', gateway: '', recipient: '', template: '', category: 'service' },
     end: { type: 'end' },
     'http-request': tool('http_request', { url: '', method: 'GET' }),
     transform: { type: 'transform', op: 'lower', input: {} },
@@ -32,6 +35,10 @@ export function defaultActionConfig(actionId: string, defaultCodeProfile?: strin
     sheets: tool('gsheets_read'),
     file: tool('gdrive_list_files'),
   };
+  // An app-owned flow may only hand over the run's own member, without a message (the server refuses anything else).
+  if (actionId === 'handoff' && embedPolicy()) {
+    return { type: 'unknown', backend_type: actionId, recipient: '$member', message: '' } as unknown as ActionConfig;
+  }
   // A step an installed app added: kept as its own type, edited by the schema form.
   if (getAppNodeType(actionId)) return { type: 'unknown', backend_type: actionId } as ActionConfig;
   return (configs[actionId] ?? { type: undefined }) as unknown as ActionConfig;

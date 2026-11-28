@@ -35,6 +35,7 @@ from huf.ai.tools.invocation import (
 from huf.ai.tools.registry import PermissionAwareToolRegistry
 from huf.ai.tools.support.run_context import _frappe_run_context_dict, _pin_code_execution_identity
 from huf.ai.memory.subject import MEMORY_TOOL_TYPES, pin_memory_run_context
+from huf.ai.tools.guest_guard import guest_scope_error
 from huf.ai.tools.types import _GUEST_DOCTYPE_PINNED_TYPES, _GUEST_REPORT_PINNED_TYPES
 from huf.ai.tools.perplexity import handle_perplexity_search
 
@@ -945,6 +946,8 @@ def create_function_tool(
                             ),
                             "denied": True,
                         })
+                    if scope_error := guest_scope_error(tool_type, _extra_args, args_dict):
+                        return json.dumps({"error": scope_error, "denied": True})
                     args_dict["ignore_permissions"] = True
 
                     # Override report_name with reference_report if pinned for guest.

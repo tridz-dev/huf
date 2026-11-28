@@ -30,6 +30,8 @@ def list_flow_tools() -> list:
 	Returns:
 	    list[dict]
 	"""
+	from huf.ai.flow.app_scope.api_guards import guard_huf_only
+	guard_huf_only()
 	if not frappe.has_permission("Agent Tool Function", "read"):
 		frappe.throw(_("Not permitted"), frappe.PermissionError)
 

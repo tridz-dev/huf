@@ -266,8 +266,13 @@ class WebhookHarness:
 		headers = {"Content-Type": "application/json"}
 		if secret is not None:
 			headers[WEBHOOK_SECRET_HEADER] = secret
+		path = "/api/method/huf.ai.gateway_webhook.handle_gateway_webhook"
+		query_string = f"gateway_name={gateway}"
 		request = SimpleNamespace(
 			args={"gateway_name": gateway},
+			url=f"https://huf.test{path}?{query_string}",
+			path=path,
+			query_string=query_string.encode(),
 			headers=headers,
 			method=method,
 			content_length=len(body),
@@ -1067,6 +1072,8 @@ class TestJoinAndWelcome(SynthBase):
 	def test_guard_captcha_issues_challenge_and_defers(self):
 		self.gate.telegram_guard_captcha = 1
 		self.patch("frappe.utils.get_url", return_value="https://huf.example.com")
+		# A site host_name with a scheme wins over get_url; pin it so the site config does not decide.
+		self.patch("huf.ai.telegram_public_url.configured_host", return_value="https://huf.example.com")
 		self.patch("huf.ai.telegram_guard._bot_token", return_value=TOKEN)
 		self.patch(
 			"huf.ai.telegram_guard.make_question",

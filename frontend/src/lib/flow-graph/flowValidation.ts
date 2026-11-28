@@ -3,6 +3,7 @@
  * docs/flow/FIELD_CONTRACT.md so a user sees "Choose an agent" next to the field instead of a raw
  * JSON-schema error after Save. Field names are the contract's config keys.
  */
+import { splitProblems } from '@/lib/flow/splitConfig';
 import { getTransformOp } from './flowTransformOps';
 import { transformParamHelp } from '../flow/flowHelp';
 import { branchHandlesFor } from '../flow/flowBranches';
@@ -18,6 +19,7 @@ import { peekIssueRegistry } from '../flow-gateway/registryStore';
 import { unreachableNodeIds } from '../flow/flowEdit';
 import { MAX_CODE_BYTES } from './codeFlow';
 import type { FlowEdge, FlowNode } from '../../types/flow.types';
+import { sendMessageIssues } from '@/lib/flow-send/sendMessage';
 
 type Cfg = Record<string, unknown>;
 
@@ -67,7 +69,9 @@ export function nodeKind(node: NodeLike): string {
     case 'doc-update': return 'doc.update';
     case 'flow-call': return 'flow.call';
     case 'member-set': return 'member.set';
+    case 'send-message': return 'send.message';
     case 'code-run': return 'code.run';
+    case 'split': return 'split';
     default: return typeof t === 'string' ? t : 'unknown';
   }
 }
@@ -139,6 +143,7 @@ export function validateNode(node: NodeLike, edges: EdgeLike[]): FlowIssue[] {
       // Draft and publish share this list: a draft saves anyway, publish is blocked until it is empty.
       for (const i of gatewayTriggerIssues(chat, c, peekIssueRegistry())) add(i.field, i.message);
     }
+    if (kind === 'trigger.app' && isBlank(c.app)) add('app', 'Choose the app that starts this flow.');
     if (kind === 'trigger.doc-event') {
       if (isBlank(c.doctype)) add('doctype', 'Choose a document type.');
       if (isBlank(c.event)) add('event', 'Choose when it should fire.');
@@ -197,11 +202,22 @@ export function validateNode(node: NodeLike, edges: EdgeLike[]): FlowIssue[] {
       const rules = out.filter((e) => edgeRoute(e as FlowEdge) === 'option');
       if (rules.length === 0) add('options', 'Add at least one rule.');
       else {
-        if (rules.some((e) => isBlank(asObj((e as { data?: unknown }).data).expression))) add('options', 'Write the check for this rule.');
+        const aiDecides = c.decision !== null && typeof c.decision === 'object';
+        if (aiDecides) {
+          if (rules.length < 2) add('options', 'Add at least two paths for the AI to choose from.');
+          if (isBlank(asObj(c.decision).instructions)) add('decision', 'Describe how the AI should choose a path.');
+        } else if (rules.some((e) => isBlank(asObj((e as { data?: unknown }).data).expression))) add('options', 'Write the check for this rule.');
         const names = rules.map((e) => (typeof e.label === 'string' ? e.label.trim().toLowerCase() : '')).filter((n) => n !== '');
         if (new Set(names).size !== names.length) add('options', 'Give each rule a different name.');
       }
-      if (!out.some((e) => edgeRoute(e as FlowEdge) === 'default')) add('default', 'Choose where to go when no rule matches.');
+      if (!out.some((e) => edgeRoute(e as FlowEdge) === 'default')) {
+        add('default', c.decision && typeof c.decision === 'object' ? 'Choose where to go when the AI is unsure.' : 'Choose where to go when no rule matches.');
+      }
+      break;
+    }
+    case 'split': {
+      const arms = out.filter((e) => edgeRoute(e as FlowEdge) === 'option').map((e) => ({ label: e.label, weight: asObj((e as { data?: unknown }).data).weight }));
+      for (const p of splitProblems(arms, c.holdout, c.salt)) add(p.field, p.message);
       break;
     }
     case 'condition':
@@ -276,6 +292,9 @@ export function validateNode(node: NodeLike, edges: EdgeLike[]): FlowIssue[] {
       break;
     case 'member.set':
       if (Object.keys(asObj(c.vars)).length === 0) add('vars', 'Add at least one value to remember.');
+      break;
+    case 'send.message':
+      for (const [field, message] of sendMessageIssues(c)) add(field, message);
       break;
     case 'flow.call':
       if (isBlank(c.flow_id)) add('flow_id', 'Choose a flow to run.');

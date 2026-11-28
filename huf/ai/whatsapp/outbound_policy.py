@@ -119,14 +119,14 @@ def check_pre_send(gateway: str | None, to: Any, kind: str, context: dict[str, A
 
 
 def check_template(gateway: str | None, recipient: Any, row: dict[str, Any] | None) -> None:
-	"""Refuse a known template that is not APPROVED, and MARKETING to a contact who stopped marketing."""
+	"""G5, fail closed: refuse a missing template row or any status but APPROVED, and MARKETING to a
+	contact who stopped marketing."""
 	if not row:
-		return
+		raise OutboundRefused("The template is not known here, so it was not sent.", "template_not_approved")
 	status = str(row.get("status") or "").upper()
-	if status and status != "APPROVED":
-		raise OutboundRefused(
-			f"The template is {status.lower()}, not approved, so it was not sent.", "template_not_approved"
-		)
+	if status != "APPROVED":
+		shown = status.lower() or "without a status"
+		raise OutboundRefused(f"The template is {shown}, not approved, so it was not sent.", "template_not_approved")
 	if gateway and str(row.get("category") or "").upper() == "MARKETING":
 		from huf.ai.whatsapp import account_events as events
 

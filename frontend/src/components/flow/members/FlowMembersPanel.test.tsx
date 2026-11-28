@@ -12,8 +12,8 @@ vi.mock('@/services/flow/steps/flowMembersApi', () => ({ listFlowMembers: (...a:
 import { FlowMembersPanel } from './FlowMembersPanel';
 
 const ROWS = [
-  { member_key: '+15550100', status: 'Waiting', current_node_id: 'w', active_flow_run: 'r1', last_event_at: '2026-11-20 10:00:00' },
-  { member_key: '+15550101', status: 'Completed', current_node_id: null, active_flow_run: null, last_event_at: null },
+  { member_key: '****0100', member_ref: 'ref-a', status: 'Waiting', current_node_id: 'w', active_flow_run: 'r1', last_event_at: '2026-11-20 10:00:00' },
+  { member_key: '****0101', member_ref: 'ref-b', status: 'Completed', current_node_id: null, active_flow_run: null, last_event_at: null },
 ];
 const show = () => render(<FlowMembersPanel flowId="f" open onOpenChange={() => {}} stepName={(id) => (id === 'w' ? 'Wait a day' : undefined)} />);
 
@@ -44,9 +44,9 @@ describe('FlowMembersPanel', () => {
   it('removing asks first, then forgets the person and reloads', async () => {
     show();
     fireEvent.click((await screen.findAllByTestId('flow-member-remove'))[0]);
-    expect((await screen.findByTestId('flow-member-remove-dialog')).textContent).toContain('This forgets what the flow saved for +15550100 and cancels their waiting run.');
+    expect((await screen.findByTestId('flow-member-remove-dialog')).textContent).toContain('This forgets what the flow saved for ****0100 and cancels their waiting run.');
     fireEvent.click(screen.getByTestId('flow-member-remove-confirm'));
-    await waitFor(() => expect(remove).toHaveBeenCalledWith('f', '+15550100'));
+    await waitFor(() => expect(remove).toHaveBeenCalledWith('f', 'ref-a'));
     await waitFor(() => expect(list).toHaveBeenCalledTimes(2));
   });
 

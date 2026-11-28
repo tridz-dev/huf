@@ -133,6 +133,8 @@ def _result(doc: frappe.Document, needs_setup: list[dict]) -> dict:
 @frappe.whitelist(methods=["POST"])
 def clone_flow(flow_id: str) -> dict:
 	"""Copy a flow into a new Draft named "<name> (copy)". Returns ``{flow_id, flow_name, needs_setup}``."""
+	from huf.ai.flow.app_scope.api_guards import guard_huf_flow
+	guard_huf_flow(flow_id)
 	require_permission(frappe.has_permission("Flow Definition", "create"), "You are not allowed to create flows")
 	if not frappe.db.exists("Flow Definition", flow_id):
 		frappe.throw(_("Flow {0} was not found").format(flow_id), frappe.DoesNotExistError)
@@ -160,6 +162,8 @@ def create_flow_from_template(
 	The caller supplies the graph exactly like ``save_flow_definition`` does and it is checked the same way when saved;
 	what this adds is the fresh secret, the unique name and the list of steps that still need setup.
 	"""
+	from huf.ai.flow.app_scope.api_guards import guard_huf_only
+	guard_huf_only()
 	require_permission(frappe.has_permission("Flow Definition", "create"), "You are not allowed to create flows")
 	graph = json.loads(definition_json) if isinstance(definition_json, str) else definition_json
 	if not isinstance(graph, dict):

@@ -64,6 +64,14 @@ def avail(value=True):
 	return patch.object(wb, "is_available", return_value=value)
 
 
+def approved(body="", header=""):
+	"""The local row of an approved template: a send without one is refused (G5, fail closed)."""
+	row = {"template": body, "status": "APPROVED", "category": "UTILITY", "whatsapp_account": "ACC", "language_code": "en_US"}
+	if header:
+		row.update(header_type="TEXT", header=header)
+	return patch.object(wb, "_template_row", return_value=row)
+
+
 class TestBridge(unittest.TestCase):
 	def test_constants_and_import_without_app(self):
 		self.assertEqual(wb.GRAPH_DEFAULT_VERSION, "v25.0")
@@ -257,7 +265,7 @@ class TestBridge(unittest.TestCase):
 		doc = FakeDoc()
 		with avail(), patch.object(wb, "resolve_account", return_value=ACCT), patch.object(frappe, "get_doc", return_value=doc) as gd, patch.object(
 			wb, "_template_docname", return_value="hello_tpl-en_US"
-		), patch.object(frappe.db, "commit") as commit:
+		), approved("Hi {{1}} {{2}}"), patch.object(frappe.db, "commit") as commit:
 			wb.send_template("ACC", "+1 415", "hello_tpl", ["a", "b"])
 		v = gd.call_args.args[0]
 		self.assertEqual(v["use_template"], 1)
@@ -270,7 +278,7 @@ class TestBridge(unittest.TestCase):
 		doc = FakeDoc()
 		with avail(), patch.object(wb, "resolve_account", return_value=ACCT), patch.object(
 			frappe, "get_doc", return_value=doc
-		) as gd, patch.object(wb, "_template_docname", return_value="hello_tpl-en_US"), patch.object(
+		) as gd, patch.object(wb, "_template_docname", return_value="hello_tpl-en_US"), approved("Hi {{1}} {{2}}", "{{1}}"), patch.object(
 			wb, "_graph_post_message", return_value="wamid.G1"
 		) as post, patch.object(frappe, "has_permission", return_value=True):
 			res = wb.send_template("ACC", "+1 415", "hello_tpl", ["a", "b"], ["h"])
@@ -280,6 +288,16 @@ class TestBridge(unittest.TestCase):
 		v = gd.call_args.args[0]
 		self.assertEqual(v["message_id"], "wamid.G1")  # preset message_id: frappe_whatsapp will not send again
 		self.assertEqual(v["template_header_parameters"], "h")
+
+	def test_send_template_without_a_local_row_is_refused_and_nothing_is_sent(self):
+		with avail(), patch.object(wb, "resolve_account", return_value=ACCT), patch.object(frappe, "get_doc") as gd, patch.object(
+			wb, "_template_docname", return_value="nope"
+		), patch.object(wb, "_template_row", return_value=None), patch.object(wb, "_graph_post_message") as post:
+			with self.assertRaises(wb.BridgeError) as cm:
+				wb.send_template("ACC", "+1 415", "nope", ["a"], ["h"])
+		self.assertEqual(cm.exception.payload["error"], "template_not_approved")
+		post.assert_not_called()
+		gd.assert_not_called()
 
 	def test_trusted_sends_commit_right_after_insert(self):
 		for send in (
@@ -291,7 +309,7 @@ class TestBridge(unittest.TestCase):
 			doc.insert = lambda **kw: order.append("insert") or FakeDoc.insert(doc, **kw)
 			with avail(), patch.object(wb, "resolve_account", return_value=ACCT), patch.object(
 				frappe, "get_doc", return_value=doc
-			), patch.object(wb, "_template_docname", return_value="t"), patch.object(
+			), patch.object(wb, "_template_docname", return_value="t"), approved("Hi"), patch.object(
 				frappe.db, "commit", side_effect=lambda: order.append("commit")
 			):
 				send()

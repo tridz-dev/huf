@@ -14,6 +14,7 @@ from urllib.parse import urlparse
 import frappe
 
 from huf.ai.http_handler import handle_http_request
+from huf.ai.tools.doctype_guard import is_denylisted
 from huf.ai.tools.functions import get_report_result
 
 # ---------------------------------------------------------------------------
@@ -111,6 +112,8 @@ def _make_broker_handler(profile_snapshot: dict, acting_user: str | None):
 			rows = _scoped_rows(rows, target)
 			if not rows:
 				return f"capability '{capability}' not granted for doctype '{target}'"
+			if capability in _WRITE_CAPABILITIES and is_denylisted(target):
+				return f"Access to doctype '{target}' is not permitted through this tool."
 			ptype = _CAPABILITY_PTYPE[capability]
 			if not frappe.has_permission(target, ptype, user=acting_user):
 				return f"user '{acting_user}' lacks {ptype} permission on '{target}'"

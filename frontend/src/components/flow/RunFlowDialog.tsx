@@ -15,6 +15,7 @@ import { getFlowDefinition } from '@/services/flowApi';
 import { getLastWebhookRequest } from '@/services/flow/triggerApi';
 import { describeJsonProblem } from '@/lib/flow-run/jsonErrors';
 import { parsePayload, readLastPayload, rememberPayload, RUN_MODE_BUTTON, type RunMode } from '@/lib/flow-run/flowRunPayload';
+import { isEmbedPath } from '@/embed/bridge';
 import { hasData, payloadFromForm, runFormFields, valuesFromPayload, type RunField, type RunFormValues } from '@/lib/flow-run/runForm';
 
 interface RunFlowDialogProps {
@@ -24,6 +25,8 @@ interface RunFlowDialogProps {
   onOpenChange: (open: boolean) => void;
   /** Starts the run with the parsed payload and the chosen mode. Resolve when the run has been reported. */
   onRun: (payload: Record<string, unknown>, mode: RunMode) => Promise<void>;
+  /** Embed only: a test run is the only choice (no "Run for real"). */
+  testOnly?: boolean;
 }
 
 interface FlowInputs {
@@ -62,7 +65,9 @@ async function loadInputs(flowId: string): Promise<FlowInputs> {
   };
 }
 
-export function RunFlowDialog({ open, flowId, flowName, onOpenChange, onRun }: RunFlowDialogProps) {
+export function RunFlowDialog({ open, flowId, flowName, onOpenChange, onRun, testOnly = false }: RunFlowDialogProps) {
+  // Only the embedded editor may hide the real run; elsewhere the prop is ignored.
+  const onlyTest = testOnly && isEmbedPath();
   const [mode, setMode] = useState<RunMode>('test');
   const [inputs, setInputs] = useState<FlowInputs>(NO_INPUTS);
   const [loading, setLoading] = useState(false);
@@ -213,7 +218,7 @@ export function RunFlowDialog({ open, flowId, flowName, onOpenChange, onRun }: R
           <DialogDescription>Starts the flow once, right now, as if its trigger had fired. Choose how, then give it the details it would receive.</DialogDescription>
         </DialogScrollHeader>
         <DialogScrollBody className="grid gap-4 py-4">
-          <RadioGroup value={mode} onValueChange={(v) => setMode(v as RunMode)} className="gap-2" aria-label="How to run" data-testid="flow-run-mode">
+          {!onlyTest && <RadioGroup value={mode} onValueChange={(v) => setMode(v as RunMode)} className="gap-2" aria-label="How to run" data-testid="flow-run-mode">
             {MODES.map((m) => (
               <Label
                 key={m.value}
@@ -231,9 +236,9 @@ export function RunFlowDialog({ open, flowId, flowName, onOpenChange, onRun }: R
                 </span>
               </Label>
             ))}
-          </RadioGroup>
+          </RadioGroup>}
 
-          {mode === 'real' && (
+          {mode === 'real' && !onlyTest && (
             <p role="note" className="rounded-md bg-warning-tint px-3 py-2 text-sm text-warning" data-testid="flow-run-real-warning">
               This is a real run: emails and messages go out and records are created or changed. If you only want to see what would happen, choose Test run.
             </p>

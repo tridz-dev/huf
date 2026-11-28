@@ -23,7 +23,7 @@ import json
 
 import frappe
 from frappe.model import default_fields
-from huf.ai.tools.doctype_guard import _check_doctype_allowed, _DENYLISTED_DOCTYPES, _DENYLISTED_PREFIXES
+from huf.ai.tools.doctype_guard import is_denylisted
 
 logger = frappe.logger("huf")
 
@@ -38,7 +38,7 @@ def _error(msg: str) -> str:
     return json.dumps({"success": False, "error": msg}, default=str)
 
 
-def _check_doctype_allowed(doctype: str):
+def _check_doctype_allowed(doctype: str, read_only: bool = False):
     """Return ``(meta, None)`` if ``doctype`` may be accessed through this
     module, or ``(None, error_json_str)`` if it is denied.
 
@@ -49,15 +49,15 @@ def _check_doctype_allowed(doctype: str):
     if not doctype or not isinstance(doctype, str):
         return None, _error("'doctype' is required")
 
-    normalized = doctype.strip().lower()
-    if normalized in _DENYLISTED_DOCTYPES:
-        return None, _error(f"Access to doctype '{doctype}' is not permitted through this tool.")
-    if normalized.startswith(_DENYLISTED_PREFIXES):
+    if is_denylisted(doctype, read_only):
         return None, _error(f"Access to doctype '{doctype}' is not permitted through this tool.")
 
     try:
-        if not frappe.db.exists("DocType", doctype):
+        stored = frappe.db.exists("DocType", doctype)
+        if not stored:
             return None, _error(f"DocType '{doctype}' does not exist.")
+        if isinstance(stored, str) and is_denylisted(stored, read_only):
+            return None, _error(f"Access to doctype '{doctype}' is not permitted through this tool.")
         meta = frappe.get_meta(doctype)
     except Exception as e:
         return None, _error(f"Could not load DocType '{doctype}': {e}")
@@ -170,7 +170,7 @@ def handle_get_doctype_meta(**kwargs) -> str:
     one level deep.
     """
     doctype = (kwargs.get("doctype") or "").strip()
-    meta, err = _check_doctype_allowed(doctype)
+    meta, err = _check_doctype_allowed(doctype, read_only=True)
     if err:
         return err
 
@@ -199,7 +199,7 @@ def handle_list_records(**kwargs) -> str:
     pagination.
     """
     doctype = (kwargs.get("doctype") or "").strip()
-    meta, err = _check_doctype_allowed(doctype)
+    meta, err = _check_doctype_allowed(doctype, read_only=True)
     if err:
         return err
 
@@ -266,7 +266,7 @@ def handle_get_record(**kwargs) -> str:
     doctype = (kwargs.get("doctype") or "").strip()
     name = kwargs.get("name")
 
-    meta, err = _check_doctype_allowed(doctype)
+    meta, err = _check_doctype_allowed(doctype, read_only=True)
     if err:
         return err
     if not name:
@@ -441,7 +441,7 @@ def handle_render_frappe_view(**kwargs) -> str:
     if mode not in _VALID_VIEW_MODES:
         return _error(f"'mode' must be one of {_VALID_VIEW_MODES}, got {mode!r}")
 
-    meta, err = _check_doctype_allowed(doctype)
+    meta, err = _check_doctype_allowed(doctype, read_only=True)
     if err:
         return err
 

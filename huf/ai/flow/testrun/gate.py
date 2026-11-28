@@ -3,7 +3,8 @@
 Three entry points, one rule: ``reads`` run, ``changes`` and ``sends`` are skipped and answer with a simulated
 output (see :mod:`~huf.ai.flow.testrun.simulate`).
 
-* :func:`simulate_node` is called by the engine before it runs a node (``tool.call``, ``doc.create``, ``code.run``).
+* :func:`simulate_node` is called by the engine before it runs a node (``tool.call``, ``doc.create``, ``doc.update``,
+  ``handoff``, ``code.run``).
 * :func:`agent_tool_gate` / :func:`mcp_tool_gate` are called by the tools an agent step uses, so an agent in a test
   run can look things up but cannot send or change anything.
 * :func:`approval_extras` / :func:`notify_test_owner` shape a test run's approval pause.
@@ -19,7 +20,14 @@ import frappe
 
 from huf.ai.flow.testrun import STORED_TEST
 from huf.ai.flow.testrun.effects import CHANGES, READS, tool_effect
-from huf.ai.flow.testrun.simulate import simulated_code, simulated_document, simulated_output, simulated_state
+from huf.ai.flow.testrun.simulate import (
+	simulated_code,
+	simulated_document,
+	simulated_handoff,
+	simulated_output,
+	simulated_state,
+	simulated_update,
+)
 
 TEST_NOTE = "Test: you can approve this yourself"
 # Code steps run for real only in the throw-away scratch profile (it has no network and no site access).
@@ -35,6 +43,60 @@ def _log_doubt(what: str, exc: BaseException) -> None:
 
 def is_test_run(flow_run) -> bool:
 	return str(getattr(flow_run, "run_mode", "") or "") == STORED_TEST
+
+
+def is_dry_run(flow_run) -> bool:
+	"""A test run of the flow or a one-step test: nothing may go out."""
+	return is_test_run(flow_run) or step_test_active()
+
+
+def live_send_on(flow_id) -> bool:
+	"""The flow's ``live_send`` switch. Fails CLOSED: no flow, or a read error, means off."""
+	if not flow_id:
+		return False
+	try:
+		return bool(frappe.db.get_value("Flow Definition", flow_id, "live_send"))
+	except Exception as exc:
+		_log_doubt("live_send", exc)
+		return False
+
+
+def pin_is_current(flow_run) -> bool:
+	"""Whether the run executes the flow's CURRENT PUBLISHED definition (status Active, pinned fingerprint matches).
+
+	A flow that was unpublished, archived or superseded (any status but Active) is not live, so its parked runs
+	only preview.
+
+	``live_send`` is switched on for one version, after that version was looked at (G3). A run parked on an older
+	version keeps executing that older graph after a republish (H-W2-18 drain), so a newer version's ``live_send``
+	must not make it send for real. Fails CLOSED: no pin, no flow, or a read error means not current.
+	"""
+	pinned = getattr(flow_run, "pinned_fingerprint", None)
+	flow_id = getattr(flow_run, "flow_id", None)
+	if not pinned or not flow_id:
+		return False
+	try:
+		from huf.ai.graph.executor import PinnedVersion
+
+		row = frappe.db.get_value("Flow Definition", flow_id, ["definition_json", "status"], as_dict=True)
+		if not row or row.get("status") != "Active" or not row.get("definition_json"):
+			return False
+		raw = row.get("definition_json")
+		defn = json.loads(raw) if isinstance(raw, str) else raw
+		return PinnedVersion.pin(defn).fingerprint == pinned
+	except Exception as exc:
+		_log_doubt("pinned version", exc)
+		return False
+
+
+def is_live(flow_run) -> bool:
+	"""G3, the one place it is decided: ``live = live_send AND NOT dry_run``. Anything else is preview only.
+
+	``live_send`` belongs to the current version, so a run pinned to an older version is never live.
+	"""
+	if is_dry_run(flow_run):
+		return False
+	return live_send_on(getattr(flow_run, "flow_id", None)) and pin_is_current(flow_run)
 
 
 # --------------------------------------------------------------------------- testing one step on its own (UX-16)
@@ -116,6 +178,12 @@ def simulate_node(node: dict, resolve: Callable[[Any], Any]) -> dict | None:
 		return _success(simulated_output(tool_id, effect, args))
 	if ntype == "doc.create":
 		return _success(simulated_document(config.get("doctype")))
+	if ntype == "doc.update":
+		return _success(simulated_update(config.get("doctype")))
+	if ntype == "handoff":
+		result = _success(simulated_handoff())
+		result["next_node_id"] = node.get("next")
+		return result
 	if ntype in ("state.set", "state.delete") and step_test_active():
 		return _success(simulated_state(ntype, config.get("key")))
 	if ntype == "wait":

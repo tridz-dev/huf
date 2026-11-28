@@ -34,6 +34,7 @@ _TRIGGER_KEYS = {
 	"trigger.webhook": ("method",),
 	"trigger.schedule": ("cron",),
 	"trigger.doc-event": ("doctype", "event"),
+	"trigger.app": ("app",),
 	# The channel's name only: no credentials, ids or filter values.
 	"trigger.gateway": ("gateway",),
 	"trigger.whatsapp": ("gateway",),
@@ -59,7 +60,7 @@ def _links(node: dict) -> list[str]:
 			found.append(value)
 
 	add(node.get("next"))
-	for key in ("on_true", "on_false", "approve_next", "reject_next", "timeout_next", "default"):
+	for key in ("on_true", "on_false", "fallback_next", "approve_next", "reject_next", "timeout_next", "default"):
 		add(config.get(key))
 	for option in config.get("options") or []:
 		if isinstance(option, dict):
@@ -163,6 +164,8 @@ def list_flow_cards(
 	or Archived; ``category`` is a category name (or ``Uncategorized`` for flows without one). Only flows the caller may
 	read are returned.
 	"""
+	from huf.ai.flow.app_scope.api_guards import guard_huf_read
+	guard_huf_read()
 	require_permission(frappe.has_permission("Flow Definition", "read"), "Not permitted")
 
 	limit = max(1, min(int(limit or MAX_PAGE), MAX_PAGE))
@@ -258,4 +261,6 @@ def category_names() -> list[str]:
 @frappe.whitelist()
 def list_flow_categories() -> list[str]:
 	"""Categories that flows use, sorted. Feeds the list filter and the settings picker."""
+	from huf.ai.flow.app_scope.api_guards import guard_huf_read
+	guard_huf_read()
 	return category_names()

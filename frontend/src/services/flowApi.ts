@@ -58,7 +58,7 @@ export type BackendNodeType =
     | 'trigger.webhook' | 'trigger.schedule' | 'trigger.doc-event' | 'trigger.unset' | 'trigger.gateway' | 'trigger.whatsapp' | 'trigger.telegram'
     | 'agent.run' | 'tool.call' | 'router.llm' | 'router.decision' | 'member.set' | 'wait' | 'human.approval'
     | 'condition' | 'transform' | 'foreach' | 'validate' | 'output'
-    | 'state.get' | 'state.set' | 'state.delete' | 'doc.create' | 'code.run' | 'stop' | 'doc.get' | 'doc.update' | 'flow.call';
+    | 'state.get' | 'state.set' | 'state.delete' | 'doc.create' | 'code.run' | 'stop' | 'doc.get' | 'doc.update' | 'flow.call' | 'send.message' | 'split';
 
 export interface BackendNode {
     id: string;

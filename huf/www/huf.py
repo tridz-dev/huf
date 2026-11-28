@@ -1,4 +1,5 @@
 import json
+import re
 
 import frappe
 import frappe.sessions
@@ -6,6 +7,13 @@ from frappe import _
 from frappe.utils.telemetry import capture
 
 no_cache = 1
+
+# Flow builder embed mode (docs/flow/BUILDER_EMBED.md, section 2.2).
+EMBED_CONFIG_KEY = "huf_embed_frame_ancestors"
+_ORIGIN_RE = re.compile(
+	r"(?P<scheme>https?)://(?P<host>[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*)(?::(?P<port>[0-9]{1,5}))?",
+	re.IGNORECASE | re.ASCII,
+)
 
 
 def _safe_json_embed(data_dict) -> str:
@@ -15,7 +23,7 @@ def _safe_json_embed(data_dict) -> str:
 	return json.dumps(safe_json)
 
 
-def build_boot_context() -> dict:
+def build_boot_context(extra_boot: dict | None = None) -> dict:
 	"""Standard HUF boot context: CSRF token + Guest-branching boot data.
 
 	Extracted from get_context() below so any other renderer that needs the
@@ -49,6 +57,9 @@ def build_boot_context() -> dict:
 		enabled = True
 	boot["server_script_enabled"] = enabled
 
+	if extra_boot:
+		boot.update(extra_boot)
+
 	boot_json = _safe_json_embed(boot)
 
 	return {
@@ -58,8 +69,135 @@ def build_boot_context() -> dict:
 	}
 
 
+def _normalize_origin(value, allow_http: bool) -> str | None:
+	"""``value`` as a browser-style origin (lower case, no default port), or None if it is not an exact origin."""
+	if not isinstance(value, str):
+		return None
+	match = _ORIGIN_RE.fullmatch(value)
+	if not match:
+		return None
+	scheme = match["scheme"].lower()
+	if scheme == "http" and not allow_http:
+		return None
+	origin = f"{scheme}://{match['host'].lower()}"
+	if match["port"]:
+		port = int(match["port"])
+		if not 0 < port <= 65535:
+			return None
+		if port != (443 if scheme == "https" else 80):
+			origin += f":{port}"
+	return origin
+
+
+def get_embed_frame_ancestors() -> list[str]:
+	"""Valid entries of the site-config allow-list. Empty means the page may not be framed."""
+	configured = frappe.conf.get(EMBED_CONFIG_KEY)
+	if not isinstance(configured, list):
+		return []
+	allow_http = bool(frappe.conf.developer_mode)
+	entries = ["'self'" if entry == "'self'" else _normalize_origin(entry, allow_http) for entry in configured]
+	return list(dict.fromkeys(entry for entry in entries if entry))
+
+
+def _site_origin() -> str | None:
+	"""The origin the browser used for this request (TLS may end at a proxy)."""
+	request = frappe.local.request
+	forwarded = (request.headers.get("X-Forwarded-Proto") or "").split(",")[0].strip()
+	return _normalize_origin(f"{forwarded or request.scheme}://{request.host}", allow_http=True)
+
+
+def _embed_path_segments() -> list[str] | None:
+	"""Path segments after ``/huf/embed``, or None when this is not an embed request.
+
+	Empty segments are dropped and the match ignores case, as Frappe's path resolver
+	and the client router are at least as lenient.
+	"""
+	request = getattr(frappe.local, "request", None)
+	if not request:
+		return None
+	segments = [part for part in request.path.strip("/ ").split("/") if part]
+	if [part.lower() for part in segments[:2]] != ["huf", "embed"]:
+		return None
+	return segments[2:]
+
+
+class EmbedNotPermitted(Exception):
+	"""Embed access denied.
+
+	Deliberately not a ``frappe.PermissionError``: Frappe renders those with a Login
+	button that would navigate the iframe to /login, which the embed contract forbids
+	(docs/flow/BUILDER_EMBED.md). This goes to Frappe's plain error page as a 403.
+	"""
+
+	http_status_code = 403
+
+	def __init__(self):
+		self.title = _("Not Permitted")
+		self.message = _("You do not have access to this flow.")
+		super().__init__(self.message)
+
+
+def _check_embed_access(segments: list[str]) -> None:
+	"""Raise EmbedNotPermitted unless the user may view this flow (``flow_access``, D-HAPPIOL-EMBED decision 2).
+
+	App-owned flows: the app's delegated view role. Huf-native flows: today's Huf roles.
+	"""
+	from huf.ai.flow.app_scope.access import flow_access
+
+	allowed = frappe.session.user != "Guest" and len(segments) >= 2 and segments[0].lower() == "flow"
+	if allowed:
+		flow_id = "/".join(segments[1:])
+		if frappe.db.exists("Flow Definition", flow_id):
+			allowed = flow_access(frappe.session.user, flow_id, "view")
+		else:
+			# A missing flow is left to the editor's "not found" state; it exposes nothing. Only Huf users get it.
+			from huf.ai.flow.app_scope.api_guards import is_app_only
+
+			allowed = not is_app_only()
+	if not allowed:
+		raise EmbedNotPermitted()
+
+
+class HufNotPermitted(EmbedNotPermitted):
+	"""The full Huf app (outside ``/huf/embed/``) for a signed-in user with no Huf capability: 403, no boot."""
+
+	def __init__(self):
+		super().__init__()
+		self.message = _("You do not have access to this page.")
+
+
+def _check_huf_access() -> None:
+	"""Guests keep today's behaviour (the app shows its login screen). App-only users get a 403 and no boot."""
+	from huf.ai.flow.app_scope.api_guards import is_app_only
+
+	if frappe.session.user != "Guest" and is_app_only():
+		raise HufNotPermitted()
+
+
+def _embed_boot(segments: list[str]) -> dict:
+	"""Set the frame policy, check access and return the extra boot data for an embed request."""
+	ancestors = get_embed_frame_ancestors()
+	# Set before the access check so the 403 page carries the same policy.
+	frappe.local.response_headers.set(
+		"Content-Security-Policy", "frame-ancestors " + (" ".join(ancestors) or "'none'")
+	)
+	_check_embed_access(segments)
+	origins = [_site_origin() if entry == "'self'" else entry for entry in ancestors]
+	embed = {"allowed_origins": list(dict.fromkeys(o for o in origins if o))}
+	from huf.ai.flow.app_scope.api_guards import embed_policy
+
+	policy = embed_policy("/".join(segments[1:]))
+	if policy is not None:
+		embed["policy"] = policy
+	return {"huf_embed": embed}
+
+
 def get_context(context):
-	context.update(build_boot_context())
+	segments = _embed_path_segments()
+	if segments is None:
+		_check_huf_access()
+	extra_boot = None if segments is None else _embed_boot(segments)
+	context.update(build_boot_context(extra_boot))
 	return context
 
 

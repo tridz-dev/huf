@@ -27,7 +27,7 @@ import json
 import sys
 import types
 import unittest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 
 def _install_standalone_frappe_stub():
@@ -70,11 +70,32 @@ def _install_standalone_frappe_stub():
 	sys.modules["frappe.model.document"] = fake_document
 
 
+# Stubs must not outlive this module: they are taken out of sys.modules once the
+# code under test is imported, and put back only while these tests run.
+_before = set(sys.modules)
+
 _install_standalone_frappe_stub()
 
 import frappe  # noqa: E402 -- must follow the stub install
 
 from huf.huf.doctype.flow_definition.flow_definition import FlowDefinition  # noqa: E402
+
+_stubs = {
+	name: sys.modules.pop(name)
+	for name, module in list(sys.modules.items())
+	if name not in _before and name.split(".")[0] == "frappe" and not hasattr(module, "__file__")
+}
+_run_patch = patch.dict(sys.modules, _stubs)
+
+
+def setUpModule():
+	if _stubs:
+		_run_patch.start()
+
+
+def tearDownModule():
+	if _stubs:
+		_run_patch.stop()
 
 
 def _limits(**overrides) -> dict:

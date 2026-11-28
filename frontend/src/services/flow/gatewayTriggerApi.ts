@@ -36,3 +36,12 @@ export async function getGatewayStates(names: string[]): Promise<GatewayChoice[]
     return [];
   }
 }
+
+/**
+ * The channels a step of one app-owned flow may use. `restricted` is false when the caller is not limited by the app
+ * (then the registry is the list). Never cached: it belongs to one flow.
+ */
+export async function getAppFlowGateways(flowId: string): Promise<{ restricted: boolean; gateways: GatewayChoice[] }> {
+  const result = await call.post('huf.ai.flow.gateways.api.get_app_flow_gateways', { flow_id: flowId });
+  return result.message as { restricted: boolean; gateways: GatewayChoice[] };
+}

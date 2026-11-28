@@ -4,8 +4,10 @@
  */
 import { useEffect, useState } from 'react';
 import { actionOptions } from '@/data/actions';
+import { embedApp, isBackendTypeAllowed, setScopeTypes } from '@/components/flow/palette/embedScope';
 import type { ActionOption } from '@/types/modal.types';
 import { listNodeTypes, type AppNodeType, type SchemaProp } from '@/services/flow/steps/nodeTypesApi';
+import { BUILTIN_SCHEMA_STEPS, builtinSchemaStep } from './builtinSchemaSteps';
 
 let cached: AppNodeType[] | null = null;
 let inFlight: Promise<AppNodeType[]> | null = null;
@@ -18,9 +20,12 @@ export function setAppNodeTypes(types: AppNodeType[] | null) {
 
 export function loadAppNodeTypes(): Promise<AppNodeType[]> {
   if (cached) return Promise.resolve(cached);
-  inFlight ??= listNodeTypes()
-    .catch(() => [] as AppNodeType[])
-    .then((types) => {
+  const app = embedApp();
+  inFlight ??= listNodeTypes(app ?? undefined)
+    // A failure is not cached: the scope stays empty (embedded) and the next call asks again.
+    .then((rows) => {
+      if (app !== null) setScopeTypes(rows.map((r) => r.type));
+      const types = rows.filter((r) => !r.builtin);
       setAppNodeTypes(types);
       return types;
     })
@@ -34,7 +39,7 @@ export function useAppNodeTypes(): { types: AppNodeType[]; loaded: boolean } {
   useEffect(() => {
     const on = () => tick((n) => n + 1);
     listeners.add(on);
-    void loadAppNodeTypes();
+    loadAppNodeTypes().catch(() => undefined);
     return () => { listeners.delete(on); };
   }, []);
   return { types: cached ?? [], loaded: cached !== null };
@@ -42,7 +47,13 @@ export function useAppNodeTypes(): { types: AppNodeType[]; loaded: boolean } {
 
 export const appNodeTypesLoaded = (): boolean => cached !== null;
 export const getAppNodeType = (type: unknown): AppNodeType | undefined =>
-  typeof type === 'string' ? cached?.find((t) => t.type === type) : undefined;
+  (typeof type === 'string' ? cached?.find((t) => t.type === type) : undefined) ?? builtinSchemaStep(type);
+
+/** The app steps, then the built-in steps drawn by the schema form (an app cannot shadow a built-in). */
+export function schemaStepTypes(types: AppNodeType[]): AppNodeType[] {
+  const builtins = BUILTIN_SCHEMA_STEPS.filter((t) => isBackendTypeAllowed(t.type));
+  return [...types.filter((t) => !builtinSchemaStep(t.type)), ...builtins];
+}
 
 const BUILTIN_STEP_PREFIXES = new Set(['agent', 'tool', 'router', 'doc', 'flow', 'state', 'code', 'member', 'trigger']);
 
@@ -53,6 +64,8 @@ export const appMissingMessage = (app: string): string =>
 /** An app step whose type is not in the loaded catalog (its app was removed): the app's name, else null. */
 export function missingAppStep(backendType: unknown): { app: string } | null {
   if (!appNodeTypesLoaded() || typeof backendType !== 'string' || getAppNodeType(backendType)) return null;
+  // Embedded: another app's step was left out of the list on purpose, not removed from the site.
+  if (embedApp() !== null && !isBackendTypeAllowed(backendType)) return null;
   const app = backendType.split('.')[0];
   return backendType.includes('.') && app && !BUILTIN_STEP_PREFIXES.has(app) ? { app } : null;
 }
@@ -61,7 +74,7 @@ const BUILTIN_CATEGORIES = new Set<ActionOption['category']>(['agent', 'control'
 
 /** Palette entries for app step types: they sit in their own category when it matches one, else under Apps. */
 export function appActionOptions(types: AppNodeType[]): ActionOption[] {
-  return types.map((t) => ({
+  return schemaStepTypes(types).map((t) => ({
     id: t.type,
     name: t.label,
     description: t.description,

@@ -48,6 +48,7 @@ class TestBroadcastBridge(unittest.TestCase):
 		with patch.object(wb, "is_available", return_value=True), patch.object(wb, "resolve_account", return_value=ACCT), \
 			patch.object(frappe, "get_doc", return_value=FakeDoc()) as gd, \
 			patch.object(wb, "_template_docname", return_value="hello-en_US"), \
+			patch.object(wb, "_template_row", return_value={"template": "Hi {{1}}", "status": "APPROVED", "category": "UTILITY", "whatsapp_account": "ACC", "language_code": "en_US"}), \
 			patch("huf.ai.whatsapp.account_events.send_refusal", return_value=None), \
 			patch.object(frappe, "has_permission", return_value=True):
 			res = wb.send_template("ACC", "+1 415 555 2671", "hello", ["a"], http_post=post, **kw)

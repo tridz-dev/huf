@@ -160,13 +160,16 @@ def iter_reachable_nodes(graph: dict) -> Iterator[dict]:
 		if ntype == "condition":
 			worklist.append(config.get("on_true"))
 			worklist.append(config.get("on_false"))
-		elif ntype in {"router.llm", "router.decision"}:
+			worklist.append(config.get("fallback_next"))
+		elif ntype in {"router.llm", "router.decision", "split"}:
 			for option in config.get("options", []) or []:
 				worklist.append(option.get("node_id"))
 			worklist.append(config.get("default"))
 		elif ntype == "human.approval":
 			worklist.append(config.get("approve_next"))
 			worklist.append(config.get("reject_next"))
+			worklist.append(config.get("timeout_next"))
+		elif ntype == "handoff":
 			worklist.append(config.get("timeout_next"))
 		elif ntype == "foreach":
 			worklist.extend(config.get("body", []) or [])

@@ -5,6 +5,7 @@ import { AgentRunForm } from './forms/AgentRunForm';
 import { ToolCallForm } from './forms/tool/ToolCallForm';
 import { RouterForm } from './forms/RouterForm';
 import { SwitchForm } from './forms/steps/SwitchForm';
+import { SplitForm } from './forms/steps/SplitForm';
 import { ConditionForm } from './forms/ConditionForm';
 import { LoopForm } from './forms/LoopForm';
 import { ApprovalForm } from './forms/approval/ApprovalForm';
@@ -14,6 +15,7 @@ import { FlowCallForm } from './forms/steps/FlowCallForm';
 import { DocGetForm } from './forms/data/DocGetForm';
 import { DocUpdateForm } from './forms/data/DocUpdateForm';
 import { MemberSetForm } from './forms/data/MemberSetForm';
+import { SendMessageForm } from './forms/SendMessageForm';
 import { TransformForm } from './forms/data/TransformForm';
 import { StateForm } from './forms/data/StateForm';
 import { DocCreateForm } from './forms/data/DocCreateForm';
@@ -48,6 +50,8 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
       return <RouterForm {...common} />;
     case 'router-decision':
       return <SwitchForm {...common} />;
+    case 'split':
+      return <SplitForm {...common} />;
     case 'condition':
       return <ConditionForm {...common} />;
     case 'foreach':
@@ -66,6 +70,8 @@ export function ActionConfigForm({ nodeId }: { nodeId: string }) {
       return <DocUpdateForm {...common} />;
     case 'member-set':
       return <MemberSetForm {...common} />;
+    case 'send-message':
+      return <SendMessageForm {...common} />;
     case 'transform':
       return <TransformForm {...common} />;
     case 'state-get':

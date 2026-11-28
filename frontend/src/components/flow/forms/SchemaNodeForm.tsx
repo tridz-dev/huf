@@ -1,6 +1,11 @@
+import { embedPolicy } from '@/embed/bridge';
 import { useFlowPermissions } from '@/hooks/flow/useFlowPermissions';
 import { fromTextRefs, toTextRefs } from '@/lib/flow-data/textRefs';
 import { appMissingMessage, getAppNodeType, missingAppStep } from '@/lib/flow-graph/appNodeTypes';
+import { HUF_APP } from '@/lib/flow-graph/builtinSchemaSteps';
+import { useFlowContext } from '@/contexts/FlowContext';
+import { edgeRoute, makeFlowEdge } from '@/services/flowSerializer';
+import type { FlowEdge } from '@/types/flow.types';
 import type { SchemaProp } from '@/services/flow/steps/nodeTypesApi';
 import { Checkbox } from '../../ui/checkbox';
 import { Input } from '../../ui/input';
@@ -11,6 +16,7 @@ import { DoctypePicker } from '../DoctypePicker';
 import { FieldHint } from '../FieldHint';
 import { ValueField } from './fields';
 import { type ActionFormProps, type Cfg, asObj, Section } from './formKit';
+import { AppHandoffFields, HANDOFF_FIXED_FIELDS } from './steps/HandoffForm';
 import { useDoctypeOptions } from './data/DocGetForm';
 import { useAsValue } from './useAsValue';
 
@@ -46,6 +52,32 @@ function DoctypeRow({ prop, value, onChange, f, path, disabled, Err }: RowProps)
   );
 }
 
+/** A step picker. `timeout_next` is the Timed out connection itself: choosing a step draws (or moves) that edge. */
+function NodeRow({ name, prop, value, onChange, nodeId, f, path, disabled, Err }: RowProps) {
+  const { activeFlow, updateEdges } = useFlowContext();
+  const others = (activeFlow?.nodes ?? []).filter((n) => n.id !== nodeId);
+  if (name === 'timeout_next') {
+    const edges = activeFlow?.edges ?? [];
+    const isTimeout = (e: FlowEdge) => e.source === nodeId && edgeRoute(e) === 'timeout';
+    value = edges.find(isTimeout)?.target;
+    onChange = (to: unknown) => {
+      if (typeof to === 'string' && to) updateEdges([...edges.filter((e) => !isTimeout(e)), makeFlowEdge(nodeId, to, 'timeout')]);
+    };
+  }
+  const id = `schema-${path.replace(/[^a-z0-9]+/gi, '-')}`;
+  return (
+    <div>
+      <Label htmlFor={id} size="sm">{prop.title}</Label>
+      <Select value={typeof value === 'string' && value ? value : undefined} disabled={disabled} onValueChange={onChange}>
+        <SelectTrigger id={id} data-testid={f(path)}><SelectValue placeholder="Choose a step" /></SelectTrigger>
+        <SelectContent>{others.map((n) => <SelectItem key={n.id} value={n.id}>{n.data.label || n.id}</SelectItem>)}</SelectContent>
+      </Select>
+      {prop.description && <FieldHint>{prop.description}</FieldHint>}
+      <Err field={path} />
+    </div>
+  );
+}
+
 function SchemaRow(props: RowProps) {
   const { name, prop, value, onChange, nodeId, f, Err, path, disabled } = props;
   const label = prop.title ?? name;
@@ -56,6 +88,7 @@ function SchemaRow(props: RowProps) {
   if (widget === 'data-ref') return <ValueField field={path} f={f} Err={Err} nodeId={nodeId} label={label} hint={prop.description} disabled={disabled} value={value} onChange={onChange} />;
   if (widget === 'template') return <TemplateRow {...props} prop={{ ...prop, title: label }} />;
   if (widget === 'doctype') return <DoctypeRow {...props} prop={{ ...prop, title: label }} />;
+  if (widget === 'node') return <NodeRow {...props} prop={{ ...prop, title: label }} />;
 
   if (prop.type === 'object') {
     const inner = asObj(value);
@@ -144,10 +177,12 @@ export function SchemaNodeForm({ nodeId, cfg, patch, f, Err, title }: ActionForm
       </div>
     );
   }
-  const entries = Object.entries(def.config_schema?.properties ?? {});
+  const appHandoff = cfg.backend_type === 'handoff' && embedPolicy() !== null;
+  const entries = Object.entries(def.config_schema?.properties ?? {}).filter(([name]) => !appHandoff || !HANDOFF_FIXED_FIELDS.includes(name));
   return (
     <Section title={title} hint={def.description}>
-      <FieldHint testId="flow-schema-app">Added by {def.app}</FieldHint>
+      {def.app !== HUF_APP && <FieldHint testId="flow-schema-app">Added by {def.app}</FieldHint>}
+      {appHandoff && <AppHandoffFields cfg={cfg} patch={patch} f={f} Err={Err} />}
       {entries.length === 0 && <p className="text-xs text-muted-foreground" data-testid="flow-schema-empty">This step has no settings.</p>}
       {entries.map(([name, prop]) => (
         <SchemaRow key={name} name={name} prop={prop} path={name} value={cfg[name]} onChange={(v) => patch({ [name]: v })} nodeId={nodeId} f={f} Err={Err} disabled={!canManage} />
