@@ -38,7 +38,7 @@ from typing import Any
 import frappe
 from frappe.utils import add_to_date, convert_utc_to_system_timezone, get_datetime, now_datetime
 
-from huf.ai.channels import guard, guard_steps, recipient_binder, token_binder
+from huf.ai.channels.outbound import guard, guard_steps, recipient_binder, token_binder
 
 DOCTYPE = "Channel Outbox"
 TRANSIENT, PERMANENT, BLOCKED, AMBIGUOUS = "transient", "permanent", "blocked", "ambiguous"
@@ -144,7 +144,7 @@ def enqueue(request: dict, *, deliver_now: bool = True) -> str:
 		return frappe.db.get_value(DOCTYPE, {"step_key": step_key}, "name")
 	if deliver_now:
 		frappe.enqueue(
-			"huf.ai.channels.outbox.deliver",
+			"huf.ai.channels.outbound.outbox.deliver",
 			queue="short",
 			name=doc.name,
 			enqueue_after_commit=True,
@@ -244,7 +244,7 @@ def retry_due(limit: int = 500) -> int:
 	for row_name in names:
 		step_key = frappe.db.get_value(DOCTYPE, row_name, "step_key")
 		frappe.enqueue(
-			"huf.ai.channels.outbox.deliver",
+			"huf.ai.channels.outbound.outbox.deliver",
 			queue="short",
 			name=row_name,
 			job_id=f"outbox:{step_key}",

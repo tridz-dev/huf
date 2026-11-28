@@ -26,7 +26,7 @@ from datetime import datetime, timedelta, timezone
 
 import frappe
 
-from huf.ai.channels import guard, guard_steps, recipient_binder
+from huf.ai.channels.outbound import guard, guard_steps, recipient_binder
 from huf.ai.flow.runs import park
 from huf.ai.flow.runs.park import ParkRequest
 from huf.ai.flow.support import step_keys

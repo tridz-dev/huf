@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 import frappe
 from frappe.tests import IntegrationTestCase
 
-from huf.ai.channels import guard, guard_steps, token_binder
+from huf.ai.channels.outbound import guard, guard_steps, token_binder
 from huf.ai.flow import engine, preflight
 from huf.ai.flow.nodes import send
 from huf.ai.flow.runs import park
@@ -169,7 +169,7 @@ class TestSendOutboxWiring(IntegrationTestCase):
 	"""H-W2-15 wiring: the send step queues on the outbox; a decided send is never run again (G2)."""
 
 	def test_enqueue_maps_literal_recipient_to_block_and_other_channels_refused(self):
-		from huf.ai.channels import outbox
+		from huf.ai.channels.outbound import outbox
 
 		with patch.object(outbox, "enqueue", side_effect=outbox.LiteralRecipient("recipient_ref")):
 			self.assertEqual(send._enqueue({"channel": "whatsapp"}), "bad_recipient")

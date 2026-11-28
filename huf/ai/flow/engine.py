@@ -794,7 +794,7 @@ def run_flow(flow_run_name: str):
 		commit_if_background()
 
 		try:
-			from huf.ai.channels import guard
+			from huf.ai.channels.outbound import guard
 
 			with guard.batch():  # one run's sends share template reads and consent allows (H-W2-19)
 				_execute_loop(flow_run, nodes_map, edges_list, run_ctx)

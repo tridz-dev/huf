@@ -469,7 +469,7 @@ def get_flow_run(flow_run_id: str) -> dict:
 
 def _stop_unsent_messages(doc) -> None:
 	"""Record that a person failed this run and withdraw its unsent messages. The caller commits."""
-	from huf.ai.channels import outbox
+	from huf.ai.channels.outbound import outbox
 	from huf.ai.flow.runs.park import _waiting
 
 	waiting = {**_waiting(doc), outbox.FAILED_BY_PERSON: True}

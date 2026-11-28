@@ -214,7 +214,7 @@ def remove_member(flow: str, key: str) -> bool:
 
 	Commits. Raises, keeping the row, when a run cannot be stopped.
 	"""
-	from huf.ai.channels import outbox
+	from huf.ai.channels.outbound import outbox
 	from huf.ai.flow.engine import TERMINAL_STATUSES
 	from huf.ai.flow.runs.park import cancel_run
 
@@ -275,7 +275,7 @@ def exit_on_opt_out(gateway: str | None = None, sender_id: str | None = None, ki
 	key = _normalize_sender(sender_id)[:MAX_KEY_CHARS]
 	if kind != "opt_out" or not key:
 		return []
-	from huf.ai.channels import guard
+	from huf.ai.channels.outbound import guard
 
 	guard.invalidate_consent(sender_id)
 	from huf.ai.flow.engine import TERMINAL_STATUSES

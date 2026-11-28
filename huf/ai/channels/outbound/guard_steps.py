@@ -1,7 +1,7 @@
 # Copyright (c) 2026, Huf and contributors
 # For license information, please see license.txt
 
-"""Huf's built-in pre-send steps (H-W2-02), run by :mod:`huf.ai.channels.guard` before any app hook.
+"""Huf's built-in pre-send steps (H-W2-02), run by :mod:`huf.ai.channels.outbound.guard` before any app hook.
 
 Each step takes the request dict and answers ``{"allow": True}`` or ``{"allow": False, "reason": code}``.
 The steps in ``STEPS`` only read. Anything they raise is turned into a ``hook_error`` block by the chain.

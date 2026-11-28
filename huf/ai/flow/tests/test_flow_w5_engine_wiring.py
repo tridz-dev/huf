@@ -175,7 +175,7 @@ class TestSchema(unittest.TestCase):
 
 class TestRunFlowBatch(unittest.TestCase):
 	def test_execute_loop_runs_inside_a_guard_batch(self):
-		from huf.ai.channels import guard_steps
+		from huf.ai.channels.outbound import guard_steps
 
 		seen = []
 		doc = SimpleNamespace(status="Queued", name="R1")

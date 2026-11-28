@@ -7,7 +7,8 @@ from unittest.mock import MagicMock, patch
 import frappe
 from frappe.tests import IntegrationTestCase
 
-from huf.ai.channels import channel_consent, guard, guard_steps, handoff_hooks
+from huf.ai.channels import channel_consent, handoff_hooks
+from huf.ai.channels.outbound import guard, guard_steps
 from huf.ai.flow.runs import member
 
 
