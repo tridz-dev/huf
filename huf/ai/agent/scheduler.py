@@ -92,15 +92,15 @@ def run_scheduled_agents():
 	ships and automation_runtime_is_new() is the default on all
 	internal benches. See docs/DEPRECATIONS.md for removal timeline.
 	"""
-	if automation_runtime_is_new():
-		frappe.logger().info("run_scheduled_agents: legacy scheduler is disabled; new automation_runtime is active")
-		return
-	now = now_datetime().replace(microsecond=0)
-
 	if frappe.session.user != "Administrator" and not frappe.has_permission("Agent Trigger", "write"):
 		frappe.throw(
 			_("Permission denied: You cannot run scheduled agents manually."), frappe.PermissionError
 		)
+
+	if automation_runtime_is_new():
+		frappe.logger().info("run_scheduled_agents: legacy scheduler is disabled; new automation_runtime is active")
+		return
+	now = now_datetime().replace(microsecond=0)
 
 	if not frappe.db.exists("DocType", "Agent Trigger"):
 		return

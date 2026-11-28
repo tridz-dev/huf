@@ -14,6 +14,7 @@ from typing import Any
 
 import frappe
 
+from huf.ai.flow.app_scope.api_guards import guard_huf_read
 from huf.ai.skills.exporter import download_skill_huf as _download_skill_huf
 from huf.ai.skills.hooks import sync_app_skills as _sync_app_skills
 from huf.ai.skills.importer import (
@@ -65,7 +66,12 @@ def fetch_skill_registry(repo_url: str, ref: str = "main", path: str = "_index.j
 
 @frappe.whitelist()
 def sync_app_skills(apps_to_scan=None, use_cache: bool = True) -> dict[str, Any]:
-	"""Whitelisted wrapper around ``huf.ai.skills.hooks.sync_app_skills``."""
+	"""Whitelisted wrapper around ``huf.ai.skills.hooks.sync_app_skills``.
+
+	The sync saves and deletes Skill records with ``ignore_permissions``, so the caller needs Skill write.
+	Hooks call ``huf.ai.skills.hooks.sync_app_skills`` directly and are not affected.
+	"""
+	frappe.has_permission("Skill", "write", throw=True)
 	return _sync_app_skills(apps_to_scan=apps_to_scan, use_cache=use_cache)
 
 
@@ -75,6 +81,7 @@ def get_skill_options() -> list[dict[str, Any]]:
 
 	Used by link/multi-select fields that need a simple options list.
 	"""
+	guard_huf_read()
 	if not frappe.db.exists("DocType", "Skill"):
 		return []
 
@@ -103,6 +110,7 @@ def get_skill_destinations() -> list[dict[str, Any]]:
 	The default ``tridz-dev/huf-skills`` destination is always included; user
 	destinations from ``Agent Settings.skill_destinations`` are merged on top.
 	"""
+	guard_huf_read()
 	from huf.ai.skills.importer import _get_common_destinations
 
 	destinations = _get_common_destinations()
