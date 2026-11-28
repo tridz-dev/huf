@@ -37,7 +37,7 @@ import frappe
 
 from huf.ai.tools.call_telemetry import finalize_tool_call_telemetry as _finalize_tool_call_telemetry
 from huf.ai.tools.call_telemetry import start_tool_call_telemetry as _start_tool_call_telemetry
-from huf.ai.tools.guest_guard import guest_scope_error
+from huf.ai.tools.support.guest_guard import guest_scope_error
 from huf.ai.tools.support.sync import _run_coroutine_sync
 from huf.ai.tools.types import _GUEST_DOCTYPE_PINNED_TYPES, _GUEST_REPORT_PINNED_TYPES, MUTATING_TOOL_TYPES
 
