@@ -21,6 +21,7 @@ from huf.ai.gateway_adapters.registered import get_adapter_class
 from huf.ai.gateway_core.webhook_helpers import adapter_unavailable_response, reply_status_values, untracked_status_hook
 from huf.ai.whatsapp.broadcast import status as broadcast_status
 from huf.ai.whatsapp.gateway_hooks import fire_hook
+from huf.ai.gateway_delivery.failed_status import _FAILED_STATUS_TTL, _record_failed_status  # noqa: F401
 
 EXEMPT_AUTH_ROUTES: frozenset[str] = frozenset(
 	{
@@ -364,26 +365,6 @@ def _has_webhook_signals(gateway) -> bool:
 	"""Whether the provider records verify/signature health timestamps (registered hook)."""
 	hook = provider_hooks.get(getattr(gateway, "provider", ""), "webhook_signals")
 	return bool(hook()) if hook is not None else False
-
-
-_FAILED_STATUS_TTL = 7 * 24 * 3600
-
-
-def _record_failed_status(gateway_name: str, status: dict, provider: str | None = None) -> None:
-	"""Record a failed outbound delivery status through the provider's ``failed_status`` hook."""
-	hook = provider_hooks.get(provider, "failed_status")
-	if hook is None:
-		return
-	# A redelivered callback (same message and provider timestamp) must not alert twice.
-	key = ""
-	if status.get("id") and status.get("timestamp"):
-		key = f"huf_dlv_failed:{gateway_name}:{status['id']}:{status['timestamp']}"
-		if frappe.cache.get_value(key) == 1:
-			return
-	hook(gateway_name, status)
-	if key:
-		# Only after commit: a rolled-back delivery is redelivered and must alert then.
-		frappe.db.after_commit.add(lambda: frappe.cache.set_value(key, 1, expires_in_sec=_FAILED_STATUS_TTL))
 
 
 def _record_failed_status_whatsapp(gateway_name: str, status: dict) -> None:
