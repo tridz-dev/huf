@@ -64,7 +64,7 @@ def _send_approval_notifications(flow_run, node: dict, config: dict, waiting_dat
 				)
 	elif approver_type == "user":
 		approvers = list(waiting_data.get("approver_users") or [])
-	
+
 	# Ensure unique recipients to avoid duplicate emails
 	if approvers:
 		approvers = list(set(approvers))
@@ -77,7 +77,7 @@ def _send_approval_notifications(flow_run, node: dict, config: dict, waiting_dat
 			message=f"No approvers found for flow run {flow_run.name}",
 		)
 		return
-	
+
 	card = build_card(waiting_data.get("flow_name") or flow_name_of(flow_run), waiting_data)
 	headline, lead, facts = card["headline"], card["lead"], card["facts"]
 
@@ -135,7 +135,7 @@ def _send_approval_notifications(flow_run, node: dict, config: dict, waiting_dat
 			# Log error but don't fail the flow
 			frappe.log_error(
 				title=_("Flow Approval Notification"),
-				message=f"Failed to send approval notification to {user}: {str(e)}",
+				message=f"Failed to send approval notification to {user}: {e!s}",
 			)
 
 

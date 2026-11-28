@@ -28,7 +28,7 @@ pinned flows keep the id, and the step fails at run time with "no longer availab
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Callable
+from collections.abc import Callable
 
 import frappe
 

@@ -1969,7 +1969,7 @@ def _exec_code_run(flow_run, node: dict, config: dict, settings: dict):
 		}
 	try:
 		inputs = json.loads(json.dumps(ctx.resolve(config.get("inputs") or {}), default=str))
-	except (TypeError, ValueError) as exc:
+	except (TypeError, ValueError):
 		return {"status": "failed", "error": "The data given to this code step could not be read. Check the values you pass in."}
 
 	try:

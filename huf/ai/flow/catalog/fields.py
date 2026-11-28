@@ -22,7 +22,8 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any, Iterable, Mapping
+from typing import Any
+from collections.abc import Iterable, Mapping
 
 from huf.ai.flow.support.humanize import format_scalar, label_for, summarize
 from huf.ai.flow.support.trigger_sample import MASK

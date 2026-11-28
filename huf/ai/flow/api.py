@@ -1008,10 +1008,10 @@ def handle_run_flow(flow_id: str, payload: str | dict | None = None, **kwargs) -
 		from huf.ai.flow.engine import run_flow as engine_run_flow
 
 		flow_run = create_flow_run(flow_id=flow_id, payload=payload or {})
-		
+
 		# Execute synchronously so Chat agents can receive the result instead of just a queued message
 		engine_run_flow(flow_run.name)
-		
+
 		flow_run.reload()
 
 		return {
