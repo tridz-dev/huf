@@ -42,7 +42,8 @@ class _Base(IntegrationTestCase):
 		if not frappe.db.exists("User", EXEC_USER):
 			frappe.get_doc(
 				{"doctype": "User", "email": EXEC_USER, "first_name": "WA Log", "send_welcome_email": 0}
-			).insert(ignore_permissions=True).add_roles("Huf Gateway User")
+			).insert(ignore_permissions=True)
+		frappe.get_doc("User", EXEC_USER).add_roles("Huf Gateway User")  # also when a leaked user lacks the role
 		self.addCleanup(frappe.db.rollback)
 		self.addCleanup(frappe.set_user, "Administrator")
 

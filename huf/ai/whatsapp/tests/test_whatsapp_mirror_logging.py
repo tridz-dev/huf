@@ -61,6 +61,7 @@ class TestMirrorFailureLogging(unittest.TestCase):
 		with (
 			patch.object(wb, "resolve_account", return_value=ACCT),
 			patch.object(wb, "_template_docname", return_value="hello_tpl-en_US"),
+			patch.object(wb.policy, "enforce_template"),  # not under test; needs a real APPROVED row when frappe_whatsapp is installed
 			patch.object(wb, "_graph_post_message", return_value="wamid.G1") as post,
 			patch.object(frappe, "get_doc", side_effect=_failing_message_doc),
 			patch.object(frappe, "has_permission", return_value=True),
@@ -100,6 +101,7 @@ class TestMirrorFailureLogging(unittest.TestCase):
 		with (
 			patch.object(wb, "resolve_account", return_value=ACCT),
 			patch.object(wb, "_template_docname", return_value="hello_tpl-en_US"),
+			patch.object(wb.policy, "enforce_template"),  # not under test; needs a real APPROVED row when frappe_whatsapp is installed
 			patch.object(wb, "_graph_post_message", return_value="wamid.G2"),
 			patch.object(frappe, "get_doc", side_effect=_failing_message_doc),
 			patch.object(frappe, "has_permission", return_value=True),
