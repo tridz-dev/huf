@@ -81,6 +81,20 @@ class TestWakeBatch(IntegrationTestCase):
 		self.assertEqual(frappe.db.get_value("Agent Flow Run", name, "status"), park.WAIT_STATUS)
 		self.assertFalse(self.continued)
 
+	def test_timer_wait_without_resume_at_is_not_due_and_does_not_block_the_sweep(self):
+		"""A handoff parks a run as a timer wait with no ``resume_at``; the sweep must skip it, not loop on it."""
+		waiting = json.dumps({"type": "timer", "node_id": "h1", "reason": "handoff", "resume_at": None})
+		parked = [f"{self.prefix}-h{i}" for i in range(5)]
+		frappe.db.bulk_insert(
+			"Agent Flow Run", ["name", "status", "resume_at", "waiting"], [(n, park.WAIT_STATUS, None, waiting) for n in parked]
+		)
+		frappe.db.commit()
+		names = self._seed(3)
+		with patch.object(park, "WAKE_BUDGET_SECONDS", 3):  # a regression spins until the budget instead of hanging the suite
+			taken = park.wake_due_waits(now=NOW, limit=2)
+		self.assertEqual(taken, names)
+		self.assertEqual({frappe.db.get_value("Agent Flow Run", n, "status") for n in parked}, {park.WAIT_STATUS})
+
 	def test_page_size_comes_from_site_config(self):
 		self._seed(5)
 		with (
