@@ -46,6 +46,14 @@ _WRITE_DENYLISTED_DOCTYPES = {
 	"custom docperm",
 	"defaultvalue",  # holds the ledger approval records
 	"flow definition",  # live_send
+	# capability and share grants, send caps and approval defaults (FINAL_REVIEW_2 M5)
+	"huf role permission",
+	"huf role",
+	"docshare",
+	"agent role",
+	"execution profile permission",
+	"flow send counter",
+	"agent settings",
 }
 
 #: Doctype name PREFIXES (case-insensitive) that are denied wholesale, since
