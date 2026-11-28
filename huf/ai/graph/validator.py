@@ -79,6 +79,7 @@ from typing import Any
 from huf.ai.graph import transforms
 from huf.ai.graph.expressions import ExpressionError, parse_expression
 from huf.ai.graph.validation import step_checks
+from huf.ai.graph.checks.flow_step_checks import _check_app_trigger_on_error, _check_split_weights
 from huf.ai.graph.validation.result import GraphValidationError, ValidationError, ValidationResult
 from huf.ai.graph.validation.schema_stage import (  # noqa: F401 -- re-exported: other modules import these from here
 	GRAPH_IR_SCHEMA,
@@ -258,27 +259,6 @@ def validate_graph(
 			errors.extend(_check_envelope_covers_closure(graph, envelope))
 
 	return ValidationResult(ok=not errors, profile=profile, errors=tuple(errors), envelope=envelope if not errors else None)
-
-
-def _check_split_weights(nodes: list) -> list[ValidationError]:
-	"""Split steps: branch weights add up to 100 and the holdout share is 0-100 (H-W2-07), in draft and publish."""
-	from huf.ai.flow.nodes.split import config_problems
-
-	errors = []
-	for node in nodes:
-		if isinstance(node, dict) and node.get("type") == "split":
-			for problem in config_problems(node.get("config") or {}):
-				errors.append(ValidationError("SPLIT_WEIGHTS", node.get("id"), "config", problem))
-	return errors
-
-
-def _check_app_trigger_on_error(nodes: list) -> list[ValidationError]:
-	"""An App trigger only refuses starts that are not its app's; an error step would let those carry on."""
-	return [
-		ValidationError("TRIGGER_ON_ERROR", node.get("id"), "on_error", "a trigger.app node must not declare on_error")
-		for node in nodes
-		if isinstance(node, dict) and node.get("type") == "trigger.app" and node.get("on_error") is not None
-	]
 
 
 def validate_procedure_graph(graph: dict, **kwargs: Any) -> ValidationResult:
