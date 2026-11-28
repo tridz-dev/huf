@@ -17,7 +17,8 @@ import frappe
 from frappe.core.doctype.user_permission.user_permission import get_user_permissions
 from frappe.utils import cint, get_datetime
 
-from huf.ai.flow.app_scope.access import flow_access
+from huf.ai.api_support import require_permission
+from huf.ai.flow.app_scope.access import apps_for, flow_access, is_privileged
 from huf.ai.flow.app_scope.api_guards import guard_app_named
 from huf.ai.flow.runs.access import get_user_permitted_runs
 
@@ -32,10 +33,16 @@ MASK_PREFIX = "****"
 MASK_KEEP = 4
 
 
+def _require_app_view(app) -> None:
+	"""``guard_app_named`` plus its rule stated as an explicit permission check (an empty ``app`` is left to the guard)."""
+	guard_app_named(app)
+	require_permission(is_privileged() or not app or app in apps_for(None, "view"), "Not permitted")
+
+
 @frappe.whitelist()
 def list_app_runs(app, status=None, flow_ids=None, member_key=None, since=None, limit=100) -> list[dict]:
 	"""Newest first, at most ``limit`` (capped at 500) runs of ``app``'s flows the caller may view."""
-	guard_app_named(app)
+	_require_app_view(app)
 	limit = max(1, min(cint(limit) or 100, MAX_LIMIT))
 	rows = _runs(app, status, flow_ids, member_key, since, limit=limit)
 	return [_row(r) for r in rows]
@@ -49,7 +56,7 @@ def count_app_runs(
 
 	Test runs are left out unless ``include_test`` is set; a run with no ``run_mode`` counts.
 	"""
-	guard_app_named(app)
+	_require_app_view(app)
 	keys = [k.strip() for k in str(group_by or "").split(",") if k.strip()]
 	if not keys or any(k not in GROUP_FIELDS for k in keys):
 		frappe.throw(frappe._("group_by takes flow, status, reason and node"), frappe.ValidationError)

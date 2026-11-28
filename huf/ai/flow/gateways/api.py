@@ -66,11 +66,13 @@ def get_app_flow_gateways(flow_id: str) -> dict:
 	from huf.ai.flow.app_scope.api_guards import guard_flow
 	guard_flow(flow_id, "edit")
 	from huf.ai.flow.app_scope import targets
-	from huf.ai.flow.app_scope.access import is_privileged
+	from huf.ai.flow.app_scope.access import flow_access, is_privileged
 	from huf.ai.flow.app_scope.gateways import app_gateways
 	from huf.ai.flow.app_scope.ownership import owner_app_of
 
 	app = owner_app_of(flow_id)
+	# explicit form of the rule guard_flow applies to app-owned flows; native flows keep guard_flow's rule
+	require_permission(not app or flow_access(frappe.session.user, flow_id, "edit"), "Not permitted")
 	if not app or is_privileged():
 		return {"restricted": False, "gateways": []}
 	definition = frappe.parse_json(frappe.db.get_value("Flow Definition", flow_id, "definition_json") or "{}")
