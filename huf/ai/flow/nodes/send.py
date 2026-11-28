@@ -234,6 +234,6 @@ def _enqueue(request: dict) -> str | None:
 		return "channel_unsupported"
 	try:
 		outbox.enqueue(request)
-	except outbox.LiteralRecipient:
+	except (outbox.LiteralRecipient, TypeError):  # a literal number, or a reference of an unsupported shape
 		return "bad_recipient"
 	return None

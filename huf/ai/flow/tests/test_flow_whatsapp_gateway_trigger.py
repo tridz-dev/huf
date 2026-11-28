@@ -216,7 +216,9 @@ class TestFlowWhatsAppGatewayTrigger(fs.TestWhatsAppMultiGateway):
 			"wamid.W3",
 			{"action": "send_message", "gateway_name": self.gateway_a.name, "to": "15559990000", "message": "hi stranger"},
 		)
-		self.assertEqual(self._text_posts(), [], self.meta.calls)
+		# the failed flow notifies the chat it came from (notify_flow_failure); the stranger gets nothing
+		self.assertEqual([p for p in self._text_posts() if not p["url"].endswith(f"/{self.PHONE_A}/messages")], [], self.meta.calls)
+		self.assertFalse([p for p in self._text_posts() if p["body"].get("to") == "15559990000"], self.meta.calls)
 		self.assertIn("recipient_not_permitted", self._tool_output(flow_run))  # scope stops the stranger before the window gate
 
 	# -- WP-7: flow target end to end -------------------------------------------------------
@@ -241,6 +243,7 @@ class TestFlowWhatsAppGatewayTrigger(fs.TestWhatsAppMultiGateway):
 			},
 		}
 		flow_api.save_flow_definition(flow_id, definition)
+		frappe.db.set_value("Flow Definition", flow_id, "status", "Active")  # a routed flow must be live
 		self._route_gateway_a_to(flow_id)
 		return flow_id
 
