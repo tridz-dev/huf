@@ -477,7 +477,7 @@ def _stop_unsent_messages(doc) -> None:
 	outbox.withdraw([doc.name], outbox.RUN_FAILED)
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def mark_flow_run_failed(flow_run_id: str) -> dict:
 	"""Fail a Flow Run that is stuck in Queued/Running (System Manager only).
 
