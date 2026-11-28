@@ -271,6 +271,8 @@ class S12Case(unittest.TestCase):
 		self._wipe()
 		self.addCleanup(self._wipe)
 		self.addCleanup(patch.stopall)
+		# the management API sets this flag for the rest of the request; a test run is one process, so undo it
+		self.addCleanup(frappe.flags.pop, "in_broadcast_api", None)
 		self.graph = GraphStub()
 		patch.object(bridge, "_default_post", self.graph).start()
 		patch("requests.sessions.Session.request", _no_network).start()
